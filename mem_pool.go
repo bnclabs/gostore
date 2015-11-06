@@ -4,29 +4,28 @@ package llrb
 import "C"
 
 import "unsafe"
+import "encoding/binary"
 
-// Pool manages a memory block sliced up into equal sized chunks.
-type Pool struct {
-	capacity int            // memory managed by this pool
+// mempool manages a memory block sliced up into equal sized chunks.
+type mempool struct {
+	capacity int64          // memory managed by this pool
 	size     int            // fixed size blocks in this pool
 	base     unsafe.Pointer // pool's base pointer
 	freelist []byte         // free block book-keeping
 	freeoff  int
 }
 
-// NewPool will create a new pool of contiguous `n` blocks, each
-// `size` bytes in length.
-func NewPool(size, n int) *Pool {
+func newmempool(size, n int) *mempool {
 	if (n & 0x7) != 0 { // n must be a multiple of 8
 		n = ((n >> 3) + 1) << 3
 	}
-	capacity := size * n
+	capacity := int64(size * n)
 	base := C.malloc(C.size_t(capacity))
 	freelist := make([]byte, n/8)
 	for i := range freelist {
 		freelist[i] = 0xff // every block is free to begin with.
 	}
-	pool := &Pool{
+	pool := &mempool{
 		capacity: capacity,
 		size:     size,
 		base:     base,
@@ -36,7 +35,7 @@ func NewPool(size, n int) *Pool {
 	return pool
 }
 
-func (pool *Pool) Alloc() (unsafe.Pointer, bool) {
+func (pool *mempool) alloc() (unsafe.Pointer, bool) {
 	var safeoff int
 
 	if pool.freeoff < 0 {
@@ -44,7 +43,7 @@ func (pool *Pool) Alloc() (unsafe.Pointer, bool) {
 	}
 	byt := pool.freelist[pool.freeoff]
 	if byt == 0 {
-		panic("Pool.Alloc(): invalid free-offset")
+		panic("mempool.alloc(): invalid free-offset")
 	}
 	sz, k := pool.size, findfirstset8(byt)
 	ptr := uintptr(pool.base) + uintptr(((pool.freeoff*8)*sz)+(int(k)*sz))
@@ -59,7 +58,7 @@ func (pool *Pool) Alloc() (unsafe.Pointer, bool) {
 	return unsafe.Pointer(ptr), true
 }
 
-func (pool *Pool) Free(ptr unsafe.Pointer) {
+func (pool *mempool) free(ptr unsafe.Pointer) {
 	nthblock := uint64(uintptr(ptr)-uintptr(pool.base)) / uint64(pool.size)
 	nthoff := (nthblock / 8)
 	pool.freelist[nthoff] = setbit8(pool.freelist[nthoff], uint8(nthblock%8))
@@ -68,27 +67,46 @@ func (pool *Pool) Free(ptr unsafe.Pointer) {
 	}
 }
 
-// Close to release memory to OS.
-func (pool *Pool) Close() {
+func (pool *mempool) release() {
 	C.free(pool.base)
 }
 
-// Less compare whether pool's base ptr is less than other pool's base ptr.
-func (pool *Pool) Less(other *Pool) bool {
+// compare whether pool's base ptr is less than other pool's base ptr.
+func (pool *mempool) less(other *mempool) bool {
 	return uintptr(pool.base) < uintptr(other.base)
 }
 
-// Pools sortable based on base-pointer.
-type Pools []*Pool
+//---- local functions
 
-func (pools Pools) Len() int {
+func (pool *mempool) allocated() int64 {
+	blocks := 0
+	q, r := len(pool.freelist)/4, len(pool.freelist)%4
+	for i := 1; i <= q; i++ {
+		v, _ := binary.Uvarint(pool.freelist[(i-1)*4 : i*4])
+		blocks += zerosin32(uint32(v & 0xffffffff))
+		blocks += zerosin32(uint32(v >> 0xffffffff))
+	}
+	for i := q * 4; i < r; i++ {
+		blocks += zerosin8(pool.freelist[i])
+	}
+	return int64(blocks * pool.size)
+}
+
+func (pool *mempool) available() int64 {
+	return pool.capacity - pool.allocated()
+}
+
+// mempools sortable based on base-pointer.
+type mempools []*mempool
+
+func (pools mempools) Len() int {
 	return len(pools)
 }
 
-func (pools Pools) Less(i, j int) bool {
-	return pools[i].Less(pools[j])
+func (pools mempools) Less(i, j int) bool {
+	return pools[i].less(pools[j])
 }
 
-func (pools Pools) Swap(i, j int) {
+func (pools mempools) Swap(i, j int) {
 	pools[i], pools[j] = pools[j], pools[i]
 }

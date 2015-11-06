@@ -17,3 +17,16 @@ func clearbit8(b byte, n uint8) byte {
 func setbit8(b byte, n uint8) byte {
 	return b | (1 << n)
 }
+
+func zerosin8(v byte) (c int) {
+	for c := 0; v != 0; v >>= 1 { // count set bits
+		c += int(v & 1)
+	}
+	return 8 - c
+}
+
+func zerosin32(v uint32) (c int) {
+	v = v - ((v >> 1) & 0x55555555)
+	v = (v & 0x33333333) + ((v >> 2) & 0x33333333)
+	return int((((v + (v >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24)
+}
