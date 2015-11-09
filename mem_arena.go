@@ -35,6 +35,8 @@ func newmemarena(minblock, maxblock, numblocks int) *memarena {
 	return arena
 }
 
+//---- operations
+
 func (arena *memarena) alloc(n int) (ptr unsafe.Pointer, mpool *mempool) {
 	var ok bool
 
@@ -53,6 +55,8 @@ func (arena *memarena) alloc(n int) (ptr unsafe.Pointer, mpool *mempool) {
 	ptr, _ = mpool.alloc()
 	return ptr, mpool
 }
+
+//---- statistics and maintenance
 
 func (arena *memarena) memory() int64 {
 	mem := int64(0)
