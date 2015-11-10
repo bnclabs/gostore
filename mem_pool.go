@@ -47,7 +47,7 @@ func (pool *mempool) alloc() (unsafe.Pointer, bool) {
 	}
 	sz, k := pool.size, findfirstset8(byt)
 	ptr := uintptr(pool.base) + uintptr(((pool.freeoff*8)*sz)+(int(k)*sz))
-	pool.freelist[pool.freeoff] = clearbit8(byt, k)
+	pool.freelist[pool.freeoff] = clearbit8(byt, uint8(k))
 	safeoff, pool.freeoff = pool.freeoff, -1
 	for i := safeoff; i < len(pool.freelist); i++ {
 		if pool.freelist[i] > 0 {
@@ -83,11 +83,11 @@ func (pool *mempool) allocated() int64 {
 	q, r := len(pool.freelist)/4, len(pool.freelist)%4
 	for i := 1; i <= q; i++ {
 		v, _ := binary.Uvarint(pool.freelist[(i-1)*4 : i*4])
-		blocks += zerosin32(uint32(v & 0xffffffff))
-		blocks += zerosin32(uint32(v >> 0xffffffff))
+		blocks += int(zerosin32(uint32(v & 0xffffffff)))
+		blocks += int(zerosin32(uint32(v >> 0xffffffff)))
 	}
 	for i := q * 4; i < r; i++ {
-		blocks += zerosin8(pool.freelist[i])
+		blocks += int(zerosin8(pool.freelist[i]))
 	}
 	return int64(blocks * pool.size)
 }
