@@ -40,6 +40,7 @@ func BenchmarkBlocksize(b *testing.B) {
 		nv.setblocksize(1024)
 		nv.blocksize()
 	}
+	mpool.free(ptr)
 }
 
 func BenchmarkValueSize(b *testing.B) {
@@ -58,6 +59,7 @@ func BenchmarkValueSize(b *testing.B) {
 		nv.setvalsize(1024)
 		nv.valsize()
 	}
+	mpool.free(ptr)
 }
 
 func BenchmarkSetValue(b *testing.B) {
@@ -75,6 +77,7 @@ func BenchmarkSetValue(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		nv.setvalue(value)
 	}
+	mpool.free(ptr)
 }
 
 func BenchmarkGetValue(b *testing.B) {
@@ -92,4 +95,5 @@ func BenchmarkGetValue(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		nv.value()
 	}
+	mpool.free(ptr)
 }

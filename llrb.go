@@ -83,7 +83,7 @@ func (llrb *LLRB) Get(lookupkey, key, value []byte) (n int, m int, ok bool) {
 				n = copy(key, nd.key())
 			}
 			if value != nil {
-				m = copy(value, nd.value())
+				m = copy(value, nd.nodevalue().value())
 			}
 			return
 		}
@@ -99,8 +99,7 @@ func (llrb *LLRB) Min(key, value []byte) (int, int, bool) {
 	for nd.left != nil {
 		nd = nd.left
 	}
-	k, v := nd.key(), nd.value()
-	return copy(key, k), copy(value, v), true
+	return copy(key, nd.key()), copy(value, nd.nodevalue().value()), true
 }
 
 func (llrb *LLRB) Max(key, value []byte) (int, int, bool) {
@@ -111,7 +110,7 @@ func (llrb *LLRB) Max(key, value []byte) (int, int, bool) {
 	for nd.right != nil {
 		nd = nd.right
 	}
-	return copy(key, nd.key()), copy(value, nd.value()), true
+	return copy(key, nd.key()), copy(value, nd.nodevalue().value()), true
 }
 
 // Range from lowkey to highkey, incl can be "both", "low", "high", "none"
@@ -143,7 +142,7 @@ func (llrb *LLRB) rangeFromFind(nd *node, lk, hk []byte, iter KeyIterator) bool 
 	if !llrb.rangeFromFind(nd.left, lk, hk, iter) {
 		return false
 	}
-	if iter != nil && !iter(nd.key(), nd.value()) {
+	if iter != nil && !iter(nd.key(), nd.nodevalue().value()) {
 		return false
 	}
 	return llrb.rangeFromFind(nd.right, lk, hk, iter)
@@ -163,7 +162,7 @@ func (llrb *LLRB) rangeFromTill(nd *node, lk, hk []byte, iter KeyIterator) bool 
 	if !llrb.rangeFromTill(nd.left, lk, hk, iter) {
 		return false
 	}
-	if iter != nil && !iter(nd.key(), nd.value()) {
+	if iter != nil && !iter(nd.key(), nd.nodevalue().value()) {
 		return false
 	}
 	return llrb.rangeFromTill(nd.right, lk, hk, iter)
@@ -183,7 +182,7 @@ func (llrb *LLRB) rangeAfterFind(nd *node, lk, hk []byte, iter KeyIterator) bool
 	if !llrb.rangeAfterFind(nd.left, lk, hk, iter) {
 		return false
 	}
-	if iter != nil && !iter(nd.key(), nd.value()) {
+	if iter != nil && !iter(nd.key(), nd.nodevalue().value()) {
 		return false
 	}
 	return llrb.rangeAfterFind(nd.right, lk, hk, iter)
@@ -203,7 +202,7 @@ func (llrb *LLRB) rangeAfterTill(nd *node, lk, hk []byte, iter KeyIterator) bool
 	if !llrb.rangeAfterTill(nd.left, lk, hk, iter) {
 		return false
 	}
-	if iter != nil && !iter(nd.key(), nd.value()) {
+	if iter != nil && !iter(nd.key(), nd.nodevalue().value()) {
 		return false
 	}
 	return llrb.rangeAfterTill(nd.right, lk, hk, iter)
@@ -239,7 +238,7 @@ func (llrb *LLRB) upsert(
 	} else if nd.ltkey(key) {
 		nd.right, n, m, replaced = llrb.upsert(nd.right, key, value, oldk, oldv)
 	} else {
-		k, v := nd.key(), nd.value()
+		k, v := nd.key(), nd.nodevalue().value()
 		n, m, replaced = copy(oldk, k), copy(oldv, v), true
 	}
 
@@ -268,7 +267,7 @@ func (llrb *LLRB) deletemin( // using 2-3 trees
 		return nil, 0, 0, false
 	}
 	if nd.left == nil {
-		k, v := nd.key(), nd.value()
+		k, v := nd.key(), nd.nodevalue().value()
 		if oldk != nil {
 			n = copy(oldk, k)
 		}
@@ -307,7 +306,7 @@ func (llrb *LLRB) deletemax( // using 2-3 trees
 		nd = rotateright(nd)
 	}
 	if nd.right == nil {
-		k, v := nd.key(), nd.value()
+		k, v := nd.key(), nd.nodevalue().value()
 		n, m := copy(oldk, k), copy(oldv, v)
 		return nil, n, m, true
 	}
@@ -353,7 +352,7 @@ func (llrb *LLRB) delete(
 			nd = rotateright(nd)
 		}
 		if !nd.ltkey(key) && nd.right == nil {
-			return nil, 0, copy(oldv, nd.value()), true
+			return nil, 0, copy(oldv, nd.nodevalue().value()), true
 		}
 		if nd.right != nil && !nd.right.isred() && !nd.right.left.isred() {
 			nd = moveredright(nd)
@@ -363,9 +362,9 @@ func (llrb *LLRB) delete(
 			if deleted == false {
 				panic("logic")
 			}
-			copy(llrb.tmpv, nd.value())
+			copy(llrb.tmpv, nd.nodevalue().value())
 			nd.setkey(llrb.tmpk[:n])
-			nd.setvalue(oldv[:m])
+			nd.nodevalue().setvalue(oldv[:m])
 			copy(oldv, llrb.tmpv[:m])
 
 		} else { // Else, @key is bigger than @nd
@@ -423,11 +422,11 @@ func (llrb *LLRB) newnode(key, value []byte) *node {
 	nd = nd.setblocksize(mpool.size).setdirty().setred()
 
 	ptr, mpool = llrb.valarena.alloc(nvaluesize + len(value))
-	v := (*nodevalue)(ptr)
-	v.pool = mpool
-	v = v.setblocksize(mpool.size).setvalue(value)
+	nv := (*nodevalue)(ptr)
+	nv.pool = mpool
+	nv = nv.setblocksize(mpool.size).setvalue(value)
 
-	nd.mvalue, nd.fpos = ptr, -1
+	nd.mvalue, nd.fpos = nv, -1
 	nd = nd.settimestamp(time.Now().UnixNano()).setkey(key)
 	return nd
 }

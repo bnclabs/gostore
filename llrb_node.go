@@ -10,7 +10,7 @@ type node struct {
 	pool     *mempool
 	left     *node
 	right    *node
-	mvalue   unsafe.Pointer
+	mvalue   *nodevalue
 	fpos     int64          // file-position
 	stat1    uint64         // ts[:48]
 	keystart unsafe.Pointer // just a place-holder
@@ -36,12 +36,13 @@ func (nd *node) keysize() int {
 	return int((nd.hdr1 & 0x3ff00000) >> 20)
 }
 
-func (nd *node) isred() bool {
-	return (nd.hdr1 & 0x100000000) == 0
+func (nd *node) setred() *node {
+	nd.hdr1 = nd.hdr1 & 0xfffffffeffffffff
+	return nd
 }
 
-func (nd *node) isblack() bool {
-	return !nd.isred()
+func (nd *node) isred() bool {
+	return (nd.hdr1 & 0x100000000) == 0
 }
 
 func (nd *node) setblack() *node {
@@ -49,9 +50,8 @@ func (nd *node) setblack() *node {
 	return nd
 }
 
-func (nd *node) setred() *node {
-	nd.hdr1 = nd.hdr1 & 0xfffffffeffffffff
-	return nd
+func (nd *node) isblack() bool {
+	return !nd.isred()
 }
 
 func (nd *node) togglelink() *node {
@@ -100,21 +100,13 @@ func (nd *node) key() (k []byte) {
 	return
 }
 
-func (nd *node) setvalue(val []byte) *node {
-	if nd.mvalue != nil {
-		v := (*nodevalue)(nd.mvalue)
-		v.setvalue(val)
-	}
+func (nd *node) setnodevalue(nv *nodevalue) *node {
+	nd.mvalue = nv
 	return nd
 }
 
-func (nd *node) value() (val []byte) {
-	// TODO: if mvalue is nil, get the value from fpos
-	if nd.mvalue != nil {
-		v := (*nodevalue)(nd.mvalue)
-		val = v.value()
-	}
-	return
+func (nd *node) nodevalue() *nodevalue {
+	return nd.mvalue
 }
 
 func (nd *node) ltkey(other []byte) bool {
