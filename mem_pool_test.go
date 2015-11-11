@@ -11,8 +11,8 @@ var _ = fmt.Sprintf("dummy")
 
 func TestNewmempool(t *testing.T) {
 	size, n := 96, 1024*1024
-	mpool := newmempool(size, n-1)
-	if mpool.capacity != int64(size*n) {
+	mpool := newmempool(size, n)
+	if mpool.capacity != size*n {
 		t.Errorf("expected %v, got %v", size*n, mpool.capacity)
 	} else if len(mpool.freelist) != (n / 8) {
 		t.Errorf("expected %v, got %v", n/8, len(mpool.freelist))
@@ -26,7 +26,7 @@ func TestNewmempool(t *testing.T) {
 func TestMpoolAlloc(t *testing.T) {
 	size, n := 96, 56
 	ptrs := make([]unsafe.Pointer, 0, n)
-	mpool := newmempool(size, n-1)
+	mpool := newmempool(size, n)
 	flref := []byte{255, 255, 255, 255, 255, 255, 255}
 	if bytes.Compare(mpool.freelist, flref) != 0 {
 		t.Errorf("expected %v, got %v", flref, mpool.freelist)
@@ -36,9 +36,9 @@ func TestMpoolAlloc(t *testing.T) {
 		ptr, ok := mpool.alloc()
 		if ok == false {
 			t.Errorf("unable to allocate even first block")
-		} else if x, y := mpool.allocated(), (i+1)*size; x != int64(y) {
+		} else if x, y := mpool.allocated(), (i+1)*size; x != y {
 			t.Errorf("expected %v, got %v", y, x)
-		} else if x, y = mpool.available(), (n-i-1)*size; x != int64(y) {
+		} else if x, y = mpool.available(), (n-i-1)*size; x != y {
 			t.Errorf("expected %v, got %v", y, x)
 		}
 		ptrs = append(ptrs, ptr)
@@ -49,9 +49,9 @@ func TestMpoolAlloc(t *testing.T) {
 	// free
 	for i, ptr := range ptrs {
 		mpool.free(ptr)
-		if x, y := mpool.allocated(), (n-i-1)*size; x != int64(y) {
+		if x, y := mpool.allocated(), (n-i-1)*size; x != y {
 			t.Errorf("expected %v, got %v", y, x)
-		} else if x, y = mpool.available(), (i+1)*size; x != int64(y) {
+		} else if x, y = mpool.available(), (i+1)*size; x != y {
 			t.Errorf("expected %v, got %v", y, x)
 		}
 	}
@@ -63,7 +63,7 @@ func TestMpoolAlloc(t *testing.T) {
 
 	size, n = 96, 1024*1024
 	ptrs = make([]unsafe.Pointer, 0, n)
-	mpool = newmempool(size, n-1)
+	mpool = newmempool(size, n)
 	// allocate all of them
 	ptrs = make([]unsafe.Pointer, 0, n)
 	for i := 0; i < n; i++ {
@@ -85,6 +85,14 @@ func TestMpoolAlloc(t *testing.T) {
 
 	// release
 	mpool.release()
+}
+
+func TestPoolMemory(t *testing.T) {
+	size, n := 96, 1024*1024
+	mpool := newmempool(size, n)
+	if x := mpool.memory(); x != 100794424 {
+		t.Errorf("expected %v, got %v", 100794424, x)
+	}
 }
 
 func TestMpools(t *testing.T) {

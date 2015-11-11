@@ -29,12 +29,12 @@ func NewLLRB(config map[string]interface{}) *LLRB {
 	llrb := &LLRB{}
 	minblock := config["nodemem.minblock"].(int)
 	maxblock := config["nodemem.maxblock"].(int)
-	numblocks := config["nodemem.numblocks"].(int)
-	llrb.nodearena = newmemarena(minblock, maxblock, numblocks)
+	capacity := config["nodemem.capacity "].(int)
+	llrb.nodearena = newmemarena(minblock, maxblock, capacity)
 	minblock = config["valmem.minblock"].(int)
 	maxblock = config["valmem.maxblock"].(int)
-	numblocks = config["valmem.numblocks"].(int)
-	llrb.valarena = newmemarena(minblock, maxblock, numblocks)
+	capacity = config["valmem.capacity"].(int)
+	llrb.valarena = newmemarena(minblock, maxblock, capacity)
 	// scratchpad
 	llrb.tmpk = make([]byte, config["keymem.maxblock"].(int))
 	llrb.tmpv = make([]byte, config["valmem.maxblock"].(int))
@@ -435,27 +435,27 @@ func (llrb *LLRB) newnode(key, value []byte) *node {
 func validateConfig(config map[string]interface{}) {
 	minblock := config["nodemem.minblock"].(int)
 	maxblock := config["nodemem.maxblock"].(int)
-	numblocks := config["nodemem.numblocks"].(int)
+	capacity := config["nodemem.capacity"].(int)
 	if minblock < minKeymem {
 		fmsg := "nodemem.minblock < %v configuration"
 		panic(fmt.Errorf(fmsg, minKeymem))
 	} else if maxblock > maxKeymem {
 		fmsg := "nodemem.maxblock > %v configuration"
 		panic(fmt.Errorf(fmsg, maxKeymem))
-	} else if numblocks == 0 {
-		panic("nodemem.numblocks cannot be ZERO")
+	} else if capacity == 0 {
+		panic("nodemem.capacity cannot be ZERO")
 	}
 
 	minblock = config["valmem.minblock"].(int)
 	maxblock = config["valmem.maxblock"].(int)
-	numblocks = config["valmem.numblocks"].(int)
+	capacity = config["valmem.capacity"].(int)
 	if minblock < minKeymem {
 		fmsg := "valmem.minblock < %v configuration"
 		panic(fmt.Errorf(fmsg, minKeymem))
 	} else if maxblock > maxKeymem {
 		fmsg := "valmem.maxblock > %v configuration"
 		panic(fmt.Errorf(fmsg, maxKeymem))
-	} else if numblocks == 0 {
-		panic("valmem.numblocks cannot be ZERO")
+	} else if capacity == 0 {
+		panic("valmem.capacity cannot be ZERO")
 	}
 }
