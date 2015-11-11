@@ -15,16 +15,30 @@ type LLRB struct { // tree container
 	nodearena *memarena
 	valarena  *memarena
 	root      unsafe.Pointer // root *node of LLRB tree
+	mvcc      bool
+	config    map[string]interface{}
 	// scratch pad
 	tmpk []byte
 	tmpv []byte
 	// statistics
-	count     int64 // number of nodes in the tree
-	keymemory int64 // memory used by all keys
-	valmemory int64 // memory used by all values
+	count     int // number of nodes in the tree
+	keymemory int // memory used by all keys
+	valmemory int // memory used by all values
 }
 
 func NewLLRB(config map[string]interface{}) *LLRB {
+	llrb := newllrb(config)
+	llrb.mvcc = false
+	return llrb
+}
+
+func NewLLRBMvcc(config map[string]interface{}) *LLRB {
+	llrb := newllrb(config)
+	llrb.mvcc = true
+	return llrb
+}
+
+func newllrb(config map[string]interface{}) *LLRB {
 	validateConfig(config)
 	llrb := &LLRB{}
 	minblock := config["nodemem.minblock"].(int)
@@ -51,16 +65,28 @@ func (llrb *LLRB) Root() *node {
 	return (*node)(atomic.LoadPointer(&llrb.root))
 }
 
-func (llrb *LLRB) Count() int64 {
-	return atomic.LoadInt64(&llrb.count)
+func (llrb *LLRB) Count() int {
+	return llrb.count
 }
 
-func (llrb *LLRB) KeyMemory() int64 {
-	return atomic.LoadInt64(&llrb.keymemory)
+func (llrb *LLRB) KeyMemory() int {
+	return llrb.keymemory
 }
 
-func (llrb *LLRB) ValueMemory() int64 {
-	return atomic.LoadInt64(&llrb.valmemory)
+func (llrb *LLRB) ValueMemory() int {
+	return llrb.valmemory
+}
+
+func (llrb *LLRB) Memory() int {
+	return llrb.nodearena.memory() + llrb.valarena.memory()
+}
+
+func (llrb *LLRB) Allocated() int {
+	return llrb.nodearena.allocated() + llrb.valarena.allocated()
+}
+
+func (llrb *LLRB) Available() int {
+	return llrb.nodearena.available() + llrb.valarena.available()
 }
 
 //---- LLRB read operations.
@@ -70,7 +96,11 @@ func (llrb *LLRB) Has(key []byte) bool {
 	return rv
 }
 
-func (llrb *LLRB) Get(lookupkey, key, value []byte) (n int, m int, ok bool) {
+func (llrb *LLRB) Get(lookupkey, key, value []byte) (n, m int, ok bool) {
+	return llrb.get(lookupkey, key, value)
+}
+
+func (llrb *LLRB) get(lookupkey, key, value []byte) (n, m int, ok bool) {
 	nd := (*node)(atomic.LoadPointer(&llrb.root))
 	for nd != nil {
 		if !nd.lekey(lookupkey) {
@@ -216,7 +246,7 @@ func (llrb *LLRB) Upsert(key, value, oldkey, oldvalue []byte) (int, int, bool) {
 	root.setblack()
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 	if replaced == false {
-		atomic.AddInt64(&llrb.count, 1)
+		llrb.count++
 	}
 	return n, m, replaced
 }
@@ -255,7 +285,7 @@ func (llrb *LLRB) DeleteMin(oldkey, oldvalue []byte) (int, int, bool) {
 	}
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 	if deleted {
-		atomic.AddInt64(&llrb.count, -1)
+		llrb.count++
 	}
 	return n, m, deleted
 }
@@ -291,7 +321,7 @@ func (llrb *LLRB) DeleteMax(oldkey, oldvalue []byte) (int, int, bool) {
 	}
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 	if deleted {
-		atomic.AddInt64(&llrb.count, -1)
+		llrb.count++
 	}
 	return n, m, deleted
 }
@@ -326,7 +356,7 @@ func (llrb *LLRB) Delete(key, oldvalue []byte) (int, bool) {
 	}
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 	if deleted {
-		atomic.AddInt64(&llrb.count, -1)
+		llrb.count++
 	}
 	return m, deleted
 }
