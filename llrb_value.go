@@ -5,27 +5,18 @@ import "reflect"
 
 const nvaluesize = 8 // plus value size
 type nodevalue struct {
-	hdr1     uint64 // vsize(32), blksize(20)
+	hdr1     uint64 // vsize(32)
 	pool     *mempool
 	valstart unsafe.Pointer // just a place-holder
 }
 
-func (nv *nodevalue) setblocksize(size int) *nodevalue {
-	nv.hdr1 = (nv.hdr1 & 0xfffffffffff00000) | (uint64(size) & 0xfffff)
-	return nv
-}
-
-func (nv *nodevalue) blocksize() int {
-	return int(nv.hdr1 & 0xfffff)
-}
-
 func (nv *nodevalue) setvalsize(size int) *nodevalue {
-	nv.hdr1 = (nv.hdr1 & 0xfff00000000fffff) | ((uint64(size) & 0xffffffff) << 20)
+	nv.hdr1 = (nv.hdr1 & 0xffffffff00000000) | (uint64(size) & 0xffffffff)
 	return nv
 }
 
 func (nv *nodevalue) valsize() int {
-	return int((nv.hdr1 & 0xffffffff00000) >> 20)
+	return int(nv.hdr1 & 0xffffffff)
 
 }
 func (nv *nodevalue) setvalue(val []byte) *nodevalue {

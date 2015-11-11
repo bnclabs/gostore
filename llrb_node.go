@@ -4,9 +4,12 @@ import "unsafe"
 import "bytes"
 import "reflect"
 
-const nodesize = 56 // plus key size.
+const nodesize = 72 // plus key size.
+// {vbno, vbuuid, seqno, {keysize, key}, {valsize, value}}
 type node struct {
-	hdr1     uint64 // dirty, black, ksize(12), blksize(20)
+	hdr1     uint64 // dirty, black, ksize(12), vbno(16)
+	vbuuid   uint64
+	seqno    uint64
 	pool     *mempool
 	left     *node
 	right    *node
@@ -18,35 +21,35 @@ type node struct {
 
 //---- field operations
 
-func (nd *node) setblocksize(size int) *node {
-	nd.hdr1 = (nd.hdr1 & 0xfffffffffff00000) | (uint64(size) & 0xfffff)
+func (nd *node) setvbno(vbno uint16) *node {
+	nd.hdr1 = (nd.hdr1 & 0xffffffffffff0000) | (uint64(vbno) & 0xffff)
 	return nd
 }
 
-func (nd *node) blocksize() int {
-	return int(nd.hdr1 & 0xfffff)
+func (nd *node) vbno() uint16 {
+	return uint16(nd.hdr1 & 0xffff)
 }
 
 func (nd *node) setkeysize(size int) *node {
-	nd.hdr1 = (nd.hdr1 & 0xffffffff000fffff) | ((uint64(size) & 0x3ff) << 20)
+	nd.hdr1 = (nd.hdr1 & 0xfffffffff000ffff) | ((uint64(size) & 0xfff) << 16)
 	return nd
 }
 
 func (nd *node) keysize() int {
-	return int((nd.hdr1 & 0x3ff00000) >> 20)
+	return int((nd.hdr1 & 0xfff0000) >> 16)
 }
 
 func (nd *node) setred() *node {
-	nd.hdr1 = nd.hdr1 & 0xfffffffeffffffff
+	nd.hdr1 = nd.hdr1 & 0xffffffffefffffff
 	return nd
 }
 
 func (nd *node) isred() bool {
-	return (nd.hdr1 & 0x100000000) == 0
+	return (nd.hdr1 & 0x10000000) == 0
 }
 
 func (nd *node) setblack() *node {
-	nd.hdr1 = nd.hdr1 | 0x100000000
+	nd.hdr1 = nd.hdr1 | 0x10000000
 	return nd
 }
 
@@ -55,27 +58,27 @@ func (nd *node) isblack() bool {
 }
 
 func (nd *node) togglelink() *node {
-	nd.hdr1 = nd.hdr1 ^ 0x100000000
+	nd.hdr1 = nd.hdr1 ^ 0x10000000
 	return nd
 }
 
 func (nd *node) isdirty() bool {
-	return (nd.hdr1 & 0x200000000) == 1
+	return (nd.hdr1 & 0x20000000) == 1
 }
 
 func (nd *node) setdirty() *node {
-	nd.hdr1 = nd.hdr1 | 0x200000000
+	nd.hdr1 = nd.hdr1 | 0x20000000
 	return nd
 }
 
 func (nd *node) cleardirty() *node {
-	nd.hdr1 = nd.hdr1 & 0xfffffffdffffffff
+	nd.hdr1 = nd.hdr1 & 0xfffffffdfffffff
 	return nd
 }
 
 func (nd *node) settimestamp(ts int64) *node { // ts is time.Now().UnixNano()
 	ts = ts >> 16
-	nd.stat1 = (nd.hdr1 & 0xffff000000000000) | (uint64(ts) & 0xffffffffffff)
+	nd.stat1 = (nd.stat1 & 0xffff000000000000) | (uint64(ts) & 0xffffffffffff)
 	return nd
 }
 

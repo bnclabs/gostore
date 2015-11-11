@@ -240,9 +240,13 @@ func (llrb *LLRB) rangeAfterTill(nd *node, lk, hk []byte, iter KeyIterator) bool
 
 //---- LLRB write operations.
 
-func (llrb *LLRB) Upsert(key, value, oldkey, oldvalue []byte) (int, int, bool) {
+func (llrb *LLRB) Upsert(
+	key, value, oldkey, oldvalue []byte,
+	vbno uint16, vbuuid, seqno uint64) (int, int, bool) {
+
 	nd := (*node)(atomic.LoadPointer(&llrb.root))
-	root, n, m, replaced := llrb.upsert(nd, key, value, oldkey, oldvalue)
+	root, n, m, replaced := llrb.upsert(
+		nd, key, value, oldkey, oldvalue, vbno, vbuuid, seqno)
 	root.setblack()
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 	if replaced == false {
@@ -252,10 +256,11 @@ func (llrb *LLRB) Upsert(key, value, oldkey, oldvalue []byte) (int, int, bool) {
 }
 
 func (llrb *LLRB) upsert(
-	nd *node, key, value, oldk, oldv []byte) (*node, int, int, bool) {
+	nd *node, key, value, oldk, oldv []byte,
+	vbno uint16, vbuuid, seqno uint64) (*node, int, int, bool) {
 
 	if nd == nil {
-		return llrb.newnode(key, value), 0, 0, false
+		return llrb.newnode(key, value, vbno, vbuuid, seqno), 0, 0, false
 	}
 
 	nd = llrb.walkdownrot23(nd)
@@ -264,9 +269,11 @@ func (llrb *LLRB) upsert(
 	var replaced bool
 
 	if nd.gekey(key) == false {
-		nd.left, n, m, replaced = llrb.upsert(nd.left, key, value, oldk, oldv)
+		nd.left, n, m, replaced =
+			llrb.upsert(nd.left, key, value, oldk, oldv, vbno, vbuuid, seqno)
 	} else if nd.ltkey(key) {
-		nd.right, n, m, replaced = llrb.upsert(nd.right, key, value, oldk, oldv)
+		nd.right, n, m, replaced =
+			llrb.upsert(nd.right, key, value, oldk, oldv, vbno, vbuuid, seqno)
 	} else {
 		k, v := nd.key(), nd.nodevalue().value()
 		n, m, replaced = copy(oldk, k), copy(oldv, v), true
@@ -445,19 +452,21 @@ func walkuprot234(nd *node) *node {
 
 //---- local functions
 
-func (llrb *LLRB) newnode(key, value []byte) *node {
-	ptr, mpool := llrb.nodearena.alloc(nodesize + len(key))
+func (llrb *LLRB) newnode(k, v []byte, vbno uint16, seqno, vbuuid uint64) *node {
+	ptr, mpool := llrb.nodearena.alloc(nodesize + len(k))
 	nd := (*node)(ptr)
+	nd = nd.setdirty().setred()
+	nd = nd.setvbno(vbno)
+	nd.vbuuid = vbuuid
 	nd.pool, nd.left, nd.right = mpool, nil, nil
-	nd = nd.setblocksize(mpool.size).setdirty().setred()
 
-	ptr, mpool = llrb.valarena.alloc(nvaluesize + len(value))
+	ptr, mpool = llrb.valarena.alloc(nvaluesize + len(v))
 	nv := (*nodevalue)(ptr)
 	nv.pool = mpool
-	nv = nv.setblocksize(mpool.size).setvalue(value)
+	nv = nv.setvalue(v)
 
 	nd.mvalue, nd.fpos = nv, -1
-	nd = nd.settimestamp(time.Now().UnixNano()).setkey(key)
+	nd = nd.settimestamp(time.Now().UnixNano()).setkey(k)
 	return nd
 }
 
