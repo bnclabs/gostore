@@ -10,37 +10,37 @@ type nodevalue struct {
 	valstart unsafe.Pointer // just a place-holder
 }
 
-func (v *nodevalue) setblocksize(size int) *nodevalue {
-	v.hdr1 = (v.hdr1 & 0xfffffffffff00000) | (uint64(size) & 0xfffff)
-	return v
+func (nv *nodevalue) setblocksize(size int) *nodevalue {
+	nv.hdr1 = (nv.hdr1 & 0xfffffffffff00000) | (uint64(size) & 0xfffff)
+	return nv
 }
 
-func (v *nodevalue) blocksize() int {
-	return int(v.hdr1 & 0xfffff)
+func (nv *nodevalue) blocksize() int {
+	return int(nv.hdr1 & 0xfffff)
 }
 
-func (v *nodevalue) setvalsize(size int) *nodevalue {
-	v.hdr1 = (v.hdr1 & 0xfff00000000fffff) | ((uint64(size) & 0xffffffff) << 20)
-	return v
+func (nv *nodevalue) setvalsize(size int) *nodevalue {
+	nv.hdr1 = (nv.hdr1 & 0xfff00000000fffff) | ((uint64(size) & 0xffffffff) << 20)
+	return nv
 }
 
-func (v *nodevalue) valsize() int {
-	return int((v.hdr1 & 0xffffffff00000) >> 20)
+func (nv *nodevalue) valsize() int {
+	return int((nv.hdr1 & 0xffffffff00000) >> 20)
 
 }
-func (v *nodevalue) setvalue(val []byte) *nodevalue {
+func (nv *nodevalue) setvalue(val []byte) *nodevalue {
 	var dst []byte
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&dst))
 	sl.Len = len(val)
 	sl.Cap = len(val)
-	sl.Data = (uintptr)(unsafe.Pointer(&v.valstart))
-	return v.setvalsize(copy(dst, val))
+	sl.Data = (uintptr)(unsafe.Pointer(&nv.valstart))
+	return nv.setvalsize(copy(dst, val))
 }
 
-func (v *nodevalue) value() (val []byte) {
+func (nv *nodevalue) value() (val []byte) {
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&val))
-	sl.Len = v.valsize()
+	sl.Len = nv.valsize()
 	sl.Cap = sl.Len
-	sl.Data = (uintptr)(unsafe.Pointer(&v.valstart))
+	sl.Data = (uintptr)(unsafe.Pointer(&nv.valstart))
 	return
 }

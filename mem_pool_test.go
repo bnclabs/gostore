@@ -90,8 +90,8 @@ func TestMpoolAlloc(t *testing.T) {
 func TestPoolMemory(t *testing.T) {
 	size, n := 96, 1024*1024
 	mpool := newmempool(size, n)
-	if x := mpool.memory(); x != 100794424 {
-		t.Errorf("expected %v, got %v", 100794424, x)
+	if x := mpool.memory(); x != 100794432 {
+		t.Errorf("expected %v, got %v", 100794432, x)
 	}
 }
 
@@ -111,7 +111,7 @@ func TestMpools(t *testing.T) {
 func BenchmarkNewmempool(b *testing.B) {
 	size, n := 96, 1024*1024
 	for i := 0; i < b.N; i++ {
-		newmempool(size, n-1)
+		newmempool(size, n)
 	}
 }
 
