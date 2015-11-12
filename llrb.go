@@ -56,26 +56,26 @@ func (llrb *LLRB) Root() *node {
 }
 
 func (llrb *LLRB) Count() int64 {
-	return llrb.count
+	return atomic.LoadInt64(&llrb.count)
 }
 
 func (llrb *LLRB) KeyMemory() int64 {
-	return llrb.keymemory
+	return atomic.LoadInt64(&llrb.keymemory)
 }
 
 func (llrb *LLRB) ValueMemory() int64 {
-	return llrb.valmemory
+	return atomic.LoadInt64(&llrb.valmemory)
 }
 
-func (llrb *LLRB) Memory() int64 {
+func (llrb *LLRB) Memory() int64 { // needs an Rlock
 	return llrb.nodearena.memory() + llrb.valarena.memory()
 }
 
-func (llrb *LLRB) Allocated() int64 {
+func (llrb *LLRB) Allocated() int64 { // needs an Rlock
 	return llrb.nodearena.allocated() + llrb.valarena.allocated()
 }
 
-func (llrb *LLRB) Available() int64 {
+func (llrb *LLRB) Available() int64 { // needs an Rlock
 	return llrb.nodearena.available() + llrb.valarena.available()
 }
 

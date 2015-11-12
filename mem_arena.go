@@ -55,6 +55,7 @@ func (arena *memarena) alloc(n int64) (ptr unsafe.Pointer, mpool *mempool) {
 		numblocks = ((numblocks >> 3) + 1) << 3
 	}
 	mpool = newmempool(size, numblocks)
+	// mpools should be protected by write-lock or mvcc.
 	arena.mpools[size] = append(arena.mpools[size], mpool)
 	sort.Sort(arena.mpools[size])
 	ptr, _ = mpool.alloc()

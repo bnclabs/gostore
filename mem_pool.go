@@ -56,7 +56,7 @@ func (pool *mempool) alloc() (unsafe.Pointer, bool) {
 			break
 		}
 	}
-	pool.mallocated += pool.size
+	atomic.AddInt64(&pool.mallocated, pool.size)
 	return unsafe.Pointer(ptr), true
 }
 
@@ -74,7 +74,7 @@ func (pool *mempool) free(ptr unsafe.Pointer) {
 	if pool.freeoff == -1 || nthoff < pool.freeoff {
 		pool.freeoff = nthoff
 	}
-	pool.mallocated -= pool.size
+	atomic.AddInt64(&pool.mallocated, -pool.size)
 }
 
 func (pool *mempool) release() {
@@ -97,10 +97,15 @@ func (pool *mempool) memory() int64 {
 }
 
 func (pool *mempool) allocated() int64 {
-	return pool.mallocated
+	return atomic.LoadInt64(&pool.mallocated)
 }
 
-func (pool *mempool) allocated1() int64 {
+func (pool *mempool) available() int64 {
+	return pool.capacity - pool.allocated()
+}
+
+// can be costly operation.
+func (pool *mempool) checkallocated() int64 {
 	blocks := int64(0)
 	q, r := int64(len(pool.freelist)/4), int64(len(pool.freelist)%4)
 	for i := int64(1); i <= q; i++ {
@@ -111,10 +116,6 @@ func (pool *mempool) allocated1() int64 {
 		blocks += int64(zerosin8(pool.freelist[i]))
 	}
 	return blocks * pool.size
-}
-
-func (pool *mempool) available() int64 {
-	return pool.capacity - pool.allocated()
 }
 
 // mempools sortable based on base-pointer.
