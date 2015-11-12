@@ -15,40 +15,30 @@ type LLRB struct { // tree container
 	nodearena *memarena
 	valarena  *memarena
 	root      unsafe.Pointer // root *node of LLRB tree
-	mvcc      bool
 	config    map[string]interface{}
 	// scratch pad
 	tmpk []byte
 	tmpv []byte
 	// statistics
-	count     int // number of nodes in the tree
-	keymemory int // memory used by all keys
-	valmemory int // memory used by all values
+	count     int64 // number of nodes in the tree
+	keymemory int64 // memory used by all keys
+	valmemory int64 // memory used by all values
 }
 
 func NewLLRB(config map[string]interface{}) *LLRB {
-	llrb := newllrb(config)
-	llrb.mvcc = false
-	return llrb
-}
-
-func NewLLRBMvcc(config map[string]interface{}) *LLRB {
-	llrb := newllrb(config)
-	llrb.mvcc = true
-	return llrb
-}
-
-func newllrb(config map[string]interface{}) *LLRB {
 	validateConfig(config)
+
 	llrb := &LLRB{}
-	minblock := config["nodemem.minblock"].(int)
-	maxblock := config["nodemem.maxblock"].(int)
-	capacity := config["nodemem.capacity "].(int)
+
+	minblock := int64(config["nodemem.minblock"].(int))
+	maxblock := int64(config["nodemem.maxblock"].(int))
+	capacity := int64(config["nodemem.capacity "].(int))
 	llrb.nodearena = newmemarena(minblock, maxblock, capacity)
-	minblock = config["valmem.minblock"].(int)
-	maxblock = config["valmem.maxblock"].(int)
-	capacity = config["valmem.capacity"].(int)
+	minblock = int64(config["valmem.minblock"].(int))
+	maxblock = int64(config["valmem.maxblock"].(int))
+	capacity = int64(config["valmem.capacity"].(int))
 	llrb.valarena = newmemarena(minblock, maxblock, capacity)
+
 	// scratchpad
 	llrb.tmpk = make([]byte, config["keymem.maxblock"].(int))
 	llrb.tmpv = make([]byte, config["valmem.maxblock"].(int))
@@ -65,27 +55,27 @@ func (llrb *LLRB) Root() *node {
 	return (*node)(atomic.LoadPointer(&llrb.root))
 }
 
-func (llrb *LLRB) Count() int {
+func (llrb *LLRB) Count() int64 {
 	return llrb.count
 }
 
-func (llrb *LLRB) KeyMemory() int {
+func (llrb *LLRB) KeyMemory() int64 {
 	return llrb.keymemory
 }
 
-func (llrb *LLRB) ValueMemory() int {
+func (llrb *LLRB) ValueMemory() int64 {
 	return llrb.valmemory
 }
 
-func (llrb *LLRB) Memory() int {
+func (llrb *LLRB) Memory() int64 {
 	return llrb.nodearena.memory() + llrb.valarena.memory()
 }
 
-func (llrb *LLRB) Allocated() int {
+func (llrb *LLRB) Allocated() int64 {
 	return llrb.nodearena.allocated() + llrb.valarena.allocated()
 }
 
-func (llrb *LLRB) Available() int {
+func (llrb *LLRB) Available() int64 {
 	return llrb.nodearena.available() + llrb.valarena.available()
 }
 
@@ -453,14 +443,14 @@ func walkuprot234(nd *node) *node {
 //---- local functions
 
 func (llrb *LLRB) newnode(k, v []byte, vbno uint16, seqno, vbuuid uint64) *node {
-	ptr, mpool := llrb.nodearena.alloc(nodesize + len(k))
+	ptr, mpool := llrb.nodearena.alloc(int64(nodesize + len(k)))
 	nd := (*node)(ptr)
 	nd = nd.setdirty().setred()
 	nd = nd.setvbno(vbno)
 	nd.vbuuid = vbuuid
 	nd.pool, nd.left, nd.right = mpool, nil, nil
 
-	ptr, mpool = llrb.valarena.alloc(nvaluesize + len(v))
+	ptr, mpool = llrb.valarena.alloc(int64(nvaluesize + len(v)))
 	nv := (*nodevalue)(ptr)
 	nv.pool = mpool
 	nv = nv.setvalue(v)

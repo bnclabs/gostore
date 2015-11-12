@@ -3,7 +3,7 @@ package llrb
 import "unsafe"
 import "reflect"
 
-const nvaluesize = 8 // plus value size
+const nvaluesize = 16 // plus value size
 type nodevalue struct {
 	hdr1     uint64 // vsize(32)
 	pool     *mempool

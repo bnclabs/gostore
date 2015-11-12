@@ -8,15 +8,15 @@ import "encoding/binary"
 
 // mempool manages a memory block sliced up into equal sized chunks.
 type mempool struct {
-	capacity   int            // memory managed by this pool
-	size       int            // fixed size blocks in this pool
+	capacity   int64          // memory managed by this pool
+	size       int64          // fixed size blocks in this pool
 	base       unsafe.Pointer // pool's base pointer
 	freelist   []uint8        // free block book-keeping
-	freeoff    int
-	mallocated int
+	freeoff    int64
+	mallocated int64
 }
 
-func newmempool(size, n int) *mempool {
+func newmempool(size, n int64) *mempool {
 	if (n & 0x7) != 0 {
 		panic("number of blocks in a pool should be multiple of 8")
 	}
@@ -36,7 +36,7 @@ func newmempool(size, n int) *mempool {
 }
 
 func (pool *mempool) alloc() (unsafe.Pointer, bool) {
-	var safeoff int
+	var safeoff int64
 
 	if pool.freeoff < 0 {
 		return nil, false
@@ -45,12 +45,12 @@ func (pool *mempool) alloc() (unsafe.Pointer, bool) {
 	if byt == 0 {
 		panic("mempool.alloc(): invalid free-offset")
 	}
-	sz, k := pool.size, findfirstset8(byt)
-	ptr := uintptr(pool.base) + uintptr(((pool.freeoff*8)*sz)+(int(k)*sz))
+	sz, k := pool.size, int64(findfirstset8(byt))
+	ptr := uintptr(pool.base) + uintptr(((pool.freeoff*8)*sz)+(k*sz))
 	pool.freelist[pool.freeoff] = clearbit8(byt, uint8(k))
 	// recompute freeoff
 	safeoff, pool.freeoff = pool.freeoff, -1
-	for i := safeoff; i < len(pool.freelist); i++ {
+	for i := safeoff; i < int64(len(pool.freelist)); i++ {
 		if pool.freelist[i] != 0 {
 			pool.freeoff = i
 			break
@@ -69,10 +69,10 @@ func (pool *mempool) free(ptr unsafe.Pointer) {
 		panic("mempool.free(): unaligned pointer")
 	}
 	nthblock := diffptr / uint64(pool.size)
-	nthoff := (nthblock / 8)
+	nthoff := int64(nthblock / 8)
 	pool.freelist[nthoff] = setbit8(pool.freelist[nthoff], uint8(nthblock%8))
-	if pool.freeoff == -1 || int(nthoff) < pool.freeoff {
-		pool.freeoff = int(nthoff)
+	if pool.freeoff == -1 || nthoff < pool.freeoff {
+		pool.freeoff = nthoff
 	}
 	pool.mallocated -= pool.size
 }
@@ -90,30 +90,30 @@ func (pool *mempool) less(other *mempool) bool {
 
 //---- local functions
 
-func (pool *mempool) memory() int {
-	self := int(unsafe.Sizeof(*pool))
-	slicesz := cap(pool.freelist)
+func (pool *mempool) memory() int64 {
+	self := int64(unsafe.Sizeof(*pool))
+	slicesz := int64(cap(pool.freelist))
 	return pool.capacity + slicesz + self
 }
 
-func (pool *mempool) allocated() int {
+func (pool *mempool) allocated() int64 {
 	return pool.mallocated
 }
 
-func (pool *mempool) allocated1() int {
-	blocks := 0
-	q, r := len(pool.freelist)/4, len(pool.freelist)%4
-	for i := 1; i <= q; i++ {
+func (pool *mempool) allocated1() int64 {
+	blocks := int64(0)
+	q, r := int64(len(pool.freelist)/4), int64(len(pool.freelist)%4)
+	for i := int64(1); i <= q; i++ {
 		v := binary.BigEndian.Uint32(pool.freelist[(i-1)*4 : i*4])
-		blocks += int(zerosin32(uint32(v & 0xffffffff)))
+		blocks += int64(zerosin32(uint32(v & 0xffffffff)))
 	}
 	for i := q * 4; i < (q*4)+r; i++ {
-		blocks += int(zerosin8(pool.freelist[i]))
+		blocks += int64(zerosin8(pool.freelist[i]))
 	}
 	return blocks * pool.size
 }
 
-func (pool *mempool) available() int {
+func (pool *mempool) available() int64 {
 	return pool.capacity - pool.allocated()
 }
 

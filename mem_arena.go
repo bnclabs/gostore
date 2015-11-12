@@ -12,19 +12,19 @@ const maxpools = 256                           // len(arena.blocksizes)
 const maxarenasize = 1024 * 1024 * 1024 * 1024 // 1TB
 
 type memarena struct {
-	minblock   int              // minimum block size allocatable by arena
-	maxblock   int              // maximum block size allocatable by arena
-	capacity   int              // memory capacity to be managed by this arena
-	blocksizes []int            // sorted list of block-sizes in this arena
-	mpools     map[int]mempools // size -> sorted list of mempool
+	minblock   int64              // minimum block size allocatable by arena
+	maxblock   int64              // maximum block size allocatable by arena
+	capacity   int64              // memory capacity to be managed by this arena
+	blocksizes []int64            // sorted list of block-sizes in this arena
+	mpools     map[int64]mempools // size -> sorted list of mempool
 }
 
-func newmemarena(minblock, maxblock, capacity int) *memarena {
+func newmemarena(minblock, maxblock, capacity int64) *memarena {
 	arena := &memarena{
 		minblock: minblock,
 		maxblock: maxblock,
 		capacity: capacity,
-		mpools:   make(map[int]mempools),
+		mpools:   make(map[int64]mempools),
 	}
 	arena.blocksizes = Blocksizes(arena.minblock, arena.maxblock)
 	if len(arena.blocksizes) > 256 || capacity > maxarenasize {
@@ -38,7 +38,7 @@ func newmemarena(minblock, maxblock, capacity int) *memarena {
 
 //---- operations
 
-func (arena *memarena) alloc(n int) (ptr unsafe.Pointer, mpool *mempool) {
+func (arena *memarena) alloc(n int64) (ptr unsafe.Pointer, mpool *mempool) {
 	var ok bool
 
 	if largest := arena.blocksizes[len(arena.blocksizes)-1]; n > largest {
@@ -50,7 +50,7 @@ func (arena *memarena) alloc(n int) (ptr unsafe.Pointer, mpool *mempool) {
 			return ptr, mpool
 		}
 	}
-	numblocks := (arena.capacity / len(arena.blocksizes)) / size
+	numblocks := (arena.capacity / int64(len(arena.blocksizes))) / size
 	if (numblocks & 0x7) > 0 {
 		numblocks = ((numblocks >> 3) + 1) << 3
 	}
@@ -72,9 +72,9 @@ func (arena *memarena) release() {
 
 //---- statistics and maintenance
 
-func (arena *memarena) memory() int {
-	self := int(unsafe.Sizeof(*arena))
-	slicesz := cap(arena.blocksizes) * int(unsafe.Sizeof(int(1)))
+func (arena *memarena) memory() int64 {
+	self := int64(unsafe.Sizeof(*arena))
+	slicesz := int64(cap(arena.blocksizes) * int(unsafe.Sizeof(int64(1))))
 	size := self + slicesz
 	for _, mpools := range arena.mpools {
 		for _, mpool := range mpools {
@@ -84,8 +84,8 @@ func (arena *memarena) memory() int {
 	return size
 }
 
-func (arena *memarena) allocated() int {
-	allocated := 0
+func (arena *memarena) allocated() int64 {
+	allocated := int64(0)
 	for _, mpools := range arena.mpools {
 		for _, mpool := range mpools {
 			allocated += mpool.allocated()
@@ -94,11 +94,11 @@ func (arena *memarena) allocated() int {
 	return allocated
 }
 
-func (arena *memarena) available() int {
+func (arena *memarena) available() int64 {
 	return arena.capacity - arena.allocated()
 }
 
-func SuitableSize(sizes []int, size int) int {
+func SuitableSize(sizes []int64, size int64) int64 {
 	switch len(sizes) {
 	case 1:
 		return sizes[0]
@@ -118,7 +118,7 @@ func SuitableSize(sizes []int, size int) int {
 	}
 }
 
-func Blocksizes(minblock, maxblock int) []int {
+func Blocksizes(minblock, maxblock int64) []int64 {
 	if maxblock < minblock { // validate and cure the input params
 		panic("minblock < maxblock")
 	} else if (minblock % sizeinterval) != 0 {
@@ -127,8 +127,8 @@ func Blocksizes(minblock, maxblock int) []int {
 		panic(fmt.Errorf("maxblock is not multiple of %v", sizeinterval))
 	}
 
-	nextsize := func(from int) int {
-		addby := int(float64(from) * (1.0 - MEMUtilization))
+	nextsize := func(from int64) int64 {
+		addby := int64(float64(from) * (1.0 - MEMUtilization))
 		if addby <= 32 {
 			addby = 32
 		}
@@ -139,7 +139,7 @@ func Blocksizes(minblock, maxblock int) []int {
 		return size
 	}
 
-	sizes := make([]int, 0, maxpools)
+	sizes := make([]int64, 0, maxpools)
 	for size := minblock; size < maxblock; {
 		sizes = append(sizes, size)
 		size = nextsize(size)
