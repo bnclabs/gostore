@@ -8,8 +8,9 @@ import "sync/atomic"
 const minKeymem = 64
 const maxKeymem = 4096
 
-// KeyIterator callback function while ranging from low-key and high-key.
-type KeyIterator func(key, value []byte) bool
+// KeyIterator callback function while ranging from
+// low-key and high-key, return false to stop iteration.
+type KeyIterator func(nd *node) bool
 
 type LLRB struct { // tree container
 	nodearena *memarena
@@ -82,55 +83,45 @@ func (llrb *LLRB) Available() int64 { // needs an Rlock
 //---- LLRB read operations.
 
 func (llrb *LLRB) Has(key []byte) bool {
-	_, _, rv := llrb.Get(key, nil, nil)
-	return rv
+	nd := llrb.Get(key)
+	return nd != nil
 }
 
-func (llrb *LLRB) Get(lookupkey, key, value []byte) (n, m int, ok bool) {
-	return llrb.get(lookupkey, key, value)
-}
-
-func (llrb *LLRB) get(lookupkey, key, value []byte) (n, m int, ok bool) {
-	nd := (*node)(atomic.LoadPointer(&llrb.root))
+func (llrb *LLRB) Get(lookupkey []byte) (nd *node) {
+	nd = (*node)(atomic.LoadPointer(&llrb.root))
 	for nd != nil {
 		if !nd.lekey(lookupkey) {
 			nd = nd.left
 		} else if nd.ltkey(lookupkey) {
 			nd = nd.right
 		} else {
-			ok = true
-			if key != nil {
-				n = copy(key, nd.key())
-			}
-			if value != nil {
-				m = copy(value, nd.nodevalue().value())
-			}
-			return
+			nd.settimestamp(time.Now().UnixNano())
+			return nd
 		}
 	}
-	return 0, 0, false // key is not present in the tree
+	return nil // key is not present in the tree
 }
 
-func (llrb *LLRB) Min(key, value []byte) (int, int, bool) {
+func (llrb *LLRB) Min() *node {
 	nd := (*node)(atomic.LoadPointer(&llrb.root))
 	if nd == nil {
-		return 0, 0, false
+		return nil
 	}
 	for nd.left != nil {
 		nd = nd.left
 	}
-	return copy(key, nd.key()), copy(value, nd.nodevalue().value()), true
+	return nd
 }
 
-func (llrb *LLRB) Max(key, value []byte) (int, int, bool) {
+func (llrb *LLRB) Max() *node {
 	nd := (*node)(atomic.LoadPointer(&llrb.root))
 	if nd == nil {
-		return 0, 0, false
+		return nil
 	}
 	for nd.right != nil {
 		nd = nd.right
 	}
-	return copy(key, nd.key()), copy(value, nd.nodevalue().value()), true
+	return nd
 }
 
 // Range from lowkey to highkey, incl can be "both", "low", "high", "none"
@@ -162,7 +153,7 @@ func (llrb *LLRB) rangeFromFind(nd *node, lk, hk []byte, iter KeyIterator) bool 
 	if !llrb.rangeFromFind(nd.left, lk, hk, iter) {
 		return false
 	}
-	if iter != nil && !iter(nd.key(), nd.nodevalue().value()) {
+	if iter != nil && !iter(nd) {
 		return false
 	}
 	return llrb.rangeFromFind(nd.right, lk, hk, iter)
@@ -182,7 +173,7 @@ func (llrb *LLRB) rangeFromTill(nd *node, lk, hk []byte, iter KeyIterator) bool 
 	if !llrb.rangeFromTill(nd.left, lk, hk, iter) {
 		return false
 	}
-	if iter != nil && !iter(nd.key(), nd.nodevalue().value()) {
+	if iter != nil && !iter(nd) {
 		return false
 	}
 	return llrb.rangeFromTill(nd.right, lk, hk, iter)
@@ -202,7 +193,7 @@ func (llrb *LLRB) rangeAfterFind(nd *node, lk, hk []byte, iter KeyIterator) bool
 	if !llrb.rangeAfterFind(nd.left, lk, hk, iter) {
 		return false
 	}
-	if iter != nil && !iter(nd.key(), nd.nodevalue().value()) {
+	if iter != nil && !iter(nd) {
 		return false
 	}
 	return llrb.rangeAfterFind(nd.right, lk, hk, iter)
@@ -222,7 +213,7 @@ func (llrb *LLRB) rangeAfterTill(nd *node, lk, hk []byte, iter KeyIterator) bool
 	if !llrb.rangeAfterTill(nd.left, lk, hk, iter) {
 		return false
 	}
-	if iter != nil && !iter(nd.key(), nd.nodevalue().value()) {
+	if iter != nil && !iter(nd) {
 		return false
 	}
 	return llrb.rangeAfterTill(nd.right, lk, hk, iter)
@@ -231,175 +222,173 @@ func (llrb *LLRB) rangeAfterTill(nd *node, lk, hk []byte, iter KeyIterator) bool
 //---- LLRB write operations.
 
 func (llrb *LLRB) Upsert(
-	key, value, oldkey, oldvalue []byte,
-	vbno uint16, vbuuid, seqno uint64) (int, int, bool) {
+	key, value []byte, vbno uint16, vbuuid, seqno uint64) *node {
 
 	nd := (*node)(atomic.LoadPointer(&llrb.root))
-	root, n, m, replaced := llrb.upsert(
-		nd, key, value, oldkey, oldvalue, vbno, vbuuid, seqno)
+	root, oldn := llrb.upsert(nd, key, value, vbno, vbuuid, seqno)
 	root.setblack()
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
-	if replaced == false {
+	if oldn == nil {
 		llrb.count++
 	}
-	return n, m, replaced
+	return oldn
 }
 
 func (llrb *LLRB) upsert(
-	nd *node, key, value, oldk, oldv []byte,
-	vbno uint16, vbuuid, seqno uint64) (*node, int, int, bool) {
+	nd *node,
+	key, value []byte, vbno uint16, vbuuid, seqno uint64) (root, oldn *node) {
 
 	if nd == nil {
-		return llrb.newnode(key, value, vbno, vbuuid, seqno), 0, 0, false
+		return llrb.newnode(key, value, vbno, vbuuid, seqno), nil
 	}
 
 	nd = llrb.walkdownrot23(nd)
 
-	var n, m int
-	var replaced bool
-
 	if nd.gekey(key) == false {
-		nd.left, n, m, replaced =
-			llrb.upsert(nd.left, key, value, oldk, oldv, vbno, vbuuid, seqno)
+		nd.left, oldn = llrb.upsert(nd.left, key, value, vbno, vbuuid, seqno)
 	} else if nd.ltkey(key) {
-		nd.right, n, m, replaced =
-			llrb.upsert(nd.right, key, value, oldk, oldv, vbno, vbuuid, seqno)
+		nd.right, oldn = llrb.upsert(nd.right, key, value, vbno, vbuuid, seqno)
 	} else {
-		k, v := nd.key(), nd.nodevalue().value()
-		n, m, replaced = copy(oldk, k), copy(oldv, v), true
+		oldn = nd
 	}
 
 	nd = llrb.walkuprot23(nd)
-
-	return nd, n, m, replaced
+	return nd, oldn
 }
 
-func (llrb *LLRB) DeleteMin(oldkey, oldvalue []byte) (int, int, bool) {
+func (llrb *LLRB) DeleteMin() *node {
 	nd := (*node)(atomic.LoadPointer(&llrb.root))
-	root, n, m, deleted := llrb.deletemin(nd, oldkey, oldvalue)
+	root, deleted := llrb.deletemin(nd)
 	if root != nil {
 		root.setblack()
 	}
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
-	if deleted {
-		llrb.count++
+	if deleted != nil {
+		llrb.count--
 	}
-	return n, m, deleted
+	return deleted
 }
 
-func (llrb *LLRB) deletemin( // using 2-3 trees
-	nd *node, oldk, oldv []byte) (newnd *node, n int, m int, deleted bool) {
-
+// using 2-3 trees
+func (llrb *LLRB) deletemin(nd *node) (newnd, deleted *node) {
 	if nd == nil {
-		return nil, 0, 0, false
+		return nil, nil
 	}
 	if nd.left == nil {
-		k, v := nd.key(), nd.nodevalue().value()
-		if oldk != nil {
-			n = copy(oldk, k)
-		}
-		m = copy(oldv, v)
-		return nil, n, m, true
+		return nil, nd
 	}
-
 	if !nd.left.isred() && !nd.left.left.isred() {
 		nd = moveredleft(nd)
 	}
-
-	nd.left, n, m, deleted = llrb.deletemin(nd.left, oldk, oldv)
-	return fixup(nd), n, m, deleted
+	nd.left, deleted = llrb.deletemin(nd.left)
+	return fixup(nd), deleted
 }
 
-func (llrb *LLRB) DeleteMax(oldkey, oldvalue []byte) (int, int, bool) {
+func (llrb *LLRB) DeleteMax() *node {
 	nd := (*node)(atomic.LoadPointer(&llrb.root))
-	root, n, m, deleted := llrb.deletemax(nd, oldkey, oldvalue)
+	root, deleted := llrb.deletemax(nd)
 	if root != nil {
 		root.setblack()
 	}
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
-	if deleted {
-		llrb.count++
+	if deleted != nil {
+		llrb.count--
 	}
-	return n, m, deleted
+	return deleted
 }
 
-func (llrb *LLRB) deletemax( // using 2-3 trees
-	nd *node, oldk, oldv []byte) (newnd *node, n int, m int, deleted bool) {
-
+// using 2-3 trees
+func (llrb *LLRB) deletemax(nd *node) (newnd, deleted *node) {
 	if nd == nil {
-		return nil, 0, 0, false
+		return nil, nil
 	}
 	if nd.left.isred() {
 		nd = rotateright(nd)
 	}
 	if nd.right == nil {
-		k, v := nd.key(), nd.nodevalue().value()
-		n, m := copy(oldk, k), copy(oldv, v)
-		return nil, n, m, true
+		return nil, nd
 	}
 	if !nd.right.isred() && !nd.right.left.isred() {
 		nd = moveredright(nd)
 	}
-
-	nd.left, n, m, deleted = llrb.deletemax(nd.right, oldk, oldv)
-	return fixup(nd), n, m, deleted
+	nd.right, deleted = llrb.deletemax(nd.right)
+	return fixup(nd), deleted
 }
 
-func (llrb *LLRB) Delete(key, oldvalue []byte) (int, bool) {
+func (llrb *LLRB) Delete(key []byte) *node {
 	nd := (*node)(atomic.LoadPointer(&llrb.root))
-	root, _, m, deleted := llrb.delete(nd, key, oldvalue)
+	root, deleted := llrb.delete(nd, key)
 	if root != nil {
 		root.setblack()
 	}
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
-	if deleted {
-		llrb.count++
+	if deleted != nil {
+		llrb.count--
 	}
-	return m, deleted
+	return deleted
 }
 
-func (llrb *LLRB) delete(
-	nd *node, key, oldv []byte) (newnd *node, n, m int, deleted bool) {
-
+func (llrb *LLRB) delete(nd *node, key []byte) (newnd, deleted *node) {
 	if nd == nil {
-		return nil, 0, 0, false
+		return nil, nil
 	}
 
 	if nd.gekey(key) == false {
 		if nd.left == nil { // key not present. Nothing to delete
-			return nd, 0, 0, false
+			return nd, nil
 		}
 		if !nd.left.isred() && !nd.left.left.isred() {
 			nd = moveredleft(nd)
 		}
-		nd.left, _, m, deleted = llrb.delete(nd.left, key, oldv)
+		nd.left, deleted = llrb.delete(nd.left, key)
 
 	} else {
 		if nd.left.isred() {
 			nd = rotateright(nd)
 		}
+		// If @key equals @h.Item and no right children at @h
 		if !nd.ltkey(key) && nd.right == nil {
-			return nil, 0, copy(oldv, nd.nodevalue().value()), true
+			return nil, nd
 		}
 		if nd.right != nil && !nd.right.isred() && !nd.right.left.isred() {
 			nd = moveredright(nd)
 		}
+		// If @key equals @h.Item, and (from above) 'h.Right != nil'
 		if !nd.ltkey(key) {
-			nd.right, n, m, deleted = llrb.deletemin(nd.right, llrb.tmpk, oldv)
-			if deleted == false {
+			var subdeleted *node
+			nd.right, subdeleted = llrb.deletemin(nd.right)
+			if subdeleted == nil {
 				panic("logic")
 			}
-			copy(llrb.tmpv, nd.nodevalue().value())
-			nd.setkey(llrb.tmpk[:n])
-			nd.nodevalue().setvalue(oldv[:m])
-			copy(oldv, llrb.tmpv[:m])
-
+			freend := nd
+			// copy subdeleted as the current node
+			sdkey := subdeleted.key()
+			vbno, vbuuid := subdeleted.vbno(), subdeleted.vbuuid
+			seqno := subdeleted.seqno
+			if nv := subdeleted.nodevalue(); nv != nil {
+				nd = llrb.newnode(sdkey, nv.value(), vbno, vbuuid, seqno)
+			} else {
+				nd = llrb.newnode(sdkey, nil, vbno, vbuuid, seqno)
+			}
+			if freend.isdirty() {
+				nd.setdirty()
+			} else {
+				nd.cleardirty()
+			}
+			if freend.isblack() {
+				nd.setblack()
+			} else {
+				nd.setred()
+			}
+			nd.left, nd.right = freend.left, freend.right
+			// and free the current node.
+			llrb.freenode(freend)
 		} else { // Else, @key is bigger than @nd
-			nd.right, n, m, deleted = llrb.delete(nd.right, key, oldv)
+			nd.right, deleted = llrb.delete(nd.right, key)
 		}
 	}
 
-	return fixup(nd), n, m, deleted
+	return fixup(nd), deleted
 }
 
 // rotation routines for 2-3 algorithm
@@ -442,7 +431,7 @@ func walkuprot234(nd *node) *node {
 
 //---- local functions
 
-func (llrb *LLRB) newnode(k, v []byte, vbno uint16, seqno, vbuuid uint64) *node {
+func (llrb *LLRB) newnode(k, v []byte, vbno uint16, vbuuid, seqno uint64) *node {
 	ptr, mpool := llrb.nodearena.alloc(int64(nodesize + len(k)))
 	nd := (*node)(ptr)
 	nd = nd.setdirty().setred()
@@ -458,6 +447,34 @@ func (llrb *LLRB) newnode(k, v []byte, vbno uint16, seqno, vbuuid uint64) *node 
 	nd.mvalue, nd.fpos = nv, -1
 	nd = nd.settimestamp(time.Now().UnixNano()).setkey(k)
 	return nd
+}
+
+func (llrb *LLRB) clone(nd *node) (newnd *node) {
+	key := nd.key()
+	if nv := nd.nodevalue(); nv != nil {
+		newnd = llrb.newnode(key, nv.value(), nd.vbno(), nd.vbuuid, nd.seqno)
+	} else {
+		newnd = llrb.newnode(key, nil, nd.vbno(), nd.vbuuid, nd.seqno)
+	}
+	if nd.isdirty() {
+		newnd.setdirty()
+	} else {
+		newnd.cleardirty()
+	}
+	if nd.isblack() {
+		newnd.setblack()
+	} else {
+		newnd.setred()
+	}
+	newnd.left, newnd.right = nd.left, nd.right
+	return
+}
+
+func (llrb *LLRB) freenode(nd *node) {
+	if nv := nd.nodevalue(); nv != nil {
+		nv.pool.free(unsafe.Pointer(nv))
+	}
+	nd.pool.free(unsafe.Pointer(nd))
 }
 
 func validateConfig(config map[string]interface{}) {

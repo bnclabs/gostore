@@ -4,6 +4,7 @@ package llrb
 import "C"
 
 import "unsafe"
+import "sync/atomic"
 import "encoding/binary"
 
 // mempool manages a memory block sliced up into equal sized chunks.

@@ -11,7 +11,9 @@ type nodevalue struct {
 }
 
 func (nv *nodevalue) setvalsize(size int) *nodevalue {
-	nv.hdr1 = (nv.hdr1 & 0xffffffff00000000) | (uint64(size) & 0xffffffff)
+	if nv != nil {
+		nv.hdr1 = (nv.hdr1 & 0xffffffff00000000) | (uint64(size) & 0xffffffff)
+	}
 	return nv
 }
 
@@ -20,12 +22,15 @@ func (nv *nodevalue) valsize() int {
 
 }
 func (nv *nodevalue) setvalue(val []byte) *nodevalue {
-	var dst []byte
-	sl := (*reflect.SliceHeader)(unsafe.Pointer(&dst))
-	sl.Len = len(val)
-	sl.Cap = len(val)
-	sl.Data = (uintptr)(unsafe.Pointer(&nv.valstart))
-	return nv.setvalsize(copy(dst, val))
+	if nv != nil {
+		var dst []byte
+		sl := (*reflect.SliceHeader)(unsafe.Pointer(&dst))
+		sl.Len = len(val)
+		sl.Cap = len(val)
+		sl.Data = (uintptr)(unsafe.Pointer(&nv.valstart))
+		return nv.setvalsize(copy(dst, val))
+	}
+	return nv
 }
 
 func (nv *nodevalue) value() (val []byte) {
