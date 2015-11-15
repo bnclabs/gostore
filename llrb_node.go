@@ -3,6 +3,7 @@ package llrb
 import "unsafe"
 import "bytes"
 import "reflect"
+import "fmt"
 
 const nodesize = 72 // plus key size.
 // {vbno, vbuuid, seqno, {keysize, key}, {valsize, value}}
@@ -17,6 +18,17 @@ type node struct {
 	fpos     int64          // file-position
 	stat1    uint64         // ts[:48]
 	keystart unsafe.Pointer // just a place-holder
+}
+
+func (nd *node) repr() string {
+	return fmt.Sprintf(
+		"node(%p): %v %v %v %v %v %p %p %v %v key %v value %v",
+		nd,
+		nd.isdirty(), nd.isblack(),
+		nd.vbno(), nd.vbuuid, nd.seqno,
+		nd.left, nd.right,
+		nd.fpos, nd.timestamp(),
+		nd.key(), nd.nodevalue().value())
 }
 
 //---- field operations

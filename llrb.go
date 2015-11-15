@@ -1,12 +1,26 @@
+// Package llrb
+//
+// configuration:
+//
+//	"nodemem.minblock"
+//  "nodemem.maxblock"
+//  "nodemem.capacity"
+//  "valmem.minblock"
+//  "valmem.maxblock"
+//  "valmem.capacity"
+
 package llrb
 
 import "fmt"
 import "unsafe"
 import "time"
+import "bytes"
 import "sync/atomic"
 
-const minKeymem = 64
+const minKeymem = 96
 const maxKeymem = 4096
+const minValmem = 128
+const maxValmem = 10 * 1024 * 1024
 
 // KeyIterator callback function while ranging from
 // low-key and high-key, return false to stop iteration.
@@ -17,9 +31,6 @@ type LLRB struct { // tree container
 	valarena  *memarena
 	root      unsafe.Pointer // root *node of LLRB tree
 	config    map[string]interface{}
-	// scratch pad
-	tmpk []byte
-	tmpv []byte
 	// statistics
 	count     int64 // number of nodes in the tree
 	keymemory int64 // memory used by all keys
@@ -33,16 +44,15 @@ func NewLLRB(config map[string]interface{}) *LLRB {
 
 	minblock := int64(config["nodemem.minblock"].(int))
 	maxblock := int64(config["nodemem.maxblock"].(int))
-	capacity := int64(config["nodemem.capacity "].(int))
+	capacity := int64(config["nodemem.capacity"].(int))
 	llrb.nodearena = newmemarena(minblock, maxblock, capacity)
 	minblock = int64(config["valmem.minblock"].(int))
 	maxblock = int64(config["valmem.maxblock"].(int))
 	capacity = int64(config["valmem.capacity"].(int))
 	llrb.valarena = newmemarena(minblock, maxblock, capacity)
 
-	// scratchpad
-	llrb.tmpk = make([]byte, config["keymem.maxblock"].(int))
-	llrb.tmpv = make([]byte, config["valmem.maxblock"].(int))
+	llrb.config = config
+
 	return llrb
 }
 
@@ -436,7 +446,7 @@ func (llrb *LLRB) newnode(k, v []byte, vbno uint16, vbuuid, seqno uint64) *node 
 	nd := (*node)(ptr)
 	nd = nd.setdirty().setred()
 	nd = nd.setvbno(vbno)
-	nd.vbuuid = vbuuid
+	nd.vbuuid, nd.seqno = vbuuid, seqno
 	nd.pool, nd.left, nd.right = mpool, nil, nil
 
 	ptr, mpool = llrb.valarena.alloc(int64(nvaluesize + len(v)))
@@ -470,6 +480,19 @@ func (llrb *LLRB) clone(nd *node) (newnd *node) {
 	return
 }
 
+func (llrb *LLRB) equivalent(n1, n2 *node) bool {
+	return n1.isdirty() == n2.isdirty() &&
+		n1.isblack() == n2.isblack() &&
+		n1.vbno() == n2.vbno() &&
+		n1.vbuuid == n2.vbuuid &&
+		n1.seqno == n2.seqno &&
+		n1.left == n2.left &&
+		n1.right == n2.right &&
+		bytes.Compare(n1.key(), n2.key()) == 0 &&
+		bytes.Compare(n1.nodevalue().value(), n2.nodevalue().value()) == 0 &&
+		n1.timestamp() == n2.timestamp()
+}
+
 func (llrb *LLRB) freenode(nd *node) {
 	if nv := nd.nodevalue(); nv != nil {
 		nv.pool.free(unsafe.Pointer(nv))
@@ -497,7 +520,7 @@ func validateConfig(config map[string]interface{}) {
 	if minblock < minKeymem {
 		fmsg := "valmem.minblock < %v configuration"
 		panic(fmt.Errorf(fmsg, minKeymem))
-	} else if maxblock > maxKeymem {
+	} else if maxblock > maxValmem {
 		fmsg := "valmem.maxblock > %v configuration"
 		panic(fmt.Errorf(fmsg, maxKeymem))
 	} else if capacity == 0 {
