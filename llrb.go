@@ -22,9 +22,9 @@ const maxKeymem = 4096
 const minValmem = 128
 const maxValmem = 10 * 1024 * 1024
 
-// KeyIterator callback function while ranging from
+// NdIterator callback function while ranging from
 // low-key and high-key, return false to stop iteration.
-type KeyIterator func(nd *node) bool
+type NdIterator func(nd *node) bool
 
 type LLRB struct { // tree container
 	nodearena *memarena
@@ -147,7 +147,7 @@ func (llrb *LLRB) Max() *node {
 }
 
 // Range from lowkey to highkey, incl can be "both", "low", "high", "none"
-func (llrb *LLRB) Range(lowkey, highkey []byte, incl string, iter KeyIterator) {
+func (llrb *LLRB) Range(lowkey, highkey []byte, incl string, iter NdIterator) {
 	nd := (*node)(atomic.LoadPointer(&llrb.root))
 	switch incl {
 	case "both":
@@ -162,7 +162,7 @@ func (llrb *LLRB) Range(lowkey, highkey []byte, incl string, iter KeyIterator) {
 }
 
 // low <= (keys) <= high
-func (llrb *LLRB) rangeFromFind(nd *node, lk, hk []byte, iter KeyIterator) bool {
+func (llrb *LLRB) rangeFromFind(nd *node, lk, hk []byte, iter NdIterator) bool {
 	if nd == nil {
 		return true
 	}
@@ -182,7 +182,7 @@ func (llrb *LLRB) rangeFromFind(nd *node, lk, hk []byte, iter KeyIterator) bool 
 }
 
 // low <= (keys) < hk
-func (llrb *LLRB) rangeFromTill(nd *node, lk, hk []byte, iter KeyIterator) bool {
+func (llrb *LLRB) rangeFromTill(nd *node, lk, hk []byte, iter NdIterator) bool {
 	if nd == nil {
 		return true
 	}
@@ -202,7 +202,7 @@ func (llrb *LLRB) rangeFromTill(nd *node, lk, hk []byte, iter KeyIterator) bool 
 }
 
 // low < (keys) <= hk
-func (llrb *LLRB) rangeAfterFind(nd *node, lk, hk []byte, iter KeyIterator) bool {
+func (llrb *LLRB) rangeAfterFind(nd *node, lk, hk []byte, iter NdIterator) bool {
 	if nd == nil {
 		return true
 	}
@@ -222,7 +222,7 @@ func (llrb *LLRB) rangeAfterFind(nd *node, lk, hk []byte, iter KeyIterator) bool
 }
 
 // low < (keys) < hk
-func (llrb *LLRB) rangeAfterTill(nd *node, lk, hk []byte, iter KeyIterator) bool {
+func (llrb *LLRB) rangeAfterTill(nd *node, lk, hk []byte, iter NdIterator) bool {
 	if nd == nil {
 		return true
 	}
