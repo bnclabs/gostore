@@ -22,13 +22,24 @@ type node struct {
 
 func (nd *node) repr() string {
 	return fmt.Sprintf(
-		"node(%p): %v %v %v %v %v %p %p %v %v key %v value %v",
-		nd,
+		"%v %v %v %v %v %v %v key %v value %v",
 		nd.isdirty(), nd.isblack(),
 		nd.vbno(), nd.vbuuid, nd.seqno,
-		nd.left, nd.right,
 		nd.fpos, nd.timestamp(),
 		nd.key(), nd.nodevalue().value())
+}
+
+func (nd *node) pprint(prefix string) {
+	if nd == nil {
+		fmt.Printf("%v\n", nd)
+		return
+	}
+	fmt.Printf("%v%v\n", prefix, nd.repr())
+	prefix += "  "
+	fmt.Printf("%vleft: ", prefix)
+	nd.left.pprint(prefix)
+	fmt.Printf("%vright: ", prefix)
+	nd.right.pprint(prefix)
 }
 
 //---- field operations
@@ -57,6 +68,9 @@ func (nd *node) setred() *node {
 }
 
 func (nd *node) isred() bool {
+	if nd == nil {
+		return false
+	}
 	return (nd.hdr1 & 0x10000000) == 0
 }
 

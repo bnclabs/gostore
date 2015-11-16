@@ -70,14 +70,6 @@ func (llrb *LLRB) Count() int64 {
 	return atomic.LoadInt64(&llrb.count)
 }
 
-func (llrb *LLRB) KeyMemory() int64 {
-	return atomic.LoadInt64(&llrb.keymemory)
-}
-
-func (llrb *LLRB) ValueMemory() int64 {
-	return atomic.LoadInt64(&llrb.valmemory)
-}
-
 func (llrb *LLRB) Memory() int64 { // needs an Rlock
 	return llrb.nodearena.memory() + llrb.valarena.memory()
 }
@@ -90,6 +82,26 @@ func (llrb *LLRB) Available() int64 { // needs an Rlock
 	return llrb.nodearena.available() + llrb.valarena.available()
 }
 
+func (llrb *LLRB) KeyMemory() int64 {
+	return atomic.LoadInt64(&llrb.keymemory)
+}
+
+func (llrb *LLRB) ValueMemory() int64 {
+	return atomic.LoadInt64(&llrb.valmemory)
+}
+
+func (llrb *LLRB) Freenode(nd *node) {
+	nv := nd.nodevalue()
+	nv.pool.free(unsafe.Pointer(nv))
+	nd.pool.free(unsafe.Pointer(nd))
+}
+
+func (llrb *LLRB) PPrint() {
+	nd := llrb.Root()
+	fmt.Printf("root: ")
+	nd.pprint("  ")
+}
+
 //---- LLRB read operations.
 
 func (llrb *LLRB) Has(key []byte) bool {
@@ -100,7 +112,7 @@ func (llrb *LLRB) Has(key []byte) bool {
 func (llrb *LLRB) Get(lookupkey []byte) (nd *node) {
 	nd = (*node)(atomic.LoadPointer(&llrb.root))
 	for nd != nil {
-		if !nd.lekey(lookupkey) {
+		if nd.gtkey(lookupkey) {
 			nd = nd.left
 		} else if nd.ltkey(lookupkey) {
 			nd = nd.right
@@ -154,7 +166,7 @@ func (llrb *LLRB) rangeFromFind(nd *node, lk, hk []byte, iter KeyIterator) bool 
 	if nd == nil {
 		return true
 	}
-	if hk != nil && !nd.lekey(hk) {
+	if hk != nil && nd.gtkey(hk) {
 		return llrb.rangeFromFind(nd.left, lk, hk, iter)
 	}
 	if lk != nil && nd.ltkey(lk) {
@@ -194,10 +206,10 @@ func (llrb *LLRB) rangeAfterFind(nd *node, lk, hk []byte, iter KeyIterator) bool
 	if nd == nil {
 		return true
 	}
-	if hk != nil && !nd.lekey(hk) {
+	if hk != nil && nd.gtkey(hk) {
 		return llrb.rangeAfterFind(nd.left, lk, hk, iter)
 	}
-	if lk != nil && nd.lekey(lk) {
+	if lk != nil && !nd.gtkey(lk) {
 		return llrb.rangeAfterFind(nd.right, lk, hk, iter)
 	}
 	if !llrb.rangeAfterFind(nd.left, lk, hk, iter) {
@@ -217,7 +229,7 @@ func (llrb *LLRB) rangeAfterTill(nd *node, lk, hk []byte, iter KeyIterator) bool
 	if hk != nil && !nd.ltkey(hk) {
 		return llrb.rangeAfterTill(nd.left, lk, hk, iter)
 	}
-	if lk != nil && nd.lekey(lk) {
+	if lk != nil && !nd.gtkey(lk) {
 		return llrb.rangeAfterTill(nd.right, lk, hk, iter)
 	}
 	if !llrb.rangeAfterTill(nd.left, lk, hk, iter) {
@@ -231,22 +243,28 @@ func (llrb *LLRB) rangeAfterTill(nd *node, lk, hk []byte, iter KeyIterator) bool
 
 //---- LLRB write operations.
 
-func (llrb *LLRB) Upsert(
-	key, value []byte, vbno uint16, vbuuid, seqno uint64) *node {
-
+func (llrb *LLRB) Upsert(k, v []byte, vbno uint16, vbuuid, seqno uint64) *node {
+	if k == nil {
+		panic("upserting nil key")
+	}
 	nd := (*node)(atomic.LoadPointer(&llrb.root))
-	root, oldn := llrb.upsert(nd, key, value, vbno, vbuuid, seqno)
+	root, oldn := llrb.upsert(nd, k, v, vbno, vbuuid, seqno)
 	root.setblack()
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 	if oldn == nil {
 		llrb.count++
+	} else {
+		atomic.AddInt64(&llrb.keymemory, -int64(len(oldn.key())))
+		atomic.AddInt64(&llrb.valmemory, -int64(len(oldn.nodevalue().value())))
 	}
+	atomic.AddInt64(&llrb.keymemory, int64(len(k)))
+	atomic.AddInt64(&llrb.valmemory, int64(len(v)))
 	return oldn
 }
 
 func (llrb *LLRB) upsert(
-	nd *node,
-	key, value []byte, vbno uint16, vbuuid, seqno uint64) (root, oldn *node) {
+	nd *node, key, value []byte,
+	vbno uint16, vbuuid, seqno uint64) (root, oldn *node) {
 
 	if nd == nil {
 		return llrb.newnode(key, value, vbno, vbuuid, seqno), nil
@@ -254,12 +272,13 @@ func (llrb *LLRB) upsert(
 
 	nd = llrb.walkdownrot23(nd)
 
-	if nd.gekey(key) == false {
+	if nd.gtkey(key) {
 		nd.left, oldn = llrb.upsert(nd.left, key, value, vbno, vbuuid, seqno)
 	} else if nd.ltkey(key) {
 		nd.right, oldn = llrb.upsert(nd.right, key, value, vbno, vbuuid, seqno)
 	} else {
-		oldn = nd
+		oldn = llrb.clone(nd)
+		nd.nodevalue().setvalue(value)
 	}
 
 	nd = llrb.walkuprot23(nd)
@@ -274,6 +293,8 @@ func (llrb *LLRB) DeleteMin() *node {
 	}
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 	if deleted != nil {
+		atomic.AddInt64(&llrb.keymemory, -int64(len(deleted.key())))
+		atomic.AddInt64(&llrb.valmemory, -int64(len(deleted.nodevalue().value())))
 		llrb.count--
 	}
 	return deleted
@@ -302,6 +323,8 @@ func (llrb *LLRB) DeleteMax() *node {
 	}
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 	if deleted != nil {
+		atomic.AddInt64(&llrb.keymemory, -int64(len(deleted.key())))
+		atomic.AddInt64(&llrb.valmemory, -int64(len(deleted.nodevalue().value())))
 		llrb.count--
 	}
 	return deleted
@@ -333,6 +356,8 @@ func (llrb *LLRB) Delete(key []byte) *node {
 	}
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 	if deleted != nil {
+		atomic.AddInt64(&llrb.keymemory, -int64(len(deleted.key())))
+		atomic.AddInt64(&llrb.valmemory, -int64(len(deleted.nodevalue().value())))
 		llrb.count--
 	}
 	return deleted
@@ -397,7 +422,6 @@ func (llrb *LLRB) delete(nd *node, key []byte) (newnd, deleted *node) {
 			nd.right, deleted = llrb.delete(nd.right, key)
 		}
 	}
-
 	return fixup(nd), deleted
 }
 
