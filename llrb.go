@@ -91,9 +91,13 @@ func (llrb *LLRB) ValueMemory() int64 {
 }
 
 func (llrb *LLRB) Freenode(nd *node) {
-	nv := nd.nodevalue()
-	nv.pool.free(unsafe.Pointer(nv))
-	nd.pool.free(unsafe.Pointer(nd))
+	if nd != nil {
+		nv := nd.nodevalue()
+		if nv != nil {
+			nv.pool.free(unsafe.Pointer(nv))
+		}
+		nd.pool.free(unsafe.Pointer(nd))
+	}
 }
 
 func (llrb *LLRB) PPrint() {
@@ -368,7 +372,7 @@ func (llrb *LLRB) delete(nd *node, key []byte) (newnd, deleted *node) {
 		return nil, nil
 	}
 
-	if nd.gekey(key) == false {
+	if nd.gtkey(key) {
 		if nd.left == nil { // key not present. Nothing to delete
 			return nd, nil
 		}
@@ -395,7 +399,7 @@ func (llrb *LLRB) delete(nd *node, key []byte) (newnd, deleted *node) {
 			if subdeleted == nil {
 				panic("logic")
 			}
-			freend := nd
+			deleted = nd
 			// copy subdeleted as the current node
 			sdkey := subdeleted.key()
 			vbno, vbuuid := subdeleted.vbno(), subdeleted.vbuuid
@@ -405,19 +409,19 @@ func (llrb *LLRB) delete(nd *node, key []byte) (newnd, deleted *node) {
 			} else {
 				nd = llrb.newnode(sdkey, nil, vbno, vbuuid, seqno)
 			}
-			if freend.isdirty() {
+			if deleted.isdirty() {
 				nd.setdirty()
 			} else {
 				nd.cleardirty()
 			}
-			if freend.isblack() {
+			if deleted.isblack() {
 				nd.setblack()
 			} else {
 				nd.setred()
 			}
-			nd.left, nd.right = freend.left, freend.right
-			// and free the current node.
-			llrb.freenode(freend)
+			nd.left, nd.right = deleted.left, deleted.right
+			// free the subdeleted node.
+			llrb.Freenode(subdeleted)
 		} else { // Else, @key is bigger than @nd
 			nd.right, deleted = llrb.delete(nd.right, key)
 		}
@@ -515,13 +519,6 @@ func (llrb *LLRB) equivalent(n1, n2 *node) bool {
 		bytes.Compare(n1.key(), n2.key()) == 0 &&
 		bytes.Compare(n1.nodevalue().value(), n2.nodevalue().value()) == 0 &&
 		n1.timestamp() == n2.timestamp()
-}
-
-func (llrb *LLRB) freenode(nd *node) {
-	if nv := nd.nodevalue(); nv != nil {
-		nv.pool.free(unsafe.Pointer(nv))
-	}
-	nd.pool.free(unsafe.Pointer(nd))
 }
 
 func validateConfig(config map[string]interface{}) {

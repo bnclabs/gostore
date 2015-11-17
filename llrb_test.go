@@ -28,7 +28,7 @@ func TestNewLLRB(t *testing.T) {
 	}
 }
 
-func TestNewNode(t *testing.T) {
+func TestNewLLRBNode(t *testing.T) {
 	llrb := NewLLRB(makenewconfig())
 	key, value := makekeyvalue(make([]byte, 128), make([]byte, 1024))
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
@@ -44,10 +44,10 @@ func TestNewNode(t *testing.T) {
 	} else if x := nd.seqno; x != seqno {
 		t.Errorf("expected %v, got %v", seqno, x)
 	}
-	llrb.freenode(nd)
+	llrb.Freenode(nd)
 }
 
-func TestCloneNode(t *testing.T) {
+func TestCloneLLRBNode(t *testing.T) {
 	llrb := NewLLRB(makenewconfig())
 	key, value := makekeyvalue(make([]byte, 128), make([]byte, 1024))
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
@@ -64,7 +64,196 @@ func TestCloneNode(t *testing.T) {
 	}
 }
 
-func TestInsert(t *testing.T) {
+func TestLLRBBasic(t *testing.T) {
+	llrb := NewLLRB(makenewconfig())
+	if llrb.Count() != 0 {
+		t.Fatalf("expected an empty dict")
+	}
+	// inserts
+	inserts := [][2][]byte{
+		[2][]byte{[]byte("key1"), []byte("value1")},
+		[2][]byte{[]byte("key2"), []byte("value2")},
+		[2][]byte{[]byte("key3"), []byte("value3")},
+		[2][]byte{[]byte("key4"), []byte("value4")},
+		[2][]byte{[]byte("key5"), []byte("value5")},
+	}
+	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
+	for _, kv := range inserts {
+		v := llrb.Upsert(kv[0], kv[1], vbno, vbuuid, seqno)
+		if v != nil {
+			t.Errorf("expected nil")
+		}
+		seqno++
+	}
+	// lookups
+	if llrb.Has(inserts[1][0]) == false {
+		t.Errorf("expected key %v", string(inserts[0][0]))
+	}
+	nd := llrb.Get(inserts[2][0])
+	v := nd.nodevalue().value()
+	if bytes.Compare(v, inserts[2][1]) != 0 {
+		t.Errorf("expected %v, got %v", string(inserts[2][1]), string(v))
+	}
+	nd = llrb.Min()
+	k, v := nd.key(), nd.nodevalue().value()
+	if bytes.Compare(k, inserts[0][0]) != 0 {
+		t.Errorf("expected %v, got %v", string(inserts[0][0]), string(k))
+	} else if bytes.Compare(v, inserts[0][1]) != 0 {
+		t.Errorf("expected %v, got %v", string(inserts[0][1]), string(v))
+	}
+	nd = llrb.Max()
+	k, v = nd.key(), nd.nodevalue().value()
+	if bytes.Compare(k, []byte("key5")) != 0 {
+		t.Errorf("expected %v, got %v", "key5", string(k))
+	} else if bytes.Compare(v, []byte("value5")) != 0 {
+		t.Errorf("expected %v, got %v", "value5", string(v))
+	}
+	// upsert
+	nd = llrb.Upsert(inserts[0][0], []byte("value11"), vbno, vbuuid, seqno)
+	v = nd.nodevalue().value()
+	if bytes.Compare(v, inserts[0][1]) != 0 {
+		t.Errorf("expected %v, got %v\n", string(inserts[0][1]), string(v))
+	}
+	llrb.Freenode(nd)
+	// deletes
+	nd = llrb.DeleteMin()
+	k, v = nd.key(), nd.nodevalue().value()
+	if bytes.Compare(k, inserts[0][0]) != 0 {
+		t.Errorf("expected %v, got %v", string(inserts[0][0]), string(k))
+	} else if bytes.Compare(v, []byte("value11")) != 0 {
+		t.Errorf("expected %v, got %v", string(inserts[0][1]), string(v))
+	} else if llrb.Count() != int64(len(inserts)-1) {
+		t.Errorf("expected %v, got %v", len(inserts)-1, llrb.Count())
+	}
+	llrb.Freenode(nd)
+	nd = llrb.DeleteMax()
+	k, v = nd.key(), nd.nodevalue().value()
+	if bytes.Compare(k, []byte("key5")) != 0 {
+		t.Errorf("expected %v, got %v", "key5", string(k))
+	} else if bytes.Compare(v, []byte("value5")) != 0 {
+		t.Errorf("expected %v, got %v", "value5", string(v))
+	} else if llrb.Count() != int64(len(inserts)-2) {
+		t.Errorf("expected %v, got %v", len(inserts)-2, llrb.Count())
+	}
+	llrb.Freenode(nd)
+	nd = llrb.Delete([]byte("key2"))
+	v = nd.nodevalue().value()
+	if bytes.Compare(v, []byte("value2")) != 0 {
+		t.Errorf("expected %v, got %v", "value2", string(v))
+	} else if llrb.Count() != int64(len(inserts)-3) {
+		t.Errorf("expected %v, got %v", len(inserts)-3, llrb.Count())
+	}
+	llrb.Freenode(nd)
+}
+
+func TestLLRBBasicRange(t *testing.T) {
+	llrb := NewLLRB(makenewconfig())
+	// inserts
+	inserts := [][2][]byte{
+		[2][]byte{[]byte("key1"), []byte("value1")},
+		[2][]byte{[]byte("key2"), []byte("value2")},
+		[2][]byte{[]byte("key3"), []byte("value3")},
+		[2][]byte{[]byte("key4"), []byte("value4")},
+		[2][]byte{[]byte("key5"), []byte("value5")},
+	}
+	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
+	for _, kv := range inserts {
+		if v := llrb.Upsert(kv[0], kv[1], vbno, vbuuid, seqno); v != nil {
+			t.Errorf("expected nil")
+		}
+		seqno++
+	}
+	// both
+	i, ln := 0, 0
+	llrb.Range(
+		inserts[0][0], inserts[4][0], "both",
+		func(nd *node) bool {
+			k, v := nd.key(), nd.nodevalue().value()
+			if bytes.Compare(inserts[i][0], k) != 0 {
+				t.Errorf("expected key %v, got %v", inserts[i][0], string(k))
+			} else if bytes.Compare(inserts[i][1], v) != 0 {
+				t.Errorf("expected key %v, got %v", inserts[i][1], string(v))
+			}
+			i++
+			ln++
+			return true
+		})
+	if ln != len(inserts) {
+		t.Errorf("expected %v, got %v", len(inserts), ln)
+	}
+	// none
+	i, ln = 1, 0
+	llrb.Range(
+		inserts[0][0], inserts[4][0], "none",
+		func(nd *node) bool {
+			k, v := nd.key(), nd.nodevalue().value()
+			if bytes.Compare(inserts[i][0], k) != 0 {
+				t.Errorf("expected key %v, got %v", inserts[i][0], string(k))
+			} else if bytes.Compare(inserts[i][1], v) != 0 {
+				t.Errorf("expected key %v, got %v", inserts[i][1], string(v))
+			}
+			i++
+			ln++
+			return true
+		})
+	if ln != (len(inserts) - 2) {
+		t.Errorf("expected %v, got %v", len(inserts)-2, ln)
+	}
+	// high
+	i, ln = 1, 0
+	llrb.Range(
+		inserts[0][0], inserts[4][0], "high",
+		func(nd *node) bool {
+			k, v := nd.key(), nd.nodevalue().value()
+			if bytes.Compare(inserts[i][0], k) != 0 {
+				t.Errorf("expected key %v, got %v", inserts[i][0], string(k))
+			} else if bytes.Compare(inserts[i][1], v) != 0 {
+				t.Errorf("expected key %v, got %v", inserts[i][1], string(v))
+			}
+			i++
+			ln++
+			return true
+		})
+	if ln != (len(inserts) - 1) {
+		t.Errorf("expected %v, got %v", len(inserts)-1, ln)
+	}
+	// low
+	i, ln = 0, 0
+	llrb.Range(
+		inserts[0][0], inserts[4][0], "low",
+		func(nd *node) bool {
+			k, v := nd.key(), nd.nodevalue().value()
+			if bytes.Compare(inserts[i][0], k) != 0 {
+				t.Errorf("expected key %v, got %v", inserts[i][0], string(k))
+			} else if bytes.Compare(inserts[i][1], v) != 0 {
+				t.Errorf("expected key %v, got %v", inserts[i][1], string(v))
+			}
+			i++
+			ln++
+			return true
+		})
+	if ln != (len(inserts) - 1) {
+		t.Errorf("expected %v, got %v", len(inserts)-1, ln)
+	}
+	// corner case on the high side.
+	i, ln = 0, 0
+	llrb.Range(
+		inserts[0][0], inserts[0][0], "high",
+		func(nd *node) bool { return true })
+	if ln != 0 {
+		t.Errorf("expected %v, got %v", 0, ln)
+	}
+	// corner case on the low side.
+	i, ln = 0, 0
+	llrb.Range(
+		inserts[4][0], inserts[4][0], "low",
+		func(nd *node) bool { return true })
+	if ln != 0 {
+		t.Errorf("expected %v, got %v", 0, ln)
+	}
+}
+
+func TestLLRBInsert(t *testing.T) {
 	config := makenewconfig()
 	llrb := NewLLRB(config)
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
@@ -105,7 +294,7 @@ func TestInsert(t *testing.T) {
 	}
 }
 
-func TestUpsert(t *testing.T) {
+func TestLLRBUpsert(t *testing.T) {
 	llrb := NewLLRB(makenewconfig())
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
 	// insert
