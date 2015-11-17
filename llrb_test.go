@@ -4,6 +4,7 @@ import "testing"
 import "fmt"
 import "unsafe"
 import "time"
+import "math/rand"
 import "bytes"
 
 var _ = fmt.Sprintf("dummy")
@@ -343,15 +344,79 @@ func TestLLRBUpsert(t *testing.T) {
 	}
 }
 
+func TestLLRBDelete(t *testing.T) {
+	llrb := NewLLRB(makenewconfig())
+	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
+	keys, values := make([][]byte, 0), make([][]byte, 0)
+	// insert
+	for i := 0; i < 100; i++ {
+		key, value := make([]byte, 100), make([]byte, 100)
+		key, value = makekeyvalue(key, value)
+		keys = append(keys, key)
+		values = append(values, value)
+		llrb.Upsert(key, value, vbno, vbuuid, seqno)
+		vbno++
+		vbuuid++
+		seqno++
+	}
+
+	if x := llrb.Memory(); x != 223623913 {
+		t.Errorf("expected %v, got %v", 223623913, x)
+	} else if x = llrb.Allocated(); x != 32000 {
+		t.Errorf("expected %v, got %v", 32000, x)
+	} else if x = llrb.Available(); x != 11811128064 {
+		t.Errorf("expected %v, got %v", 11811128064, x)
+	} else if x = llrb.KeyMemory(); x != 10000 {
+		t.Errorf("expected %v, got %v", 10000, x)
+	} else if x = llrb.ValueMemory(); x != 10000 {
+		t.Errorf("expected %v, got %v", 10000, x)
+	}
+
+	vbno, vbuuid, seqno = uint16(10), uint64(0xABCD), uint64(12345678)
+	for i := 0; i < len(keys); i++ {
+		refk, refv := keys[i], values[i]
+		nd := llrb.Delete(refk)
+		k, v := nd.key(), nd.nodevalue().value()
+		if bytes.Compare(k, refk) != 0 {
+			t.Errorf("expected %v, got %v", refk, string(k))
+		} else if bytes.Compare(v, refv) != 0 {
+			t.Errorf("expected %v, got %v", refv, string(v))
+		} else if llrb.Count() != int64(len(keys)-1-i) {
+			t.Errorf("expected %v, got %v", len(keys)-1-i, llrb.Count())
+		} else if nd.vbno() != vbno {
+		} else if nd.vbuuid != vbuuid {
+		} else if nd.seqno != seqno {
+		}
+		vbno++
+		vbuuid++
+		seqno++
+		llrb.Freenode(nd)
+	}
+
+	if x := llrb.Memory(); x != 223623913 {
+		t.Errorf("expected %v, got %v", 223623913, x)
+	} else if x = llrb.Allocated(); x != 0 {
+		t.Errorf("expected %v, got %v", 0, x)
+	} else if x = llrb.Available(); x != 11811160064 {
+		t.Errorf("expected %v, got %v", 11811160064, x)
+	} else if x = llrb.KeyMemory(); x != 0 {
+		t.Errorf("expected %v, got %v", 0, x)
+	} else if x = llrb.ValueMemory(); x != 0 {
+		t.Errorf("expected %v, got %v", 0, x)
+	}
+}
+
 func makekeyvalue(key, value []byte) ([]byte, []byte) {
 	if key != nil {
 		for i := 0; i < len(key); i++ {
-			key[i] = byte(97 + (i % 26))
+			x := rand.Intn(26)
+			key[i] = byte(97 + (x % 26))
 		}
 	}
 	if value != nil {
 		for i := 0; i < len(value); i++ {
-			value[i] = byte(97 + (i % 26))
+			x := rand.Intn(26)
+			value[i] = byte(97 + (x % 26))
 		}
 	}
 	return key, value
