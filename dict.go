@@ -47,7 +47,7 @@ func (d *Dict) Min() (key, value []byte) {
 		return nil, nil
 	}
 	hashv := d.sorted()[0]
-	kv := d.dict[uint64(hashv)]
+	kv := d.dict[hashv]
 	return kv[0], kv[1]
 }
 
@@ -56,7 +56,7 @@ func (d *Dict) Max() (key, value []byte) {
 		return nil, nil
 	}
 	keys := d.sorted()
-	kv := d.dict[uint64(keys[len(keys)-1])]
+	kv := d.dict[keys[len(keys)-1]]
 	return kv[0], kv[1]
 }
 
@@ -103,19 +103,19 @@ func (d *Dict) Range(lowkey, highkey []byte, incl string, iter KVIterator) {
 		cmp = 0
 	}
 	for start = 0; start < len(keys); start++ {
-		kv := d.dict[uint64(keys[start])]
-		if bytes.Compare(lowkey, kv[0]) == cmp {
+		kv := d.dict[keys[start]]
+		if bytes.Compare(kv[0], lowkey) >= cmp {
 			break
 		}
 	}
 	if start < len(keys) {
-		cmp = -1
+		cmp = 0
 		if incl == "high" || incl == "both" {
-			cmp = 0
+			cmp = 1
 		}
 		for i := start; i < len(keys); i++ {
-			kv := d.dict[uint64(keys[i])]
-			if bytes.Compare(kv[0], highkey) <= cmp {
+			kv := d.dict[keys[i]]
+			if bytes.Compare(kv[0], highkey) < cmp {
 				if iter(kv[0], kv[1]) == false {
 					break
 				}
@@ -126,11 +126,15 @@ func (d *Dict) Range(lowkey, highkey []byte, incl string, iter KVIterator) {
 	}
 }
 
-func (d *Dict) sorted() []int {
-	keys := make([]int, 0, len(d.dict))
-	for key, _ := range d.dict {
-		keys = append(keys, int(key))
+func (d *Dict) sorted() []uint64 {
+	keys := make([]string, 0, len(d.dict))
+	for _, kv := range d.dict {
+		keys = append(keys, string(kv[0]))
 	}
-	sort.Ints(keys)
-	return keys
+	sort.Strings(keys)
+	hashks := make([]uint64, 0, len(d.dict))
+	for _, key := range keys {
+		hashks = append(hashks, crc64.Checksum([]byte(key), crcisotab))
+	}
+	return hashks
 }
