@@ -136,6 +136,7 @@ func (llrb *LLRB) Min() *node {
 	for nd.left != nil {
 		nd = nd.left
 	}
+	nd.settimestamp(time.Now().UnixNano())
 	return nd
 }
 
@@ -147,11 +148,15 @@ func (llrb *LLRB) Max() *node {
 	for nd.right != nil {
 		nd = nd.right
 	}
+	nd.settimestamp(time.Now().UnixNano())
 	return nd
 }
 
 // Range from lowkey to highkey, incl can be "both", "low", "high", "none"
 func (llrb *LLRB) Range(lowkey, highkey []byte, incl string, iter NdIterator) {
+	if iter == nil {
+		panic("Range(): iter argument is nil")
+	}
 	nd := (*node)(atomic.LoadPointer(&llrb.root))
 	switch incl {
 	case "both":
@@ -182,6 +187,7 @@ func (llrb *LLRB) rangeFromFind(nd *node, lk, hk []byte, iter NdIterator) bool {
 	if iter != nil && !iter(nd) {
 		return false
 	}
+	nd.settimestamp(time.Now().UnixNano())
 	return llrb.rangeFromFind(nd.right, lk, hk, iter)
 }
 
@@ -202,6 +208,7 @@ func (llrb *LLRB) rangeFromTill(nd *node, lk, hk []byte, iter NdIterator) bool {
 	if iter != nil && !iter(nd) {
 		return false
 	}
+	nd.settimestamp(time.Now().UnixNano())
 	return llrb.rangeFromTill(nd.right, lk, hk, iter)
 }
 
@@ -222,6 +229,7 @@ func (llrb *LLRB) rangeAfterFind(nd *node, lk, hk []byte, iter NdIterator) bool 
 	if iter != nil && !iter(nd) {
 		return false
 	}
+	nd.settimestamp(time.Now().UnixNano())
 	return llrb.rangeAfterFind(nd.right, lk, hk, iter)
 }
 
@@ -242,6 +250,7 @@ func (llrb *LLRB) rangeAfterTill(nd *node, lk, hk []byte, iter NdIterator) bool 
 	if iter != nil && !iter(nd) {
 		return false
 	}
+	nd.settimestamp(time.Now().UnixNano())
 	return llrb.rangeAfterTill(nd.right, lk, hk, iter)
 }
 
@@ -285,6 +294,7 @@ func (llrb *LLRB) upsert(
 		if nv := nd.nodevalue(); nv != nil { // free the old value block
 			nv.pool.free(unsafe.Pointer(nv))
 		}
+		nd.settimestamp(time.Now().UnixNano())
 		if value != nil { // and new value block if need be
 			ptr, mpool := llrb.valarena.alloc(int64(nvaluesize + len(value)))
 			nv := (*nodevalue)(ptr)
