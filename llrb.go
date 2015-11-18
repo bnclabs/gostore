@@ -17,10 +17,10 @@ import "time"
 import "bytes"
 import "sync/atomic"
 
-const minKeymem = 96
-const maxKeymem = 4096
-const minValmem = 32
-const maxValmem = 10 * 1024 * 1024
+const MinKeymem = 96
+const MaxKeymem = 4096
+const MinValmem = 32
+const MaxValmem = 10 * 1024 * 1024
 
 // NdIterator callback function while ranging from
 // low-key and high-key, return false to stop iteration.
@@ -88,6 +88,14 @@ func (llrb *LLRB) KeyMemory() int64 {
 
 func (llrb *LLRB) ValueMemory() int64 {
 	return atomic.LoadInt64(&llrb.valmemory)
+}
+
+func (llrb *LLRB) NodeBlocks() []int64 {
+	return llrb.nodearena.blocksizes
+}
+
+func (llrb *LLRB) ValueBlocks() []int64 {
+	return llrb.valarena.blocksizes
 }
 
 func (llrb *LLRB) Freenode(nd *node) {
@@ -543,12 +551,12 @@ func validateConfig(config map[string]interface{}) {
 	minblock := config["nodemem.minblock"].(int)
 	maxblock := config["nodemem.maxblock"].(int)
 	capacity := config["nodemem.capacity"].(int)
-	if minblock < minKeymem {
+	if minblock < MinKeymem {
 		fmsg := "nodemem.minblock < %v configuration"
-		panic(fmt.Errorf(fmsg, minKeymem))
-	} else if maxblock > maxKeymem {
+		panic(fmt.Errorf(fmsg, MinKeymem))
+	} else if maxblock > MaxKeymem {
 		fmsg := "nodemem.maxblock > %v configuration"
-		panic(fmt.Errorf(fmsg, maxKeymem))
+		panic(fmt.Errorf(fmsg, MaxKeymem))
 	} else if capacity == 0 {
 		panic("nodemem.capacity cannot be ZERO")
 	}
@@ -556,12 +564,12 @@ func validateConfig(config map[string]interface{}) {
 	minblock = config["valmem.minblock"].(int)
 	maxblock = config["valmem.maxblock"].(int)
 	capacity = config["valmem.capacity"].(int)
-	if minblock < minKeymem {
+	if minblock < MinValmem {
 		fmsg := "valmem.minblock < %v configuration"
-		panic(fmt.Errorf(fmsg, minKeymem))
-	} else if maxblock > maxValmem {
+		panic(fmt.Errorf(fmsg, MinValmem))
+	} else if maxblock > MaxValmem {
 		fmsg := "valmem.maxblock > %v configuration"
-		panic(fmt.Errorf(fmsg, maxKeymem))
+		panic(fmt.Errorf(fmsg, MaxValmem))
 	} else if capacity == 0 {
 		panic("valmem.capacity cannot be ZERO")
 	}
