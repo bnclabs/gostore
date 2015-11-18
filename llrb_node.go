@@ -249,3 +249,16 @@ func fixup(nd *node) *node {
 	}
 	return nd
 }
+
+//func fixupCow(nd *node, reclaim []*node) (*node, []*node) {
+//	if nd.right.isred() {
+//		nd, reclaim = rotateleftCow(nd, reclaim)
+//	}
+//	if nd.left.isred() && nd.left.left.isred() {
+//		nd, reclaim = rotaterightCow(nd, reclaim)
+//	}
+//	if nd.left.isred() && nd.right.isred() {
+//		reclaim = flipCow(nd, reclaim)
+//	}
+//	return nd, reclaim
+//}
