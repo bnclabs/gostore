@@ -19,7 +19,7 @@ import "sync/atomic"
 
 const minKeymem = 96
 const maxKeymem = 4096
-const minValmem = 128
+const minValmem = 32
 const maxValmem = 10 * 1024 * 1024
 
 // NdIterator callback function while ranging from
