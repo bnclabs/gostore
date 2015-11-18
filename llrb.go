@@ -282,7 +282,15 @@ func (llrb *LLRB) upsert(
 		nd.right, oldn = llrb.upsert(nd.right, key, value, vbno, vbuuid, seqno)
 	} else {
 		oldn = llrb.clone(nd)
-		nd.nodevalue().setvalue(value)
+		if nv := nd.nodevalue(); nv != nil { // free the old value block
+			nv.pool.free(unsafe.Pointer(nv))
+		}
+		if value != nil { // and new value block if need be
+			ptr, mpool := llrb.valarena.alloc(int64(nvaluesize + len(value)))
+			nv := (*nodevalue)(ptr)
+			nv.pool = mpool
+			nd = nd.setnodevalue(nv.setvalue(value))
+		}
 	}
 
 	nd = llrb.walkuprot23(nd)
@@ -480,9 +488,9 @@ func (llrb *LLRB) newnode(k, v []byte, vbno uint16, vbuuid, seqno uint64) *node 
 	ptr, mpool = llrb.valarena.alloc(int64(nvaluesize + len(v)))
 	nv := (*nodevalue)(ptr)
 	nv.pool = mpool
-	nv = nv.setvalue(v)
+	nd.setnodevalue(nv.setvalue(v))
 
-	nd.mvalue, nd.fpos = nv, -1
+	nd.fpos = -1
 	nd = nd.settimestamp(time.Now().UnixNano()).setkey(k)
 	return nd
 }

@@ -91,15 +91,17 @@ func TestArenaAlloc(t *testing.T) {
 	} else if x, y := marena.allocated(), int64(1024*1024); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
+	marena.release()
 }
 
 func TestArenaMemory(t *testing.T) {
 	minblock, maxblock := int64(96), int64(1024*1024*1024)
 	capacity := int64(1024 * 1024 * 1024 * 1024)
-	arena := newmemarena(minblock, maxblock, capacity)
-	if x := arena.memory(); x != 2104 {
+	marena := newmemarena(minblock, maxblock, capacity)
+	if x := marena.memory(); x != 2104 {
 		t.Errorf("expected %v, got %v", 1232, x)
 	}
+	marena.release()
 }
 
 func BenchmarkBlocksizes(b *testing.B) {
@@ -136,10 +138,10 @@ func BenchmarkNewarena(b *testing.B) {
 func BenchmarkArenaAlloc(b *testing.B) {
 	minblock, maxblock := int64(96), int64(1024*1024*1024)
 	capacity := int64(1024 * 1024 * 1024 * 1024)
-	arena := newmemarena(minblock, maxblock, capacity)
+	marena := newmemarena(minblock, maxblock, capacity)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if ptr, mpool := arena.alloc(96); ptr == nil || mpool == nil {
+		if ptr, mpool := marena.alloc(96); ptr == nil || mpool == nil {
 			b.Errorf("unexpected failure in allocation")
 		}
 	}
@@ -148,29 +150,29 @@ func BenchmarkArenaAlloc(b *testing.B) {
 func BenchmarkArenaMemory(b *testing.B) {
 	minblock, maxblock := int64(96), int64(1024*1024*1024)
 	capacity := int64(1024 * 1024 * 1024 * 1024)
-	arena := newmemarena(minblock, maxblock, capacity)
+	marena := newmemarena(minblock, maxblock, capacity)
 	for i := 0; i < 1024*1024; i++ {
-		arena.alloc(int64(rand.Intn(2048)))
+		marena.alloc(int64(rand.Intn(2048)))
 	}
 
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		arena.memory()
+		marena.memory()
 	}
 }
 
 func BenchmarkArenaAllocated(b *testing.B) {
 	minblock, maxblock := int64(96), int64(1024*1024*1024)
 	capacity := int64(1024 * 1024 * 1024 * 1024)
-	arena := newmemarena(minblock, maxblock, capacity)
+	marena := newmemarena(minblock, maxblock, capacity)
 	for i := 0; i < 1024*1024; i++ {
-		arena.alloc(int64(rand.Intn(2048)))
+		marena.alloc(int64(rand.Intn(2048)))
 	}
 
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		arena.allocated()
+		marena.allocated()
 	}
 }

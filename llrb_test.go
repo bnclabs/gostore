@@ -255,91 +255,104 @@ func TestLLRBBasicRange(t *testing.T) {
 }
 
 func TestLLRBInsert(t *testing.T) {
-	config := makenewconfig()
-	llrb := NewLLRB(config)
+	llrb := NewLLRB(makenewconfig())
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
-	// insert first item
-	nd := llrb.Upsert([]byte("abcdef"), []byte("value"), vbno, vbuuid, seqno)
-	if nd != nil {
-		t.Errorf("expected nil")
-	} else if x, y := int64(1), llrb.Count(); x != y {
-		t.Errorf("expected %v, got %v", x, y)
-	}
-	// insert second item
-	seqno++
-	nd1 := llrb.Upsert([]byte("bcdefg"), []byte("value1"), vbno, vbuuid, seqno)
-	if nd1 != nil {
-		t.Errorf("expected nil")
-	} else if x, y := int64(2), llrb.Count(); x != y {
-		t.Errorf("expected %v, got %v", x, y)
-	}
-	// insert third item
-	seqno++
-	nd2 := llrb.Upsert([]byte("aacdef"), []byte("value2"), vbno, vbuuid, seqno)
-	if nd2 != nil {
-		t.Errorf("expected nil")
-	} else if x, y := int64(3), llrb.Count(); x != y {
-		t.Errorf("expected %v, got %v", x, y)
+	keys, values := make([][]byte, 0), make([][]byte, 0)
+	// insert 10K items
+	count := 10 * 1000
+	for i := 0; i < count; i++ {
+		key, value := make([]byte, 100), make([]byte, 100)
+		key, value = makekeyvalue(key, value)
+		if nd := llrb.Upsert(key, value, vbno, vbuuid, seqno); nd != nil {
+			t.Errorf("expected nil")
+		} else if x := llrb.Count(); x != int64(i+1) {
+			t.Errorf("expected %v, got %v", i, x)
+		}
+		seqno++
 	}
 	// check memory accounting
-	if x, y := int64(223717202), llrb.Memory(); x != y {
+	if x, y := int64(223623913), llrb.Memory(); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(576), llrb.Allocated(); x != y {
+	} else if x, y = int64(3200000), llrb.Allocated(); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(11811159488), llrb.Available(); x != y {
+	} else if x, y = int64(11807960064), llrb.Available(); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(18), llrb.KeyMemory(); x != y {
+	} else if x, y = int64(1000000), llrb.KeyMemory(); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(17), llrb.ValueMemory(); x != y {
+	} else if x, y = int64(1000000), llrb.ValueMemory(); x != y {
 		t.Errorf("expected %v, got %v", x, y)
+	}
+	// Get items
+	vbno, vbuuid, seqno = uint16(10), uint64(0xABCD), uint64(12345678)
+	for i, key := range keys {
+		nd := llrb.Get(key)
+		if nd == nil {
+			t.Errorf("unexpected nil")
+		} else if nd.vbno() != vbno {
+			t.Errorf("expected %v, got %v", vbno, nd.vbno())
+		} else if nd.vbuuid != vbuuid {
+			t.Errorf("expected %v, got %v", vbuuid, nd.vbuuid)
+		} else if nd.seqno != seqno {
+			t.Errorf("expected %v, got %v", seqno, nd.seqno)
+		}
+		x, y := values[i], nd.nodevalue().value()
+		if bytes.Compare(x, y) != 0 {
+			t.Errorf("expected %v, got %v", x, y)
+		}
+		seqno++
 	}
 }
 
 func TestLLRBUpsert(t *testing.T) {
 	llrb := NewLLRB(makenewconfig())
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
-	// insert
-	inserts := [][2][]byte{
-		[2][]byte{[]byte("abcdef"), []byte("value")},
-		[2][]byte{[]byte("bcdefg"), []byte("value1")},
-		[2][]byte{[]byte("aacdef"), []byte("value2")},
-	}
-	for _, kv := range inserts {
-		llrb.Upsert(kv[0], kv[1], vbno, vbuuid, seqno)
+	keys, values := make([][]byte, 0), make([][]byte, 0)
+	// insert 10K items
+	count := 10 * 1000
+	for i := 0; i < count; i++ {
+		key, value := make([]byte, 100), make([]byte, 100)
+		key, value = makekeyvalue(key, value)
+		if nd := llrb.Upsert(key, value, vbno, vbuuid, seqno); nd != nil {
+			t.Errorf("expected nil")
+		} else if x := llrb.Count(); x != int64(i+1) {
+			t.Errorf("expected %v, got %v", i, x)
+		}
+		keys, values = append(keys, key), append(values, value)
 		seqno++
 	}
-	// upsert
-	upserts := [][2][]byte{
-		[2][]byte{[]byte("abcdef"), []byte("upsertvalue")},
-		[2][]byte{[]byte("bcdefg"), []byte("upsertvalue1")},
-		[2][]byte{[]byte("aacdef"), []byte("upsertvalue2")},
-	}
-	for i, kv := range upserts {
-		nd := llrb.Upsert(kv[0], kv[1], vbno, vbuuid, seqno)
-		refk, refv := inserts[i][0], inserts[i][1]
-		if k := nd.key(); bytes.Compare(k, refk) != 0 {
-			t.Errorf("expected %v, got %v", refk, k)
+
+	// upsert same items
+	newvalues := make([][]byte, 0)
+	for i, key := range keys {
+		value := make([]byte, 200)
+		_, value = makekeyvalue(nil, value)
+		newvalues = append(newvalues, value)
+		nd := llrb.Upsert(key, value, vbno, vbuuid, seqno)
+		if nd == nil {
+			t.Errorf("unexpected nil")
+		} else if nd.vbno() != vbno {
+			t.Errorf("expected %v, got %v", vbno, nd.vbno())
+		} else if nd.vbuuid != vbuuid {
+			t.Errorf("expected %v, got %v", vbuuid, nd.vbuuid)
 		}
-		if v := nd.nodevalue().value(); bytes.Compare(v, refv) != 0 {
-			t.Errorf("expected %v, got %v", refv, v)
+		x, y := values[i], nd.nodevalue().value()
+		if bytes.Compare(x, y) != 0 {
+			t.Errorf("expected %v, got %v", x, y)
 		}
 		llrb.Freenode(nd)
 		seqno++
 	}
-	// check the count
-	if x, y := int64(3), llrb.Count(); x != y {
-		t.Errorf("expected %v, got %v", x, y)
-	}
+
 	// check memory accounting
-	if x, y := int64(223717202), llrb.Memory(); x != y {
+	if x, y := int64(383973760), llrb.Memory(); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(576), llrb.Allocated(); x != y {
+	} else if x, y = int64(4160000), llrb.Allocated(); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(11811159488), llrb.Available(); x != y {
+	} else if x, y = int64(11807000064), llrb.Available(); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(18), llrb.KeyMemory(); x != y {
+	} else if x, y = int64(1000000), llrb.KeyMemory(); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(35), llrb.ValueMemory(); x != y {
+	} else if x, y = int64(2000000), llrb.ValueMemory(); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
 }
@@ -348,61 +361,100 @@ func TestLLRBDelete(t *testing.T) {
 	llrb := NewLLRB(makenewconfig())
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
 	keys, values := make([][]byte, 0), make([][]byte, 0)
-	// insert
-	for i := 0; i < 100; i++ {
+	// insert 10K items
+	count := 10 * 1000
+	for i := 0; i < count; i++ {
 		key, value := make([]byte, 100), make([]byte, 100)
 		key, value = makekeyvalue(key, value)
-		keys = append(keys, key)
-		values = append(values, value)
-		llrb.Upsert(key, value, vbno, vbuuid, seqno)
-		vbno++
-		vbuuid++
-		seqno++
-	}
-
-	if x := llrb.Memory(); x != 223623913 {
-		t.Errorf("expected %v, got %v", 223623913, x)
-	} else if x = llrb.Allocated(); x != 32000 {
-		t.Errorf("expected %v, got %v", 32000, x)
-	} else if x = llrb.Available(); x != 11811128064 {
-		t.Errorf("expected %v, got %v", 11811128064, x)
-	} else if x = llrb.KeyMemory(); x != 10000 {
-		t.Errorf("expected %v, got %v", 10000, x)
-	} else if x = llrb.ValueMemory(); x != 10000 {
-		t.Errorf("expected %v, got %v", 10000, x)
-	}
-
-	vbno, vbuuid, seqno = uint16(10), uint64(0xABCD), uint64(12345678)
-	for i := 0; i < len(keys); i++ {
-		refk, refv := keys[i], values[i]
-		nd := llrb.Delete(refk)
-		k, v := nd.key(), nd.nodevalue().value()
-		if bytes.Compare(k, refk) != 0 {
-			t.Errorf("expected %v, got %v", refk, string(k))
-		} else if bytes.Compare(v, refv) != 0 {
-			t.Errorf("expected %v, got %v", refv, string(v))
-		} else if llrb.Count() != int64(len(keys)-1-i) {
-			t.Errorf("expected %v, got %v", len(keys)-1-i, llrb.Count())
-		} else if nd.vbno() != vbno {
-		} else if nd.vbuuid != vbuuid {
-		} else if nd.seqno != seqno {
+		if nd := llrb.Upsert(key, value, vbno, vbuuid, seqno); nd != nil {
+			t.Errorf("expected nil")
+		} else if x := llrb.Count(); x != int64(i+1) {
+			t.Errorf("expected %v, got %v", i, x)
 		}
-		vbno++
-		vbuuid++
+		keys, values = append(keys, key), append(values, value)
 		seqno++
-		llrb.Freenode(nd)
 	}
+	// Delete items
+	vbno, vbuuid, seqno = uint16(10), uint64(0xABCD), uint64(12345678)
+	for i, key := range keys {
+		nd := llrb.Delete(key)
+		if nd == nil {
+			t.Errorf("unexpected nil")
+		} else if nd.vbno() != vbno {
+			t.Errorf("expected %v, got %v", vbno, nd.vbno())
+		} else if nd.vbuuid != vbuuid {
+			t.Errorf("expected %v, got %v", vbuuid, nd.vbuuid)
+		} else if nd.seqno != seqno {
+			t.Errorf("expected %v, got %v", seqno, nd.seqno)
+		}
+		x, y := values[i], nd.nodevalue().value()
+		if bytes.Compare(x, y) != 0 {
+			t.Errorf("expected %v, got %v", x, y)
+		}
+		llrb.Freenode(nd)
+		seqno++
+	}
+	// check memory accounting
+	if x, y := int64(223623913), llrb.Memory(); x != y {
+		t.Errorf("expected %v, got %v", x, y)
+	} else if x, y = int64(0), llrb.Allocated(); x != y {
+		t.Errorf("expected %v, got %v", x, y)
+	} else if x, y = int64(11811160064), llrb.Available(); x != y {
+		t.Errorf("expected %v, got %v", x, y)
+	} else if x, y = int64(0), llrb.KeyMemory(); x != y {
+		t.Errorf("expected %v, got %v", x, y)
+	} else if x, y = int64(0), llrb.ValueMemory(); x != y {
+		t.Errorf("expected %v, got %v", x, y)
+	}
+}
 
-	if x := llrb.Memory(); x != 223623913 {
-		t.Errorf("expected %v, got %v", 223623913, x)
-	} else if x = llrb.Allocated(); x != 0 {
-		t.Errorf("expected %v, got %v", 0, x)
-	} else if x = llrb.Available(); x != 11811160064 {
-		t.Errorf("expected %v, got %v", 11811160064, x)
-	} else if x = llrb.KeyMemory(); x != 0 {
-		t.Errorf("expected %v, got %v", 0, x)
-	} else if x = llrb.ValueMemory(); x != 0 {
-		t.Errorf("expected %v, got %v", 0, x)
+func TestLLRBRange(t *testing.T) {
+	llrb := NewLLRB(makenewconfig())
+	d := NewDict()
+	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
+	keys, values := make([][]byte, 0), make([][]byte, 0)
+	// insert 10K items
+	count := 10 * 1000
+	for i := 0; i < count; i++ {
+		key, value := make([]byte, 100), make([]byte, 100)
+		key, value = makekeyvalue(key, value)
+		if nd := llrb.Upsert(key, value, vbno, vbuuid, seqno); nd != nil {
+			t.Errorf("expected nil")
+		} else if x := llrb.Count(); x != int64(i+1) {
+			t.Errorf("expected %v, got %v", i, x)
+		}
+		d.Upsert(key, value)
+		keys, values = append(keys, key), append(values, value)
+		seqno++
+	}
+	// random ranges
+	repeat := 1000
+	incls := []string{"both", "low", "high", "none"}
+	for i := 0; i < repeat; i++ {
+		incl := incls[rand.Intn(len(incls))]
+		x := rand.Intn(len(keys))
+		y := rand.Intn(len(keys))
+		lowkey, highkey := keys[x], keys[y]
+		llrbks, llrbvs := make([][]byte, 0), make([][]byte, 0)
+		llrb.Range(lowkey, highkey, incl, func(nd *node) bool {
+			llrbks = append(llrbks, nd.key())
+			llrbvs = append(llrbvs, nd.nodevalue().value())
+			return true
+		})
+		dks, dvs := make([][]byte, 0), make([][]byte, 0)
+		d.Range(lowkey, highkey, incl, func(k, v []byte) bool {
+			dks, dvs = append(dks, k), append(dvs, v)
+			return true
+		})
+		if len(llrbks) != len(dks) {
+			t.Errorf("expected %v, got %v", len(llrbks), len(dks))
+		} else {
+			for j, llrbk := range llrbks {
+				if bytes.Compare(llrbk, dks[j]) != 0 {
+					t.Errorf("expected %v, got %v", llrbk, dks[j])
+				}
+			}
+		}
 	}
 }
 

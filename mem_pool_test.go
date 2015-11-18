@@ -109,6 +109,18 @@ func TestMpools(t *testing.T) {
 	}
 }
 
+func TestCheckAllocated(t *testing.T) {
+	size, n := int64(96), int64(56)
+	mpool := newmempool(size, n)
+	// allocate
+	for i := int64(0); i < n; i++ {
+		mpool.alloc()
+	}
+	if x, y := mpool.allocated(), mpool.checkallocated(); x != y {
+		t.Errorf("expected %v, got %v", x, y)
+	}
+}
+
 func BenchmarkNewmempool(b *testing.B) {
 	size, n := int64(96), int64(1024*1024)
 	for i := 0; i < b.N; i++ {
