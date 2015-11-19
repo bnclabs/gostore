@@ -1,5 +1,8 @@
 package llrb
 
+import "fmt"
+import "sort"
+
 func findfirstset8(b byte) int8 { // move this to ASM.
 	for i := uint8(0); i < 8; i++ {
 		if (b & (1 << i)) != 0 {
@@ -36,4 +39,25 @@ func onesin32(v uint32) int8 { // move this to ASM.
 
 func zerosin32(v uint32) int8 {
 	return 32 - onesin32(v)
+}
+
+func poolutilz(prefix string, arenapools map[int64]mempools) {
+	sizes := []int{}
+	for size := range arenapools {
+		sizes = append(sizes, int(size))
+	}
+	sort.Ints(sizes)
+
+	for _, size := range sizes {
+		mpools := arenapools[int64(size)]
+		allocated, capacity := int64(0), int64(0)
+		if len(mpools) > 0 {
+			for _, mpool := range mpools {
+				allocated += mpool.allocated()
+				capacity += mpool.capacity
+			}
+			utilz := (float64(allocated) / float64(capacity)) * 100
+			fmt.Printf("%v%v %v %2.2f\n", prefix, size, capacity, utilz)
+		}
+	}
 }

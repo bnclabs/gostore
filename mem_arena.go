@@ -15,16 +15,18 @@ type memarena struct {
 	minblock   int64              // minimum block size allocatable by arena
 	maxblock   int64              // maximum block size allocatable by arena
 	capacity   int64              // memory capacity to be managed by this arena
+	pcapacity  int64              // maximum capacity for a single pool
 	blocksizes []int64            // sorted list of block-sizes in this arena
 	mpools     map[int64]mempools // size -> sorted list of mempool
 }
 
-func newmemarena(minblock, maxblock, capacity int64) *memarena {
+func newmemarena(minblock, maxblock, capacity, pcapacity int64) *memarena {
 	arena := &memarena{
-		minblock: minblock,
-		maxblock: maxblock,
-		capacity: capacity,
-		mpools:   make(map[int64]mempools),
+		minblock:  minblock,
+		maxblock:  maxblock,
+		capacity:  capacity,
+		pcapacity: pcapacity,
+		mpools:    make(map[int64]mempools),
 	}
 	arena.blocksizes = Blocksizes(arena.minblock, arena.maxblock)
 	if len(arena.blocksizes) > 256 || capacity > maxarenasize {
@@ -40,22 +42,38 @@ func newmemarena(minblock, maxblock, capacity int64) *memarena {
 
 func (arena *memarena) alloc(n int64) (ptr unsafe.Pointer, mpool *mempool) {
 	var ok bool
-
+	// check argument
 	if largest := arena.blocksizes[len(arena.blocksizes)-1]; n > largest {
 		return nil, nil
 	}
+	// try to get from existing pool
 	size := SuitableSize(arena.blocksizes, n)
 	for _, mpool = range arena.mpools[size] {
 		if ptr, ok = mpool.alloc(); ok {
 			return ptr, mpool
 		}
 	}
+	// okay create a new pool, figure the dimensions.
 	numblocks := (arena.capacity / int64(len(arena.blocksizes))) / size
-	if (numblocks & 0x7) > 0 {
-		numblocks = ((numblocks >> 3) + 1) << 3
+	if int64(numblocks*size) > arena.pcapacity {
+		numblocks = arena.pcapacity / size
 	}
+	if (numblocks & 0x7) > 0 {
+		numblocks = (numblocks >> 3) << 3
+	}
+	// check whether we are exceeding memory.
+	allocated := int64(numblocks * size)
+	for _, mpools := range arena.mpools {
+		if len(mpools) == 0 {
+			continue
+		}
+		allocated += mpools[0].capacity * int64(len(mpools))
+	}
+	if allocated > arena.capacity {
+		panic(ErrorOutofMemory)
+	}
+	// go ahead, create a new pool.
 	mpool = newmempool(size, numblocks)
-	// mpools should be protected by write-lock or mvcc.
 	arena.mpools[size] = append(arena.mpools[size], mpool)
 	sort.Sort(arena.mpools[size])
 	ptr, _ = mpool.alloc()
@@ -73,16 +91,18 @@ func (arena *memarena) release() {
 
 //---- statistics and maintenance
 
-func (arena *memarena) memory() int64 {
+func (arena *memarena) memory() (overhead, useful int64) {
 	self := int64(unsafe.Sizeof(*arena))
 	slicesz := int64(cap(arena.blocksizes) * int(unsafe.Sizeof(int64(1))))
-	size := self + slicesz
+	overhead += self + slicesz
 	for _, mpools := range arena.mpools {
 		for _, mpool := range mpools {
-			size += mpool.memory()
+			x, y := mpool.memory()
+			overhead += x
+			useful += y
 		}
 	}
-	return size
+	return
 }
 
 func (arena *memarena) allocated() int64 {

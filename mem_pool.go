@@ -91,10 +91,10 @@ func (pool *mempool) less(other *mempool) bool {
 
 //---- local functions
 
-func (pool *mempool) memory() int64 {
+func (pool *mempool) memory() (overhead, useful int64) {
 	self := int64(unsafe.Sizeof(*pool))
 	slicesz := int64(cap(pool.freelist))
-	return pool.capacity + slicesz + self
+	return slicesz + self, pool.capacity
 }
 
 func (pool *mempool) allocated() int64 {

@@ -2,12 +2,14 @@
 //
 // configuration:
 //
-//	"nodemem.minblock"
-//  "nodemem.maxblock"
-//  "nodemem.capacity"
-//  "valmem.minblock"
-//  "valmem.maxblock"
-//  "valmem.capacity"
+//	"nodearena.minblock"
+//  "nodearena.maxblock"
+//  "nodearena.capacity"
+//  "nodepool.capacity"
+//  "valarena.minblock"
+//  "valarena.maxblock"
+//  "valarena.capacity"
+//  "valpool.capacity"
 
 package llrb
 
@@ -42,14 +44,16 @@ func NewLLRB(config map[string]interface{}) *LLRB {
 
 	llrb := &LLRB{}
 
-	minblock := int64(config["nodemem.minblock"].(int))
-	maxblock := int64(config["nodemem.maxblock"].(int))
-	capacity := int64(config["nodemem.capacity"].(int))
-	llrb.nodearena = newmemarena(minblock, maxblock, capacity)
-	minblock = int64(config["valmem.minblock"].(int))
-	maxblock = int64(config["valmem.maxblock"].(int))
-	capacity = int64(config["valmem.capacity"].(int))
-	llrb.valarena = newmemarena(minblock, maxblock, capacity)
+	minblock := int64(config["nodearena.minblock"].(int))
+	maxblock := int64(config["nodearena.maxblock"].(int))
+	capacity := int64(config["nodearena.capacity"].(int))
+	pcapacity := int64(config["nodepool.capacity"].(int))
+	llrb.nodearena = newmemarena(minblock, maxblock, capacity, pcapacity)
+	minblock = int64(config["valarena.minblock"].(int))
+	maxblock = int64(config["valarena.maxblock"].(int))
+	capacity = int64(config["valarena.capacity"].(int))
+	pcapacity = int64(config["valpool.capacity"].(int))
+	llrb.valarena = newmemarena(minblock, maxblock, capacity, pcapacity)
 
 	llrb.config = config
 
@@ -66,20 +70,37 @@ func (llrb *LLRB) Root() *node {
 	return (*node)(atomic.LoadPointer(&llrb.root))
 }
 
+func (llrb *LLRB) Release() {
+	llrb.nodearena.release()
+	llrb.valarena.release()
+}
+
 func (llrb *LLRB) Count() int64 {
 	return atomic.LoadInt64(&llrb.count)
 }
 
-func (llrb *LLRB) Memory() int64 { // needs an Rlock
-	return llrb.nodearena.memory() + llrb.valarena.memory()
+func (llrb *LLRB) NodeArena() (overhead, useful int64) { // needs an Rlock
+	return llrb.nodearena.memory()
 }
 
-func (llrb *LLRB) Allocated() int64 { // needs an Rlock
-	return llrb.nodearena.allocated() + llrb.valarena.allocated()
+func (llrb *LLRB) ValueArena() (overhead, useful int64) { // needs an Rlock
+	return llrb.nodearena.memory()
 }
 
-func (llrb *LLRB) Available() int64 { // needs an Rlock
-	return llrb.nodearena.available() + llrb.valarena.available()
+func (llrb *LLRB) NodeAllocated() int64 { // needs an Rlock
+	return llrb.nodearena.allocated()
+}
+
+func (llrb *LLRB) ValueAllocated() int64 { // needs an Rlock
+	return llrb.valarena.allocated()
+}
+
+func (llrb *LLRB) NodeAvailable() int64 { // needs an Rlock
+	return llrb.nodearena.available()
+}
+
+func (llrb *LLRB) ValueAvailable() int64 { // needs an Rlock
+	return llrb.nodearena.available()
 }
 
 func (llrb *LLRB) KeyMemory() int64 {
@@ -106,6 +127,16 @@ func (llrb *LLRB) Freenode(nd *node) {
 		}
 		nd.pool.free(unsafe.Pointer(nd))
 	}
+}
+
+func (llrb *LLRB) PPrintNodeutilz() {
+	fmt.Println("Node utilization:")
+	poolutilz("  ", llrb.nodearena.mpools)
+}
+
+func (llrb *LLRB) PPrintValueutilz() {
+	fmt.Println("Value utilization:")
+	poolutilz("  ", llrb.valarena.mpools)
 }
 
 func (llrb *LLRB) PPrint() {
@@ -548,29 +579,29 @@ func (llrb *LLRB) equivalent(n1, n2 *node) bool {
 }
 
 func validateConfig(config map[string]interface{}) {
-	minblock := config["nodemem.minblock"].(int)
-	maxblock := config["nodemem.maxblock"].(int)
-	capacity := config["nodemem.capacity"].(int)
+	minblock := config["nodearena.minblock"].(int)
+	maxblock := config["nodearena.maxblock"].(int)
+	capacity := config["nodearena.capacity"].(int)
 	if minblock < MinKeymem {
-		fmsg := "nodemem.minblock < %v configuration"
+		fmsg := "nodearena.minblock < %v configuration"
 		panic(fmt.Errorf(fmsg, MinKeymem))
 	} else if maxblock > MaxKeymem {
-		fmsg := "nodemem.maxblock > %v configuration"
+		fmsg := "nodearena.maxblock > %v configuration"
 		panic(fmt.Errorf(fmsg, MaxKeymem))
 	} else if capacity == 0 {
-		panic("nodemem.capacity cannot be ZERO")
+		panic("nodearena.capacity cannot be ZERO")
 	}
 
-	minblock = config["valmem.minblock"].(int)
-	maxblock = config["valmem.maxblock"].(int)
-	capacity = config["valmem.capacity"].(int)
+	minblock = config["valarena.minblock"].(int)
+	maxblock = config["valarena.maxblock"].(int)
+	capacity = config["valarena.capacity"].(int)
 	if minblock < MinValmem {
-		fmsg := "valmem.minblock < %v configuration"
+		fmsg := "valarena.minblock < %v configuration"
 		panic(fmt.Errorf(fmsg, MinValmem))
 	} else if maxblock > MaxValmem {
-		fmsg := "valmem.maxblock > %v configuration"
+		fmsg := "valarena.maxblock > %v configuration"
 		panic(fmt.Errorf(fmsg, MaxValmem))
 	} else if capacity == 0 {
-		panic("valmem.capacity cannot be ZERO")
+		panic("valarena.capacity cannot be ZERO")
 	}
 }
