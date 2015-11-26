@@ -10,11 +10,14 @@
 //  "valarena.maxblock"
 //  "valarena.capacity"
 //  "valpool.capacity"
+//  "log.level"
+//  "log.file"
 
 package llrb
 
 import "fmt"
 import "unsafe"
+import "sort"
 import "time"
 import "bytes"
 import "sync/atomic"
@@ -29,21 +32,21 @@ const MaxValmem = 10 * 1024 * 1024
 type NdIterator func(nd *node) bool
 
 type LLRB struct { // tree container
+	name      string
 	nodearena *memarena
 	valarena  *memarena
 	root      unsafe.Pointer // root *node of LLRB tree
 	config    map[string]interface{}
+	logPrefix string
 	// statistics
 	count     int64 // number of nodes in the tree
 	keymemory int64 // memory used by all keys
 	valmemory int64 // memory used by all values
 }
 
-func NewLLRB(config map[string]interface{}) *LLRB {
+func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	validateConfig(config)
-
 	llrb := &LLRB{}
-
 	minblock := int64(config["nodearena.minblock"].(int))
 	maxblock := int64(config["nodearena.maxblock"].(int))
 	capacity := int64(config["nodearena.capacity"].(int))
@@ -54,9 +57,10 @@ func NewLLRB(config map[string]interface{}) *LLRB {
 	capacity = int64(config["valarena.capacity"].(int))
 	pcapacity = int64(config["valpool.capacity"].(int))
 	llrb.valarena = newmemarena(minblock, maxblock, capacity, pcapacity)
-
 	llrb.config = config
-
+	// set up logger
+	setLogger(logg, config)
+	llrb.logPrefix = fmt.Sprintf("[LLRB-%s]", name)
 	return llrb
 }
 
@@ -100,7 +104,7 @@ func (llrb *LLRB) NodeAvailable() int64 { // needs an Rlock
 }
 
 func (llrb *LLRB) ValueAvailable() int64 { // needs an Rlock
-	return llrb.nodearena.available()
+	return llrb.valarena.available()
 }
 
 func (llrb *LLRB) KeyMemory() int64 {
@@ -129,14 +133,48 @@ func (llrb *LLRB) Freenode(nd *node) {
 	}
 }
 
-func (llrb *LLRB) PPrintNodeutilz() {
-	fmt.Println("Node utilization:")
-	poolutilz("  ", llrb.nodearena.mpools)
+func (llrb *LLRB) LogNodeutilz() {
+	log.Infof("%v Node utilization:\n", llrb.logPrefix)
+	arenapools := llrb.nodearena.mpools
+	sizes := []int{}
+	for size := range arenapools {
+		sizes = append(sizes, int(size))
+	}
+	sort.Ints(sizes)
+	for _, size := range sizes {
+		mpools := arenapools[int64(size)]
+		allocated, capacity := int64(0), int64(0)
+		if len(mpools) > 0 {
+			for _, mpool := range mpools {
+				allocated += mpool.allocated()
+				capacity += mpool.capacity
+			}
+			z := (float64(allocated) / float64(capacity)) * 100
+			log.Infof("%v  %v%v %v %2.2f\n", llrb.logPrefix, size, capacity, z)
+		}
+	}
 }
 
-func (llrb *LLRB) PPrintValueutilz() {
-	fmt.Println("Value utilization:")
-	poolutilz("  ", llrb.valarena.mpools)
+func (llrb *LLRB) LogValueutilz() {
+	log.Infof("%v Value utilization:\n", llrb.logPrefix)
+	arenapools := llrb.nodearena.mpools
+	sizes := []int{}
+	for size := range arenapools {
+		sizes = append(sizes, int(size))
+	}
+	sort.Ints(sizes)
+	for _, size := range sizes {
+		mpools := arenapools[int64(size)]
+		allocated, capacity := int64(0), int64(0)
+		if len(mpools) > 0 {
+			for _, mpool := range mpools {
+				allocated += mpool.allocated()
+				capacity += mpool.capacity
+			}
+			z := (float64(allocated) / float64(capacity)) * 100
+			log.Infof("%v  %v%v %v %2.2f\n", llrb.logPrefix, size, capacity, z)
+		}
+	}
 }
 
 func (llrb *LLRB) PPrint() {

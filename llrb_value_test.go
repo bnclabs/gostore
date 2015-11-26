@@ -8,8 +8,8 @@ var _ = fmt.Sprintf("dummy")
 
 func TestNodeValue(t *testing.T) {
 	minblock, maxblock := int64(96), int64(1024*1024*10)
-	capacity := int64(1024 * 1024 * 1024)
-	marena := newmemarena(minblock, maxblock, capacity)
+	capacity, pcapacity := int64(1024*1024*1024), int64(1024*1024)
+	marena := newmemarena(minblock, maxblock, capacity, pcapacity)
 	blocksize, value := int64(1024), []byte("hello world")
 
 	ptr, mpool := marena.alloc(blocksize)
@@ -25,10 +25,10 @@ func TestNodeValue(t *testing.T) {
 
 func BenchmarkValueSize(b *testing.B) {
 	minblock, maxblock := int64(96), int64(1024*1024*10)
-	capacity := int64(1024 * 1024 * 1024)
+	capacity, pcapacity := int64(1024*1024*1024), int64(1024*1024)
 	blocksize, value := int64(1024), []byte("hello world")
 
-	marena := newmemarena(minblock, maxblock, capacity)
+	marena := newmemarena(minblock, maxblock, capacity, pcapacity)
 	ptr, mpool := marena.alloc(blocksize)
 	nv := (*nodevalue)(ptr)
 	nv.pool = mpool
@@ -45,10 +45,10 @@ func BenchmarkValueSize(b *testing.B) {
 
 func BenchmarkSetValue(b *testing.B) {
 	minblock, maxblock := int64(96), int64(1024*1024*10)
-	capacity := int64(1024 * 1024 * 1024)
+	capacity, pcapacity := int64(1024*1024*1024), int64(1024*1024)
 	blocksize, value := int64(20*1024), make([]byte, 10*1024)
 
-	marena := newmemarena(minblock, maxblock, capacity)
+	marena := newmemarena(minblock, maxblock, capacity, pcapacity)
 	ptr, mpool := marena.alloc(blocksize)
 	nv := (*nodevalue)(ptr)
 	nv.pool = mpool
@@ -64,10 +64,10 @@ func BenchmarkSetValue(b *testing.B) {
 
 func BenchmarkGetValue(b *testing.B) {
 	minblock, maxblock := int64(96), int64(1024*1024*10)
-	capacity := int64(1024 * 1024 * 1024)
+	capacity, pcapacity := int64(1024*1024*1024), int64(1024*1024)
 	blocksize, value := int64(20*1024), make([]byte, 10*1024)
 
-	marena := newmemarena(minblock, maxblock, capacity)
+	marena := newmemarena(minblock, maxblock, capacity, pcapacity)
 	ptr, mpool := marena.alloc(blocksize)
 	nv := (*nodevalue)(ptr)
 	nv.pool = mpool

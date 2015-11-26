@@ -65,8 +65,8 @@ func TestSuitableSize(t *testing.T) {
 
 func TestNewmarena(t *testing.T) {
 	minblock, maxblock := int64(96), int64(1024*1024*1024)
-	capacity := int64(1024 * 1024 * 1024 * 1024)
-	marena := newmemarena(minblock, maxblock, capacity)
+	capacity, pcapacity := int64(1024*1024*1024*1024), int64(1024*1024)
+	marena := newmemarena(minblock, maxblock, capacity, pcapacity)
 	if x := len(marena.blocksizes); x != 116 {
 		t.Errorf("expected %v, got %v", 116, x)
 	} else if x, y := len(marena.blocksizes), len(marena.mpools); x != y {
@@ -77,8 +77,8 @@ func TestNewmarena(t *testing.T) {
 
 func TestArenaAlloc(t *testing.T) {
 	minblock, maxblock := int64(96), int64(1024)
-	capacity := int64(1024 * 1024)
-	marena := newmemarena(minblock, maxblock, capacity)
+	capacity, pcapacity := int64(1024*1024*1024), int64(1024*1024)
+	marena := newmemarena(minblock, maxblock, capacity, pcapacity)
 	ptrs, mpools := make([]unsafe.Pointer, 1024), make([]*mempool, 1024)
 	for i := 0; i < 1024; i++ {
 		ptrs[i], mpools[i] = marena.alloc(1024)
@@ -86,8 +86,8 @@ func TestArenaAlloc(t *testing.T) {
 			t.Errorf("unexpected allocation failure")
 		}
 	}
-	if x := marena.available(); x != 0 {
-		t.Errorf("expected %v, got %v", 0, x)
+	if x := marena.available(); x != 1072693248 {
+		t.Errorf("expected %v, got %v", 1072693248, x)
 	} else if x, y := marena.allocated(), int64(1024*1024); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
@@ -96,10 +96,12 @@ func TestArenaAlloc(t *testing.T) {
 
 func TestArenaMemory(t *testing.T) {
 	minblock, maxblock := int64(96), int64(1024*1024*1024)
-	capacity := int64(1024 * 1024 * 1024 * 1024)
-	marena := newmemarena(minblock, maxblock, capacity)
-	if x := marena.memory(); x != 2104 {
-		t.Errorf("expected %v, got %v", 1232, x)
+	capacity, pcapacity := int64(1024*1024*1024*1024), int64(1024*1024)
+	marena := newmemarena(minblock, maxblock, capacity, pcapacity)
+	if x, y := marena.memory(); x != 2112 {
+		t.Errorf("expected %v, got %v", 2112, x)
+	} else if y != 0 {
+		t.Errorf("expected %v, got %v", 0, y)
 	}
 	marena.release()
 }
@@ -129,16 +131,16 @@ func BenchmarkSuitableSize(b *testing.B) {
 
 func BenchmarkNewarena(b *testing.B) {
 	minblock, maxblock := int64(96), int64(1024*1024*1024)
-	capacity := int64(1024 * 1024 * 1024 * 1024)
+	capacity, pcapacity := int64(1024*1024*1024*1024), int64(1024*1024)
 	for i := 0; i < b.N; i++ {
-		newmemarena(minblock, maxblock, capacity)
+		newmemarena(minblock, maxblock, capacity, pcapacity)
 	}
 }
 
 func BenchmarkArenaAlloc(b *testing.B) {
 	minblock, maxblock := int64(96), int64(1024*1024*1024)
-	capacity := int64(1024 * 1024 * 1024 * 1024)
-	marena := newmemarena(minblock, maxblock, capacity)
+	capacity, pcapacity := int64(1024*1024*1024*1024), int64(1024*1024)
+	marena := newmemarena(minblock, maxblock, capacity, pcapacity)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if ptr, mpool := marena.alloc(96); ptr == nil || mpool == nil {
@@ -149,8 +151,8 @@ func BenchmarkArenaAlloc(b *testing.B) {
 
 func BenchmarkArenaMemory(b *testing.B) {
 	minblock, maxblock := int64(96), int64(1024*1024*1024)
-	capacity := int64(1024 * 1024 * 1024 * 1024)
-	marena := newmemarena(minblock, maxblock, capacity)
+	capacity, pcapacity := int64(3*1024*1024*1024), int64(1024*1024)
+	marena := newmemarena(minblock, maxblock, capacity, pcapacity)
 	for i := 0; i < 1024*1024; i++ {
 		marena.alloc(int64(rand.Intn(2048)))
 	}
@@ -164,8 +166,8 @@ func BenchmarkArenaMemory(b *testing.B) {
 
 func BenchmarkArenaAllocated(b *testing.B) {
 	minblock, maxblock := int64(96), int64(1024*1024*1024)
-	capacity := int64(1024 * 1024 * 1024 * 1024)
-	marena := newmemarena(minblock, maxblock, capacity)
+	capacity, pcapacity := int64(3*1024*1024*1024), int64(1024*1024)
+	marena := newmemarena(minblock, maxblock, capacity, pcapacity)
 	for i := 0; i < 1024*1024; i++ {
 		marena.alloc(int64(rand.Intn(2048)))
 	}

@@ -79,7 +79,7 @@ func main() {
 		"valarena.capacity":  options.valarena[2],
 		"valpool.capacity":   options.nodearena[3],
 	}
-	t := llrb.NewLLRB(config)
+	t := llrb.NewLLRB("cmdline", config, nil)
 	now := time.Now()
 	insertItems(t, 10 /*vbno*/, 0xABCD123456 /*vbuuid*/, 0 /*seqno*/, options.n)
 	fmt.Printf("Took %v to populate %v items\n", time.Since(now), options.n)
@@ -144,6 +144,6 @@ func printutilization(t *llrb.LLRB) {
 	fmsg = "Value{min:%v max:%v cap:%v tot:%v use:%v alloc:{%v,%v} avail:%v blks:%v}\n"
 	fmt.Printf(fmsg, min, max, cp, total, use, alloc, vmem, avail, vblocks)
 
-	t.PPrintNodeutilz()
-	t.PPrintValueutilz()
+	t.LogNodeutilz()
+	t.LogValueutilz()
 }

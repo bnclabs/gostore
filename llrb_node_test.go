@@ -5,8 +5,8 @@ import "bytes"
 
 func Testnode(t *testing.T) {
 	minblock, maxblock := int64(96), int64(1024*1024*10)
-	capacity := int64(1024 * 1024 * 1024)
-	marena := newmemarena(minblock, maxblock, capacity)
+	capacity, pcapacity := int64(1024*1024*1024), int64(1024*1024)
+	marena := newmemarena(minblock, maxblock, capacity, pcapacity)
 	blocksize, key := int64(1024), make([]byte, 512)
 	copy(key, "hello world")
 
@@ -54,8 +54,8 @@ func Testnode(t *testing.T) {
 
 func TestLtkey(t *testing.T) {
 	minblock, maxblock := int64(96), int64(1024*1024*10)
-	capacity := int64(1024 * 1024 * 1024)
-	marena := newmemarena(minblock, maxblock, capacity)
+	capacity, pcapacity := int64(1024*1024*1024), int64(1024*1024)
+	marena := newmemarena(minblock, maxblock, capacity, pcapacity)
 	blocksize, key := int64(1024), []byte("abcdef")
 
 	ptr, mpool := marena.alloc(blocksize)
@@ -86,8 +86,8 @@ func TestLtkey(t *testing.T) {
 
 func TestLekey(t *testing.T) {
 	minblock, maxblock := int64(96), int64(1024*1024*10)
-	capacity := int64(1024 * 1024 * 1024)
-	marena := newmemarena(minblock, maxblock, capacity)
+	capacity, pcapacity := int64(1024*1024*1024), int64(1024*1024)
+	marena := newmemarena(minblock, maxblock, capacity, pcapacity)
 	blocksize, key := int64(1024), []byte("abcdef")
 
 	ptr, mpool := marena.alloc(blocksize)
@@ -118,8 +118,8 @@ func TestLekey(t *testing.T) {
 
 func TestGtkey(t *testing.T) {
 	minblock, maxblock := int64(96), int64(1024*1024*10)
-	capacity := int64(1024 * 1024 * 1024)
-	marena := newmemarena(minblock, maxblock, capacity)
+	capacity, pcapacity := int64(1024*1024*1024), int64(1024*1024)
+	marena := newmemarena(minblock, maxblock, capacity, pcapacity)
 	blocksize, key := int64(1024), []byte("abcdef")
 
 	ptr, mpool := marena.alloc(blocksize)
@@ -150,8 +150,8 @@ func TestGtkey(t *testing.T) {
 
 func TestGekey(t *testing.T) {
 	minblock, maxblock := int64(96), int64(1024*1024*10)
-	capacity := int64(1024 * 1024 * 1024)
-	marena := newmemarena(minblock, maxblock, capacity)
+	capacity, pcapacity := int64(1024*1024*1024), int64(1024*1024)
+	marena := newmemarena(minblock, maxblock, capacity, pcapacity)
 	blocksize, key := int64(1024), []byte("abcdef")
 
 	ptr, mpool := marena.alloc(blocksize)
@@ -182,8 +182,8 @@ func TestGekey(t *testing.T) {
 
 func BenchmarkNodefields(b *testing.B) {
 	minblock, maxblock := int64(96), int64(1024*1024*10)
-	capacity := int64(1024 * 1024 * 1024)
-	marena := newmemarena(minblock, maxblock, capacity)
+	capacity, pcapacity := int64(1024*1024*1024), int64(1024*1024)
+	marena := newmemarena(minblock, maxblock, capacity, pcapacity)
 	blocksize, key := int64(1024), []byte("abcdef")
 
 	ptr, mpool := marena.alloc(blocksize)
@@ -210,8 +210,8 @@ func BenchmarkNodefields(b *testing.B) {
 
 func BenchmarkNodeSetKey(b *testing.B) {
 	minblock, maxblock := int64(96), int64(1024*1024*10)
-	capacity := int64(1024 * 1024 * 1024)
-	marena := newmemarena(minblock, maxblock, capacity)
+	capacity, pcapacity := int64(1024*1024*1024), int64(1024*1024)
+	marena := newmemarena(minblock, maxblock, capacity, pcapacity)
 	blocksize, key := int64(1024), make([]byte, 215)
 
 	ptr, mpool := marena.alloc(blocksize)
@@ -228,8 +228,8 @@ func BenchmarkNodeSetKey(b *testing.B) {
 
 func BenchmarkNodeGetKey(b *testing.B) {
 	minblock, maxblock := int64(96), int64(1024*1024*10)
-	capacity := int64(1024 * 1024 * 1024)
-	marena := newmemarena(minblock, maxblock, capacity)
+	capacity, pcapacity := int64(1024*1024*1024), int64(1024*1024)
+	marena := newmemarena(minblock, maxblock, capacity, pcapacity)
 	blocksize, key := int64(1024), make([]byte, 512)
 
 	ptr, mpool := marena.alloc(blocksize)
@@ -245,8 +245,8 @@ func BenchmarkNodeGetKey(b *testing.B) {
 
 func BenchmarkCompareLtkey(b *testing.B) {
 	minblock, maxblock := int64(96), int64(1024*1024*10)
-	capacity := int64(1024 * 1024 * 1024)
-	marena := newmemarena(minblock, maxblock, capacity)
+	capacity, pcapacity := int64(1024*1024*1024), int64(1024*1024)
+	marena := newmemarena(minblock, maxblock, capacity, pcapacity)
 	blocksize, key := int64(1024), make([]byte, 512)
 	otherkey := make([]byte, 512)
 
@@ -265,8 +265,8 @@ func BenchmarkCompareLtkey(b *testing.B) {
 
 func BenchmarkCompareLekey(b *testing.B) {
 	minblock, maxblock := int64(96), int64(1024*1024*10)
-	capacity := int64(1024 * 1024 * 1024)
-	marena := newmemarena(minblock, maxblock, capacity)
+	capacity, pcapacity := int64(1024*1024*1024), int64(1024*1024)
+	marena := newmemarena(minblock, maxblock, capacity, pcapacity)
 	blocksize, key := int64(1024), make([]byte, 512)
 	otherkey := make([]byte, 512)
 
@@ -285,8 +285,8 @@ func BenchmarkCompareLekey(b *testing.B) {
 
 func BenchmarkCompareGtkey(b *testing.B) {
 	minblock, maxblock := int64(96), int64(1024*1024*10)
-	capacity := int64(1024 * 1024 * 1024)
-	marena := newmemarena(minblock, maxblock, capacity)
+	capacity, pcapacity := int64(1024*1024*1024), int64(1024*1024)
+	marena := newmemarena(minblock, maxblock, capacity, pcapacity)
 	blocksize, key := int64(1024), make([]byte, 512)
 	otherkey := make([]byte, 512)
 
@@ -305,8 +305,8 @@ func BenchmarkCompareGtkey(b *testing.B) {
 
 func BenchmarkCompareGekey(b *testing.B) {
 	minblock, maxblock := int64(96), int64(1024*1024*10)
-	capacity := int64(1024 * 1024 * 1024)
-	marena := newmemarena(minblock, maxblock, capacity)
+	capacity, pcapacity := int64(1024*1024*1024), int64(1024*1024)
+	marena := newmemarena(minblock, maxblock, capacity, pcapacity)
 	blocksize, key := int64(1024), make([]byte, 512)
 	otherkey := make([]byte, 512)
 

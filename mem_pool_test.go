@@ -91,8 +91,10 @@ func TestMpoolAlloc(t *testing.T) {
 func TestPoolMemory(t *testing.T) {
 	size, n := int64(96), int64(1024*1024)
 	mpool := newmempool(size, n)
-	if x := mpool.memory(); x != 100794432 {
-		t.Errorf("expected %v, got %v", 100794432, x)
+	if x, y := mpool.memory(); x != 131136 {
+		t.Errorf("expected %v, got %v", 131136, x)
+	} else if y != 100663296 {
+		t.Errorf("expected %v, got %v", 100663296, y)
 	}
 }
 

@@ -11,19 +11,27 @@ var _ = fmt.Sprintf("dummy")
 
 func TestNewLLRB(t *testing.T) {
 	config := makenewconfig()
-	llrb := NewLLRB(config)
+	llrb := NewLLRB("test", config, nil)
 	if llrb == nil {
 		t.Errorf("unexpected nil")
 	}
-	avail := config["nodearena.capacity"].(int) +
-		config["valarena.capacity"].(int)
-	if overhead, useful := llrb.Memory(); overhead != 0 {
+	nodavail := config["nodearena.capacity"].(int)
+	valavail := config["valarena.capacity"].(int)
+	if overhead, useful := llrb.NodeArena(); overhead != 2112 {
+		t.Errorf("expected %v, got %v", 0, 2112)
+	} else if useful != 0 {
+		t.Errorf("expected %v, got %v", 0, useful)
+	} else if overhead, useful := llrb.ValueArena(); overhead != 2112 {
 		t.Errorf("expected %v, got %v", 0, overhead)
 	} else if useful != 0 {
 		t.Errorf("expected %v, got %v", 0, overhead)
-	} else if x, y = int64(0), llrb.Allocated(); x != y {
+	} else if x, y := int64(0), llrb.NodeAllocated(); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(avail), llrb.Available(); x != y {
+	} else if x, y = int64(0), llrb.ValueAllocated(); x != y {
+		t.Errorf("expected %v, got %v", x, y)
+	} else if x, y := int64(nodavail), llrb.NodeAvailable(); x != y {
+		t.Errorf("expected %v, got %v", x, y)
+	} else if x, y = int64(valavail), llrb.ValueAvailable(); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	} else if x, y = int64(0), llrb.KeyMemory(); x != y {
 		t.Errorf("expected %v, got %v", x, y)
@@ -33,7 +41,7 @@ func TestNewLLRB(t *testing.T) {
 }
 
 func TestNewLLRBNode(t *testing.T) {
-	llrb := NewLLRB(makenewconfig())
+	llrb := NewLLRB("test", makenewconfig(), nil)
 	key, value := makekeyvalue(make([]byte, 128), make([]byte, 1024))
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
 	nd := llrb.newnode(key, value, vbno, vbuuid, seqno)
@@ -52,7 +60,7 @@ func TestNewLLRBNode(t *testing.T) {
 }
 
 func TestCloneLLRBNode(t *testing.T) {
-	llrb := NewLLRB(makenewconfig())
+	llrb := NewLLRB("test", makenewconfig(), nil)
 	key, value := makekeyvalue(make([]byte, 128), make([]byte, 1024))
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
 	nd := llrb.newnode(key, value, vbno, vbuuid, seqno)
@@ -69,7 +77,7 @@ func TestCloneLLRBNode(t *testing.T) {
 }
 
 func TestLLRBBasic(t *testing.T) {
-	llrb := NewLLRB(makenewconfig())
+	llrb := NewLLRB("test", makenewconfig(), nil)
 	if llrb.Count() != 0 {
 		t.Fatalf("expected an empty dict")
 	}
@@ -151,7 +159,7 @@ func TestLLRBBasic(t *testing.T) {
 }
 
 func TestLLRBBasicRange(t *testing.T) {
-	llrb := NewLLRB(makenewconfig())
+	llrb := NewLLRB("test", makenewconfig(), nil)
 	// inserts
 	inserts := [][2][]byte{
 		[2][]byte{[]byte("key1"), []byte("value1")},
@@ -258,7 +266,8 @@ func TestLLRBBasicRange(t *testing.T) {
 }
 
 func TestLLRBInsert(t *testing.T) {
-	llrb := NewLLRB(makenewconfig())
+	config := makenewconfig()
+	llrb := NewLLRB("test", config, nil)
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
 	keys, values := make([][]byte, 0), make([][]byte, 0)
 	// insert 10K items
@@ -274,15 +283,19 @@ func TestLLRBInsert(t *testing.T) {
 		seqno++
 	}
 	// check memory accounting
-	avail := config["nodearena.capacity"].(int) +
-		config["valarena.capacity"].(int)
-	if overhead, useful := llrb.Memory(); overhead != 0 {
-		t.Errorf("expected %v, got %v", 0, overhead)
-	} else if useful != 0 {
-		t.Errorf("expected %v, got %v", 0, overhead)
-	} else if x, y = int64(3200000), llrb.Allocated(); x != y {
+	if overhead, useful := llrb.NodeArena(); overhead != 3541 {
+		t.Errorf("expected %v, got %v", 3541, overhead)
+	} else if overhead, useful = llrb.ValueArena(); overhead != 3541 {
+		t.Errorf("expected %v, got %v", 3541, overhead)
+	} else if useful != 2096640 {
+		t.Errorf("expected %v, got %v", 2096640, useful)
+	} else if x, y := int64(1920000), llrb.NodeAllocated(); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(11807960064), llrb.Available(); x != y {
+	} else if x, y = int64(1280000), llrb.ValueAllocated(); x != y {
+		t.Errorf("expected %v, got %v", x, y)
+	} else if x, y = int64(1071821824), llrb.NodeAvailable(); x != y {
+		t.Errorf("expected %v, got %v", x, y)
+	} else if x, y = int64(10736138240), llrb.ValueAvailable(); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	} else if x, y = int64(1000000), llrb.KeyMemory(); x != y {
 		t.Errorf("expected %v, got %v", x, y)
@@ -311,7 +324,8 @@ func TestLLRBInsert(t *testing.T) {
 }
 
 func TestLLRBUpsert(t *testing.T) {
-	llrb := NewLLRB(makenewconfig())
+	config := makenewconfig()
+	llrb := NewLLRB("test", config, nil)
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
 	keys, values := make([][]byte, 0), make([][]byte, 0)
 	// insert 10K items
@@ -351,15 +365,19 @@ func TestLLRBUpsert(t *testing.T) {
 	}
 
 	// check memory accounting
-	avail := config["nodearena.capacity"].(int) +
-		config["valarena.capacity"].(int)
-	if overhead, useful := llrb.Memory(); overhead != 0 {
-		t.Errorf("expected %v, got %v", 0, overhead)
-	} else if useful != 0 {
-		t.Errorf("expected %v, got %v", 0, overhead)
-	} else if x, y = int64(4160000), llrb.Allocated(); x != y {
+	if overhead, useful := llrb.NodeArena(); overhead != 3541 {
+		t.Errorf("expected %v, got %v", 3541, overhead)
+	} else if overhead, useful = llrb.ValueArena(); overhead != 3541 {
+		t.Errorf("expected %v, got %v", 3541, overhead)
+	} else if useful != 2096640 {
+		t.Errorf("expected %v, got %v", 2096640, useful)
+	} else if x, y := int64(1920000), llrb.NodeAllocated(); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(11807000064), llrb.Available(); x != y {
+	} else if x, y = int64(2240000), llrb.ValueAllocated(); x != y {
+		t.Errorf("expected %v, got %v", x, y)
+	} else if x, y = int64(1071821824), llrb.NodeAvailable(); x != y {
+		t.Errorf("expected %v, got %v", x, y)
+	} else if x, y = int64(10735178240), llrb.ValueAvailable(); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	} else if x, y = int64(1000000), llrb.KeyMemory(); x != y {
 		t.Errorf("expected %v, got %v", x, y)
@@ -369,7 +387,8 @@ func TestLLRBUpsert(t *testing.T) {
 }
 
 func TestLLRBDelete(t *testing.T) {
-	llrb := NewLLRB(makenewconfig())
+	config := makenewconfig()
+	llrb := NewLLRB("test", config, nil)
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
 	keys, values := make([][]byte, 0), make([][]byte, 0)
 	// insert 10K items
@@ -406,15 +425,19 @@ func TestLLRBDelete(t *testing.T) {
 		seqno++
 	}
 	// check memory accounting
-	avail := config["nodearena.capacity"].(int) +
-		config["valarena.capacity"].(int)
-	if overhead, useful := llrb.Memory(); overhead != 0 {
-		t.Errorf("expected %v, got %v", 0, overhead)
-	} else if useful != 0 {
-		t.Errorf("expected %v, got %v", 0, overhead)
-	} else if x, y = int64(0), llrb.Allocated(); x != y {
+	if overhead, useful := llrb.NodeArena(); overhead != 3541 {
+		t.Errorf("expected %v, got %v", 3541, overhead)
+	} else if overhead, useful = llrb.ValueArena(); overhead != 3541 {
+		t.Errorf("expected %v, got %v", 3541, overhead)
+	} else if useful != 2096640 {
+		t.Errorf("expected %v, got %v", 2096640, useful)
+	} else if x, y := int64(0), llrb.NodeAllocated(); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(11811160064), llrb.Available(); x != y {
+	} else if x, y = int64(0), llrb.ValueAllocated(); x != y {
+		t.Errorf("expected %v, got %v", x, y)
+	} else if x, y = int64(1073741824), llrb.NodeAvailable(); x != y {
+		t.Errorf("expected %v, got %v", x, y)
+	} else if x, y = int64(10737418240), llrb.ValueAvailable(); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	} else if x, y = int64(0), llrb.KeyMemory(); x != y {
 		t.Errorf("expected %v, got %v", x, y)
@@ -424,7 +447,7 @@ func TestLLRBDelete(t *testing.T) {
 }
 
 func TestLLRBRange(t *testing.T) {
-	llrb := NewLLRB(makenewconfig())
+	llrb := NewLLRB("test", makenewconfig(), nil)
 	d := NewDict()
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
 	keys, values := make([][]byte, 0), make([][]byte, 0)

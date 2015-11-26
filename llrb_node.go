@@ -12,8 +12,8 @@ type node struct {
 	vbuuid   uint64
 	seqno    uint64
 	pool     *mempool
-	left     *node
-	right    *node
+	left     *node // TODO: unsafe.Pointer ???
+	right    *node // TODO: unsafe.Pointer ???
 	mvalue   *nodevalue
 	fpos     int64          // file-position
 	stat1    uint64         // ts[:48]
