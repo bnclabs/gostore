@@ -2,10 +2,14 @@ package main
 
 import "fmt"
 import "time"
+import "os"
 import "flag"
 import "strings"
 import "math/rand"
 import "strconv"
+import _ "net/http/pprof"
+import "net/http"
+import "runtime/pprof"
 
 import "github.com/prataprc/storage.go"
 import hm "github.com/dustin/go-humanize"
@@ -16,6 +20,9 @@ var options struct {
 	klen      [2]int // min-klen, max-klen
 	vlen      [2]int // min-vlen, max-vlen
 	n         int
+	memtick   int
+	mprof     string
+	pprof     string
 }
 
 func argParse() {
@@ -31,6 +38,12 @@ func argParse() {
 		"minvlen, maxvlen - generate values between [minklen,maxklen)")
 	flag.IntVar(&options.n, "n", 1000,
 		"number of items to generate and insert")
+	flag.IntVar(&options.memtick, "memtick", 1000,
+		"log memory stats for every tick, in ms")
+	flag.StringVar(&options.mprof, "mprof", "",
+		"dump mem-profile to file")
+	flag.StringVar(&options.pprof, "pprof", "",
+		"dump cpu-profile to file")
 	flag.Parse()
 
 	options.nodearena = [4]int{
@@ -69,6 +82,23 @@ func argParse() {
 
 func main() {
 	argParse()
+	// start memory statistic logger
+	go MemstatLogger(int64(options.memtick))
+	// start pprof
+	go func() {
+		fmt.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+	if options.pprof != "" {
+		fd, err := os.Create(options.pprof)
+		if err != nil {
+			fmt.Printf("unable to create %q: %v\n", options.pprof, err)
+		}
+		defer fd.Close()
+
+		pprof.StartCPUProfile(fd)
+		defer pprof.StopCPUProfile()
+	}
+
 	config := map[string]interface{}{
 		"nodearena.minblock": options.nodearena[0],
 		"nodearena.maxblock": options.nodearena[1],
@@ -85,6 +115,9 @@ func main() {
 	fmt.Printf("Took %v to populate %v items\n", time.Since(now), options.n)
 	printutilization(t)
 	t.Release()
+	if takeMEMProfile(options.mprof) {
+		fmt.Printf("dumped mem-profile to %v\n", options.mprof)
+	}
 }
 
 func insertItems(t *llrb.LLRB, vbno uint16, vbuuid, seqno uint64, count int) {
@@ -95,26 +128,32 @@ func insertItems(t *llrb.LLRB, vbno uint16, vbuuid, seqno uint64, count int) {
 		}
 		fmt.Printf("Inserted %v items\n", seqno-startseqno)
 	}()
+	maxkey, maxval := options.klen[1], options.vlen[1]
+	key, value := make([]byte, maxkey), make([]byte, maxval)
 	for i := 0; i < count; i++ {
-		key, value := makekeyval()
+		key, value := makekeyval(key, value)
 		t.Upsert(key, value, vbno, vbuuid, seqno)
 		seqno++
 	}
 }
 
-func makekeyval() (key, value []byte) {
+func makekeyval(key, value []byte) (k, v []byte) {
 	min, max := options.klen[0], options.klen[1]
-	key = make([]byte, rand.Intn(max-min)+min)
-	for i := range key {
-		key[i] = byte(97 + rand.Intn(26))
+	if max-min > 0 {
+		k = key[:rand.Intn(max-min)+min]
+		for i := range k {
+			k[i] = byte(97 + rand.Intn(26))
+		}
 	}
 
 	min, max = options.vlen[0], options.vlen[1]
-	value = make([]byte, rand.Intn(max-min)+min)
-	for i := range value {
-		value[i] = byte(97 + rand.Intn(26))
+	if max-min > 0 {
+		v = value[:rand.Intn(max-min)+min]
+		for i := range v {
+			v[i] = byte(97 + rand.Intn(26))
+		}
 	}
-	return key, value
+	return k, v
 }
 
 func printutilization(t *llrb.LLRB) {
@@ -148,4 +187,18 @@ func printutilization(t *llrb.LLRB) {
 
 	t.LogNodeutilz()
 	t.LogValueutilz()
+}
+
+func takeMEMProfile(filename string) bool {
+	if filename == "" {
+		return false
+	}
+	fd, err := os.Create(filename)
+	if err != nil {
+		fmt.Println(err)
+		return false
+	}
+	pprof.WriteHeapProfile(fd)
+	defer fd.Close()
+	return true
 }
