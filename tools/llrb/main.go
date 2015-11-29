@@ -77,7 +77,7 @@ func main() {
 		"valarena.minblock":  options.valarena[0],
 		"valarena.maxblock":  options.valarena[1],
 		"valarena.capacity":  options.valarena[2],
-		"valpool.capacity":   options.nodearena[3],
+		"valpool.capacity":   options.valarena[3],
 	}
 	t := llrb.NewLLRB("cmdline", config, nil)
 	now := time.Now()
@@ -121,28 +121,30 @@ func printutilization(t *llrb.LLRB) {
 	min := hm.Bytes(uint64(options.nodearena[0]))
 	max := hm.Bytes(uint64(options.nodearena[1]))
 	cp := hm.Bytes(uint64(options.nodearena[2]))
+	pcp := hm.Bytes(uint64(options.nodearena[3]))
 	overhead, useful := t.NodeArena()
-	total := hm.Bytes(uint64(overhead + useful))
+	overh := hm.Bytes(uint64(overhead))
 	use := hm.Bytes(uint64(useful))
 	alloc := hm.Bytes(uint64(t.NodeAllocated()))
 	kmem := hm.Bytes(uint64(t.KeyMemory()))
 	avail := hm.Bytes(uint64(t.NodeAvailable()))
 	nblocks := len(t.NodeBlocks())
-	fmsg := "Nodes{min:%v max:%v cap:%v tot:%v use:%v alloc:{%v,%v} avail:%v blks:%v}\n"
-	fmt.Printf(fmsg, min, max, cp, total, use, alloc, kmem, avail, nblocks)
+	fmsg := "Nodes{min:%v max:%v cap:%v,%v mem:%v,%v alloc:{%v,%v} avail:%v blks:%v}\n"
+	fmt.Printf(fmsg, min, max, cp, pcp, overh, use, alloc, kmem, avail, nblocks)
 
 	min = hm.Bytes(uint64(options.valarena[0]))
 	max = hm.Bytes(uint64(options.valarena[1]))
 	cp = hm.Bytes(uint64(options.valarena[2]))
+	pcp = hm.Bytes(uint64(options.valarena[3]))
 	overhead, useful = t.ValueArena()
-	total = hm.Bytes(uint64(overhead + useful))
+	overh = hm.Bytes(uint64(overhead))
 	use = hm.Bytes(uint64(useful))
 	alloc = hm.Bytes(uint64(t.ValueAllocated()))
 	vmem := hm.Bytes(uint64(t.ValueMemory()))
 	avail = hm.Bytes(uint64(t.ValueAvailable()))
 	vblocks := len(t.ValueBlocks())
-	fmsg = "Value{min:%v max:%v cap:%v tot:%v use:%v alloc:{%v,%v} avail:%v blks:%v}\n"
-	fmt.Printf(fmsg, min, max, cp, total, use, alloc, vmem, avail, vblocks)
+	fmsg = "Value{min:%v max:%v cap:{%v,%v} mem:{%v,%v} alloc:{%v,%v} avail:%v blks:%v}\n"
+	fmt.Printf(fmsg, min, max, cp, pcp, overh, use, alloc, vmem, avail, vblocks)
 
 	t.LogNodeutilz()
 	t.LogValueutilz()

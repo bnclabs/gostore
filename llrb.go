@@ -88,7 +88,7 @@ func (llrb *LLRB) NodeArena() (overhead, useful int64) { // needs an Rlock
 }
 
 func (llrb *LLRB) ValueArena() (overhead, useful int64) { // needs an Rlock
-	return llrb.nodearena.memory()
+	return llrb.valarena.memory()
 }
 
 func (llrb *LLRB) NodeAllocated() int64 { // needs an Rlock
@@ -150,14 +150,14 @@ func (llrb *LLRB) LogNodeutilz() {
 				capacity += mpool.capacity
 			}
 			z := (float64(allocated) / float64(capacity)) * 100
-			log.Infof("%v  %v%v %v %2.2f\n", llrb.logPrefix, size, capacity, z)
+			log.Infof("%v  %v %v %2.2f\n", llrb.logPrefix, size, capacity, z)
 		}
 	}
 }
 
 func (llrb *LLRB) LogValueutilz() {
 	log.Infof("%v Value utilization:\n", llrb.logPrefix)
-	arenapools := llrb.nodearena.mpools
+	arenapools := llrb.valarena.mpools
 	sizes := []int{}
 	for size := range arenapools {
 		sizes = append(sizes, int(size))
@@ -172,7 +172,7 @@ func (llrb *LLRB) LogValueutilz() {
 				capacity += mpool.capacity
 			}
 			z := (float64(allocated) / float64(capacity)) * 100
-			log.Infof("%v  %v%v %v %2.2f\n", llrb.logPrefix, size, capacity, z)
+			log.Infof("%v  %v %v %2.2f\n", llrb.logPrefix, size, capacity, z)
 		}
 	}
 }
