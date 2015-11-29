@@ -572,10 +572,12 @@ func (llrb *LLRB) newnode(k, v []byte, vbno uint16, vbuuid, seqno uint64) *node 
 	nd.vbuuid, nd.seqno = vbuuid, seqno
 	nd.pool, nd.left, nd.right = mpool, nil, nil
 
-	ptr, mpool = llrb.valarena.alloc(int64(nvaluesize + len(v)))
-	nv := (*nodevalue)(ptr)
-	nv.pool = mpool
-	nd.setnodevalue(nv.setvalue(v))
+	if v != nil {
+		ptr, mpool = llrb.valarena.alloc(int64(nvaluesize + len(v)))
+		nv := (*nodevalue)(ptr)
+		nv.pool = mpool
+		nd.setnodevalue(nv.setvalue(v))
+	}
 
 	nd.fpos = -1
 	nd = nd.settimestamp(time.Now().UnixNano()).setkey(k)
