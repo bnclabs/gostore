@@ -3,6 +3,7 @@ package main
 import "fmt"
 import "time"
 import "os"
+import "runtime"
 import "flag"
 import "strings"
 import "math/rand"
@@ -20,6 +21,7 @@ var options struct {
 	klen      [2]int // min-klen, max-klen
 	vlen      [2]int // min-vlen, max-vlen
 	n         int
+	ncpu      int
 	memtick   int
 	mprof     string
 	pprof     string
@@ -38,6 +40,8 @@ func argParse() {
 		"minvlen, maxvlen - generate values between [minklen,maxklen)")
 	flag.IntVar(&options.n, "n", 1000,
 		"number of items to generate and insert")
+	flag.IntVar(&options.ncpu, "ncpu", 1,
+		"set number cores to use.")
 	flag.IntVar(&options.memtick, "memtick", 1000,
 		"log memory stats for every tick, in ms")
 	flag.StringVar(&options.mprof, "mprof", "",
@@ -82,6 +86,9 @@ func argParse() {
 
 func main() {
 	argParse()
+	// set CPU
+	fmt.Printf("Setting number of cpus to %v\n", options.ncpu)
+	runtime.GOMAXPROCS(options.ncpu)
 	// start memory statistic logger
 	go MemstatLogger(int64(options.memtick))
 	// start pprof
@@ -128,6 +135,7 @@ func insertItems(t *llrb.LLRB, vbno uint16, vbuuid, seqno uint64, count int) {
 		}
 		fmt.Printf("Inserted %v items\n", seqno-startseqno)
 	}()
+
 	maxkey, maxval := options.klen[1], options.vlen[1]
 	key, value := make([]byte, maxkey), make([]byte, maxval)
 	for i := 0; i < count; i++ {
