@@ -285,10 +285,10 @@ func TestLLRBInsert(t *testing.T) {
 	// check memory accounting
 	if overhead, useful := llrb.NodeArena(); overhead != 3541 {
 		t.Errorf("expected %v, got %v", 3541, overhead)
-	} else if overhead, useful = llrb.ValueArena(); overhead != 3541 {
-		t.Errorf("expected %v, got %v", 3541, overhead)
-	} else if useful != 2096640 {
-		t.Errorf("expected %v, got %v", 2096640, useful)
+	} else if overhead, useful = llrb.ValueArena(); overhead != 22656 {
+		t.Errorf("expected %v, got %v", 22656, overhead)
+	} else if useful != 20971520 {
+		t.Errorf("expected %v, got %v", 20971520, useful)
 	} else if x, y := int64(1920000), llrb.NodeAllocated(); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	} else if x, y = int64(1280000), llrb.ValueAllocated(); x != y {
@@ -367,10 +367,10 @@ func TestLLRBUpsert(t *testing.T) {
 	// check memory accounting
 	if overhead, useful := llrb.NodeArena(); overhead != 3541 {
 		t.Errorf("expected %v, got %v", 3541, overhead)
-	} else if overhead, useful = llrb.ValueArena(); overhead != 3541 {
-		t.Errorf("expected %v, got %v", 3541, overhead)
-	} else if useful != 2096640 {
-		t.Errorf("expected %v, got %v", 2096640, useful)
+	} else if overhead, useful = llrb.ValueArena(); overhead != 34422 {
+		t.Errorf("expected %v, got %v", 34422, overhead)
+	} else if useful != 41941504 {
+		t.Errorf("expected %v, got %v", 41941504, useful)
 	} else if x, y := int64(1920000), llrb.NodeAllocated(); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	} else if x, y = int64(2240000), llrb.ValueAllocated(); x != y {
@@ -427,10 +427,10 @@ func TestLLRBDelete(t *testing.T) {
 	// check memory accounting
 	if overhead, useful := llrb.NodeArena(); overhead != 3541 {
 		t.Errorf("expected %v, got %v", 3541, overhead)
-	} else if overhead, useful = llrb.ValueArena(); overhead != 3541 {
-		t.Errorf("expected %v, got %v", 3541, overhead)
-	} else if useful != 2096640 {
-		t.Errorf("expected %v, got %v", 2096640, useful)
+	} else if overhead, useful = llrb.ValueArena(); overhead != 22656 {
+		t.Errorf("expected %v, got %v", 22656, overhead)
+	} else if useful != 20971520 {
+		t.Errorf("expected %v, got %v", 20971520, useful)
 	} else if x, y := int64(0), llrb.NodeAllocated(); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	} else if x, y = int64(0), llrb.ValueAllocated(); x != y {
