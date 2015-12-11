@@ -17,12 +17,18 @@ func TestInitMetadata(t *testing.T) {
 
 	// bnseq, ddseq, vbuuid
 	dotest1 := func(md *metadata, bnseq, ddseq, vbuuid uint64) {
-		if md.setbnseq(bnseq).bnseq() != bnseq {
+		if md.isbnseq() && (md.setbnseq(bnseq).bnseq() != bnseq) {
 			t.Errorf("expected %v, got %v", bnseq, md.bnseq())
-		} else if md.setbnseq(ddseq).ddseq() != ddseq {
+		} else if md.setbnseq(bnseq).bnseq() != 0 {
+			t.Errorf("expected %v, got %v", 0, md.bnseq())
+		} else if md.isddseq() && (md.setddseq(ddseq).ddseq() != ddseq) {
 			t.Errorf("expected %v, got %v", ddseq, md.ddseq())
-		} else if md.setvbuuid(vbuuid).vbuuid() != vbuuid {
+		} else if md.setddseq(ddseq).ddseq() != 0 {
+			t.Errorf("expected %v, got %v", 0, md.ddseq())
+		} else if md.isvbuuid() && (md.setvbuuid(vbuuid).vbuuid() != vbuuid) {
 			t.Errorf("expected %v, got %v", vbuuid, md.vbuuid())
+		} else if md.setvbuuid(vbuuid).vbuuid() != 0 {
+			t.Errorf("expected %v, got %v", 0, md.vbuuid())
 		}
 	}
 	for i := 0; i < 10000; i++ {
@@ -49,10 +55,18 @@ func TestMvalueMetadata(t *testing.T) {
 		mvalue := (uint64(0xabcdef0123456789) + i) & 0xfffffffffffffff8
 		for level := byte(0); level < 8; level++ {
 			mval, lvl := md.setmvalue(mvalue, level).mvalue()
-			if mvalue != mval {
-				t.Errorf("expected %v, for %v", mvalue, mval)
-			} else if level != lvl {
-				t.Errorf("expected %v, for %v", level, lvl)
+			if md.ismvalue() {
+				if mvalue != mval {
+					t.Errorf("expected %v, for %v", mvalue, mval)
+				} else if level != lvl {
+					t.Errorf("expected %v, for %v", level, lvl)
+				}
+			} else {
+				if 0 != mval {
+					t.Errorf("expected %v, for %v", 0, mval)
+				} else if 0 != lvl {
+					t.Errorf("expected %v, for %v", 0, lvl)
+				}
 			}
 		}
 	}
