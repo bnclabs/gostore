@@ -72,6 +72,121 @@ func TestMvalueMetadata(t *testing.T) {
 	}
 }
 
+func BenchmarkMdSizeof(b *testing.B) {
+	md := &metadata{}
+	for i := 0; i < b.N; i++ {
+		md.sizeof()
+	}
+}
+
+func BenchmarkMdInitmeta(b *testing.B) {
+	md := &metadata{}
+	for i := 0; i < b.N; i++ {
+		md.initMetadata(0x10, 0x10)
+	}
+}
+
+func BenchmarkMdGetvbno(b *testing.B) {
+	md := &metadata{}
+	md.initMetadata(0x10, 0x10)
+	for i := 0; i < b.N; i++ {
+		md.vbno()
+	}
+}
+
+func BenchmarkMdGetfmask(b *testing.B) {
+	md := &metadata{}
+	md.initMetadata(0x10, 0x10)
+	for i := 0; i < b.N; i++ {
+		md.fmask()
+	}
+}
+
+func BenchmarkMdSetaccess(b *testing.B) {
+	md := &metadata{}
+	md.initMetadata(0x10, 0x10)
+	for i := 0; i < b.N; i++ {
+		md.setaccess(0x12345)
+	}
+}
+
+func BenchmarkMdGetaccess(b *testing.B) {
+	md := &metadata{}
+	md.initMetadata(0x10, 0x10)
+	md.setaccess(0x12345)
+	for i := 0; i < b.N; i++ {
+		md.access()
+	}
+}
+
+func BenchmarkMdSetbnseq(b *testing.B) {
+	md := &metadata{}
+	md.initMetadata(0x10, 0x10)
+	for i := 0; i < b.N; i++ {
+		md.setbnseq(0x12345)
+	}
+}
+
+func BenchmarkMdGetbnseq(b *testing.B) {
+	md := &metadata{}
+	md.initMetadata(0x10, 0x10)
+	md.setbnseq(0x12345)
+	for i := 0; i < b.N; i++ {
+		md.bnseq()
+	}
+}
+
+func BenchmarkMdSetddseq(b *testing.B) {
+	md := &metadata{}
+	md.initMetadata(0x10, 0x10)
+	for i := 0; i < b.N; i++ {
+		md.setddseq(0x12345)
+	}
+}
+
+func BenchmarkMdGetddseq(b *testing.B) {
+	md := &metadata{}
+	md.initMetadata(0x10, 0x10)
+	md.setddseq(0x12345)
+	for i := 0; i < b.N; i++ {
+		md.ddseq()
+	}
+}
+
+func BenchmarkMdSetMvalue(b *testing.B) {
+	md := &metadata{}
+	md.initMetadata(0x10, 0x10)
+	for i := 0; i < b.N; i++ {
+		md.setmvalue(0x12345, 4)
+	}
+}
+
+func BenchmarkMdGetmvalue(b *testing.B) {
+	md := &metadata{}
+	md.initMetadata(0x10, 0x10)
+	md.setmvalue(0x12345, 4)
+	for i := 0; i < b.N; i++ {
+		md.mvalue()
+	}
+}
+
+func BenchmarkMdSetvbuuid(b *testing.B) {
+	md := &metadata{}
+	md.initMetadata(0x10, 0x10)
+	for i := 0; i < b.N; i++ {
+		md.setvbuuid(0x12345)
+	}
+}
+
+func BenchmarkMdGetvbuuid(b *testing.B) {
+	md := &metadata{}
+	md.initMetadata(0x10, 0x10)
+	md.setvbuuid(0x12345)
+	for i := 0; i < b.N; i++ {
+		md.vbuuid()
+	}
+}
+
 func randomMetadata() *metadata {
 	var flags metadataMask
 	if rand.Intn(2) == 1 {
