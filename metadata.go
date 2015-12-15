@@ -53,16 +53,23 @@ func (mask metadataMask) enableVbuuid() metadataMask {
 }
 
 type metadata struct {
-	// access(32:52) vbno(16:32) (vbuuid mvalue bnseq)[:16]
+	// ksize(52:64) access(32:52) vbno(16:32)
+	// reserved deleted dirty black (vbuuid mvalue bnseq)[:12]
 	hdr uint64
 	// vbuuid mvalue ddseq bnseq
 	fields [16]uint64 // maximum 16 fields.
 }
 
+func (md *metadata) initMetadata(vbno uint16, fmask metadataMask) *metadata {
+	md.hdr = md.hdr&0xffffffff00000000 | ((uint64(vbno) << 16) | uint64(fmask))
+	return md
+}
+
 func (md *metadata) sizeof() int {
-	n, sz := 0, int(unsafe.Sizeof(uint64(0)))
-	for i := uint64(0); i < 4; i++ {
-		n += (mdlookup[(md.hdr&0xf)>>i] * sz)
+	n, sz := 8, int(unsafe.Sizeof(uint64(0)))
+	for i := uint64(0); i < 3; i++ {
+		off := (md.hdr >> (i * 4)) & 0xf
+		n += (mdlookup[off] * sz)
 	}
 	return n
 }
@@ -83,8 +90,57 @@ func (md *metadata) isvbuuid() bool {
 	return (md.hdr & uint64(mdFlagVbuuid)) != 0
 }
 
-func (md *metadata) initMetadata(vbno, fmask metadataMask) *metadata {
-	md.hdr = uint64((uint64(vbno) << 16) | uint64(fmask))
+func (md *metadata) setblack() *metadata {
+	md.hdr = md.hdr | 0x1000
+	return md
+}
+
+func (md *metadata) isblack() bool {
+	if md == nil {
+		return false
+	}
+	return (md.hdr & 0x1000) == 0x1000
+}
+
+func (md *metadata) setred() *metadata {
+	md.hdr = md.hdr & 0xffffffffffffefff // clear the bit
+	return md
+}
+
+func (md *metadata) isred() bool {
+	return !md.isblack()
+}
+
+func (md *metadata) togglelink() *metadata {
+	md.hdr = md.hdr ^ 0x1000
+	return md
+}
+
+func (md *metadata) isdirty() bool {
+	return (md.hdr & 0x2000) == 0x2000
+}
+
+func (md *metadata) setdirty() *metadata {
+	md.hdr = md.hdr | 0x2000
+	return md
+}
+
+func (md *metadata) cleardirty() *metadata {
+	md.hdr = md.hdr & 0xffffffffffffdfff
+	return md
+}
+
+func (md *metadata) isdeleted() bool {
+	return (md.hdr & 0x4000) == 0x4000
+}
+
+func (md *metadata) setdeleted() *metadata {
+	md.hdr = md.hdr | 0x4000
+	return md
+}
+
+func (md *metadata) setvbno(vbno uint16) *metadata {
+	md.hdr = (md.hdr & 0xffffffff0000ffff) | (uint64(vbno) << 16)
 	return md
 }
 
@@ -92,8 +148,8 @@ func (md *metadata) vbno() uint16 {
 	return uint16((md.hdr & 0xffff0000) >> 16)
 }
 
-func (md *metadata) fmask() uint16 {
-	return uint16(md.hdr & 0xffff)
+func (md *metadata) fmask() metadataMask {
+	return metadataMask(md.hdr & 0xffff)
 }
 
 func (md *metadata) setaccess(access uint64) *metadata {
@@ -117,7 +173,8 @@ func (md *metadata) setbnseq(seqno uint64) *metadata {
 }
 
 func (md *metadata) bnseq() uint64 {
-	return md.fields[mdlookup[mdOffsetmaskBnseq&md.hdr]]
+	off := mdlookup[mdOffsetmaskBnseq&md.hdr]
+	return md.fields[off-1]
 }
 
 func (md *metadata) setddseq(seqno uint64) *metadata {
@@ -129,7 +186,8 @@ func (md *metadata) setddseq(seqno uint64) *metadata {
 }
 
 func (md *metadata) ddseq() uint64 {
-	return md.fields[mdlookup[mdOffsetmaskDdseq&md.hdr]]
+	off := mdlookup[mdOffsetmaskDdseq&md.hdr]
+	return md.fields[off-1]
 }
 
 func (md *metadata) setmvalue(mvalue uint64, level byte) *metadata {
@@ -142,7 +200,8 @@ func (md *metadata) setmvalue(mvalue uint64, level byte) *metadata {
 }
 
 func (md *metadata) mvalue() (uint64, byte) {
-	mvalue := md.fields[mdlookup[mdOffsetmaskMvalue&md.hdr]]
+	off := mdlookup[mdOffsetmaskMvalue&md.hdr]
+	mvalue := md.fields[off-1]
 	return mvalue & 0xfffffffffffffff8, byte(mvalue & 0x7)
 }
 
@@ -155,5 +214,15 @@ func (md *metadata) setvbuuid(vbuuid uint64) *metadata {
 }
 
 func (md *metadata) vbuuid() uint64 {
-	return md.fields[mdlookup[mdOffsetmaskVbuuid&md.hdr]]
+	off := mdlookup[mdOffsetmaskVbuuid&md.hdr]
+	return md.fields[off-1]
+}
+
+func (md *metadata) setkeysize(size int) *metadata {
+	md.hdr = (md.hdr & 0x000fffffffffffff) | ((uint64(size) & 0xfff) << 52)
+	return md
+}
+
+func (md *metadata) keysize() int {
+	return int((md.hdr & 0xfff0000000000000) >> 52)
 }

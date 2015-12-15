@@ -5,28 +5,26 @@ import "bytes"
 import "reflect"
 import "fmt"
 
-const nodesize = 72 // plus key size.
-// {vbno, vbuuid, seqno, {keysize, key}, {valsize, value}}
+const nodesize = 24 // plus + metadata-size + key-size
 type node struct {
-	hdr1     uint64 // dirty, black, ksize(12), vbno(16)
-	vbuuid   uint64
-	seqno    uint64
-	pool     *mempool
 	left     *node // TODO: unsafe.Pointer ???
 	right    *node // TODO: unsafe.Pointer ???
-	mvalue   *nodevalue
-	fpos     int64          // file-position
-	stat1    uint64         // ts[:48]
-	keystart unsafe.Pointer // just a place-holder
+	pool     *mempool
+	mdmarker unsafe.Pointer
 }
 
 func (nd *node) repr() string {
+	bnseqno, ddseqno := int64(-1), int64(-1)
+	if nd.metadata().isbnseq() {
+		bnseqno = int64(nd.metadata().bnseq())
+	}
+	if nd.metadata().isddseq() {
+		ddseqno = int64(nd.metadata().ddseq())
+	}
 	return fmt.Sprintf(
-		"%v %v %v %v %v %v %v key %v value %v",
-		nd.isdirty(), nd.isblack(),
-		nd.vbno(), nd.vbuuid, nd.seqno,
-		nd.fpos, nd.timestamp(),
-		nd.key(), nd.nodevalue().value())
+		"%v %v {%v,%v} %v",
+		nd.metadata().isdirty(), nd.metadata().isblack(),
+		bnseqno, ddseqno, string(nd.key()))
 }
 
 func (nd *node) pprint(prefix string) {
@@ -42,74 +40,23 @@ func (nd *node) pprint(prefix string) {
 	nd.right.pprint(prefix)
 }
 
-//---- field operations
-
-func (nd *node) setvbno(vbno uint16) *node {
-	nd.hdr1 = (nd.hdr1 & 0xffffffffffff0000) | (uint64(vbno) & 0xffff)
-	return nd
+func (nd *node) metadata() *metadata {
+	return (*metadata)(unsafe.Pointer(&nd.mdmarker))
 }
 
+//---- field operations
+
 func (nd *node) vbno() uint16 {
-	return uint16(nd.hdr1 & 0xffff)
+	return nd.metadata().vbno()
 }
 
 func (nd *node) setkeysize(size int) *node {
-	nd.hdr1 = (nd.hdr1 & 0xfffffffff000ffff) | ((uint64(size) & 0xfff) << 16)
+	nd.metadata().setkeysize(size)
 	return nd
 }
 
 func (nd *node) keysize() int {
-	return int((nd.hdr1 & 0xfff0000) >> 16)
-}
-
-func (nd *node) setred() *node {
-	nd.hdr1 = nd.hdr1 & 0xffffffffefffffff
-	return nd
-}
-
-func (nd *node) isred() bool {
-	if nd == nil {
-		return false
-	}
-	return (nd.hdr1 & 0x10000000) == 0
-}
-
-func (nd *node) setblack() *node {
-	nd.hdr1 = nd.hdr1 | 0x10000000
-	return nd
-}
-
-func (nd *node) isblack() bool {
-	return !nd.isred()
-}
-
-func (nd *node) togglelink() *node {
-	nd.hdr1 = nd.hdr1 ^ 0x10000000
-	return nd
-}
-
-func (nd *node) isdirty() bool {
-	return (nd.hdr1 & 0x20000000) == 1
-}
-
-func (nd *node) setdirty() *node {
-	nd.hdr1 = nd.hdr1 | 0x20000000
-	return nd
-}
-
-func (nd *node) cleardirty() *node {
-	nd.hdr1 = nd.hdr1 & 0xfffffffdfffffff
-	return nd
-}
-
-func (nd *node) settimestamp(ts int64) *node { // ts is time.Now().UnixNano()
-	ts = ts >> 16
-	nd.stat1 = (nd.stat1 & 0xffff000000000000) | (uint64(ts) & 0xffffffffffff)
-	return nd
-}
-
-func (nd *node) timestamp() int64 {
-	return int64(nd.stat1 & 0xffffffffffff)
+	return nd.metadata().keysize()
 }
 
 func (nd *node) setkey(key []byte) *node {
@@ -117,7 +64,8 @@ func (nd *node) setkey(key []byte) *node {
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&dst))
 	sl.Len = len(key)
 	sl.Cap = len(key)
-	sl.Data = (uintptr)(unsafe.Pointer(&nd.keystart))
+	baseptr := (uintptr)(unsafe.Pointer(&nd.mdmarker))
+	sl.Data = baseptr + uintptr(nd.metadata().sizeof())
 	return nd.setkeysize(copy(dst, key))
 }
 
@@ -125,17 +73,20 @@ func (nd *node) key() (k []byte) {
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&k))
 	sl.Len = nd.keysize()
 	sl.Cap = sl.Len
-	sl.Data = (uintptr)(unsafe.Pointer(&nd.keystart))
+	baseptr := (uintptr)(unsafe.Pointer(&nd.mdmarker))
+	sl.Data = baseptr + uintptr(nd.metadata().sizeof())
 	return
 }
 
 func (nd *node) setnodevalue(nv *nodevalue) *node {
-	nd.mvalue = nv
+	arg := (uintptr)(unsafe.Pointer(nv))
+	nd.metadata().setmvalue(uint64(arg), 0)
 	return nd
 }
 
 func (nd *node) nodevalue() *nodevalue {
-	return nd.mvalue
+	nv, _ := nd.metadata().mvalue()
+	return (*nodevalue)(unsafe.Pointer(uintptr(nv)))
 }
 
 func (nd *node) ltkey(other []byte) bool {
@@ -143,7 +94,8 @@ func (nd *node) ltkey(other []byte) bool {
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&key))
 	sl.Len = nd.keysize()
 	sl.Cap = sl.Len
-	sl.Data = (uintptr)(unsafe.Pointer(&nd.keystart))
+	baseptr := (uintptr)(unsafe.Pointer(&nd.mdmarker))
+	sl.Data = baseptr + uintptr(nd.metadata().sizeof())
 	cmp := bytes.Compare(key, other)
 	return cmp == -1
 }
@@ -153,7 +105,8 @@ func (nd *node) lekey(other []byte) bool {
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&key))
 	sl.Len = nd.keysize()
 	sl.Cap = sl.Len
-	sl.Data = (uintptr)(unsafe.Pointer(&nd.keystart))
+	baseptr := (uintptr)(unsafe.Pointer(&nd.mdmarker))
+	sl.Data = baseptr + uintptr(nd.metadata().sizeof())
 	cmp := bytes.Compare(key, other)
 	return cmp == -1 || cmp == 0
 }
@@ -163,7 +116,8 @@ func (nd *node) gtkey(other []byte) bool {
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&key))
 	sl.Len = nd.keysize()
 	sl.Cap = sl.Len
-	sl.Data = (uintptr)(unsafe.Pointer(&nd.keystart))
+	baseptr := (uintptr)(unsafe.Pointer(&nd.mdmarker))
+	sl.Data = baseptr + uintptr(nd.metadata().sizeof())
 	cmp := bytes.Compare(key, other)
 	return cmp == 1
 }
@@ -173,7 +127,8 @@ func (nd *node) gekey(other []byte) bool {
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&key))
 	sl.Len = nd.keysize()
 	sl.Cap = sl.Len
-	sl.Data = (uintptr)(unsafe.Pointer(&nd.keystart))
+	baseptr := (uintptr)(unsafe.Pointer(&nd.mdmarker))
+	sl.Data = baseptr + uintptr(nd.metadata().sizeof())
 	cmp := bytes.Compare(key, other)
 	return cmp == 0 || cmp == 1
 }
@@ -182,45 +137,45 @@ func (nd *node) gekey(other []byte) bool {
 
 func rotateleft(nd *node) *node {
 	x := nd.right
-	if x.isblack() {
+	if x.metadata().isblack() {
 		panic("rotating a black link")
 	}
 	nd.right = x.left
 	x.left = nd
-	if nd.isblack() {
-		x.setblack()
+	if nd.metadata().isblack() {
+		x.metadata().setblack()
 	} else {
-		x.setred()
+		x.metadata().setred()
 	}
-	nd.setred()
+	nd.metadata().setred()
 	return x
 }
 
 func rotateright(nd *node) *node {
 	x := nd.left
-	if x.isblack() {
+	if x.metadata().isblack() {
 		panic("rotating a black link")
 	}
 	nd.left = x.right
 	x.right = nd
-	if nd.isblack() {
-		x.setblack()
+	if nd.metadata().isblack() {
+		x.metadata().setblack()
 	} else {
-		x.setred()
+		x.metadata().setred()
 	}
-	nd.setred()
+	nd.metadata().setred()
 	return x
 }
 
 func flip(nd *node) {
-	nd.togglelink()
-	nd.left.togglelink()
-	nd.right.togglelink()
+	nd.metadata().togglelink()
+	nd.left.metadata().togglelink()
+	nd.right.metadata().togglelink()
 }
 
 func moveredleft(nd *node) *node {
 	flip(nd)
-	if nd.right.left.isred() {
+	if isred(nd.right.left) {
 		nd.right = rotateright(nd.right)
 		nd = rotateleft(nd)
 		flip(nd)
@@ -230,7 +185,7 @@ func moveredleft(nd *node) *node {
 
 func moveredright(nd *node) *node {
 	flip(nd)
-	if nd.left.left.isred() {
+	if isred(nd.left.left) {
 		nd = rotateright(nd)
 		flip(nd)
 	}
@@ -238,27 +193,25 @@ func moveredright(nd *node) *node {
 }
 
 func fixup(nd *node) *node {
-	if nd.right.isred() {
+	if isred(nd.right) {
 		nd = rotateleft(nd)
 	}
-	if nd.left.isred() && nd.left.left.isred() {
+	if isred(nd.left) && isred(nd.left.left) {
 		nd = rotateright(nd)
 	}
-	if nd.left.isred() && nd.right.isred() {
+	if isred(nd.left) && isred(nd.right) {
 		flip(nd)
 	}
 	return nd
 }
 
-//func fixupCow(nd *node, reclaim []*node) (*node, []*node) {
-//	if nd.right.isred() {
-//		nd, reclaim = rotateleftCow(nd, reclaim)
-//	}
-//	if nd.left.isred() && nd.left.left.isred() {
-//		nd, reclaim = rotaterightCow(nd, reclaim)
-//	}
-//	if nd.left.isred() && nd.right.isred() {
-//		reclaim = flipCow(nd, reclaim)
-//	}
-//	return nd, reclaim
-//}
+func isred(nd *node) bool {
+	if nd == nil {
+		return false
+	}
+	return nd.metadata().isred()
+}
+
+func isblack(nd *node) bool {
+	return !isred(nd)
+}

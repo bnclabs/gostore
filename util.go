@@ -1,5 +1,8 @@
 package llrb
 
+import "unsafe"
+import "reflect"
+
 func findfirstset8(b byte) int8 { // move this to ASM.
 	for i := uint8(0); i < 8; i++ {
 		if (b & (1 << i)) != 0 {
@@ -36,4 +39,15 @@ func onesin32(v uint32) int8 { // move this to ASM.
 
 func zerosin32(v uint32) int8 {
 	return 32 - onesin32(v)
+}
+
+func memcpy(dst, src unsafe.Pointer, ln int) int {
+	var srcnd, dstnd []byte
+	srcsl := (*reflect.SliceHeader)(unsafe.Pointer(&srcnd))
+	srcsl.Len, srcsl.Cap = ln, ln
+	srcsl.Data = (uintptr)(unsafe.Pointer(src))
+	dstsl := (*reflect.SliceHeader)(unsafe.Pointer(&dstnd))
+	dstsl.Len, dstsl.Cap = ln, ln
+	dstsl.Data = (uintptr)(unsafe.Pointer(dst))
+	return copy(dstnd, srcnd)
 }

@@ -2,6 +2,9 @@ package llrb
 
 import "testing"
 import "bytes"
+import "fmt"
+
+var _ = fmt.Sprintf("dummy")
 
 func Testnode(t *testing.T) {
 	minblock, maxblock := int64(96), int64(1024*1024*10)
@@ -14,9 +17,11 @@ func Testnode(t *testing.T) {
 	nd := (*node)(ptr)
 	nd.pool = mpool
 
-	nd.setvbno(0x1234).setkeysize(len(key))
-	if nd.vbno() != 0x1234 {
-		t.Errorf("expected %v, got %v", 1234, nd.vbno())
+	vbno, fmask := uint16(0x1234), metadataMask(0)
+	nd.metadata().initMetadata(vbno, fmask)
+	nd.setkeysize(len(key))
+	if x := nd.metadata().vbno(); x != vbno {
+		t.Errorf("expected %v, got %v", vbno, x)
 	} else if nd.keysize() != len(key) {
 		t.Errorf("expected %v, got %v", len(key), nd.keysize())
 	}
@@ -29,20 +34,25 @@ func Testnode(t *testing.T) {
 		t.Errorf("expected %v, got %v", nv, nd.nodevalue())
 	}
 
-	if nd.setblack(); nd.isred() == true || nd.isblack() == false {
+	nd.metadata().setblack()
+	if nd.metadata().isred() == true || nd.metadata().isblack() == false {
 		t.Errorf("expected black")
-	} else if nd.setred(); nd.isred() == false || nd.isblack() == true {
+	}
+	nd.metadata().setred()
+	if nd.metadata().isred() == false || nd.metadata().isblack() == true {
 		t.Errorf("expected red")
-	} else if nd.togglelink(); nd.isred() == true || nd.isblack() == false {
+	}
+	nd.metadata().togglelink()
+	if nd.metadata().isred() == true || nd.metadata().isblack() == false {
 		t.Errorf("expected black")
-	} else if nd.setdirty(); nd.isdirty() == false {
+	} else if nd.metadata().setdirty(); nd.metadata().isdirty() == false {
 		t.Errorf("expected dirty")
-	} else if nd.cleardirty(); nd.isdirty() == true {
+	} else if nd.metadata().cleardirty(); nd.metadata().isdirty() == true {
 		t.Errorf("unexpected dirty")
 	}
-	nd.settimestamp(0x1234567812345678)
-	if nd.timestamp() != 0x123456781234 {
-		t.Errorf("expected %v, got %v", 0x123456781234, nd.timestamp())
+	nd.metadata().setaccess(1000)
+	if x := nd.metadata().access(); x != 1000 {
+		t.Errorf("expected %v, got %v", 1000, x)
 	}
 
 	if nd.setkey(key); bytes.Compare(nd.key(), key) != 0 {
@@ -63,7 +73,8 @@ func TestLtkey(t *testing.T) {
 	nd.pool = mpool
 
 	// check with empty key
-	nd.setvbno(0x1234).setkey([]byte(""))
+	nd.metadata().initMetadata(0x1234, 0)
+	nd.setkey([]byte(""))
 	if nd.ltkey([]byte("a")) != true {
 		t.Errorf("expected true")
 	} else if nd.ltkey([]byte("")) != false {
@@ -80,7 +91,6 @@ func TestLtkey(t *testing.T) {
 	} else if nd.ltkey([]byte("abcdef")) != false {
 		t.Errorf("expected false")
 	}
-
 	mpool.free(ptr)
 }
 
@@ -95,7 +105,9 @@ func TestLekey(t *testing.T) {
 	nd.pool = mpool
 
 	// check with empty key
-	nd.setvbno(0x1234).setkey([]byte(""))
+	vbno, fmask := uint16(0x1234), metadataMask(0)
+	nd.metadata().initMetadata(vbno, fmask)
+	nd.setkey([]byte(""))
 	if nd.lekey([]byte("a")) != true {
 		t.Errorf("expected true")
 	} else if nd.lekey([]byte("")) != true {
@@ -127,7 +139,9 @@ func TestGtkey(t *testing.T) {
 	nd.pool = mpool
 
 	// check with empty key
-	nd.setvbno(0x1234).setkey([]byte(""))
+	vbno, fmask := uint16(0x1234), metadataMask(0)
+	nd.metadata().initMetadata(vbno, fmask)
+	nd.setkey([]byte(""))
 	if nd.gtkey([]byte("a")) != false {
 		t.Errorf("expected false")
 	} else if nd.gtkey([]byte("")) != false {
@@ -159,7 +173,9 @@ func TestGekey(t *testing.T) {
 	nd.pool = mpool
 
 	// check with empty key
-	nd.setvbno(0x1234).setkey([]byte(""))
+	vbno, fmask := uint16(0x1234), metadataMask(0)
+	nd.metadata().initMetadata(vbno, fmask)
+	nd.setkey([]byte(""))
 	if nd.gekey([]byte("a")) != false {
 		t.Errorf("expected false")
 	} else if nd.gekey([]byte("")) != true {
@@ -192,17 +208,19 @@ func BenchmarkNodefields(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		nd = nd.setvbno(0x1234).setkeysize(len(key))
-		nd = nd.setdirty().cleardirty()
-		nd = nd.setred().setblack().togglelink().settimestamp(0x1234567788)
-		nd.setnodevalue(nil)
-		nd.vbno()
+		nd.metadata().initMetadata(0x1234, 0)
+		nd.setkeysize(len(key))
 		nd.keysize()
-		nd.isred()
-		nd.isblack()
-		nd.isdirty()
-		nd.timestamp()
+		nd.setnodevalue(nil)
 		nd.nodevalue()
+		md := nd.metadata()
+		md = md.setdirty().cleardirty()
+		md = md.setred().setblack().togglelink().setaccess(1000)
+		md.vbno()
+		md.isred()
+		md.isblack()
+		md.isdirty()
+		md.access()
 	}
 
 	mpool.free(ptr)
@@ -220,7 +238,8 @@ func BenchmarkNodeSetKey(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		nd = nd.setvbno(0x1234).setkey(key)
+		nd.metadata().initMetadata(0x1234, 0)
+		nd.setkey(key)
 	}
 
 	mpool.free(ptr)
@@ -235,7 +254,8 @@ func BenchmarkNodeGetKey(b *testing.B) {
 	ptr, mpool := marena.alloc(blocksize)
 	nd := (*node)(ptr)
 	nd.pool = mpool
-	nd = nd.setvbno(0x1234).setkey(key)
+	nd.metadata().initMetadata(0x1234, 0)
+	nd.setkey(key)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -253,7 +273,8 @@ func BenchmarkCompareLtkey(b *testing.B) {
 	ptr, mpool := marena.alloc(blocksize)
 	nd := (*node)(ptr)
 	nd.pool = mpool
-	nd = nd.setvbno(0x1234).setkey(key)
+	nd.metadata().initMetadata(0x1234, 0)
+	nd.setkey(key)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -273,7 +294,8 @@ func BenchmarkCompareLekey(b *testing.B) {
 	ptr, mpool := marena.alloc(blocksize)
 	nd := (*node)(ptr)
 	nd.pool = mpool
-	nd = nd.setvbno(0x1234).setkey(key)
+	nd.metadata().initMetadata(0x1234, 0)
+	nd.setkey(key)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -293,7 +315,8 @@ func BenchmarkCompareGtkey(b *testing.B) {
 	ptr, mpool := marena.alloc(blocksize)
 	nd := (*node)(ptr)
 	nd.pool = mpool
-	nd = nd.setvbno(0x1234).setkey(key)
+	nd.metadata().initMetadata(0x1234, 0)
+	nd.setkey(key)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -313,7 +336,8 @@ func BenchmarkCompareGekey(b *testing.B) {
 	ptr, mpool := marena.alloc(blocksize)
 	nd := (*node)(ptr)
 	nd.pool = mpool
-	nd = nd.setvbno(0x1234).setkey(key)
+	nd.metadata().initMetadata(0x1234, 0)
+	nd.setkey(key)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

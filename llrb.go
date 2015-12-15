@@ -10,6 +10,10 @@
 //  "valarena.maxblock"
 //  "valarena.capacity"
 //  "valpool.capacity"
+//  "metadata.bornseqno"
+//  "metadata.deadseqno"
+//  "metadata.mvalue"
+//  "metadata.vbuuid"
 //  "log.level"
 //  "log.file"
 
@@ -18,7 +22,6 @@ package llrb
 import "fmt"
 import "unsafe"
 import "sort"
-import "time"
 import "bytes"
 import "sync/atomic"
 
@@ -36,6 +39,7 @@ type LLRB struct { // tree container
 	nodearena *memarena
 	valarena  *memarena
 	root      unsafe.Pointer // root *node of LLRB tree
+	fmask     metadataMask   // only 12 bits
 	config    map[string]interface{}
 	logPrefix string
 	// statistics
@@ -47,20 +51,35 @@ type LLRB struct { // tree container
 func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	validateConfig(config)
 	llrb := &LLRB{}
+	// setup nodearena for key and metadata
 	minblock := int64(config["nodearena.minblock"].(int))
 	maxblock := int64(config["nodearena.maxblock"].(int))
 	capacity := int64(config["nodearena.capacity"].(int))
 	pcapacity := int64(config["nodepool.capacity"].(int))
 	llrb.nodearena = newmemarena(minblock, maxblock, capacity, pcapacity)
+	// setup value arena
 	minblock = int64(config["valarena.minblock"].(int))
 	maxblock = int64(config["valarena.maxblock"].(int))
 	capacity = int64(config["valarena.capacity"].(int))
 	pcapacity = int64(config["valpool.capacity"].(int))
 	llrb.valarena = newmemarena(minblock, maxblock, capacity, pcapacity)
-	llrb.config = config
 	// set up logger
 	setLogger(logg, config)
 	llrb.logPrefix = fmt.Sprintf("[LLRB-%s]", name)
+	llrb.fmask = metadataMask(0)
+	if conf, ok := config["metadata.bornseqno"]; ok && conf.(bool) {
+		llrb.fmask = llrb.fmask.enableBornSeqno()
+	}
+	if conf, ok := config["metadata.deadseqno"]; ok && conf.(bool) {
+		llrb.fmask = llrb.fmask.enableDeadSeqno()
+	}
+	if conf, ok := config["metadata.mvalue"]; ok && conf.(bool) {
+		llrb.fmask = llrb.fmask.enableMvalue()
+	}
+	if conf, ok := config["metadata.vbuuid"]; ok && conf.(bool) {
+		llrb.fmask = llrb.fmask.enableVbuuid()
+	}
+	llrb.config = config
 	return llrb
 }
 
@@ -123,7 +142,7 @@ func (llrb *LLRB) ValueBlocks() []int64 {
 	return llrb.valarena.blocksizes
 }
 
-func (llrb *LLRB) Freenode(nd *node) {
+func (llrb *LLRB) Freenode(nd *node) { // TODO: should this be exported ?
 	if nd != nil {
 		nv := nd.nodevalue()
 		if nv != nil {
@@ -198,7 +217,6 @@ func (llrb *LLRB) Get(lookupkey []byte) (nd *node) {
 		} else if nd.ltkey(lookupkey) {
 			nd = nd.right
 		} else {
-			nd.settimestamp(time.Now().UnixNano())
 			return nd
 		}
 	}
@@ -213,7 +231,6 @@ func (llrb *LLRB) Min() *node {
 	for nd.left != nil {
 		nd = nd.left
 	}
-	nd.settimestamp(time.Now().UnixNano())
 	return nd
 }
 
@@ -225,7 +242,6 @@ func (llrb *LLRB) Max() *node {
 	for nd.right != nil {
 		nd = nd.right
 	}
-	nd.settimestamp(time.Now().UnixNano())
 	return nd
 }
 
@@ -264,7 +280,6 @@ func (llrb *LLRB) rangeFromFind(nd *node, lk, hk []byte, iter NdIterator) bool {
 	if iter != nil && !iter(nd) {
 		return false
 	}
-	nd.settimestamp(time.Now().UnixNano())
 	return llrb.rangeFromFind(nd.right, lk, hk, iter)
 }
 
@@ -285,7 +300,6 @@ func (llrb *LLRB) rangeFromTill(nd *node, lk, hk []byte, iter NdIterator) bool {
 	if iter != nil && !iter(nd) {
 		return false
 	}
-	nd.settimestamp(time.Now().UnixNano())
 	return llrb.rangeFromTill(nd.right, lk, hk, iter)
 }
 
@@ -306,7 +320,6 @@ func (llrb *LLRB) rangeAfterFind(nd *node, lk, hk []byte, iter NdIterator) bool 
 	if iter != nil && !iter(nd) {
 		return false
 	}
-	nd.settimestamp(time.Now().UnixNano())
 	return llrb.rangeAfterFind(nd.right, lk, hk, iter)
 }
 
@@ -327,68 +340,71 @@ func (llrb *LLRB) rangeAfterTill(nd *node, lk, hk []byte, iter NdIterator) bool 
 	if iter != nil && !iter(nd) {
 		return false
 	}
-	nd.settimestamp(time.Now().UnixNano())
 	return llrb.rangeAfterTill(nd.right, lk, hk, iter)
 }
 
 //---- LLRB write operations.
 
-func (llrb *LLRB) Upsert(k, v []byte, vbno uint16, vbuuid, seqno uint64) *node {
+// caller should free old-node if it is not null.
+func (llrb *LLRB) Upsert(k, v []byte) (newnd, oldnd *node) {
+	var root *node
+
 	if k == nil {
 		panic("upserting nil key")
 	}
 	nd := (*node)(atomic.LoadPointer(&llrb.root))
-	root, oldn := llrb.upsert(nd, k, v, vbno, vbuuid, seqno)
-	root.setblack()
+	root, newnd, oldnd = llrb.upsert(nd, k, v)
+	root.metadata().setblack()
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
-	if oldn == nil {
+	if oldnd == nil {
 		llrb.count++
 	} else {
-		atomic.AddInt64(&llrb.keymemory, -int64(len(oldn.key())))
-		atomic.AddInt64(&llrb.valmemory, -int64(len(oldn.nodevalue().value())))
+		atomic.AddInt64(&llrb.keymemory, -int64(len(oldnd.key())))
+		atomic.AddInt64(&llrb.valmemory, -int64(len(oldnd.nodevalue().value())))
 	}
 	atomic.AddInt64(&llrb.keymemory, int64(len(k)))
 	atomic.AddInt64(&llrb.valmemory, int64(len(v)))
-	return oldn
+	return newnd, oldnd
 }
 
-func (llrb *LLRB) upsert(
-	nd *node, key, value []byte,
-	vbno uint16, vbuuid, seqno uint64) (root, oldn *node) {
+// returns root, newnd, oldnd
+func (llrb *LLRB) upsert(nd *node, key, value []byte) (*node, *node, *node) {
+	var oldnd, newnd *node
 
 	if nd == nil {
-		return llrb.newnode(key, value, vbno, vbuuid, seqno), nil
+		newnd := llrb.newnode(key, value)
+		return newnd, newnd, nil
 	}
 
 	nd = llrb.walkdownrot23(nd)
 
 	if nd.gtkey(key) {
-		nd.left, oldn = llrb.upsert(nd.left, key, value, vbno, vbuuid, seqno)
+		nd.left, newnd, oldnd = llrb.upsert(nd.left, key, value)
 	} else if nd.ltkey(key) {
-		nd.right, oldn = llrb.upsert(nd.right, key, value, vbno, vbuuid, seqno)
+		nd.right, newnd, oldnd = llrb.upsert(nd.right, key, value)
 	} else {
-		oldn = llrb.clone(nd)
-		if nv := nd.nodevalue(); nv != nil { // free the old value block
+		oldnd = llrb.clone(nd)
+		if nv := nd.nodevalue(); nv != nil { // free the value if present
 			nv.pool.free(unsafe.Pointer(nv))
 		}
-		nd.settimestamp(time.Now().UnixNano())
-		if value != nil { // and new value block if need be
+		if value != nil { // and new value if need be
 			ptr, mpool := llrb.valarena.alloc(int64(nvaluesize + len(value)))
 			nv := (*nodevalue)(ptr)
 			nv.pool = mpool
 			nd = nd.setnodevalue(nv.setvalue(value))
 		}
+		newnd = nd
 	}
 
 	nd = llrb.walkuprot23(nd)
-	return nd, oldn
+	return nd, newnd, oldnd
 }
 
 func (llrb *LLRB) DeleteMin() *node {
 	nd := (*node)(atomic.LoadPointer(&llrb.root))
 	root, deleted := llrb.deletemin(nd)
 	if root != nil {
-		root.setblack()
+		root.metadata().setblack()
 	}
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 	if deleted != nil {
@@ -407,7 +423,7 @@ func (llrb *LLRB) deletemin(nd *node) (newnd, deleted *node) {
 	if nd.left == nil {
 		return nil, nd
 	}
-	if !nd.left.isred() && !nd.left.left.isred() {
+	if !isred(nd.left) && !isred(nd.left.left) {
 		nd = moveredleft(nd)
 	}
 	nd.left, deleted = llrb.deletemin(nd.left)
@@ -418,7 +434,7 @@ func (llrb *LLRB) DeleteMax() *node {
 	nd := (*node)(atomic.LoadPointer(&llrb.root))
 	root, deleted := llrb.deletemax(nd)
 	if root != nil {
-		root.setblack()
+		root.metadata().setblack()
 	}
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 	if deleted != nil {
@@ -434,13 +450,13 @@ func (llrb *LLRB) deletemax(nd *node) (newnd, deleted *node) {
 	if nd == nil {
 		return nil, nil
 	}
-	if nd.left.isred() {
+	if isred(nd.left) {
 		nd = rotateright(nd)
 	}
 	if nd.right == nil {
 		return nil, nd
 	}
-	if !nd.right.isred() && !nd.right.left.isred() {
+	if !isred(nd.right) && !isred(nd.right.left) {
 		nd = moveredright(nd)
 	}
 	nd.right, deleted = llrb.deletemax(nd.right)
@@ -451,7 +467,7 @@ func (llrb *LLRB) Delete(key []byte) *node {
 	nd := (*node)(atomic.LoadPointer(&llrb.root))
 	root, deleted := llrb.delete(nd, key)
 	if root != nil {
-		root.setblack()
+		root.metadata().setblack()
 	}
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 	if deleted != nil {
@@ -471,20 +487,20 @@ func (llrb *LLRB) delete(nd *node, key []byte) (newnd, deleted *node) {
 		if nd.left == nil { // key not present. Nothing to delete
 			return nd, nil
 		}
-		if !nd.left.isred() && !nd.left.left.isred() {
+		if !isred(nd.left) && !isred(nd.left.left) {
 			nd = moveredleft(nd)
 		}
 		nd.left, deleted = llrb.delete(nd.left, key)
 
 	} else {
-		if nd.left.isred() {
+		if isred(nd.left) {
 			nd = rotateright(nd)
 		}
 		// If @key equals @h.Item and no right children at @h
 		if !nd.ltkey(key) && nd.right == nil {
 			return nil, nd
 		}
-		if nd.right != nil && !nd.right.isred() && !nd.right.left.isred() {
+		if nd.right != nil && !isred(nd.right) && !isred(nd.right.left) {
 			nd = moveredright(nd)
 		}
 		// If @key equals @h.Item, and (from above) 'h.Right != nil'
@@ -494,28 +510,18 @@ func (llrb *LLRB) delete(nd *node, key []byte) (newnd, deleted *node) {
 			if subdeleted == nil {
 				panic("logic")
 			}
-			deleted = nd
-			// copy subdeleted as the current node
-			sdkey := subdeleted.key()
-			vbno, vbuuid := subdeleted.vbno(), subdeleted.vbuuid
-			seqno := subdeleted.seqno
-			if nv := subdeleted.nodevalue(); nv != nil {
-				nd = llrb.newnode(sdkey, nv.value(), vbno, vbuuid, seqno)
-			} else {
-				nd = llrb.newnode(sdkey, nil, vbno, vbuuid, seqno)
+			newnd := llrb.clone(subdeleted)
+			newnd.left, newnd.right = nd.left, nd.right
+			if nd.metadata().isdirty() {
+				newnd.metadata().setdirty()
 			}
-			if deleted.isdirty() {
-				nd.setdirty()
+			if nd.metadata().isblack() {
+				newnd.metadata().setblack()
 			} else {
-				nd.cleardirty()
+				newnd.metadata().setred()
 			}
-			if deleted.isblack() {
-				nd.setblack()
-			} else {
-				nd.setred()
-			}
-			nd.left, nd.right = deleted.left, deleted.right
-			// free the subdeleted node.
+			newnd.nodevalue().setvalue(subdeleted.nodevalue().value())
+			deleted, nd = nd, newnd
 			llrb.Freenode(subdeleted)
 		} else { // Else, @key is bigger than @nd
 			nd.right, deleted = llrb.delete(nd.right, key)
@@ -531,13 +537,13 @@ func (llrb *LLRB) walkdownrot23(nd *node) *node {
 }
 
 func (llrb *LLRB) walkuprot23(nd *node) *node {
-	if nd.right.isred() && !nd.left.isred() {
+	if isred(nd.right) && !isred(nd.left) {
 		nd = rotateleft(nd)
 	}
-	if nd.left.isred() && nd.left.left.isred() {
+	if isred(nd.left) && isred(nd.left.left) {
 		nd = rotateright(nd)
 	}
-	if nd.left.isred() && nd.right.isred() {
+	if isred(nd.left) && isred(nd.right) {
 		flip(nd)
 	}
 	return nd
@@ -546,17 +552,17 @@ func (llrb *LLRB) walkuprot23(nd *node) *node {
 // rotation routines for 2-3-4 algorithm
 
 func walkdownrot234(nd *node) *node {
-	if nd.left.isred() && nd.right.isred() {
+	if isred(nd.left) && isred(nd.right) {
 		flip(nd)
 	}
 	return nd
 }
 
 func walkuprot234(nd *node) *node {
-	if nd.right.isred() && !nd.left.isred() {
+	if isred(nd.right) && !isred(nd.left) {
 		nd = rotateleft(nd)
 	}
-	if nd.left.isred() && nd.left.left.isred() {
+	if isred(nd.left) && isred(nd.left.left) {
 		nd = rotateright(nd)
 	}
 	return nd
@@ -564,58 +570,79 @@ func walkuprot234(nd *node) *node {
 
 //---- local functions
 
-func (llrb *LLRB) newnode(k, v []byte, vbno uint16, vbuuid, seqno uint64) *node {
-	ptr, mpool := llrb.nodearena.alloc(int64(nodesize + len(k)))
+func (llrb *LLRB) newnode(k, v []byte) *node {
+	mdsize := (&metadata{}).initMetadata(0, llrb.fmask).sizeof()
+	ptr, mpool := llrb.nodearena.alloc(int64(nodesize + mdsize + len(k)))
 	nd := (*node)(ptr)
-	nd = nd.setdirty().setred()
-	nd = nd.setvbno(vbno)
-	nd.vbuuid, nd.seqno = vbuuid, seqno
+	nd.metadata().initMetadata(0, llrb.fmask).setdirty().setred()
+	nd.setkey(k)
 	nd.pool, nd.left, nd.right = mpool, nil, nil
 
-	if v != nil {
+	if v != nil && nd.metadata().ismvalue() {
 		ptr, mpool = llrb.valarena.alloc(int64(nvaluesize + len(v)))
 		nv := (*nodevalue)(ptr)
 		nv.pool = mpool
-		nd.setnodevalue(nv.setvalue(v))
+		nvarg := (uintptr)(unsafe.Pointer(nv.setvalue(v)))
+		nd.metadata().setmvalue((uint64)(nvarg), 0)
+	} else if v != nil {
+		panic("llrb tree not configured for accepting value")
 	}
-
-	nd.fpos = -1
-	nd = nd.settimestamp(time.Now().UnixNano()).setkey(k)
 	return nd
 }
 
 func (llrb *LLRB) clone(nd *node) (newnd *node) {
-	key := nd.key()
-	if nv := nd.nodevalue(); nv != nil {
-		newnd = llrb.newnode(key, nv.value(), nd.vbno(), nd.vbuuid, nd.seqno)
-	} else {
-		newnd = llrb.newnode(key, nil, nd.vbno(), nd.vbuuid, nd.seqno)
+	// clone node.
+	newndu, mpool := llrb.nodearena.alloc(nd.pool.size)
+	newnd = (*node)(newndu)
+	memcpy(unsafe.Pointer(newnd), unsafe.Pointer(nd), int(nd.pool.size))
+	newnd.pool = mpool
+	// clone value if value is present.
+	if nd.metadata().ismvalue() {
+		if mvalue, level := nd.metadata().mvalue(); level == 0 && mvalue != 0 {
+			nv := (*nodevalue)(unsafe.Pointer((uintptr)(mvalue)))
+			newnvu, mpool := llrb.valarena.alloc(nv.pool.size)
+			memcpy(newnvu, unsafe.Pointer(nv), int(nv.pool.size))
+			newnv := (*nodevalue)(newnvu)
+			newnv.pool = mpool
+			newnd.setnodevalue(newnv)
+		}
 	}
-	if nd.isdirty() {
-		newnd.setdirty()
-	} else {
-		newnd.cleardirty()
-	}
-	if nd.isblack() {
-		newnd.setblack()
-	} else {
-		newnd.setred()
-	}
-	newnd.left, newnd.right = nd.left, nd.right
 	return
 }
 
 func (llrb *LLRB) equivalent(n1, n2 *node) bool {
-	return n1.isdirty() == n2.isdirty() &&
-		n1.isblack() == n2.isblack() &&
-		n1.vbno() == n2.vbno() &&
-		n1.vbuuid == n2.vbuuid &&
-		n1.seqno == n2.seqno &&
-		n1.left == n2.left &&
-		n1.right == n2.right &&
-		bytes.Compare(n1.key(), n2.key()) == 0 &&
-		bytes.Compare(n1.nodevalue().value(), n2.nodevalue().value()) == 0 &&
-		n1.timestamp() == n2.timestamp()
+	md1, md2 := n1.metadata(), n2.metadata()
+	if md1.isdirty() != md2.isdirty() {
+		//fmt.Println("dirty mismatch")
+		return false
+	} else if md1.isblack() != md2.isblack() {
+		//fmt.Println("black mismatch")
+		return false
+	} else if md1.vbno() != md2.vbno() {
+		//fmt.Println("vbno mismatch")
+		return false
+	} else if md1.isvbuuid() && (md1.vbuuid() != md2.vbuuid()) {
+		//fmt.Println("vbuuid mismatch")
+		return false
+	} else if md1.isbnseq() && (md1.bnseq() != md2.bnseq()) {
+		//fmt.Println("isbnseq mismatch")
+		return false
+	} else if md1.access() != md2.access() {
+		//fmt.Println("access mismatch", md1.access())
+		return false
+	} else if n1.left != n2.left || n1.right != n2.right {
+		//fmt.Println("left mismatch")
+		return false
+	} else if bytes.Compare(n1.key(), n2.key()) != 0 {
+		//fmt.Println("key mismatch")
+		return false
+	} else if md1.ismvalue() {
+		if bytes.Compare(n1.nodevalue().value(), n2.nodevalue().value()) != 0 {
+			//fmt.Println("dirty mismatch")
+			return false
+		}
+	}
+	return true
 }
 
 func validateConfig(config map[string]interface{}) {
