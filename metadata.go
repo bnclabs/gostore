@@ -96,9 +96,6 @@ func (md *metadata) setblack() *metadata {
 }
 
 func (md *metadata) isblack() bool {
-	if md == nil {
-		return false
-	}
 	return (md.hdr & 0x1000) == 0x1000
 }
 
@@ -165,10 +162,8 @@ func (md *metadata) access() uint64 {
 }
 
 func (md *metadata) setbnseq(seqno uint64) *metadata {
-	if md.isbnseq() {
-		off := mdlookup[mdOffsetmaskBnseq&md.hdr]
-		md.fields[off-1] = seqno
-	}
+	off := mdlookup[mdOffsetmaskBnseq&md.hdr]
+	md.fields[off-1] = seqno
 	return md
 }
 
@@ -178,10 +173,8 @@ func (md *metadata) bnseq() uint64 {
 }
 
 func (md *metadata) setddseq(seqno uint64) *metadata {
-	if md.isddseq() {
-		off := mdlookup[mdOffsetmaskDdseq&md.hdr]
-		md.fields[off-1] = seqno
-	}
+	off := mdlookup[mdOffsetmaskDdseq&md.hdr]
+	md.fields[off-1] = seqno
 	return md
 }
 
@@ -191,11 +184,9 @@ func (md *metadata) ddseq() uint64 {
 }
 
 func (md *metadata) setmvalue(mvalue uint64, level byte) *metadata {
-	if md.ismvalue() {
-		mvalue = (mvalue & 0xfffffffffffffff8) | uint64(level&0x7)
-		off := mdlookup[mdOffsetmaskMvalue&md.hdr]
-		md.fields[off-1] = mvalue
-	}
+	mvalue = (mvalue & 0xfffffffffffffff8) | uint64(level&0x7)
+	off := mdlookup[mdOffsetmaskMvalue&md.hdr]
+	md.fields[off-1] = mvalue
 	return md
 }
 
@@ -206,10 +197,8 @@ func (md *metadata) mvalue() (uint64, byte) {
 }
 
 func (md *metadata) setvbuuid(vbuuid uint64) *metadata {
-	if md.isvbuuid() {
-		off := mdlookup[mdOffsetmaskVbuuid&md.hdr]
-		md.fields[off-1] = vbuuid
-	}
+	off := mdlookup[mdOffsetmaskVbuuid&md.hdr]
+	md.fields[off-1] = vbuuid
 	return md
 }
 
