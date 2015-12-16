@@ -1,5 +1,3 @@
-// Package llrb
-//
 // configuration:
 //
 //	"nodearena.minblock"
@@ -17,7 +15,7 @@
 //  "log.level"
 //  "log.file"
 
-package llrb
+package storage
 
 import "fmt"
 import "unsafe"

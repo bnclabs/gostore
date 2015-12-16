@@ -1,6 +1,6 @@
 //  Copyright (c) 2014 Couchbase, Inc.
 
-package llrb
+package storage
 
 import "io"
 import "os"
