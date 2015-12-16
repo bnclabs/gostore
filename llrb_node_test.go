@@ -14,7 +14,7 @@ func Testnode(t *testing.T) {
 	copy(key, "hello world")
 
 	ptr, mpool := marena.alloc(blocksize)
-	nd := (*node)(ptr)
+	nd := (*llrbnode)(ptr)
 	nd.pool = mpool
 
 	vbno, fmask := uint16(0x1234), metadataMask(0)
@@ -69,7 +69,7 @@ func TestLtkey(t *testing.T) {
 	blocksize, key := int64(1024), []byte("abcdef")
 
 	ptr, mpool := marena.alloc(blocksize)
-	nd := (*node)(ptr)
+	nd := (*llrbnode)(ptr)
 	nd.pool = mpool
 
 	// check with empty key
@@ -101,7 +101,7 @@ func TestLekey(t *testing.T) {
 	blocksize, key := int64(1024), []byte("abcdef")
 
 	ptr, mpool := marena.alloc(blocksize)
-	nd := (*node)(ptr)
+	nd := (*llrbnode)(ptr)
 	nd.pool = mpool
 
 	// check with empty key
@@ -135,7 +135,7 @@ func TestGtkey(t *testing.T) {
 	blocksize, key := int64(1024), []byte("abcdef")
 
 	ptr, mpool := marena.alloc(blocksize)
-	nd := (*node)(ptr)
+	nd := (*llrbnode)(ptr)
 	nd.pool = mpool
 
 	// check with empty key
@@ -169,7 +169,7 @@ func TestGekey(t *testing.T) {
 	blocksize, key := int64(1024), []byte("abcdef")
 
 	ptr, mpool := marena.alloc(blocksize)
-	nd := (*node)(ptr)
+	nd := (*llrbnode)(ptr)
 	nd.pool = mpool
 
 	// check with empty key
@@ -203,7 +203,7 @@ func BenchmarkNodefields(b *testing.B) {
 	blocksize, key := int64(1024), []byte("abcdef")
 
 	ptr, mpool := marena.alloc(blocksize)
-	nd := (*node)(ptr)
+	nd := (*llrbnode)(ptr)
 	nd.pool = mpool
 
 	b.ResetTimer()
@@ -233,7 +233,7 @@ func BenchmarkNodeSetKey(b *testing.B) {
 	blocksize, key := int64(1024), make([]byte, 215)
 
 	ptr, mpool := marena.alloc(blocksize)
-	nd := (*node)(ptr)
+	nd := (*llrbnode)(ptr)
 	nd.pool = mpool
 
 	b.ResetTimer()
@@ -252,7 +252,7 @@ func BenchmarkNodeGetKey(b *testing.B) {
 	blocksize, key := int64(1024), make([]byte, 512)
 
 	ptr, mpool := marena.alloc(blocksize)
-	nd := (*node)(ptr)
+	nd := (*llrbnode)(ptr)
 	nd.pool = mpool
 	nd.metadata().initMetadata(0x1234, 0)
 	nd.setkey(key)
@@ -271,7 +271,7 @@ func BenchmarkCompareLtkey(b *testing.B) {
 	otherkey := make([]byte, 512)
 
 	ptr, mpool := marena.alloc(blocksize)
-	nd := (*node)(ptr)
+	nd := (*llrbnode)(ptr)
 	nd.pool = mpool
 	nd.metadata().initMetadata(0x1234, 0)
 	nd.setkey(key)
@@ -292,7 +292,7 @@ func BenchmarkCompareLekey(b *testing.B) {
 	otherkey := make([]byte, 512)
 
 	ptr, mpool := marena.alloc(blocksize)
-	nd := (*node)(ptr)
+	nd := (*llrbnode)(ptr)
 	nd.pool = mpool
 	nd.metadata().initMetadata(0x1234, 0)
 	nd.setkey(key)
@@ -313,7 +313,7 @@ func BenchmarkCompareGtkey(b *testing.B) {
 	otherkey := make([]byte, 512)
 
 	ptr, mpool := marena.alloc(blocksize)
-	nd := (*node)(ptr)
+	nd := (*llrbnode)(ptr)
 	nd.pool = mpool
 	nd.metadata().initMetadata(0x1234, 0)
 	nd.setkey(key)
@@ -334,7 +334,7 @@ func BenchmarkCompareGekey(b *testing.B) {
 	otherkey := make([]byte, 512)
 
 	ptr, mpool := marena.alloc(blocksize)
-	nd := (*node)(ptr)
+	nd := (*llrbnode)(ptr)
 	nd.pool = mpool
 	nd.metadata().initMetadata(0x1234, 0)
 	nd.setkey(key)

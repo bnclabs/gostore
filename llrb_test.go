@@ -93,9 +93,9 @@ func TestCloneLLRBNode(t *testing.T) {
 	key, value := makekeyvalue(make([]byte, 128), make([]byte, 1024))
 	nd := llrb.newnode(key, value)
 	nd.metadata().setblack().setdirty()
-	nd.left = (*node)(unsafe.Pointer((uintptr)(unsafe.Pointer(nd)) +
+	nd.left = (*llrbnode)(unsafe.Pointer((uintptr)(unsafe.Pointer(nd)) +
 		unsafe.Sizeof(*nd)))
-	nd.right = (*node)(unsafe.Pointer((uintptr)(unsafe.Pointer(nd.left)) +
+	nd.right = (*llrbnode)(unsafe.Pointer((uintptr)(unsafe.Pointer(nd.left)) +
 		unsafe.Sizeof(*nd)))
 	nd.metadata().setaccess(uint64(time.Now().UnixNano()))
 	newnd := llrb.clone(nd)
@@ -125,7 +125,7 @@ func TestLLRBBasic(t *testing.T) {
 	for _, kv := range inserts {
 		newnd, oldnd := llrb.Upsert(kv[0], kv[1])
 		if oldnd != nil {
-			t.Errorf("expected old node as nil")
+			t.Errorf("expected old llrbnode as nil")
 		}
 		newnd.metadata().setvbno(vbno).setvbuuid(vbuuid).setbnseq(seqno)
 		seqno++
@@ -211,7 +211,7 @@ func TestLLRBBasicRange(t *testing.T) {
 	for _, kv := range inserts {
 		newnd, oldnd := llrb.Upsert(kv[0], kv[1])
 		if oldnd != nil {
-			t.Errorf("expected old node as nil")
+			t.Errorf("expected old llrbnode as nil")
 		}
 		newnd.metadata().setvbno(vbno).setvbuuid(vbuuid).setbnseq(seqno)
 		seqno++
@@ -220,7 +220,7 @@ func TestLLRBBasicRange(t *testing.T) {
 	i, ln := 0, 0
 	llrb.Range(
 		inserts[0][0], inserts[4][0], "both",
-		func(nd *node) bool {
+		func(nd *llrbnode) bool {
 			k, v := nd.key(), nd.nodevalue().value()
 			if bytes.Compare(inserts[i][0], k) != 0 {
 				t.Errorf("expected key %v, got %v", inserts[i][0], string(k))
@@ -238,7 +238,7 @@ func TestLLRBBasicRange(t *testing.T) {
 	i, ln = 1, 0
 	llrb.Range(
 		inserts[0][0], inserts[4][0], "none",
-		func(nd *node) bool {
+		func(nd *llrbnode) bool {
 			k, v := nd.key(), nd.nodevalue().value()
 			if bytes.Compare(inserts[i][0], k) != 0 {
 				t.Errorf("expected key %v, got %v", inserts[i][0], string(k))
@@ -256,7 +256,7 @@ func TestLLRBBasicRange(t *testing.T) {
 	i, ln = 1, 0
 	llrb.Range(
 		inserts[0][0], inserts[4][0], "high",
-		func(nd *node) bool {
+		func(nd *llrbnode) bool {
 			k, v := nd.key(), nd.nodevalue().value()
 			if bytes.Compare(inserts[i][0], k) != 0 {
 				t.Errorf("expected key %v, got %v", inserts[i][0], string(k))
@@ -274,7 +274,7 @@ func TestLLRBBasicRange(t *testing.T) {
 	i, ln = 0, 0
 	llrb.Range(
 		inserts[0][0], inserts[4][0], "low",
-		func(nd *node) bool {
+		func(nd *llrbnode) bool {
 			k, v := nd.key(), nd.nodevalue().value()
 			if bytes.Compare(inserts[i][0], k) != 0 {
 				t.Errorf("expected key %v, got %v", inserts[i][0], string(k))
@@ -292,7 +292,7 @@ func TestLLRBBasicRange(t *testing.T) {
 	i, ln = 0, 0
 	llrb.Range(
 		inserts[0][0], inserts[0][0], "high",
-		func(nd *node) bool { return true })
+		func(nd *llrbnode) bool { return true })
 	if ln != 0 {
 		t.Errorf("expected %v, got %v", 0, ln)
 	}
@@ -300,7 +300,7 @@ func TestLLRBBasicRange(t *testing.T) {
 	i, ln = 0, 0
 	llrb.Range(
 		inserts[4][0], inserts[4][0], "low",
-		func(nd *node) bool { return true })
+		func(nd *llrbnode) bool { return true })
 	if ln != 0 {
 		t.Errorf("expected %v, got %v", 0, ln)
 	}
@@ -321,7 +321,7 @@ func TestLLRBInsert(t *testing.T) {
 		key, value = makekeyvalue(key, value)
 		newnd, oldnd := llrb.Upsert(key, value)
 		if oldnd != nil {
-			t.Errorf("expected old node to be nil")
+			t.Errorf("expected old llrbnode to be nil")
 		} else if x := llrb.Count(); x != int64(i+1) {
 			t.Errorf("expected %v, got %v", i, x)
 		}
@@ -384,7 +384,7 @@ func TestLLRBUpsert(t *testing.T) {
 		key, value = makekeyvalue(key, value)
 		newnd, oldnd := llrb.Upsert(key, value)
 		if oldnd != nil {
-			t.Errorf("expected old node to be nil")
+			t.Errorf("expected old llrbnode to be nil")
 		} else if x := llrb.Count(); x != int64(i+1) {
 			t.Errorf("expected %v, got %v", i, x)
 		}
@@ -541,7 +541,7 @@ func TestLLRBRange(t *testing.T) {
 		y := rand.Intn(len(keys))
 		lowkey, highkey := keys[x], keys[y]
 		llrbks, llrbvs := make([][]byte, 0), make([][]byte, 0)
-		llrb.Range(lowkey, highkey, incl, func(nd *node) bool {
+		llrb.Range(lowkey, highkey, incl, func(nd *llrbnode) bool {
 			llrbks = append(llrbks, nd.key())
 			llrbvs = append(llrbvs, nd.nodevalue().value())
 			return true
