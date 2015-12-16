@@ -3,11 +3,12 @@ package llrb
 import "math"
 
 type averageInt struct {
-	n     int64
-	min   int64
-	max   int64
-	sum   int64
-	sumsq float64
+	n      int64
+	minval int64
+	maxval int64
+	sum    int64
+	sumsq  float64
+	init   bool
 }
 
 func (av *averageInt) add(sample int64) {
@@ -15,12 +16,21 @@ func (av *averageInt) add(sample int64) {
 	av.sum += sample
 	f := float64(sample)
 	av.sumsq += f * f
-	if sample < av.min {
-		av.min = sample
+	if av.init == false || sample < av.minval {
+		av.minval = sample
+		av.init = true
 	}
-	if av.max < sample {
-		av.max = sample
+	if av.maxval < sample {
+		av.maxval = sample
 	}
+}
+
+func (av *averageInt) min() int64 {
+	return av.minval
+}
+
+func (av *averageInt) max() int64 {
+	return av.maxval
 }
 
 func (av *averageInt) samples() int64 {

@@ -7,7 +7,11 @@ func TestAverageInt(t *testing.T) {
 	for i := 1; i <= 100; i++ {
 		avg.add(int64(i))
 	}
-	if x, y := int64(100), avg.samples(); x != y {
+	if x, y := int64(1), avg.min(); x != y {
+		t.Errorf("min() expected %v, got %v", x, y)
+	} else if x, y := int64(100), avg.max(); x != y {
+		t.Errorf("max() expected %v, got %v", x, y)
+	} else if x, y := int64(100), avg.samples(); x != y {
 		t.Errorf("samples() expected %v, got %v", x, y)
 	} else if x, y := int64(100*101)/2, avg.total(); x != y {
 		t.Errorf("total() expected %v, got %v", x, y)
