@@ -46,6 +46,7 @@ type LLRB struct { // tree container
 	count     int64 // number of nodes in the tree
 	keymemory int64 // memory used by all keys
 	valmemory int64 // memory used by all values
+	upserthgt *averageInt
 }
 
 func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
@@ -80,6 +81,8 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 		llrb.fmask = llrb.fmask.enableVbuuid()
 	}
 	llrb.config = config
+	// statistics
+	llrb.upserthgt = &averageInt{}
 	return llrb
 }
 
@@ -193,6 +196,33 @@ func (llrb *LLRB) LogValueutilz() {
 			z := (float64(allocated) / float64(capacity)) * 100
 			log.Infof("%v  %v %v %2.2f\n", llrb.logPrefix, size, capacity, z)
 		}
+	}
+}
+
+func (llrb *LLRB) HeightStats() map[string]interface{} {
+	av := &averageInt{}
+	root := (*node)(atomic.LoadPointer(&llrb.root))
+	heightStats(root, 0, av)
+	return map[string]interface{}{
+		"samples":     av.samples(),
+		"min":         av.min(),
+		"max":         av.max(),
+		"mean":        av.mean(),
+		"variance":    av.variance(),
+		"stddeviance": av.sd(),
+	}
+}
+
+func heightStats(nd *node, d int64, av *averageInt) {
+	if nd == nil {
+		return
+	}
+	av.add(d)
+	if nd.left != nil {
+		heightStats(nd.left, d+1, av)
+	}
+	if nd.right != nil {
+		heightStats(nd.right, d+1, av)
 	}
 }
 
@@ -353,7 +383,7 @@ func (llrb *LLRB) Upsert(k, v []byte) (newnd, oldnd *node) {
 		panic("upserting nil key")
 	}
 	nd := (*node)(atomic.LoadPointer(&llrb.root))
-	root, newnd, oldnd = llrb.upsert(nd, k, v)
+	root, newnd, oldnd = llrb.upsert(nd, 1 /*depth*/, k, v)
 	root.metadata().setblack()
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 	if oldnd == nil {
@@ -368,20 +398,23 @@ func (llrb *LLRB) Upsert(k, v []byte) (newnd, oldnd *node) {
 }
 
 // returns root, newnd, oldnd
-func (llrb *LLRB) upsert(nd *node, key, value []byte) (*node, *node, *node) {
+func (llrb *LLRB) upsert(
+	nd *node, depth int64, key, value []byte) (*node, *node, *node) {
+
 	var oldnd, newnd *node
 
 	if nd == nil {
 		newnd := llrb.newnode(key, value)
+		llrb.upserthgt.add(depth)
 		return newnd, newnd, nil
 	}
 
 	nd = llrb.walkdownrot23(nd)
 
 	if nd.gtkey(key) {
-		nd.left, newnd, oldnd = llrb.upsert(nd.left, key, value)
+		nd.left, newnd, oldnd = llrb.upsert(nd.left, depth+1, key, value)
 	} else if nd.ltkey(key) {
-		nd.right, newnd, oldnd = llrb.upsert(nd.right, key, value)
+		nd.right, newnd, oldnd = llrb.upsert(nd.right, depth+1, key, value)
 	} else {
 		oldnd = llrb.clone(nd)
 		if nv := nd.nodevalue(); nv != nil { // free the value if present
@@ -394,6 +427,7 @@ func (llrb *LLRB) upsert(nd *node, key, value []byte) (*node, *node, *node) {
 			nd = nd.setnodevalue(nv.setvalue(value))
 		}
 		newnd = nd
+		llrb.upserthgt.add(depth)
 	}
 
 	nd = llrb.walkuprot23(nd)
