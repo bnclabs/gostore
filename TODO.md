@@ -1,5 +1,7 @@
 LLRB:
-* add test cases for DeleteMin() and DeleteMax()
+* add test cases for DeleteMin() and DeleteMax().
+* amend Get API to return the depth of the key inside the tree,
+  can be used for debugging.
 
 * CBOR in ; JSON out.
 * CBOR based json-pointer lookup is essential for all KV operation.
