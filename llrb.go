@@ -1,19 +1,49 @@
 // configuration:
 //
-//	"nodearena.minblock"
-//  "nodearena.maxblock"
-//  "nodearena.capacity"
-//  "nodepool.capacity"
-//  "valarena.minblock"
-//  "valarena.maxblock"
-//  "valarena.capacity"
-//  "valpool.capacity"
-//  "metadata.bornseqno"
-//  "metadata.deadseqno"
-//  "metadata.mvalue"
-//  "metadata.vbuuid"
-//  "log.level"
-//  "log.file"
+// "nodearena.minblock" - integer
+//		minimum node-block size that shall be requested from the arena.
+//
+// "nodearena.maxblock" - integer
+//		maximum node-block size that shall be requested from the arena.
+//
+// "nodearena.capacity" - integer
+//		capacity in bytes that the arena shall manage for node-blocks
+//		using one or more pools.
+//
+// "nodepool.capacity" - integer
+//		limit the size of a pool, irrespective of pool's block size.
+//
+// "valarena.minblock" - integer
+//		minimum value-block size that shall be requested from the arena.
+//
+// "valarena.maxblock" - integer
+//		maximum value-block size that shall be requested from the arena.
+//
+// "valarena.capacity" - integer
+//		capacity in bytes that the arena shall manage for node-blocks
+//		using one or more pools.
+//
+// "valpool.capacity" - integer
+//		limit the size of a pool, irrespective of pool's block size.
+//
+// "metadata.bornseqno" - boolean
+//		use metadata field to book-keep node's born sequence number.
+//
+// "metadata.deadseqno" - boolean
+//		use metadata field to book-keep node's dead sequence number.
+//
+// "metadata.mvalue" - boolean
+//		value is not nil and its blocks allocated from value-arena
+//
+// "metadata.vbuuid" - boolean
+//		use metadata field to book-keep node's vbuuid.
+//
+// "log.level" - string
+//		one of the following
+//		"ignore", "fatal", "error", "warn", "info", "verbose", "debug", "trace"
+//
+// "log.file" - string
+//		log to file, if empty log to console
 
 package storage
 
@@ -41,10 +71,12 @@ type LLRB struct { // tree container
 	config    map[string]interface{}
 	logPrefix string
 	// statistics
-	count     int64 // number of nodes in the tree
-	keymemory int64 // memory used by all keys
-	valmemory int64 // memory used by all values
-	upserthgt *averageInt
+	count       int64 // number of nodes in the tree
+	keymemory   int64 // memory used by all keys
+	valmemory   int64 // memory used by all values
+	upsertdepth *averageInt
+	// scratch pads
+	strsl []string
 }
 
 func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
@@ -80,7 +112,9 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	}
 	llrb.config = config
 	// statistics
-	llrb.upserthgt = &averageInt{}
+	llrb.upsertdepth = &averageInt{}
+	// scratch pads
+	llrb.strsl = make([]string, 0)
 	return llrb
 }
 
@@ -170,7 +204,8 @@ func (llrb *LLRB) LogNodeutilz() {
 				capacity += mpool.capacity
 			}
 			z := (float64(allocated) / float64(capacity)) * 100
-			log.Infof("%v  %v %v %2.2f\n", llrb.logPrefix, size, capacity, z)
+			fmsg := "%v  %6v %10v/%4v %2.2f\n"
+			log.Infof(fmsg, llrb.logPrefix, size, capacity, len(mpools), z)
 		}
 	}
 }
@@ -197,6 +232,25 @@ func (llrb *LLRB) LogValueutilz() {
 	}
 }
 
+func (llrb *LLRB) UpsertDepth() map[string]interface{} {
+	return map[string]interface{}{
+		"samples":     llrb.upsertdepth.samples(),
+		"min":         llrb.upsertdepth.min(),
+		"max":         llrb.upsertdepth.max(),
+		"mean":        llrb.upsertdepth.mean(),
+		"variance":    llrb.upsertdepth.variance(),
+		"stddeviance": llrb.upsertdepth.sd(),
+	}
+}
+
+func (llrb *LLRB) LogUpsertDepth() {
+	m := llrb.UpsertDepth()
+	fmsg := "UpsertDepth (%v) %v-%v %v/%2.2f/%2.2f\n"
+	log.Infof(
+		fmsg, m["samples"], m["min"], m["max"],
+		m["mean"], m["variance"], m["stddeviance"])
+}
+
 func (llrb *LLRB) HeightStats() map[string]interface{} {
 	av := &averageInt{}
 	root := (*llrbnode)(atomic.LoadPointer(&llrb.root))
@@ -209,6 +263,14 @@ func (llrb *LLRB) HeightStats() map[string]interface{} {
 		"variance":    av.variance(),
 		"stddeviance": av.sd(),
 	}
+}
+
+func (llrb *LLRB) LogHeightStats() {
+	m := llrb.HeightStats()
+	fmsg := "HeightStats (%v) %v-%v %v/%2.2f/%2.2f\n"
+	log.Infof(
+		fmsg, m["samples"], m["min"], m["max"],
+		m["mean"], m["variance"], m["stddeviance"])
 }
 
 func heightStats(nd *llrbnode, d int64, av *averageInt) {
@@ -412,7 +474,7 @@ func (llrb *LLRB) upsert(
 
 	if nd == nil {
 		newnd := llrb.newnode(key, value)
-		llrb.upserthgt.add(depth)
+		llrb.upsertdepth.add(depth)
 		return newnd, newnd, nil
 	}
 
@@ -434,7 +496,7 @@ func (llrb *LLRB) upsert(
 			nd = nd.setnodevalue(nv.setvalue(value))
 		}
 		newnd = nd
-		llrb.upserthgt.add(depth)
+		llrb.upsertdepth.add(depth)
 	}
 
 	nd = llrb.walkuprot23(nd)
