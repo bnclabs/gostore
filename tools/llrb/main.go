@@ -31,9 +31,9 @@ func argParse() {
 	var nodearena, valarena, klen, vlen string
 
 	flag.StringVar(&nodearena, "nodearena", "",
-		"minblock,maxblock,capacity for node memory arena")
+		"minblock,maxblock,arena-capacity,pool-capacity for nodes")
 	flag.StringVar(&valarena, "valarena", "",
-		"minblock,maxblock,capacity for value memory arena")
+		"minblock,maxblock,arena-capacity,pool-capacity for values")
 	flag.StringVar(&klen, "klen", "",
 		"minklen, maxklen - generate keys between [minklen,maxklen)")
 	flag.StringVar(&vlen, "vlen", "",
@@ -51,7 +51,7 @@ func argParse() {
 	flag.Parse()
 
 	options.nodearena = [4]int{
-		llrb.MinKeymem, llrb.MaxKeymem, 10 * 1024 * 1024, 1024 * 1024,
+		storage.MinKeymem, storage.MaxKeymem, 10 * 1024 * 1024, 1024 * 1024,
 	}
 	if nodearena != "" {
 		for i, s := range strings.Split(nodearena, ",") {
@@ -60,7 +60,7 @@ func argParse() {
 		}
 	}
 	options.valarena = [4]int{
-		llrb.MinKeymem, llrb.MaxKeymem, 10 * 1024 * 1024, 1024 * 1024,
+		storage.MinKeymem, storage.MaxKeymem, 10 * 1024 * 1024, 1024 * 1024,
 	}
 	if valarena != "" {
 		for i, s := range strings.Split(valarena, ",") {
@@ -116,18 +116,19 @@ func main() {
 		"valarena.capacity":  options.valarena[2],
 		"valpool.capacity":   options.valarena[3],
 	}
-	t := llrb.NewLLRB("cmdline", config, nil)
+	llrb := storage.NewLLRB("cmdline", config, nil)
 	now := time.Now()
-	insertItems(t, 10 /*vbno*/, 0xABCD123456 /*vbuuid*/, 0 /*seqno*/, options.n)
-	fmt.Printf("Took %v to populate %v items\n", time.Since(now), options.n)
-	printutilization(t)
-	t.Release()
+	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD123456), uint64(0)
+	insertItems(llrb, vbno, vbuuid, seqno, options.n)
+	fmt.Printf("Took %v to insert %v items\n", time.Since(now), options.n)
+	printutilization(llrb)
+	llrb.Release()
 	if takeMEMProfile(options.mprof) {
 		fmt.Printf("dumped mem-profile to %v\n", options.mprof)
 	}
 }
 
-func insertItems(t *llrb.LLRB, vbno uint16, vbuuid, seqno uint64, count int) {
+func insertItems(llrb *storage.LLRB, vbno uint16, vbuuid, seqno uint64, count int) {
 	startseqno := seqno
 	defer func() {
 		if r := recover(); r != nil {
@@ -140,7 +141,7 @@ func insertItems(t *llrb.LLRB, vbno uint16, vbuuid, seqno uint64, count int) {
 	key, value := make([]byte, maxkey), make([]byte, maxval)
 	for i := 0; i < count; i++ {
 		key, value := makekeyval(key, value)
-		t.Upsert(key, value, vbno, vbuuid, seqno)
+		llrb.Upsert(key, value)
 		seqno++
 	}
 }
@@ -164,37 +165,39 @@ func makekeyval(key, value []byte) (k, v []byte) {
 	return k, v
 }
 
-func printutilization(t *llrb.LLRB) {
+func printutilization(llrb *storage.LLRB) {
 	min := hm.Bytes(uint64(options.nodearena[0]))
 	max := hm.Bytes(uint64(options.nodearena[1]))
 	cp := hm.Bytes(uint64(options.nodearena[2]))
 	pcp := hm.Bytes(uint64(options.nodearena[3]))
-	overhead, useful := t.NodeArena()
+	overhead, useful := llrb.NodeArena()
 	overh := hm.Bytes(uint64(overhead))
 	use := hm.Bytes(uint64(useful))
-	alloc := hm.Bytes(uint64(t.NodeAllocated()))
-	kmem := hm.Bytes(uint64(t.KeyMemory()))
-	avail := hm.Bytes(uint64(t.NodeAvailable()))
-	nblocks := len(t.NodeBlocks())
-	fmsg := "Nodes{min:%v max:%v cap:%v,%v mem:%v,%v alloc:{%v,%v} avail:%v blks:%v}\n"
-	fmt.Printf(fmsg, min, max, cp, pcp, overh, use, alloc, kmem, avail, nblocks)
+	alloc := hm.Bytes(uint64(llrb.NodeAllocated()))
+	kmem := hm.Bytes(uint64(llrb.KeyMemory()))
+	avail := hm.Bytes(uint64(llrb.NodeAvailable()))
+	nblocks := len(llrb.NodeBlocks())
+	fmsg := "Nodes blksz:{%v-%v/%v} cap:{%v/%v} mem:{%v,%v - %v,%v} avail:%v\n"
+	fmt.Printf(fmsg, min, max, nblocks, cp, pcp, use, overh, alloc, kmem, avail)
 
 	min = hm.Bytes(uint64(options.valarena[0]))
 	max = hm.Bytes(uint64(options.valarena[1]))
 	cp = hm.Bytes(uint64(options.valarena[2]))
 	pcp = hm.Bytes(uint64(options.valarena[3]))
-	overhead, useful = t.ValueArena()
+	overhead, useful = llrb.ValueArena()
 	overh = hm.Bytes(uint64(overhead))
 	use = hm.Bytes(uint64(useful))
-	alloc = hm.Bytes(uint64(t.ValueAllocated()))
-	vmem := hm.Bytes(uint64(t.ValueMemory()))
-	avail = hm.Bytes(uint64(t.ValueAvailable()))
-	vblocks := len(t.ValueBlocks())
-	fmsg = "Value{min:%v max:%v cap:{%v,%v} mem:{%v,%v} alloc:{%v,%v} avail:%v blks:%v}\n"
-	fmt.Printf(fmsg, min, max, cp, pcp, overh, use, alloc, vmem, avail, vblocks)
+	alloc = hm.Bytes(uint64(llrb.ValueAllocated()))
+	vmem := hm.Bytes(uint64(llrb.ValueMemory()))
+	avail = hm.Bytes(uint64(llrb.ValueAvailable()))
+	vblocks := len(llrb.ValueBlocks())
+	fmsg = "Value blksz:{%v-%v/%v} cap:{%v/%v} mem:{%v,%v - %v,%v} avail:%v\n"
+	fmt.Printf(fmsg, min, max, vblocks, cp, pcp, use, overh, alloc, vmem, avail)
 
-	t.LogNodeutilz()
-	t.LogValueutilz()
+	llrb.LogNodeutilz()
+	llrb.LogValueutilz()
+	llrb.LogUpsertDepth()
+	llrb.LogHeightStats()
 }
 
 func takeMEMProfile(filename string) bool {
