@@ -15,40 +15,70 @@ type Llrbnode struct {
 
 // Exported methods
 
-func (nd *Llrbnode) Setvbno() uint16 {
-	return nd.metadata().vbno()
+func (nd *Llrbnode) Setvbno(vbno uint16) {
+	if nd != nil {
+		nd.metadata().setvbno(vbno)
+	}
 }
 
 func (nd *Llrbnode) Vbno() uint16 {
-	return nd.metadata().vbno()
+	if nd != nil {
+		return nd.metadata().vbno()
+	}
+	return 0
 }
 
 func (nd *Llrbnode) SetBornseqno(seqno uint64) {
-	nd.metadata().setbnseq(seqno)
+	if nd != nil {
+		nd.metadata().setbnseq(seqno)
+	}
 }
 
 func (nd *Llrbnode) Bornseqno() uint64 {
-	return nd.metadata().bnseq()
+	if nd != nil {
+		return nd.metadata().bnseq()
+	}
+	return 0
 }
 
 func (nd *Llrbnode) SetDeadseqno(seqno uint64) {
-	nd.metadata().setddseq(seqno)
+	if nd != nil {
+		nd.metadata().setddseq(seqno)
+	}
 }
 
 func (nd *Llrbnode) Deadseqno() uint64 {
-	return nd.metadata().ddseq()
+	if nd != nil {
+		return nd.metadata().ddseq()
+	}
+	return 0
 }
 
 func (nd *Llrbnode) SetVbuuid(vbuuid uint64) {
-	nd.metadata().setvbuuid(vbuuid)
+	if nd != nil {
+		nd.metadata().setvbuuid(vbuuid)
+	}
 }
 
 func (nd *Llrbnode) Vbuuid() uint64 {
-	return nd.metadata().vbuuid()
+	if nd != nil {
+		return nd.metadata().vbuuid()
+	}
+	return 0
+}
+
+func (nd *Llrbnode) Key() []byte {
+	if nd != nil {
+		return nd.key()
+	}
+	return nil
 }
 
 func (nd *Llrbnode) Value() []byte {
-	return nd.nodevalue().value()
+	if nd != nil {
+		return nd.nodevalue().value()
+	}
+	return nil
 }
 
 // maintanence methods.

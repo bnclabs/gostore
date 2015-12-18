@@ -53,6 +53,8 @@ import "sort"
 import "bytes"
 import "sync/atomic"
 
+import hm "github.com/dustin/go-humanize"
+
 const MinKeymem = 96
 const MaxKeymem = 4096
 const MinValmem = 32
@@ -204,6 +206,48 @@ func heightStats(nd *Llrbnode, d int64, av *averageInt) {
 	}
 }
 
+func (llrb *LLRB) ValidateReds() bool {
+	root := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
+	if validatereds(root, isred(root)) != true {
+		return false
+	}
+	return true
+}
+
+func validatereds(nd *Llrbnode, fromred bool) bool {
+	if nd == nil {
+		return true
+	}
+	if fromred && isred(nd) {
+		log.Fatalf("consequetive red spotted")
+		return false
+	}
+	if validatereds(nd.left, isred(nd)) == false {
+		return false
+	}
+	return validatereds(nd.right, isred(nd))
+}
+
+func (llrb *LLRB) ValidateBlacks() int {
+	root := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
+	return validateblacks(root, 0)
+}
+
+func validateblacks(nd *Llrbnode, count int) int {
+	if nd == nil {
+		return count
+	}
+	if !isred(nd) {
+		count++
+	}
+	x := validateblacks(nd.left, count)
+	y := validateblacks(nd.right, count)
+	if x != y {
+		log.Fatalf("blacks on left %v, on right %v\n", x, y)
+	}
+	return x
+}
+
 func (llrb *LLRB) LogNodeutilz() {
 	log.Infof("%v Node utilization:\n", llrb.logPrefix)
 	arenapools := llrb.nodearena.mpools
@@ -250,22 +294,61 @@ func (llrb *LLRB) LogValueutilz() {
 	}
 }
 
-func (llrb *LLRB) LogStatistics() {
-	// log upsert-depth statistics
+func (llrb *LLRB) LogNodememory() {
+	stats := llrb.StatsMem()
+	min := hm.Bytes(uint64(llrb.config["nodearena.minblock"].(int)))
+	max := hm.Bytes(uint64(llrb.config["nodearena.maxblock"].(int)))
+	cp := hm.Bytes(uint64(llrb.config["nodearena.capacity"].(int)))
+	pcp := hm.Bytes(uint64(llrb.config["nodepool.capacity"].(int)))
+	overh := hm.Bytes(uint64(stats["node.overhead"].(int64)))
+	use := hm.Bytes(uint64(stats["node.useful"].(int64)))
+	alloc := hm.Bytes(uint64(stats["node.allocated"].(int64)))
+	avail := hm.Bytes(uint64(stats["node.available"].(int64)))
+	nblocks := len(stats["node.blocks"].([]int64))
+	kmem := hm.Bytes(uint64(stats["keymemory"].(int64)))
+	fmsg := "%v Nodes blksz:{%v-%v / %v} cap:{%v/%v}\n"
+	log.Infof(fmsg, llrb.logPrefix, min, max, nblocks, cp, pcp)
+	fmsg = "%v Nodes mem:{%v,%v - %v,%v} avail - %v\n"
+	log.Infof(fmsg, llrb.logPrefix, use, overh, alloc, kmem, avail)
+}
+
+func (llrb *LLRB) LogValuememory() {
+	stats := llrb.StatsMem()
+	min := hm.Bytes(uint64(llrb.config["valarena.minblock"].(int)))
+	max := hm.Bytes(uint64(llrb.config["valarena.maxblock"].(int)))
+	cp := hm.Bytes(uint64(llrb.config["valarena.capacity"].(int)))
+	pcp := hm.Bytes(uint64(llrb.config["valpool.capacity"].(int)))
+	overh := hm.Bytes(uint64(stats["value.overhead"].(int64)))
+	use := hm.Bytes(uint64(stats["value.useful"].(int64)))
+	alloc := hm.Bytes(uint64(stats["value.allocated"].(int64)))
+	avail := hm.Bytes(uint64(stats["value.available"].(int64)))
+	vblocks := len(stats["value.blocks"].([]int64))
+	vmem := hm.Bytes(uint64(stats["valmemory"].(int64)))
+	fmsg := "%v Value blksz:{%v-%v / %v} cap:{%v/%v}\n"
+	log.Infof(fmsg, llrb.logPrefix, min, max, vblocks, cp, pcp)
+	fmsg = "%v Value mem:{%v,%v - %v,%v} avail - %v\n"
+	log.Infof(fmsg, llrb.logPrefix, use, overh, alloc, vmem, avail)
+}
+
+func (llrb *LLRB) LogUpsertdepth() {
 	stats := llrb.StatsUpsert()
-	samples := stats["upsertdepth.samples"]
-	min, max := stats["upsertdepth.min"], stats["upsertdepth.max"]
+	samples := stats["upsertdepth.samples"].(int64)
+	min := stats["upsertdepth.min"].(int64)
+	max := stats["upsertdepth.max"].(int64)
 	mean := stats["upsertdepth.mean"]
 	varn, sd := stats["upsertdepth.variance"], stats["upsertdepth.stddeviance"]
 	fmsg := "%v UpsertDepth (%v) %v-%v %v/%2.2f/%2.2f\n"
 	log.Infof(fmsg, llrb.logPrefix, samples, min, max, mean, varn, sd)
+}
+
+func (llrb *LLRB) LogTreeheight() {
 	// log height statistics
-	stats = llrb.StatsUpsert()
-	samples = stats["samples"]
-	min, max = stats["min"], stats["max"]
-	mean = stats["mean"]
-	varn, sd = stats["variance"], stats["stddeviance"]
-	fmsg = "%v HeightStats (%v) %v-%v %v/%2.2f/%2.2f\n"
+	stats := llrb.StatsHeight()
+	samples := stats["samples"]
+	min, max := stats["min"], stats["max"]
+	mean := stats["mean"]
+	varn, sd := stats["variance"], stats["stddeviance"]
+	fmsg := "%v HeightStats (%v) %v-%v %v/%2.2f/%2.2f\n"
 	log.Infof(fmsg, llrb.logPrefix, samples, min, max, mean, varn, sd)
 }
 
