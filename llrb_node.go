@@ -13,6 +13,46 @@ type Llrbnode struct {
 	mdmarker unsafe.Pointer
 }
 
+// Exported methods
+
+func (nd *Llrbnode) Setvbno() uint16 {
+	return nd.metadata().vbno()
+}
+
+func (nd *Llrbnode) Vbno() uint16 {
+	return nd.metadata().vbno()
+}
+
+func (nd *Llrbnode) SetBornseqno(seqno uint64) {
+	nd.metadata().setbnseq(seqno)
+}
+
+func (nd *Llrbnode) Bornseqno() uint64 {
+	return nd.metadata().bnseq()
+}
+
+func (nd *Llrbnode) SetDeadseqno(seqno uint64) {
+	nd.metadata().setddseq(seqno)
+}
+
+func (nd *Llrbnode) Deadseqno() uint64 {
+	return nd.metadata().ddseq()
+}
+
+func (nd *Llrbnode) SetVbuuid(vbuuid uint64) {
+	nd.metadata().setvbuuid(vbuuid)
+}
+
+func (nd *Llrbnode) Vbuuid() uint64 {
+	return nd.metadata().vbuuid()
+}
+
+func (nd *Llrbnode) Value() []byte {
+	return nd.nodevalue().value()
+}
+
+// maintanence methods.
+
 func (nd *Llrbnode) repr() string {
 	bnseqno, ddseqno := int64(-1), int64(-1)
 	if nd.metadata().isbnseq() {
@@ -45,10 +85,6 @@ func (nd *Llrbnode) metadata() *metadata {
 }
 
 //---- field operations
-
-func (nd *Llrbnode) vbno() uint16 {
-	return nd.metadata().vbno()
-}
 
 func (nd *Llrbnode) setkeysize(size int) *Llrbnode {
 	nd.metadata().setkeysize(size)
