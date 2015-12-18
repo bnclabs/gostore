@@ -98,24 +98,32 @@ func (d *Dict) Delete(key []byte) []byte {
 func (d *Dict) Range(lowkey, highkey []byte, incl string, iter KVIterator) {
 	var start int
 	keys := d.sorted()
-	cmp := 1
-	if incl == "low" || incl == "both" {
-		cmp = 0
-	}
-	for start = 0; start < len(keys); start++ {
-		kv := d.dict[keys[start]]
-		if bytes.Compare(kv[0], lowkey) >= cmp {
-			break
+
+	if lowkey == nil {
+		start = 0
+	} else {
+		cmp := 1
+		if incl == "low" || incl == "both" {
+			cmp = 0
+		}
+		for start = 0; start < len(keys); start++ {
+			kv := d.dict[keys[start]]
+			if bytes.Compare(kv[0], lowkey) >= cmp {
+				break
+			}
 		}
 	}
 	if start < len(keys) {
-		cmp = 0
+		cmp := 0
 		if incl == "high" || incl == "both" {
 			cmp = 1
 		}
 		for i := start; i < len(keys); i++ {
 			kv := d.dict[keys[i]]
-			if bytes.Compare(kv[0], highkey) < cmp {
+			if highkey == nil {
+				iter(kv[0], kv[1])
+				continue
+			} else if bytes.Compare(kv[0], highkey) < cmp {
 				if iter(kv[0], kv[1]) == false {
 					break
 				}
