@@ -18,25 +18,31 @@ func TestNewLLRB(t *testing.T) {
 	}
 	nodavail := config["nodearena.capacity"].(int)
 	valavail := config["valarena.capacity"].(int)
-	if overhead, useful := llrb.NodeArena(); overhead != 2112 {
+	mstats := llrb.StatsMem()
+	if overhead := mstats["node.overhead"].(int64); overhead != 2112 {
 		t.Errorf("expected %v, got %v", 0, 2112)
-	} else if useful != 0 {
+	} else if useful := mstats["node.useful"].(int64); useful != 0 {
 		t.Errorf("expected %v, got %v", 0, useful)
-	} else if overhead, useful := llrb.ValueArena(); overhead != 2112 {
+	} else if overhead = mstats["value.overhead"].(int64); overhead != 2112 {
 		t.Errorf("expected %v, got %v", 0, overhead)
-	} else if useful != 0 {
+	} else if useful = mstats["value.useful"].(int64); useful != 0 {
 		t.Errorf("expected %v, got %v", 0, overhead)
-	} else if x, y := int64(0), llrb.NodeAllocated(); x != y {
+	} else if x, y := int64(0), mstats["node.allocated"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(0), llrb.ValueAllocated(); x != y {
+	} else if x, y = int64(0), mstats["value.allocated"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y := int64(nodavail), llrb.NodeAvailable(); x != y {
+	}
+	x, y := int64(nodavail), mstats["node.available"].(int64)
+	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(valavail), llrb.ValueAvailable(); x != y {
+	}
+	x, y = int64(valavail), mstats["value.available"].(int64)
+	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(0), llrb.KeyMemory(); x != y {
+	}
+	if x, y := int64(0), mstats["keymemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(0), llrb.ValueMemory(); x != y {
+	} else if x, y := int64(0), mstats["valmemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
 }
@@ -93,9 +99,9 @@ func TestCloneLLRBNode(t *testing.T) {
 	key, value := makekeyvalue(make([]byte, 128), make([]byte, 1024))
 	nd := llrb.newnode(key, value)
 	nd.metadata().setblack().setdirty()
-	nd.left = (*llrbnode)(unsafe.Pointer((uintptr)(unsafe.Pointer(nd)) +
+	nd.left = (*Llrbnode)(unsafe.Pointer((uintptr)(unsafe.Pointer(nd)) +
 		unsafe.Sizeof(*nd)))
-	nd.right = (*llrbnode)(unsafe.Pointer((uintptr)(unsafe.Pointer(nd.left)) +
+	nd.right = (*Llrbnode)(unsafe.Pointer((uintptr)(unsafe.Pointer(nd.left)) +
 		unsafe.Sizeof(*nd)))
 	nd.metadata().setaccess(uint64(time.Now().UnixNano()))
 	newnd := llrb.clone(nd)
@@ -125,7 +131,7 @@ func TestLLRBBasic(t *testing.T) {
 	for _, kv := range inserts {
 		newnd, oldnd := llrb.Upsert(kv[0], kv[1])
 		if oldnd != nil {
-			t.Errorf("expected old llrbnode as nil")
+			t.Errorf("expected old Llrbnode as nil")
 		}
 		newnd.metadata().setvbno(vbno).setvbuuid(vbuuid).setbnseq(seqno)
 		seqno++
@@ -211,7 +217,7 @@ func TestLLRBBasicRange(t *testing.T) {
 	for _, kv := range inserts {
 		newnd, oldnd := llrb.Upsert(kv[0], kv[1])
 		if oldnd != nil {
-			t.Errorf("expected old llrbnode as nil")
+			t.Errorf("expected old Llrbnode as nil")
 		}
 		newnd.metadata().setvbno(vbno).setvbuuid(vbuuid).setbnseq(seqno)
 		seqno++
@@ -220,7 +226,7 @@ func TestLLRBBasicRange(t *testing.T) {
 	i, ln := 0, 0
 	llrb.Range(
 		inserts[0][0], inserts[4][0], "both",
-		func(nd *llrbnode) bool {
+		func(nd *Llrbnode) bool {
 			k, v := nd.key(), nd.nodevalue().value()
 			if bytes.Compare(inserts[i][0], k) != 0 {
 				t.Errorf("expected key %v, got %v", inserts[i][0], string(k))
@@ -238,7 +244,7 @@ func TestLLRBBasicRange(t *testing.T) {
 	i, ln = 1, 0
 	llrb.Range(
 		inserts[0][0], inserts[4][0], "none",
-		func(nd *llrbnode) bool {
+		func(nd *Llrbnode) bool {
 			k, v := nd.key(), nd.nodevalue().value()
 			if bytes.Compare(inserts[i][0], k) != 0 {
 				t.Errorf("expected key %v, got %v", inserts[i][0], string(k))
@@ -256,7 +262,7 @@ func TestLLRBBasicRange(t *testing.T) {
 	i, ln = 1, 0
 	llrb.Range(
 		inserts[0][0], inserts[4][0], "high",
-		func(nd *llrbnode) bool {
+		func(nd *Llrbnode) bool {
 			k, v := nd.key(), nd.nodevalue().value()
 			if bytes.Compare(inserts[i][0], k) != 0 {
 				t.Errorf("expected key %v, got %v", inserts[i][0], string(k))
@@ -274,7 +280,7 @@ func TestLLRBBasicRange(t *testing.T) {
 	i, ln = 0, 0
 	llrb.Range(
 		inserts[0][0], inserts[4][0], "low",
-		func(nd *llrbnode) bool {
+		func(nd *Llrbnode) bool {
 			k, v := nd.key(), nd.nodevalue().value()
 			if bytes.Compare(inserts[i][0], k) != 0 {
 				t.Errorf("expected key %v, got %v", inserts[i][0], string(k))
@@ -292,7 +298,7 @@ func TestLLRBBasicRange(t *testing.T) {
 	i, ln = 0, 0
 	llrb.Range(
 		inserts[0][0], inserts[0][0], "high",
-		func(nd *llrbnode) bool { return true })
+		func(nd *Llrbnode) bool { return true })
 	if ln != 0 {
 		t.Errorf("expected %v, got %v", 0, ln)
 	}
@@ -300,7 +306,7 @@ func TestLLRBBasicRange(t *testing.T) {
 	i, ln = 0, 0
 	llrb.Range(
 		inserts[4][0], inserts[4][0], "low",
-		func(nd *llrbnode) bool { return true })
+		func(nd *Llrbnode) bool { return true })
 	if ln != 0 {
 		t.Errorf("expected %v, got %v", 0, ln)
 	}
@@ -321,7 +327,7 @@ func TestLLRBInsert(t *testing.T) {
 		key, value = makekeyvalue(key, value)
 		newnd, oldnd := llrb.Upsert(key, value)
 		if oldnd != nil {
-			t.Errorf("expected old llrbnode to be nil")
+			t.Errorf("expected old Llrbnode to be nil")
 		} else if x := llrb.Count(); x != int64(i+1) {
 			t.Errorf("expected %v, got %v", i, x)
 		}
@@ -329,23 +335,26 @@ func TestLLRBInsert(t *testing.T) {
 		seqno++
 	}
 	// check memory accounting
-	if overhead, useful := llrb.NodeArena(); overhead != 3814 {
+	mstats := llrb.StatsMem()
+	if overhead := mstats["node.overhead"].(int64); overhead != 3814 {
 		t.Errorf("expected %v, got %v", 3541, overhead)
-	} else if overhead, useful = llrb.ValueArena(); overhead != 22656 {
+	} else if useful := mstats["node.useful"].(int64); useful != 2096640 {
+		t.Errorf("expected %v, got %v", 2096640, useful)
+	} else if overhead := mstats["value.overhead"].(int64); overhead != 22656 {
 		t.Errorf("expected %v, got %v", 22656, overhead)
-	} else if useful != 20971520 {
+	} else if useful := mstats["value.useful"].(int64); useful != 20971520 {
 		t.Errorf("expected %v, got %v", 20971520, useful)
-	} else if x, y := int64(1600000), llrb.NodeAllocated(); x != y {
+	} else if x, y := int64(1600000), mstats["node.allocated"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(1280000), llrb.ValueAllocated(); x != y {
+	} else if x, y = int64(1280000), mstats["value.allocated"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(1072141824), llrb.NodeAvailable(); x != y {
+	} else if x, y = int64(1072141824), mstats["node.available"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(10736138240), llrb.ValueAvailable(); x != y {
+	} else if x, y = int64(10736138240), mstats["value.available"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(1000000), llrb.KeyMemory(); x != y {
+	} else if x, y = int64(1000000), mstats["keymemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(1000000), llrb.ValueMemory(); x != y {
+	} else if x, y = int64(1000000), mstats["valmemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
 	// Get items
@@ -384,7 +393,7 @@ func TestLLRBUpsert(t *testing.T) {
 		key, value = makekeyvalue(key, value)
 		newnd, oldnd := llrb.Upsert(key, value)
 		if oldnd != nil {
-			t.Errorf("expected old llrbnode to be nil")
+			t.Errorf("expected old Llrbnode to be nil")
 		} else if x := llrb.Count(); x != int64(i+1) {
 			t.Errorf("expected %v, got %v", i, x)
 		}
@@ -421,23 +430,26 @@ func TestLLRBUpsert(t *testing.T) {
 	}
 
 	// check memory accounting
-	if overhead, useful := llrb.NodeArena(); overhead != 3814 {
+	mstats := llrb.StatsMem()
+	if overhead := mstats["node.overhead"].(int64); overhead != 3814 {
 		t.Errorf("expected %v, got %v", 3814, overhead)
-	} else if overhead, useful = llrb.ValueArena(); overhead != 34422 {
+	} else if useful := mstats["node.useful"].(int64); useful != 2096640 {
+		t.Errorf("expected %v, got %v", 2096640, useful)
+	} else if overhead := mstats["value.overhead"].(int64); overhead != 34422 {
 		t.Errorf("expected %v, got %v", 34422, overhead)
-	} else if useful != 41941504 {
+	} else if useful := mstats["value.useful"].(int64); useful != 41941504 {
 		t.Errorf("expected %v, got %v", 41941504, useful)
-	} else if x, y := int64(1600000), llrb.NodeAllocated(); x != y {
+	} else if x, y := int64(1600000), mstats["node.allocated"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(2240000), llrb.ValueAllocated(); x != y {
+	} else if x, y := int64(2240000), mstats["value.allocated"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(1072141824), llrb.NodeAvailable(); x != y {
+	} else if x, y := int64(1072141824), mstats["node.available"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(10735178240), llrb.ValueAvailable(); x != y {
+	} else if x, y := int64(10735178240), mstats["value.available"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(1000000), llrb.KeyMemory(); x != y {
+	} else if x, y = int64(1000000), mstats["keymemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(2000000), llrb.ValueMemory(); x != y {
+	} else if x, y = int64(2000000), mstats["valmemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
 }
@@ -486,23 +498,26 @@ func TestLLRBDelete(t *testing.T) {
 		seqno++
 	}
 	// check memory accounting
-	if overhead, useful := llrb.NodeArena(); overhead != 3814 {
+	mstats := llrb.StatsMem()
+	if overhead := mstats["node.overhead"].(int64); overhead != 3814 {
 		t.Errorf("expected %v, got %v", 3814, overhead)
-	} else if overhead, useful = llrb.ValueArena(); overhead != 22656 {
+	} else if useful := mstats["node.useful"].(int64); useful != 2096640 {
+		t.Errorf("expected %v, got %v", 2096640, useful)
+	} else if overhead := mstats["value.overhead"].(int64); overhead != 22656 {
 		t.Errorf("expected %v, got %v", 22656, overhead)
-	} else if useful != 20971520 {
+	} else if useful := mstats["value.useful"].(int64); useful != 20971520 {
 		t.Errorf("expected %v, got %v", 20971520, useful)
-	} else if x, y := int64(0), llrb.NodeAllocated(); x != y {
+	} else if x, y := int64(0), mstats["node.allocated"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(0), llrb.ValueAllocated(); x != y {
+	} else if x, y = int64(0), mstats["value.allocated"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(1073741824), llrb.NodeAvailable(); x != y {
+	} else if x, y = int64(1073741824), mstats["node.available"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(10737418240), llrb.ValueAvailable(); x != y {
+	} else if x, y = int64(10737418240), mstats["value.available"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(0), llrb.KeyMemory(); x != y {
+	} else if x, y = int64(0), mstats["keymemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(0), llrb.ValueMemory(); x != y {
+	} else if x, y = int64(0), mstats["valmemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
 }
@@ -541,7 +556,7 @@ func TestLLRBRange(t *testing.T) {
 		y := rand.Intn(len(keys))
 		lowkey, highkey := keys[x], keys[y]
 		llrbks, llrbvs := make([][]byte, 0), make([][]byte, 0)
-		llrb.Range(lowkey, highkey, incl, func(nd *llrbnode) bool {
+		llrb.Range(lowkey, highkey, incl, func(nd *Llrbnode) bool {
 			llrbks = append(llrbks, nd.key())
 			llrbvs = append(llrbvs, nd.nodevalue().value())
 			return true

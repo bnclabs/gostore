@@ -4,7 +4,6 @@ import "unsafe"
 import "sort"
 import "fmt"
 
-// MEMUtilization expected.
 const MEMUtilization = 0.95
 
 const sizeinterval = 32

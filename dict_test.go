@@ -5,7 +5,7 @@ import "bytes"
 
 func TestDict(t *testing.T) {
 	d := NewDict()
-	if d.Len() != 0 {
+	if d.Count() != 0 {
 		t.Fatalf("expected an empty dict")
 	}
 	// inserts
@@ -48,26 +48,26 @@ func TestDict(t *testing.T) {
 		t.Errorf("expected %v, got %v", string(inserts[0][0]), string(k))
 	} else if bytes.Compare(v, []byte("value11")) != 0 {
 		t.Errorf("expected %v, got %v", string(inserts[0][1]), string(v))
-	} else if d.Len() != (len(inserts) - 1) {
-		t.Errorf("expected %v, got %v", len(inserts)-1, d.Len())
+	} else if int(d.Count()) != (len(inserts) - 1) {
+		t.Errorf("expected %v, got %v", len(inserts)-1, d.Count())
 	}
 	if k, v := d.DeleteMax(); bytes.Compare(k, []byte("key5")) != 0 {
 		t.Errorf("expected %v, got %v", "key5", string(k))
 	} else if bytes.Compare(v, []byte("value5")) != 0 {
 		t.Errorf("expected %v, got %v", "value5", string(v))
-	} else if d.Len() != (len(inserts) - 2) {
-		t.Errorf("expected %v, got %v", len(inserts)-2, d.Len())
+	} else if int(d.Count()) != (len(inserts) - 2) {
+		t.Errorf("expected %v, got %v", len(inserts)-2, d.Count())
 	}
 	if v := d.Delete([]byte("key2")); bytes.Compare(v, []byte("value2")) != 0 {
 		t.Errorf("expected %v, got %v", "value2", string(v))
-	} else if d.Len() != (len(inserts) - 3) {
-		t.Errorf("expected %v, got %v", len(inserts)-3, d.Len())
+	} else if int(d.Count()) != (len(inserts) - 3) {
+		t.Errorf("expected %v, got %v", len(inserts)-3, d.Count())
 	}
 }
 
 func TestDictRange(t *testing.T) {
 	d := NewDict()
-	if d.Len() != 0 {
+	if d.Count() != 0 {
 		t.Fatalf("expected an empty dict")
 	}
 	// inserts

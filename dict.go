@@ -24,8 +24,8 @@ func (d *Dict) RSnapshot(_ int) *Dict {
 	return newd
 }
 
-func (d *Dict) Len() int {
-	return len(d.dict)
+func (d *Dict) Count() int64 {
+	return int64(len(d.dict))
 }
 
 func (d *Dict) Has(key []byte) bool {
