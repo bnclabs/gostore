@@ -219,8 +219,7 @@ func validatereds(nd *Llrbnode, fromred bool) bool {
 		return true
 	}
 	if fromred && isred(nd) {
-		log.Fatalf("consequetive red spotted")
-		return false
+		panic("consequetive red spotted")
 	}
 	if validatereds(nd.left, isred(nd)) == false {
 		return false
@@ -243,7 +242,7 @@ func validateblacks(nd *Llrbnode, count int) int {
 	x := validateblacks(nd.left, count)
 	y := validateblacks(nd.right, count)
 	if x != y {
-		log.Fatalf("blacks on left %v, on right %v\n", x, y)
+		panic(fmt.Errorf("blacks on left %v, on right %v\n", x, y))
 	}
 	return x
 }
