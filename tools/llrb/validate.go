@@ -119,28 +119,27 @@ func withLLRB(count int, opch chan [][]interface{}) {
 		for _, cmd := range cmds {
 			switch cmd[0].(string) {
 			case "get":
-				stats = validateGet(dict, llrb, cmd, stats)
+				stats = opGet(dict, llrb, cmd, stats)
 			case "min":
-				stats = validateMin(dict, llrb, cmd, stats)
+				stats = opMin(dict, llrb, cmd, stats)
 			case "max":
-				stats = validateMax(dict, llrb, cmd, stats)
+				stats = opMax(dict, llrb, cmd, stats)
 			case "delmin":
-				stats = validateDelmin(dict, llrb, cmd, stats)
+				stats = opDelmin(dict, llrb, cmd, stats)
 			case "delmax":
-				stats = validateDelmax(dict, llrb, cmd, stats)
+				stats = opDelmax(dict, llrb, cmd, stats)
 			case "upsert":
-				stats = validateUpsert(dict, llrb, cmd, stats)
+				stats = opUpsert(dict, llrb, cmd, stats)
 			case "delete":
-				stats = validateDelete(dict, llrb, cmd, stats)
+				stats = opDelete(dict, llrb, cmd, stats)
+			case "validate":
+				validate(dict, llrb, stats, false)
 			default:
 				log.Fatalf("unknown command %v\n", cmd)
 			}
 		}
 	}
-	fmt.Printf("validateEqual:  %v\n", validateEqual(dict, llrb))
-	fmt.Printf("validateStats:  %v\n", validateStats(dict, stats))
-	fmt.Printf("ValidateReds:   %v\n", llrb.ValidateReds())
-	fmt.Printf("ValidateBlacks: %v\n", llrb.ValidateBlacks())
+	validate(dict, llrb, stats, true)
 	llrb.LogNodememory()
 	llrb.LogNodeutilz()
 	llrb.LogValuememory()
@@ -198,7 +197,7 @@ func evaluate(
 // validate
 //---------
 
-func validateGet(
+func opGet(
 	dict *storage.Dict, llrb *storage.LLRB,
 	cmd []interface{}, stats map[string]int) map[string]int {
 
@@ -220,7 +219,7 @@ func validateGet(
 	return stats
 }
 
-func validateMin(
+func opMin(
 	dict *storage.Dict, llrb *storage.LLRB,
 	cmd []interface{}, stats map[string]int) map[string]int {
 
@@ -250,7 +249,7 @@ func validateMin(
 	return stats
 }
 
-func validateMax(
+func opMax(
 	dict *storage.Dict, llrb *storage.LLRB,
 	cmd []interface{}, stats map[string]int) map[string]int {
 
@@ -280,7 +279,7 @@ func validateMax(
 	return stats
 }
 
-func validateDelmin(
+func opDelmin(
 	dict *storage.Dict, llrb *storage.LLRB,
 	cmd []interface{}, stats map[string]int) map[string]int {
 
@@ -311,7 +310,7 @@ func validateDelmin(
 	return stats
 }
 
-func validateDelmax(
+func opDelmax(
 	dict *storage.Dict, llrb *storage.LLRB,
 	cmd []interface{}, stats map[string]int) map[string]int {
 
@@ -342,7 +341,7 @@ func validateDelmax(
 	return stats
 }
 
-func validateUpsert(
+func opUpsert(
 	dict *storage.Dict, llrb *storage.LLRB,
 	cmd []interface{}, stats map[string]int) map[string]int {
 
@@ -405,7 +404,7 @@ func validateUpsert(
 	return stats
 }
 
-func validateDelete(
+func opDelete(
 	dict *storage.Dict, llrb *storage.LLRB,
 	cmd []interface{}, stats map[string]int) map[string]int {
 
@@ -434,34 +433,56 @@ func validateDelete(
 	return stats
 }
 
-func validateEqual(dict *storage.Dict, llrb *storage.LLRB) bool {
-	x, y := dict.Count(), llrb.Count()
-	if x != y {
-		log.Fatalf("count expected dict:%v, got llrb:%v", x, y)
+func validate(
+	dict *storage.Dict, llrb *storage.LLRB, stats map[string]int, dolog bool) {
+
+	validateEqual(dict, llrb, dolog)
+	validateStats(dict, llrb, stats, dolog)
+	ok := llrb.ValidateReds()
+	if dolog || !ok {
+		fmt.Printf("ValidateReds:   %v\n", ok)
 	}
-	fmt.Printf("number of elements {dict: %v, llrb:%v}\n", x, y)
+	count := llrb.ValidateBlacks()
+	if dolog || !ok {
+		fmt.Printf("ValidateBlacks: %v\n", count)
+	}
+}
+
+func validateEqual(dict *storage.Dict, llrb *storage.LLRB, dolog bool) bool {
+	dictn, llrbn := dict.Count(), llrb.Count()
+	if dictn != llrbn {
+		log.Fatalf("count expected dict:%v, got llrb:%v", dictn, llrbn)
+		return false
+	}
 
 	refkeys, refvals := make([][]byte, 0), make([][]byte, 0)
 	dict.Range(nil, nil, "both", func(k, v []byte) bool {
 		refkeys, refvals = append(refkeys, k), append(refvals, v)
-		//fmt.Println("dict range", string(k), string(v))
 		return true
 	})
 	keys, vals := make([][]byte, 0), make([][]byte, 0)
 	llrb.Range(nil, nil, "both", func(nd *storage.Llrbnode) bool {
 		keys, vals = append(keys, nd.Key()), append(vals, nd.Value())
-		//fmt.Println("llrb range", string(nd.Key()), string(nd.Value()))
 		return true
 	})
 	if reflect.DeepEqual(refkeys, keys) == false {
 		log.Fatalf("final Dict keys and LLRB keys mismatch\n")
+		return false
 	} else if reflect.DeepEqual(refvals, vals) == false {
 		log.Fatalf("final Dict values and LLRB values mismatch\n")
+		return false
+	}
+	if dolog {
+		fmt.Printf("validateEqual: ok\n")
+		fmt.Printf("  number of elements {dict: %v, llrb:%v}\n", dictn, llrbn)
 	}
 	return true
 }
 
-func validateStats(dict *storage.Dict, stats map[string]int) bool {
+func validateStats(
+	dict *storage.Dict, llrb *storage.LLRB,
+	stats map[string]int, dolog bool) bool {
+
 	insert, upsert := stats["insert"], stats["upsert"]
 	dels := [2]int{stats["delete.ok"], stats["delete.na"]}
 	dmax := [2]int{stats["delmax.ok"], stats["delmax.na"]}
@@ -475,18 +496,23 @@ func validateStats(dict *storage.Dict, stats map[string]int) bool {
 
 	if total != stats["total"] {
 		log.Fatalf("total expected %v, got %v", total, stats["total"])
+		return false
 	}
-	x, y := dict.Count(), int64(insert-(dels[0]+dmin[0]+dmax[0]))
-	if x != y {
-		log.Fatalf("expected counts: %v, stats: %v\n", x, y)
+	dictn, cnt := dict.Count(), int64(insert-(dels[0]+dmin[0]+dmax[0]))
+	if dictn != cnt {
+		log.Fatalf("expected counts: %v, stats: %v\n", dictn, cnt)
+		return false
 	}
 
-	fmt.Printf("total commands   : %v\n", total)
-	fmt.Printf("inserts/upserts  : {%v,%v}\n", insert, upsert)
-	fmsg := "ds/dn/dx {ok/na} : {%v,%v} {%v,%v} {%v,%v}\n"
-	fmt.Printf(fmsg, dels[0], dels[1], dmax[0], dmax[1], dmin[0], dmin[1])
-	fmsg = "gt/mn/mx {ok/na} : {%v,%v} {%v,%v} {%v,%v}\n"
-	fmt.Printf(fmsg, gets[0], gets[1], mins[0], mins[1], maxs[0], maxs[1])
+	if dolog {
+		fmt.Printf("validateStats:  ok\n")
+		fmt.Printf("  total commands   : %v\n", total)
+		fmt.Printf("  inserts/upserts  : {%v,%v}\n", insert, upsert)
+		fmsg := "  ds/dn/dx {ok/na} : {%v,%v} {%v,%v} {%v,%v}\n"
+		fmt.Printf(fmsg, dels[0], dels[1], dmax[0], dmax[1], dmin[0], dmin[1])
+		fmsg = "  gt/mn/mx {ok/na} : {%v,%v} {%v,%v} {%v,%v}\n"
+		fmt.Printf(fmsg, gets[0], gets[1], mins[0], mins[1], maxs[0], maxs[1])
+	}
 	return true
 }
 
