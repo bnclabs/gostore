@@ -134,6 +134,9 @@ func withLLRB(count int, opch chan [][]interface{}) {
 				stats = opDelete(dict, llrb, cmd, stats)
 			case "validate":
 				validate(dict, llrb, stats, false)
+				if validateopts.opdump {
+					fmt.Printf("%v\n", cmd)
+				}
 			default:
 				log.Fatalf("unknown command %v\n", cmd)
 			}
@@ -266,7 +269,7 @@ func opMax(
 	if validateopts.opdump {
 		fmsg := "%v | dict:{%v,%v} llrb:{%v,%v}\n"
 		fmt.Printf(
-			fmsg, cmd, string(refkey), string(refkey), string(rkey),
+			fmsg, cmd, string(refkey), string(refval), string(rkey),
 			string(rval),
 		)
 	}
@@ -297,7 +300,7 @@ func opDelmin(
 	if validateopts.opdump {
 		fmsg := "%v | dict:{%v,%v} llrb:{%v,%v}\n"
 		fmt.Printf(
-			fmsg, cmd, string(refkey), string(refkey), string(rkey),
+			fmsg, cmd, string(refkey), string(refval), string(rkey),
 			string(rval),
 		)
 	}
@@ -328,7 +331,7 @@ func opDelmax(
 	if validateopts.opdump {
 		fmsg := "%v | dict:{%v,%v} llrb:{%v,%v}\n"
 		fmt.Printf(
-			fmsg, cmd, string(refkey), string(refkey), string(rkey),
+			fmsg, cmd, string(refkey), string(refval), string(rkey),
 			string(rval),
 		)
 	}
@@ -358,7 +361,6 @@ func opUpsert(
 		}
 		refval = dict.Upsert(key, value)
 		newnd, oldnd := llrb.Upsert(key, value)
-		llrb.Freenode(oldnd)
 		if reflect.DeepEqual(refval, oldnd.Value()) == false {
 			fmsg := "upsert: expected %v, got %v\n"
 			log.Fatalf(fmsg, string(refval), string(oldnd.Value()))
@@ -373,9 +375,10 @@ func opUpsert(
 			fmsg := "%v | {%v,%v} dict:%v llrb:%v\n"
 			fmt.Printf(
 				fmsg, cmd, string(key), string(value), string(refval),
-				string(val),
+				string(oldnd.Value()),
 			)
 		}
+		llrb.Freenode(oldnd)
 		stats["upsert"] += 1
 	} else {
 		refval = dict.Upsert(key, value)
