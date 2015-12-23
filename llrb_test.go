@@ -604,6 +604,8 @@ func makenewconfig() map[string]interface{} {
 		"valarena.maxblock":  1024 * 1024,
 		"valarena.capacity":  10 * 1024 * 1024 * 1024,
 		"valpool.capacity":   10 * 2 * 1024 * 1024,
+		"mvcc.enabled":       false,
+		"mvcc.snapshotTick":  0,
 	}
 	return config
 }
