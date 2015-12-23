@@ -69,7 +69,8 @@ type LLRB struct { // tree container
 	nodearena *memarena
 	valarena  *memarena
 	root      unsafe.Pointer // root *Llrbnode of LLRB tree
-	fmask     metadataMask   // only 12 bits
+	// config
+	fmask     metadataMask // only 12 bits
 	config    map[string]interface{}
 	logPrefix string
 	// statistics
@@ -78,12 +79,13 @@ type LLRB struct { // tree container
 	valmemory   int64 // memory used by all values
 	upsertdepth *averageInt
 	// scratch pads
-	strsl []string
+	strsl   []string
+	reclaim []*Llrbnode
 }
 
 func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	validateConfig(config)
-	llrb := &LLRB{}
+	llrb := &LLRB{name: name}
 	// setup nodearena for key and metadata
 	minblock := int64(config["nodearena.minblock"].(int))
 	maxblock := int64(config["nodearena.maxblock"].(int))
@@ -117,6 +119,7 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	llrb.upsertdepth = &averageInt{}
 	// scratch pads
 	llrb.strsl = make([]string, 0)
+	llrb.reclaim = make([]*Llrbnode, 0, 64)
 	return llrb
 }
 

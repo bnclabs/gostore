@@ -202,19 +202,19 @@ func (nd *Llrbnode) gekey(other []byte) bool {
 //---- tree operations
 
 func rotateleft(nd *Llrbnode) *Llrbnode {
-	x := nd.right
-	if x.metadata().isblack() {
+	y := nd.right
+	if y.metadata().isblack() {
 		panic("rotating a black link")
 	}
-	nd.right = x.left
-	x.left = nd
+	nd.right = y.left
+	y.left = nd
 	if nd.metadata().isblack() {
-		x.metadata().setblack()
+		y.metadata().setblack()
 	} else {
-		x.metadata().setred()
+		y.metadata().setred()
 	}
 	nd.metadata().setred()
-	return x
+	return y
 }
 
 func rotateright(nd *Llrbnode) *Llrbnode {
@@ -233,12 +233,14 @@ func rotateright(nd *Llrbnode) *Llrbnode {
 	return x
 }
 
+// REQUIRE: Left and Right children must be present
 func flip(nd *Llrbnode) {
 	nd.metadata().togglelink()
 	nd.left.metadata().togglelink()
 	nd.right.metadata().togglelink()
 }
 
+// REQUIRE: Left and Right children must be present
 func moveredleft(nd *Llrbnode) *Llrbnode {
 	flip(nd)
 	if isred(nd.right.left) {
@@ -249,6 +251,7 @@ func moveredleft(nd *Llrbnode) *Llrbnode {
 	return nd
 }
 
+// REQUIRE: Left and Right children must be present
 func moveredright(nd *Llrbnode) *Llrbnode {
 	flip(nd)
 	if isred(nd.left.left) {
@@ -280,4 +283,96 @@ func isred(nd *Llrbnode) bool {
 
 func isblack(nd *Llrbnode) bool {
 	return !isred(nd)
+}
+
+// MVCC methods.
+
+func rotateleftCow(
+	llrb *LLRB, nd *Llrbnode, reclaim []*Llrbnode) (*Llrbnode, []*Llrbnode) {
+
+	reclaim = append(reclaim, nd.right)
+	y := llrb.clone(nd.right)
+	if y.metadata().isblack() {
+		panic("rotating a black link")
+	}
+	nd.right = y.left
+	y.left = nd
+	if nd.metadata().isblack() {
+		y.metadata().setblack()
+	} else {
+		y.metadata().setred()
+	}
+	nd.metadata().setred()
+	return y, reclaim
+}
+
+func rotaterightCow(
+	llrb *LLRB, nd *Llrbnode, reclaim []*Llrbnode) (*Llrbnode, []*Llrbnode) {
+
+	reclaim = append(reclaim, nd.left)
+	x := llrb.clone(nd.left)
+	if x.metadata().isblack() {
+		panic("rotating a black link")
+	}
+	nd.left = x.right
+	x.right = nd
+	if nd.metadata().isblack() {
+		x.metadata().setblack()
+	} else {
+		x.metadata().setred()
+	}
+	nd.metadata().setred()
+	return x, reclaim
+}
+
+// REQUIRE: Left and Right children must be present
+func flipCow(llrb *LLRB, nd *Llrbnode, reclaim []*Llrbnode) []*Llrbnode {
+	reclaim = append(reclaim, nd.left, nd.right)
+	x, y := llrb.clone(nd.left), llrb.clone(nd.right)
+	x.metadata().togglelink()
+	y.metadata().togglelink()
+	nd.metadata().togglelink()
+	nd.left, nd.right = x, y
+	return reclaim
+}
+
+// REQUIRE: Left and Right children must be present
+func moveredleftCow(
+	llrb *LLRB, nd *Llrbnode, reclaim []*Llrbnode) (*Llrbnode, []*Llrbnode) {
+
+	reclaim = flipCow(llrb, nd, reclaim)
+	if isred(nd.right.left) {
+		nd.right, reclaim = rotaterightCow(llrb, nd.right, reclaim)
+		nd, reclaim = rotateleftCow(llrb, nd, reclaim)
+		reclaim = flipCow(llrb, nd, reclaim)
+	}
+	return nd, reclaim
+}
+
+// REQUIRE: Left and Right children must be present
+func moveredrightCow(
+	llrb *LLRB, nd *Llrbnode, reclaim []*Llrbnode) (*Llrbnode, []*Llrbnode) {
+
+	reclaim = flipCow(llrb, nd, reclaim)
+	if isred(nd.left.left) {
+		nd, reclaim = rotaterightCow(llrb, nd, reclaim)
+		reclaim = flipCow(llrb, nd, reclaim)
+	}
+	return nd, reclaim
+}
+
+// REQUIRE: Left and Right children must be present
+func fixupCow(
+	llrb *LLRB, nd *Llrbnode, reclaim []*Llrbnode) (*Llrbnode, []*Llrbnode) {
+
+	if isred(nd.right) {
+		nd, reclaim = rotateleftCow(llrb, nd, reclaim)
+	}
+	if isred(nd.left) && isred(nd.left.left) {
+		nd, reclaim = rotaterightCow(llrb, nd, reclaim)
+	}
+	if isred(nd.left) && isred(nd.right) {
+		reclaim = flipCow(llrb, nd, reclaim)
+	}
+	return nd, reclaim
 }
