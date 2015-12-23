@@ -44,54 +44,74 @@
 //
 // "log.file" - string
 //		log to file, if empty log to console
+//
+// "mvcc.enabled" - boolean
+//		consume LLRB as Multi-Version-Concurrency-Control-led tree.
+//
+// "mvcc.snapshot" - int
+//		interval in milli-second for generating read-snapshots
 
 package storage
 
 import "fmt"
 import "unsafe"
+import "time"
 import "sort"
 import "bytes"
 import "sync/atomic"
 
-import hm "github.com/dustin/go-humanize"
+import humanize "github.com/dustin/go-humanize"
 
 const MinKeymem = 96
 const MaxKeymem = 4096
 const MinValmem = 32
 const MaxValmem = 10 * 1024 * 1024
 
-// NdIterator callback function while ranging from
-// low-key and high-key, return false to stop iteration.
 type NdIterator func(nd *Llrbnode) bool
 
 type LLRB struct { // tree container
-	name       string
-	nodearena  *memarena
-	valarena   *memarena
-	root       unsafe.Pointer // root *Llrbnode of LLRB tree
-	snaphead   unsafe.Pointer // *LLRBSnapshot
-	cowednodes []*Llrbnode
+	name      string
+	nodearena *memarena
+	valarena  *memarena
+	root      unsafe.Pointer // root *Llrbnode of LLRB tree
+
 	// config
 	fmask     metadataMask // only 12 bits
 	config    map[string]interface{}
 	logPrefix string
+
 	// statistics
-	count        int64 // number of nodes in the tree
-	keymemory    int64 // memory used by all keys
-	valmemory    int64 // memory used by all values
-	upsertdepth  *averageInt
-	reclaimstats map[string]*averageInt
-	// scratch pads
-	strsl   []string
-	reclaim []*Llrbnode
+	count       int64 // number of nodes in the tree
+	keymemory   int64 // memory used by all keys
+	valmemory   int64 // memory used by all values
+	upsertdepth *averageInt
+
+	// scratch pad
+	strsl []string
+
+	// mvcc
+	mvcc struct {
+		enabled    bool
+		snaphead   unsafe.Pointer // *LLRBSnapshot
+		cowednodes []*Llrbnode
+
+		// config
+		snapshotTick time.Duration
+
+		// stats
+		reclaimstats map[string]*averageInt
+
+		// scratch pad
+		reclaim []*Llrbnode
+	}
 }
 
 func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	validateConfig(config)
-	llrb := &LLRB{
-		name:       name,
-		cowednodes: make([]*Llrbnode, 0, 64),
-	}
+	llrb := &LLRB{name: name}
+	llrb.mvcc.enabled = config["mvcc.enabled"].(bool)
+	llrb.mvcc.snapshotTick = time.Duration(config["mvcc.snapshotTick"].(int))
+	llrb.mvcc.cowednodes = make([]*Llrbnode, 0, 64)
 	// setup nodearena for key and metadata
 	minblock := int64(config["nodearena.minblock"].(int))
 	maxblock := int64(config["nodearena.maxblock"].(int))
@@ -123,7 +143,7 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	llrb.config = config
 	// statistics
 	llrb.upsertdepth = &averageInt{}
-	llrb.reclaimstats = map[string]*averageInt{
+	llrb.mvcc.reclaimstats = map[string]*averageInt{
 		"upsert": &averageInt{},
 		"delmin": &averageInt{},
 		"delmax": &averageInt{},
@@ -131,7 +151,7 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	}
 	// scratch pads
 	llrb.strsl = make([]string, 0)
-	llrb.reclaim = make([]*Llrbnode, 0, 64)
+	llrb.mvcc.reclaim = make([]*Llrbnode, 0, 64)
 	return llrb
 }
 
@@ -310,16 +330,16 @@ func (llrb *LLRB) LogValueutilz() {
 
 func (llrb *LLRB) LogNodememory() {
 	stats := llrb.StatsMem()
-	min := hm.Bytes(uint64(llrb.config["nodearena.minblock"].(int)))
-	max := hm.Bytes(uint64(llrb.config["nodearena.maxblock"].(int)))
-	cp := hm.Bytes(uint64(llrb.config["nodearena.capacity"].(int)))
-	pcp := hm.Bytes(uint64(llrb.config["nodepool.capacity"].(int)))
-	overh := hm.Bytes(uint64(stats["node.overhead"].(int64)))
-	use := hm.Bytes(uint64(stats["node.useful"].(int64)))
-	alloc := hm.Bytes(uint64(stats["node.allocated"].(int64)))
-	avail := hm.Bytes(uint64(stats["node.available"].(int64)))
+	min := humanize.Bytes(uint64(llrb.config["nodearena.minblock"].(int)))
+	max := humanize.Bytes(uint64(llrb.config["nodearena.maxblock"].(int)))
+	cp := humanize.Bytes(uint64(llrb.config["nodearena.capacity"].(int)))
+	pcp := humanize.Bytes(uint64(llrb.config["nodepool.capacity"].(int)))
+	overh := humanize.Bytes(uint64(stats["node.overhead"].(int64)))
+	use := humanize.Bytes(uint64(stats["node.useful"].(int64)))
+	alloc := humanize.Bytes(uint64(stats["node.allocated"].(int64)))
+	avail := humanize.Bytes(uint64(stats["node.available"].(int64)))
 	nblocks := len(stats["node.blocks"].([]int64))
-	kmem := hm.Bytes(uint64(stats["keymemory"].(int64)))
+	kmem := humanize.Bytes(uint64(stats["keymemory"].(int64)))
 	fmsg := "%v Nodes blksz:{%v-%v / %v} cap:{%v/%v}\n"
 	log.Infof(fmsg, llrb.logPrefix, min, max, nblocks, cp, pcp)
 	fmsg = "%v Nodes mem:{%v,%v - %v,%v} avail - %v\n"
@@ -328,16 +348,16 @@ func (llrb *LLRB) LogNodememory() {
 
 func (llrb *LLRB) LogValuememory() {
 	stats := llrb.StatsMem()
-	min := hm.Bytes(uint64(llrb.config["valarena.minblock"].(int)))
-	max := hm.Bytes(uint64(llrb.config["valarena.maxblock"].(int)))
-	cp := hm.Bytes(uint64(llrb.config["valarena.capacity"].(int)))
-	pcp := hm.Bytes(uint64(llrb.config["valpool.capacity"].(int)))
-	overh := hm.Bytes(uint64(stats["value.overhead"].(int64)))
-	use := hm.Bytes(uint64(stats["value.useful"].(int64)))
-	alloc := hm.Bytes(uint64(stats["value.allocated"].(int64)))
-	avail := hm.Bytes(uint64(stats["value.available"].(int64)))
+	min := humanize.Bytes(uint64(llrb.config["valarena.minblock"].(int)))
+	max := humanize.Bytes(uint64(llrb.config["valarena.maxblock"].(int)))
+	cp := humanize.Bytes(uint64(llrb.config["valarena.capacity"].(int)))
+	pcp := humanize.Bytes(uint64(llrb.config["valpool.capacity"].(int)))
+	overh := humanize.Bytes(uint64(stats["value.overhead"].(int64)))
+	use := humanize.Bytes(uint64(stats["value.useful"].(int64)))
+	alloc := humanize.Bytes(uint64(stats["value.allocated"].(int64)))
+	avail := humanize.Bytes(uint64(stats["value.available"].(int64)))
 	vblocks := len(stats["value.blocks"].([]int64))
-	vmem := hm.Bytes(uint64(stats["valmemory"].(int64)))
+	vmem := humanize.Bytes(uint64(stats["valmemory"].(int64)))
 	fmsg := "%v Value blksz:{%v-%v / %v} cap:{%v/%v}\n"
 	log.Infof(fmsg, llrb.logPrefix, min, max, vblocks, cp, pcp)
 	fmsg = "%v Value mem:{%v,%v - %v,%v} avail - %v\n"
