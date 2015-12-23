@@ -94,6 +94,8 @@ func withLLRB(count int, opch chan [][]interface{}) {
 		"valarena.capacity":  loadopts.valarena[2],
 		"valpool.capacity":   loadopts.valarena[3],
 		"metadata.mvalue":    true,
+		"mvcc.enabled":       false,
+		"mvcc.snapshotTick":  0,
 	}
 	llrb := storage.NewLLRB("validate", config, nil)
 	stats := map[string]int{

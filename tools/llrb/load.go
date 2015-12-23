@@ -116,6 +116,8 @@ func doLoad(args []string) {
 		"valarena.maxblock":  loadopts.valarena[1],
 		"valarena.capacity":  loadopts.valarena[2],
 		"valpool.capacity":   loadopts.valarena[3],
+		"mvcc.enabled":       false,
+		"mvcc.snapshotTick":  0,
 	}
 	llrb := storage.NewLLRB("load", config, nil)
 	now := time.Now()
