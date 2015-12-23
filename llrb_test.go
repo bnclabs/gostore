@@ -596,16 +596,16 @@ func makekeyvalue(key, value []byte) ([]byte, []byte) {
 
 func makenewconfig() map[string]interface{} {
 	config := map[string]interface{}{
-		"nodearena.minblock": 96,
-		"nodearena.maxblock": 1024,
-		"nodearena.capacity": 1024 * 1024 * 1024,
-		"nodepool.capacity":  2 * 1024 * 1024,
-		"valarena.minblock":  96,
-		"valarena.maxblock":  1024 * 1024,
-		"valarena.capacity":  10 * 1024 * 1024 * 1024,
-		"valpool.capacity":   10 * 2 * 1024 * 1024,
-		"mvcc.enabled":       false,
-		"mvcc.snapshotTick":  0,
+		"nodearena.minblock":      96,
+		"nodearena.maxblock":      1024,
+		"nodearena.capacity":      1024 * 1024 * 1024,
+		"nodearena.pool.capacity": 2 * 1024 * 1024,
+		"valarena.minblock":       96,
+		"valarena.maxblock":       1024 * 1024,
+		"valarena.capacity":       10 * 1024 * 1024 * 1024,
+		"valarena.pool.capacity":  10 * 2 * 1024 * 1024,
+		"mvcc.enabled":            false,
+		"mvcc.snapshotTick":       0,
 	}
 	return config
 }

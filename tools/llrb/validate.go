@@ -85,17 +85,17 @@ func doValidate(args []string) {
 func withLLRB(count int, opch chan [][]interface{}) {
 	dict := storage.NewDict()
 	config := map[string]interface{}{
-		"nodearena.minblock": loadopts.nodearena[0],
-		"nodearena.maxblock": loadopts.nodearena[1],
-		"nodearena.capacity": loadopts.nodearena[2],
-		"nodepool.capacity":  loadopts.nodearena[3],
-		"valarena.minblock":  loadopts.valarena[0],
-		"valarena.maxblock":  loadopts.valarena[1],
-		"valarena.capacity":  loadopts.valarena[2],
-		"valpool.capacity":   loadopts.valarena[3],
-		"metadata.mvalue":    true,
-		"mvcc.enabled":       false,
-		"mvcc.snapshotTick":  0,
+		"nodearena.minblock":      loadopts.nodearena[0],
+		"nodearena.maxblock":      loadopts.nodearena[1],
+		"nodearena.capacity":      loadopts.nodearena[2],
+		"nodearena.pool.capacity": loadopts.nodearena[3],
+		"valarena.minblock":       loadopts.valarena[0],
+		"valarena.maxblock":       loadopts.valarena[1],
+		"valarena.capacity":       loadopts.valarena[2],
+		"valarena.pool.capacity":  loadopts.valarena[3],
+		"metadata.mvalue":         true,
+		"mvcc.enabled":            false,
+		"mvcc.snapshotTick":       0,
 	}
 	llrb := storage.NewLLRB("validate", config, nil)
 	stats := map[string]int{

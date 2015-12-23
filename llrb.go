@@ -10,7 +10,7 @@
 //		capacity in bytes that the arena shall manage for node-blocks
 //		using one or more pools.
 //
-// "nodepool.capacity" - integer
+// "nodearena.pool.capacity" - integer
 //		limit the size of a pool, irrespective of pool's block size.
 //
 // "valarena.minblock" - integer
@@ -23,7 +23,7 @@
 //		capacity in bytes that the arena shall manage for node-blocks
 //		using one or more pools.
 //
-// "valpool.capacity" - integer
+// "valarena.pool.capacity" - integer
 //		limit the size of a pool, irrespective of pool's block size.
 //
 // "metadata.bornseqno" - boolean
@@ -109,21 +109,25 @@ type LLRB struct { // tree container
 func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	validateConfig(config)
 	llrb := &LLRB{name: name}
+
 	llrb.mvcc.enabled = config["mvcc.enabled"].(bool)
 	llrb.mvcc.snapshotTick = time.Duration(config["mvcc.snapshotTick"].(int))
 	llrb.mvcc.cowednodes = make([]*Llrbnode, 0, 64)
+
 	// setup nodearena for key and metadata
 	minblock := int64(config["nodearena.minblock"].(int))
 	maxblock := int64(config["nodearena.maxblock"].(int))
 	capacity := int64(config["nodearena.capacity"].(int))
-	pcapacity := int64(config["nodepool.capacity"].(int))
+	pcapacity := int64(config["nodearena.pool.capacity"].(int))
 	llrb.nodearena = newmemarena(minblock, maxblock, capacity, pcapacity)
+
 	// setup value arena
 	minblock = int64(config["valarena.minblock"].(int))
 	maxblock = int64(config["valarena.maxblock"].(int))
 	capacity = int64(config["valarena.capacity"].(int))
-	pcapacity = int64(config["valpool.capacity"].(int))
+	pcapacity = int64(config["valarena.pool.capacity"].(int))
 	llrb.valarena = newmemarena(minblock, maxblock, capacity, pcapacity)
+
 	// set up logger
 	setLogger(logg, config)
 	llrb.logPrefix = fmt.Sprintf("[LLRB-%s]", name)
@@ -232,12 +236,13 @@ func heightStats(nd *Llrbnode, d int64, av *averageInt) {
 	if nd == nil {
 		return
 	}
+	d++
 	av.add(d)
 	if nd.left != nil {
-		heightStats(nd.left, d+1, av)
+		heightStats(nd.left, d, av)
 	}
 	if nd.right != nil {
-		heightStats(nd.right, d+1, av)
+		heightStats(nd.right, d, av)
 	}
 }
 
@@ -333,7 +338,7 @@ func (llrb *LLRB) LogNodememory() {
 	min := humanize.Bytes(uint64(llrb.config["nodearena.minblock"].(int)))
 	max := humanize.Bytes(uint64(llrb.config["nodearena.maxblock"].(int)))
 	cp := humanize.Bytes(uint64(llrb.config["nodearena.capacity"].(int)))
-	pcp := humanize.Bytes(uint64(llrb.config["nodepool.capacity"].(int)))
+	pcp := humanize.Bytes(uint64(llrb.config["nodearena.pool.capacity"].(int)))
 	overh := humanize.Bytes(uint64(stats["node.overhead"].(int64)))
 	use := humanize.Bytes(uint64(stats["node.useful"].(int64)))
 	alloc := humanize.Bytes(uint64(stats["node.allocated"].(int64)))
@@ -351,7 +356,7 @@ func (llrb *LLRB) LogValuememory() {
 	min := humanize.Bytes(uint64(llrb.config["valarena.minblock"].(int)))
 	max := humanize.Bytes(uint64(llrb.config["valarena.maxblock"].(int)))
 	cp := humanize.Bytes(uint64(llrb.config["valarena.capacity"].(int)))
-	pcp := humanize.Bytes(uint64(llrb.config["valpool.capacity"].(int)))
+	pcp := humanize.Bytes(uint64(llrb.config["valarena.pool.capacity"].(int)))
 	overh := humanize.Bytes(uint64(stats["value.overhead"].(int64)))
 	use := humanize.Bytes(uint64(stats["value.useful"].(int64)))
 	alloc := humanize.Bytes(uint64(stats["value.allocated"].(int64)))
@@ -551,7 +556,7 @@ func (llrb *LLRB) Upsert(k, v []byte) (newnd, oldnd *Llrbnode) {
 		panic("upserting nil key")
 	}
 	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	root, newnd, oldnd = llrb.upsert(nd, 1 /*depth*/, k, v)
+	root, newnd, oldnd = llrb.upsert(nd, 0 /*depth*/, k, v)
 	root.metadata().setblack()
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 	if oldnd == nil {
