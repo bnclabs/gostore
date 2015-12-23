@@ -65,19 +65,22 @@ const MaxValmem = 10 * 1024 * 1024
 type NdIterator func(nd *Llrbnode) bool
 
 type LLRB struct { // tree container
-	name      string
-	nodearena *memarena
-	valarena  *memarena
-	root      unsafe.Pointer // root *Llrbnode of LLRB tree
+	name       string
+	nodearena  *memarena
+	valarena   *memarena
+	root       unsafe.Pointer // root *Llrbnode of LLRB tree
+	snaphead   unsafe.Pointer // *LLRBSnapshot
+	cowednodes []*Llrbnode
 	// config
 	fmask     metadataMask // only 12 bits
 	config    map[string]interface{}
 	logPrefix string
 	// statistics
-	count       int64 // number of nodes in the tree
-	keymemory   int64 // memory used by all keys
-	valmemory   int64 // memory used by all values
-	upsertdepth *averageInt
+	count        int64 // number of nodes in the tree
+	keymemory    int64 // memory used by all keys
+	valmemory    int64 // memory used by all values
+	upsertdepth  *averageInt
+	reclaimstats map[string]*averageInt
 	// scratch pads
 	strsl   []string
 	reclaim []*Llrbnode
@@ -85,7 +88,10 @@ type LLRB struct { // tree container
 
 func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	validateConfig(config)
-	llrb := &LLRB{name: name}
+	llrb := &LLRB{
+		name:       name,
+		cowednodes: make([]*Llrbnode, 0, 64),
+	}
 	// setup nodearena for key and metadata
 	minblock := int64(config["nodearena.minblock"].(int))
 	maxblock := int64(config["nodearena.maxblock"].(int))
@@ -117,6 +123,12 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	llrb.config = config
 	// statistics
 	llrb.upsertdepth = &averageInt{}
+	llrb.reclaimstats = map[string]*averageInt{
+		"upsert": &averageInt{},
+		"delmin": &averageInt{},
+		"delmax": &averageInt{},
+		"delete": &averageInt{},
+	}
 	// scratch pads
 	llrb.strsl = make([]string, 0)
 	llrb.reclaim = make([]*Llrbnode, 0, 64)

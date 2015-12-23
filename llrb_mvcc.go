@@ -8,16 +8,16 @@ import "unsafe"
 // caller should free old-Llrbnode if it is not null.
 func (llrb *LLRB) UpsertCow(k, v []byte) (newnd, oldnd *Llrbnode) {
 	var root *Llrbnode
-	// var reclaim []*Llrbnode
+	var reclaim []*Llrbnode
 
 	if k == nil {
 		panic("upserting nil key")
 	}
 	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
 	depth := int64(1) /*upsertdepth*/
-	root, newnd, oldnd, _ = llrb.upsertCow(nd, depth, k, v, llrb.reclaim)
-	// t.reclaimNodes("upsert", reclaim)
-	// llrb.reclaim = llrb.reclaim[:0]
+	root, newnd, oldnd, reclaim = llrb.upsertCow(nd, depth, k, v, llrb.reclaim)
+	llrb.reclaimNodes("upsert", reclaim)
+	llrb.reclaim = llrb.reclaim[:0]
 	root.metadata().setblack()
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 	if oldnd == nil {
@@ -75,12 +75,12 @@ func (llrb *LLRB) upsertCow(
 }
 
 func (llrb *LLRB) DeleteMinCow() *Llrbnode {
-	// var reclaim []*Llrbnode
+	var reclaim []*Llrbnode
 
 	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	root, deleted, _ := llrb.deleteminCow(nd, llrb.reclaim)
-	// t.reclaimNodes("delmin", reclaim)
-	// llrb.reclaim = llrb.reclaim[:0]
+	root, deleted, reclaim := llrb.deleteminCow(nd, llrb.reclaim)
+	llrb.reclaimNodes("delmin", reclaim)
+	llrb.reclaim = llrb.reclaim[:0]
 	if root != nil {
 		root.metadata().setblack()
 	}
@@ -121,12 +121,12 @@ func (llrb *LLRB) deleteminCow(
 }
 
 func (llrb *LLRB) DeleteMaxCow() *Llrbnode {
-	// var reclaim []*Llrbnode
+	var reclaim []*Llrbnode
 
 	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
 	root, deleted, _ := llrb.deletemaxCow(nd, llrb.reclaim)
-	// t.reclaimNodes("delmax", reclaim)
-	// llrb.reclaim = llrb.reclaim[:0]
+	llrb.reclaimNodes("delmax", reclaim)
+	llrb.reclaim = llrb.reclaim[:0]
 	if root != nil {
 		root.metadata().setblack()
 	}
@@ -169,12 +169,12 @@ func (llrb *LLRB) deletemaxCow(
 }
 
 func (llrb *LLRB) DeleteCow(key []byte) *Llrbnode {
-	// var reclaim []*Llrbnode
+	var reclaim []*Llrbnode
 
 	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
 	root, deleted := llrb.delete(nd, key)
-	// t.reclaimNodes("delete", reclaim)
-	// llrb.reclaim = llrb.reclaim[:0]
+	llrb.reclaimNodes("delete", reclaim)
+	llrb.reclaim = llrb.reclaim[:0]
 	if root != nil {
 		root.metadata().setblack()
 	}
@@ -276,4 +276,56 @@ func (llrb *LLRB) walkuprot23Cow(
 	}
 
 	return nd, reclaim
+}
+
+func (llrb *LLRB) reclaimNodes(opname string, reclaim []*Llrbnode) {
+	llrb.cowednodes = append(llrb.cowednodes, reclaim...)
+	llrb.reclaimstats[opname].add(int64(len(reclaim)))
+}
+
+// snapshotting
+
+type LLRBSnapshot struct {
+	llrb     *LLRB
+	root     unsafe.Pointer
+	reclaim  []*Llrbnode
+	next     unsafe.Pointer // *LLRBSnapshot
+	refcount int32
+}
+
+func (llrb *LLRB) NewSnapshot() *LLRBSnapshot {
+	location := &llrb.snaphead
+	reference := atomic.LoadPointer(location)
+	for reference != nil {
+		location = &((*LLRBSnapshot)(reference).next)
+		reference = atomic.LoadPointer(location)
+	}
+	snapshot := &LLRBSnapshot{
+		llrb: llrb,
+		root: atomic.LoadPointer(&llrb.root),
+	}
+	if len(llrb.cowednodes) > 0 {
+		snapshot.reclaim = make([]*Llrbnode, len(llrb.cowednodes))
+	}
+	copy(snapshot.reclaim, llrb.cowednodes)
+	llrb.cowednodes = llrb.cowednodes[:0]
+	atomic.StorePointer(location, unsafe.Pointer(snapshot))
+	return snapshot
+}
+
+func (snapshot *LLRBSnapshot) RefCount() {
+	atomic.AddInt32(&snapshot.refcount, 1)
+}
+
+func (snapshot *LLRBSnapshot) Release() {
+	atomic.AddInt32(&snapshot.refcount, -1)
+	if atomic.LoadInt32(&snapshot.refcount) == 0 {
+	}
+}
+
+func (snapshot *LLRBSnapshot) Destroy() {
+	llrb := snapshot.llrb
+	for _, nd := range snapshot.reclaim {
+		llrb.Freenode(nd)
+	}
 }
