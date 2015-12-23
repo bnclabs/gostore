@@ -112,6 +112,7 @@ func withLLRB(count int, opch chan [][]interface{}) {
 		"insert":    0,
 		"delete.ok": 0,
 		"delete.na": 0,
+		"validate":  0,
 	}
 	for count > 0 {
 		count--
@@ -133,7 +134,7 @@ func withLLRB(count int, opch chan [][]interface{}) {
 			case "delete":
 				stats = opDelete(dict, llrb, cmd, stats)
 			case "validate":
-				validate(dict, llrb, stats, false)
+				opValidate(dict, llrb, stats, false)
 				if validateopts.opdump {
 					fmt.Printf("%v\n", cmd)
 				}
@@ -142,7 +143,7 @@ func withLLRB(count int, opch chan [][]interface{}) {
 			}
 		}
 	}
-	validate(dict, llrb, stats, true)
+	opValidate(dict, llrb, stats, true)
 	llrb.LogNodememory()
 	llrb.LogNodeutilz()
 	llrb.LogValuememory()
@@ -436,7 +437,7 @@ func opDelete(
 	return stats
 }
 
-func validate(
+func opValidate(
 	dict *storage.Dict, llrb *storage.LLRB, stats map[string]int, dolog bool) {
 
 	validateEqual(dict, llrb, dolog)
@@ -449,6 +450,8 @@ func validate(
 	if dolog || !ok {
 		fmt.Printf("ValidateBlacks: %v\n", count)
 	}
+	stats["total"] += 1
+	stats["validate"] += 1
 }
 
 func validateEqual(dict *storage.Dict, llrb *storage.LLRB, dolog bool) bool {
@@ -487,6 +490,8 @@ func validateStats(
 	stats map[string]int, dolog bool) bool {
 
 	insert, upsert := stats["insert"], stats["upsert"]
+	validates := stats["validate"]
+
 	dels := [2]int{stats["delete.ok"], stats["delete.na"]}
 	dmax := [2]int{stats["delmax.ok"], stats["delmax.na"]}
 	dmin := [2]int{stats["delmin.ok"], stats["delmin.na"]}
@@ -495,7 +500,8 @@ func validateStats(
 	mins := [2]int{stats["min.ok"], stats["min.na"]}
 	total := insert + upsert + dels[0] + dels[1]
 	total += dmax[0] + dmax[1] + dmin[0] + dmin[1]
-	total += gets[0] + gets[1] + maxs[0] + maxs[1] + mins[0] + mins[1]
+	total += gets[0] + gets[1] + maxs[0] + maxs[1] + mins[0] + mins[1] +
+		validates
 
 	if total != stats["total"] {
 		log.Fatalf("total expected %v, got %v", total, stats["total"])
@@ -515,6 +521,7 @@ func validateStats(
 		fmt.Printf(fmsg, dels[0], dels[1], dmax[0], dmax[1], dmin[0], dmin[1])
 		fmsg = "  gt/mn/mx {ok/na} : {%v,%v} {%v,%v} {%v,%v}\n"
 		fmt.Printf(fmsg, gets[0], gets[1], mins[0], mins[1], maxs[0], maxs[1])
+		fmt.Printf("  validates        : %v\n", validates)
 	}
 	return true
 }
