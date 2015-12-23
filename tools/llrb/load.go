@@ -125,7 +125,7 @@ func doLoad(args []string) {
 	insertItems(llrb, vbno, vbuuid, seqno, loadopts.n)
 	fmt.Printf("Took %v to insert %v items\n", time.Since(now), loadopts.n)
 	printutilization(llrb)
-	llrb.Release()
+	llrb.Destroy()
 	if takeMEMProfile(loadopts.mprof) {
 		fmt.Printf("dumped mem-profile to %v\n", loadopts.mprof)
 	}

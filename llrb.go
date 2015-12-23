@@ -1,3 +1,55 @@
+// LLRB algorithm
+//
+// * index key, value (value is optional).
+// * custom memory management, application to use copy on GC to fix
+//   memory fragmentation.
+// * configurable metadata like
+//   vbno, bornseqno, deadseqno, vbuuid
+// * supports multi-version-concurrency-control, where writes serialized
+//   over a write snapshot and there can be zero or more concurrent
+//	 read-snapshots.
+//
+// non-mvcc use case:
+//
+// * LLRB tree cannot be shared between two routines. It is upto the
+//   application to make sure that all methods on LLRB is serialized.
+// * non-mvcc maintanence APIs:
+//
+//		Count()
+//		StatsMem(), StatsUpsert(), StatsHeight()
+//		ValidateReds(), ValidateBlacks()
+//		LogNodeutilz(), LogNodememory(), LogValueutilz()
+//		LogValuememory() LogUpsertdepth(), LogTreeheight(), PPrint()
+//
+// * non-mvcc Tree/Memory APIs:
+//
+//		Destroy()
+//		Has(), Get(), Min(), Max(), Range()
+//		Upsert(), DeleteMin(), DeleteMax(), Delete()
+//
+//		TODO: add callbacks for Upsert(), DeleteMin(), DeleteMax(), Delete()
+//
+// mvcc use case:
+//
+// * all write operations need be serialized in a single routine.
+// * one or more routines can do concurrent read operation.
+// * mvcc APIs with concurrency support:
+//
+//		llrb.Count()
+//		snapshot.Has(), snapshot.Get(), snapshot.Min(), snapshot.Max(),
+//		snapshot.Range()
+//		snapshot.ValidateReds(), snapshot.ValidateBlacks()
+//
+// * mvcc APIs that needs to be serialized, on write-snapshot:
+//
+//		writer.StatsMem(), writer.StatsUpsert(), writer.StatsHeight()
+//		writer.LogNodeutilz(), writer.LogNodememory(), LogValueutilz(),
+//		writer.LogValuememory() writer.LogUpsertdepth(),
+//		writer.LogTreeheight(), writer.PPrint()
+//
+//		writer.Destroy()
+//		writer.Upsert(), writer.DeleteMin(), writer.DeleteMax(), writer.Delete()
+//
 // configuration:
 //
 // "nodearena.minblock" - integer
@@ -50,6 +102,9 @@
 //
 // "mvcc.snapshot" - int
 //		interval in milli-second for generating read-snapshots
+//
+// "mvcc.writer.chanbuffer" - int
+//		buffer size for mvcc writer's i/p channel
 
 package storage
 
@@ -74,6 +129,7 @@ type LLRB struct { // tree container
 	nodearena *memarena
 	valarena  *memarena
 	root      unsafe.Pointer // root *Llrbnode of LLRB tree
+	dead      bool
 
 	// config
 	fmask     metadataMask // only 12 bits
@@ -92,7 +148,8 @@ type LLRB struct { // tree container
 	// mvcc
 	mvcc struct {
 		enabled    bool
-		snaphead   unsafe.Pointer // *LLRBSnapshot
+		writer     *LLRBWriter
+		readerhd   unsafe.Pointer // *LLRBSnapshot
 		cowednodes []*Llrbnode
 
 		// config
@@ -109,10 +166,6 @@ type LLRB struct { // tree container
 func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	validateConfig(config)
 	llrb := &LLRB{name: name}
-
-	llrb.mvcc.enabled = config["mvcc.enabled"].(bool)
-	llrb.mvcc.snapshotTick = time.Duration(config["mvcc.snapshotTick"].(int))
-	llrb.mvcc.cowednodes = make([]*Llrbnode, 0, 64)
 
 	// setup nodearena for key and metadata
 	minblock := int64(config["nodearena.minblock"].(int))
@@ -131,6 +184,8 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	// set up logger
 	setLogger(logg, config)
 	llrb.logPrefix = fmt.Sprintf("[LLRB-%s]", name)
+
+	// set up metadata options
 	llrb.fmask = metadataMask(0)
 	if conf, ok := config["metadata.bornseqno"]; ok && conf.(bool) {
 		llrb.fmask = llrb.fmask.enableBornSeqno()
@@ -145,40 +200,54 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 		llrb.fmask = llrb.fmask.enableVbuuid()
 	}
 	llrb.config = config
+
 	// statistics
 	llrb.upsertdepth = &averageInt{}
-	llrb.mvcc.reclaimstats = map[string]*averageInt{
-		"upsert": &averageInt{},
-		"delmin": &averageInt{},
-		"delmax": &averageInt{},
-		"delete": &averageInt{},
-	}
+
 	// scratch pads
 	llrb.strsl = make([]string, 0)
-	llrb.mvcc.reclaim = make([]*Llrbnode, 0, 64)
+
+	// mvcc
+	llrb.mvcc.enabled = config["mvcc.enabled"].(bool)
+	if llrb.mvcc.enabled {
+		llrb.mvcc.snapshotTick = time.Duration(config["mvcc.snapshotTick"].(int))
+		llrb.mvcc.cowednodes = make([]*Llrbnode, 0, 64)
+		llrb.mvcc.reclaimstats = map[string]*averageInt{
+			"upsert": &averageInt{},
+			"delmin": &averageInt{},
+			"delmax": &averageInt{},
+			"delete": &averageInt{},
+		}
+		llrb.mvcc.reclaim = make([]*Llrbnode, 0, 64)
+	}
+
 	return llrb
 }
 
 //---- Maintanence APIs.
 
-func (llrb *LLRB) SetRoot(r *Llrbnode) {
-	atomic.StorePointer(&llrb.root, unsafe.Pointer(r))
-}
-
-func (llrb *LLRB) Root() *Llrbnode {
-	return (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-}
-
-func (llrb *LLRB) Release() {
-	llrb.nodearena.release()
-	llrb.valarena.release()
-}
-
 func (llrb *LLRB) Count() int64 {
-	return atomic.LoadInt64(&llrb.count)
+	return atomic.LoadInt64(&llrb.count) // concurrency safe.
+}
+
+// TODO: make this local, after implementing the callback for write ops
+func (llrb *LLRB) Freenode(nd *Llrbnode) {
+	if llrb.mvcc.enabled {
+		panic("llrb.mvcc.enabled call Freenode() on writer")
+	}
+	if nd != nil {
+		nv := nd.nodevalue()
+		if nv != nil {
+			nv.pool.free(unsafe.Pointer(nv))
+		}
+		nd.pool.free(unsafe.Pointer(nd))
+	}
 }
 
 func (llrb *LLRB) StatsMem() map[string]interface{} {
+	if llrb.mvcc.enabled {
+		panic("llrb.mvcc.enabled call StatsMem() on writer")
+	}
 	mstats := map[string]interface{}{}
 	overhead, useful := llrb.nodearena.memory()
 	mstats["node.overhead"] = overhead
@@ -197,17 +266,10 @@ func (llrb *LLRB) StatsMem() map[string]interface{} {
 	return mstats
 }
 
-func (llrb *LLRB) Freenode(nd *Llrbnode) { // TODO: should this be exported ?
-	if nd != nil {
-		nv := nd.nodevalue()
-		if nv != nil {
-			nv.pool.free(unsafe.Pointer(nv))
-		}
-		nd.pool.free(unsafe.Pointer(nd))
-	}
-}
-
 func (llrb *LLRB) StatsUpsert() map[string]interface{} {
+	if llrb.mvcc.enabled {
+		panic("llrb.mvcc.enabled call StatsUpsert() on writer")
+	}
 	return map[string]interface{}{
 		"upsertdepth.samples":     llrb.upsertdepth.samples(),
 		"upsertdepth.min":         llrb.upsertdepth.min(),
@@ -219,6 +281,9 @@ func (llrb *LLRB) StatsUpsert() map[string]interface{} {
 }
 
 func (llrb *LLRB) StatsHeight() map[string]interface{} {
+	if llrb.mvcc.enabled {
+		panic("llrb.mvcc.enabled call StatsHeight() on writer")
+	}
 	heightav := &averageInt{}
 	root := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
 	heightStats(root, 0, heightav)
@@ -247,6 +312,9 @@ func heightStats(nd *Llrbnode, d int64, av *averageInt) {
 }
 
 func (llrb *LLRB) ValidateReds() bool {
+	if llrb.mvcc.enabled {
+		panic("llrb.mvcc.enabled call ValidateReds() on r-snapshot")
+	}
 	root := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
 	if validatereds(root, isred(root)) != true {
 		return false
@@ -268,6 +336,9 @@ func validatereds(nd *Llrbnode, fromred bool) bool {
 }
 
 func (llrb *LLRB) ValidateBlacks() int {
+	if llrb.mvcc.enabled {
+		panic("llrb.mvcc.enabled call ValidateBlacks() on r-snapshot")
+	}
 	root := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
 	return validateblacks(root, 0)
 }
@@ -288,6 +359,9 @@ func validateblacks(nd *Llrbnode, count int) int {
 }
 
 func (llrb *LLRB) LogNodeutilz() {
+	if llrb.mvcc.enabled {
+		panic("llrb.mvcc.enabled call LogNodeutilz() on writer")
+	}
 	log.Infof("%v Node utilization:\n", llrb.logPrefix)
 	arenapools := llrb.nodearena.mpools
 	sizes := []int{}
@@ -311,6 +385,9 @@ func (llrb *LLRB) LogNodeutilz() {
 }
 
 func (llrb *LLRB) LogValueutilz() {
+	if llrb.mvcc.enabled {
+		panic("llrb.mvcc.enabled call LogValueutilz() on writer")
+	}
 	log.Infof("%v Value utilization:\n", llrb.logPrefix)
 	arenapools := llrb.valarena.mpools
 	sizes := []int{}
@@ -334,6 +411,9 @@ func (llrb *LLRB) LogValueutilz() {
 }
 
 func (llrb *LLRB) LogNodememory() {
+	if llrb.mvcc.enabled {
+		panic("llrb.mvcc.enabled call LogNodememory() on writer")
+	}
 	stats := llrb.StatsMem()
 	min := humanize.Bytes(uint64(llrb.config["nodearena.minblock"].(int)))
 	max := humanize.Bytes(uint64(llrb.config["nodearena.maxblock"].(int)))
@@ -352,6 +432,9 @@ func (llrb *LLRB) LogNodememory() {
 }
 
 func (llrb *LLRB) LogValuememory() {
+	if llrb.mvcc.enabled {
+		panic("llrb.mvcc.enabled call LogValuememory() on writer")
+	}
 	stats := llrb.StatsMem()
 	min := humanize.Bytes(uint64(llrb.config["valarena.minblock"].(int)))
 	max := humanize.Bytes(uint64(llrb.config["valarena.maxblock"].(int)))
@@ -370,6 +453,9 @@ func (llrb *LLRB) LogValuememory() {
 }
 
 func (llrb *LLRB) LogUpsertdepth() {
+	if llrb.mvcc.enabled {
+		panic("llrb.mvcc.enabled call LogUpsertdepth() on writer")
+	}
 	stats := llrb.StatsUpsert()
 	samples := stats["upsertdepth.samples"].(int64)
 	min := stats["upsertdepth.min"].(int64)
@@ -381,6 +467,9 @@ func (llrb *LLRB) LogUpsertdepth() {
 }
 
 func (llrb *LLRB) LogTreeheight() {
+	if llrb.mvcc.enabled {
+		panic("llrb.mvcc.enabled call LogTreeheight() on writer")
+	}
 	// log height statistics
 	stats := llrb.StatsHeight()
 	samples := stats["samples"]
@@ -392,9 +481,21 @@ func (llrb *LLRB) LogTreeheight() {
 }
 
 func (llrb *LLRB) PPrint() {
-	nd := llrb.Root()
+	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
 	fmt.Printf("root: ")
 	nd.pprint("  ")
+}
+
+func (llrb *LLRB) Destroy() {
+	if llrb.mvcc.enabled {
+		// TODO: handle destroy gracefully for MVCC enabled LLRB tree.
+	} else if llrb.dead == false {
+		llrb.nodearena.release()
+		llrb.valarena.release()
+		llrb.dead = true
+	} else {
+		panic("Destroy() on dead tree")
+	}
 }
 
 //---- LLRB read operations.
@@ -560,7 +661,7 @@ func (llrb *LLRB) Upsert(k, v []byte) (newnd, oldnd *Llrbnode) {
 	root.metadata().setblack()
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 	if oldnd == nil {
-		llrb.count++
+		atomic.AddInt64(&llrb.count, 1)
 	} else {
 		atomic.AddInt64(&llrb.keymemory, -int64(len(oldnd.key())))
 		atomic.AddInt64(&llrb.valmemory, -int64(len(oldnd.nodevalue().value())))
@@ -608,9 +709,10 @@ func (llrb *LLRB) upsert(
 	return nd, newnd, oldnd
 }
 
-func (llrb *LLRB) DeleteMin() *Llrbnode {
+func (llrb *LLRB) DeleteMin() (deleted *Llrbnode) {
+	var root *Llrbnode
 	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	root, deleted := llrb.deletemin(nd)
+	root, deleted = llrb.deletemin(nd)
 	if root != nil {
 		root.metadata().setblack()
 	}
@@ -618,7 +720,7 @@ func (llrb *LLRB) DeleteMin() *Llrbnode {
 	if deleted != nil {
 		atomic.AddInt64(&llrb.keymemory, -int64(len(deleted.key())))
 		atomic.AddInt64(&llrb.valmemory, -int64(len(deleted.nodevalue().value())))
-		llrb.count--
+		atomic.AddInt64(&llrb.count, -1)
 	}
 	return deleted
 }
@@ -638,9 +740,11 @@ func (llrb *LLRB) deletemin(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 	return fixup(nd), deleted
 }
 
-func (llrb *LLRB) DeleteMax() *Llrbnode {
+func (llrb *LLRB) DeleteMax() (deleted *Llrbnode) {
+	var root *Llrbnode
+
 	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	root, deleted := llrb.deletemax(nd)
+	root, deleted = llrb.deletemax(nd)
 	if root != nil {
 		root.metadata().setblack()
 	}
@@ -648,7 +752,7 @@ func (llrb *LLRB) DeleteMax() *Llrbnode {
 	if deleted != nil {
 		atomic.AddInt64(&llrb.keymemory, -int64(len(deleted.key())))
 		atomic.AddInt64(&llrb.valmemory, -int64(len(deleted.nodevalue().value())))
-		llrb.count--
+		atomic.AddInt64(&llrb.count, -1)
 	}
 	return deleted
 }
@@ -681,7 +785,7 @@ func (llrb *LLRB) Delete(key []byte) *Llrbnode {
 	if deleted != nil {
 		atomic.AddInt64(&llrb.keymemory, -int64(len(deleted.key())))
 		atomic.AddInt64(&llrb.valmemory, -int64(len(deleted.nodevalue().value())))
-		llrb.count--
+		atomic.AddInt64(&llrb.count, -1)
 	}
 	return deleted
 }

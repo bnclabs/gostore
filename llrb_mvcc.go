@@ -21,7 +21,7 @@ func (llrb *LLRB) UpsertCow(k, v []byte) (newnd, oldnd *Llrbnode) {
 	root.metadata().setblack()
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 	if oldnd == nil {
-		llrb.count++
+		atomic.AddInt64(&llrb.count, 1)
 	} else {
 		atomic.AddInt64(&llrb.keymemory, -int64(len(oldnd.key())))
 		atomic.AddInt64(&llrb.valmemory, -int64(len(oldnd.nodevalue().value())))
@@ -88,7 +88,7 @@ func (llrb *LLRB) DeleteMinCow() *Llrbnode {
 	if deleted != nil {
 		atomic.AddInt64(&llrb.keymemory, -int64(len(deleted.key())))
 		atomic.AddInt64(&llrb.valmemory, -int64(len(deleted.nodevalue().value())))
-		llrb.count--
+		atomic.AddInt64(&llrb.count, -1)
 	}
 	return deleted
 }
@@ -134,7 +134,7 @@ func (llrb *LLRB) DeleteMaxCow() *Llrbnode {
 	if deleted != nil {
 		atomic.AddInt64(&llrb.keymemory, -int64(len(deleted.key())))
 		atomic.AddInt64(&llrb.valmemory, -int64(len(deleted.nodevalue().value())))
-		llrb.count--
+		atomic.AddInt64(&llrb.count, -1)
 	}
 	return deleted
 }
@@ -182,7 +182,7 @@ func (llrb *LLRB) DeleteCow(key []byte) *Llrbnode {
 	if deleted != nil {
 		atomic.AddInt64(&llrb.keymemory, -int64(len(deleted.key())))
 		atomic.AddInt64(&llrb.valmemory, -int64(len(deleted.nodevalue().value())))
-		llrb.count--
+		atomic.AddInt64(&llrb.count, -1)
 	}
 	return deleted
 }
@@ -294,7 +294,7 @@ type LLRBSnapshot struct {
 }
 
 func (llrb *LLRB) NewSnapshot() *LLRBSnapshot {
-	location := &llrb.mvcc.snaphead
+	location := &llrb.mvcc.readerhd
 	reference := atomic.LoadPointer(location)
 	for reference != nil {
 		location = &((*LLRBSnapshot)(reference).next)

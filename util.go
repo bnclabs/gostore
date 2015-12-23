@@ -2,6 +2,7 @@ package storage
 
 import "unsafe"
 import "reflect"
+import "errors"
 
 func findfirstset8(b byte) int8 { // move this to ASM.
 	for i := uint8(0); i < 8; i++ {
@@ -50,4 +51,48 @@ func memcpy(dst, src unsafe.Pointer, ln int) int {
 	dstsl.Len, dstsl.Cap = ln, ln
 	dstsl.Data = (uintptr)(unsafe.Pointer(dst))
 	return copy(dstnd, srcnd)
+}
+
+func failsafeRequest(
+	reqch, respch chan []interface{},
+	cmd []interface{}, finch chan bool) ([]interface{}, error) {
+
+	select {
+	case reqch <- cmd:
+		if respch != nil {
+			select {
+			case resp := <-respch:
+				return resp, nil
+			case <-finch:
+				return nil, errors.New("closed")
+			}
+		}
+	case <-finch:
+		return nil, errors.New("closed")
+	}
+	return nil, nil
+}
+
+func failsafePost(
+	reqch chan []interface{}, cmd []interface{}, finch chan bool) error {
+
+	select {
+	case reqch <- cmd:
+	case <-finch:
+		return errors.New("closed")
+	}
+	return nil
+}
+
+func responseError(err error, resp []interface{}, idx int) error {
+	if err != nil {
+		return err
+	} else if resp != nil {
+		if resp[idx] != nil {
+			return resp[idx].(error)
+		} else {
+			return nil
+		}
+	}
+	return nil
 }
