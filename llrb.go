@@ -161,9 +161,6 @@ type LLRB struct { // tree container
 
 		// stats
 		reclaimstats map[string]*averageInt
-
-		// scratch pad
-		reclaim []*Llrbnode
 	}
 }
 
@@ -222,10 +219,393 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 			"delmax": &averageInt{},
 			"delete": &averageInt{},
 		}
-		llrb.mvcc.reclaim = make([]*Llrbnode, 0, 64)
 	}
 
 	return llrb
+}
+
+//---- LLRB read operations.
+
+func (llrb *LLRB) Has(key []byte) bool {
+	nd := llrb.Get(key)
+	return nd != nil
+}
+
+func (llrb *LLRB) Get(key []byte) (nd *Llrbnode) {
+	nd = (*Llrbnode)(atomic.LoadPointer(&llrb.root))
+	for nd != nil {
+		if nd.gtkey(key) {
+			nd = nd.left
+		} else if nd.ltkey(key) {
+			nd = nd.right
+		} else {
+			return nd
+		}
+	}
+	return nil // key is not present in the tree
+}
+
+func (llrb *LLRB) Min() *Llrbnode {
+	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
+	if nd == nil {
+		return nil
+	}
+	for nd.left != nil {
+		nd = nd.left
+	}
+	return nd
+}
+
+func (llrb *LLRB) Max() *Llrbnode {
+	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
+	if nd == nil {
+		return nil
+	}
+	for nd.right != nil {
+		nd = nd.right
+	}
+	return nd
+}
+
+// Range from lkey to hkey, incl can be "both", "low", "high", "none"
+func (llrb *LLRB) Range(lkey, hkey []byte, incl string, iter LLRBNodeIterator) {
+	if iter == nil {
+		panic("Range(): iter argument is nil")
+	}
+	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
+	switch incl {
+	case "both":
+		llrb.rangeFromFind(nd, lkey, hkey, iter)
+	case "high":
+		llrb.rangeAfterFind(nd, lkey, hkey, iter)
+	case "low":
+		llrb.rangeFromTill(nd, lkey, hkey, iter)
+	default:
+		llrb.rangeAfterTill(nd, lkey, hkey, iter)
+	}
+}
+
+// low <= (keys) <= high
+func (llrb *LLRB) rangeFromFind(
+	nd *Llrbnode, lk, hk []byte, iter LLRBNodeIterator) bool {
+
+	if nd == nil {
+		return true
+	}
+	if hk != nil && nd.gtkey(hk) {
+		return llrb.rangeFromFind(nd.left, lk, hk, iter)
+	}
+	if lk != nil && nd.ltkey(lk) {
+		return llrb.rangeFromFind(nd.right, lk, hk, iter)
+	}
+	if !llrb.rangeFromFind(nd.left, lk, hk, iter) {
+		return false
+	}
+	if iter != nil && !iter(nd) {
+		return false
+	}
+	return llrb.rangeFromFind(nd.right, lk, hk, iter)
+}
+
+// low <= (keys) < hk
+func (llrb *LLRB) rangeFromTill(
+	nd *Llrbnode, lk, hk []byte, iter LLRBNodeIterator) bool {
+
+	if nd == nil {
+		return true
+	}
+	if hk != nil && !nd.ltkey(hk) {
+		return llrb.rangeFromTill(nd.left, lk, hk, iter)
+	}
+	if lk != nil && nd.ltkey(lk) {
+		return llrb.rangeFromTill(nd.right, lk, hk, iter)
+	}
+	if !llrb.rangeFromTill(nd.left, lk, hk, iter) {
+		return false
+	}
+	if iter != nil && !iter(nd) {
+		return false
+	}
+	return llrb.rangeFromTill(nd.right, lk, hk, iter)
+}
+
+// low < (keys) <= hk
+func (llrb *LLRB) rangeAfterFind(
+	nd *Llrbnode, lk, hk []byte, iter LLRBNodeIterator) bool {
+
+	if nd == nil {
+		return true
+	}
+	if hk != nil && nd.gtkey(hk) {
+		return llrb.rangeAfterFind(nd.left, lk, hk, iter)
+	}
+	if lk != nil && !nd.gtkey(lk) {
+		return llrb.rangeAfterFind(nd.right, lk, hk, iter)
+	}
+	if !llrb.rangeAfterFind(nd.left, lk, hk, iter) {
+		return false
+	}
+	if iter != nil && !iter(nd) {
+		return false
+	}
+	return llrb.rangeAfterFind(nd.right, lk, hk, iter)
+}
+
+// low < (keys) < hk
+func (llrb *LLRB) rangeAfterTill(
+	nd *Llrbnode, lk, hk []byte, iter LLRBNodeIterator) bool {
+
+	if nd == nil {
+		return true
+	}
+	if hk != nil && !nd.ltkey(hk) {
+		return llrb.rangeAfterTill(nd.left, lk, hk, iter)
+	}
+	if lk != nil && !nd.gtkey(lk) {
+		return llrb.rangeAfterTill(nd.right, lk, hk, iter)
+	}
+	if !llrb.rangeAfterTill(nd.left, lk, hk, iter) {
+		return false
+	}
+	if iter != nil && !iter(nd) {
+		return false
+	}
+	return llrb.rangeAfterTill(nd.right, lk, hk, iter)
+}
+
+//---- LLRB write operations.
+
+func (llrb *LLRB) Upsert(key, value []byte, callb LLRBUpsertCallback) {
+	var root, newnd, oldnd *Llrbnode
+
+	if key == nil {
+		panic("upserting nil key")
+	}
+	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
+	root, newnd, oldnd = llrb.upsert(nd, 0 /*depth*/, key, value)
+	root.metadata().setblack()
+	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
+
+	llrb.upsertcount(key, value, oldnd)
+
+	if callb != nil {
+		callb(newnd, oldnd)
+	}
+	llrb.freenode(oldnd)
+}
+
+// returns root, newnd, oldnd
+func (llrb *LLRB) upsert(
+	nd *Llrbnode, depth int64,
+	key, value []byte) (*Llrbnode, *Llrbnode, *Llrbnode) {
+
+	var oldnd, newnd *Llrbnode
+
+	if nd == nil {
+		newnd := llrb.newnode(key, value)
+		llrb.upsertdepth.add(depth)
+		return newnd, newnd, nil
+	}
+
+	nd = llrb.walkdownrot23(nd)
+
+	if nd.gtkey(key) {
+		nd.left, newnd, oldnd = llrb.upsert(nd.left, depth+1, key, value)
+	} else if nd.ltkey(key) {
+		nd.right, newnd, oldnd = llrb.upsert(nd.right, depth+1, key, value)
+	} else {
+		oldnd = llrb.clone(nd)
+		if nv := nd.nodevalue(); nv != nil { // free the value if present
+			nv.pool.free(unsafe.Pointer(nv))
+		}
+		if value != nil { // and new value if need be
+			ptr, mpool := llrb.valarena.alloc(int64(nvaluesize + len(value)))
+			nv := (*nodevalue)(ptr)
+			nv.pool = mpool
+			nd = nd.setnodevalue(nv.setvalue(value))
+		}
+		newnd = nd
+		llrb.upsertdepth.add(depth)
+	}
+
+	nd = llrb.walkuprot23(nd)
+	return nd, newnd, oldnd
+}
+
+func (llrb *LLRB) DeleteMin(callb LLRBDeleteCallback) {
+	var root, deleted *Llrbnode
+	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
+	root, deleted = llrb.deletemin(nd)
+	if root != nil {
+		root.metadata().setblack()
+	}
+	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
+
+	llrb.delcount(deleted)
+
+	if callb != nil {
+		callb(deleted)
+	}
+	llrb.freenode(deleted)
+}
+
+// using 2-3 trees
+func (llrb *LLRB) deletemin(nd *Llrbnode) (newnd, deleted *Llrbnode) {
+	if nd == nil {
+		return nil, nil
+	}
+	if nd.left == nil {
+		return nil, nd
+	}
+	if !isred(nd.left) && !isred(nd.left.left) {
+		nd = moveredleft(nd)
+	}
+	nd.left, deleted = llrb.deletemin(nd.left)
+	return fixup(nd), deleted
+}
+
+func (llrb *LLRB) DeleteMax(callb LLRBDeleteCallback) {
+	var root, deleted *Llrbnode
+
+	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
+	root, deleted = llrb.deletemax(nd)
+	if root != nil {
+		root.metadata().setblack()
+	}
+	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
+
+	llrb.delcount(deleted)
+
+	if callb != nil {
+		callb(deleted)
+	}
+	llrb.freenode(deleted)
+}
+
+// using 2-3 trees
+func (llrb *LLRB) deletemax(nd *Llrbnode) (newnd, deleted *Llrbnode) {
+	if nd == nil {
+		return nil, nil
+	}
+	if isred(nd.left) {
+		nd = rotateright(nd)
+	}
+	if nd.right == nil {
+		return nil, nd
+	}
+	if !isred(nd.right) && !isred(nd.right.left) {
+		nd = moveredright(nd)
+	}
+	nd.right, deleted = llrb.deletemax(nd.right)
+	return fixup(nd), deleted
+}
+
+func (llrb *LLRB) Delete(key []byte, callb LLRBDeleteCallback) {
+	var deleted *Llrbnode
+
+	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
+	root, deleted := llrb.delete(nd, key)
+	if root != nil {
+		root.metadata().setblack()
+	}
+	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
+
+	llrb.delcount(deleted)
+
+	if callb != nil {
+		callb(deleted)
+	}
+	llrb.freenode(deleted)
+}
+
+func (llrb *LLRB) delete(nd *Llrbnode, key []byte) (newnd, deleted *Llrbnode) {
+	if nd == nil {
+		return nil, nil
+	}
+
+	if nd.gtkey(key) {
+		if nd.left == nil { // key not present. Nothing to delete
+			return nd, nil
+		}
+		if !isred(nd.left) && !isred(nd.left.left) {
+			nd = moveredleft(nd)
+		}
+		nd.left, deleted = llrb.delete(nd.left, key)
+
+	} else {
+		if isred(nd.left) {
+			nd = rotateright(nd)
+		}
+		// If @key equals @h.Item and no right children at @h
+		if !nd.ltkey(key) && nd.right == nil {
+			return nil, nd
+		}
+		if nd.right != nil && !isred(nd.right) && !isred(nd.right.left) {
+			nd = moveredright(nd)
+		}
+		// If @key equals @h.Item, and (from above) 'h.Right != nil'
+		if !nd.ltkey(key) {
+			var subdeleted *Llrbnode
+			nd.right, subdeleted = llrb.deletemin(nd.right)
+			if subdeleted == nil {
+				panic("logic")
+			}
+			newnd := llrb.clone(subdeleted)
+			newnd.left, newnd.right = nd.left, nd.right
+			if nd.metadata().isdirty() {
+				newnd.metadata().setdirty()
+			}
+			if nd.metadata().isblack() {
+				newnd.metadata().setblack()
+			} else {
+				newnd.metadata().setred()
+			}
+			newnd.nodevalue().setvalue(subdeleted.nodevalue().value())
+			deleted, nd = nd, newnd
+			llrb.freenode(subdeleted)
+		} else { // Else, @key is bigger than @nd
+			nd.right, deleted = llrb.delete(nd.right, key)
+		}
+	}
+	return fixup(nd), deleted
+}
+
+// rotation routines for 2-3 algorithm
+
+func (llrb *LLRB) walkdownrot23(nd *Llrbnode) *Llrbnode {
+	return nd
+}
+
+func (llrb *LLRB) walkuprot23(nd *Llrbnode) *Llrbnode {
+	if isred(nd.right) && !isred(nd.left) {
+		nd = rotateleft(nd)
+	}
+	if isred(nd.left) && isred(nd.left.left) {
+		nd = rotateright(nd)
+	}
+	if isred(nd.left) && isred(nd.right) {
+		flip(nd)
+	}
+	return nd
+}
+
+// rotation routines for 2-3-4 algorithm
+
+func walkdownrot234(nd *Llrbnode) *Llrbnode {
+	if isred(nd.left) && isred(nd.right) {
+		flip(nd)
+	}
+	return nd
+}
+
+func walkuprot234(nd *Llrbnode) *Llrbnode {
+	if isred(nd.right) && !isred(nd.left) {
+		nd = rotateleft(nd)
+	}
+	if isred(nd.left) && isred(nd.left.left) {
+		nd = rotateright(nd)
+	}
+	return nd
 }
 
 //---- Maintanence APIs.
@@ -488,419 +868,6 @@ func (llrb *LLRB) Destroy() {
 	}
 }
 
-//---- LLRB read operations.
-
-func (llrb *LLRB) Has(key []byte) bool {
-	nd := llrb.Get(key)
-	return nd != nil
-}
-
-func (llrb *LLRB) Get(key []byte) (nd *Llrbnode) {
-	nd = (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	for nd != nil {
-		if nd.gtkey(key) {
-			nd = nd.left
-		} else if nd.ltkey(key) {
-			nd = nd.right
-		} else {
-			return nd
-		}
-	}
-	return nil // key is not present in the tree
-}
-
-func (llrb *LLRB) Min() *Llrbnode {
-	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	if nd == nil {
-		return nil
-	}
-	for nd.left != nil {
-		nd = nd.left
-	}
-	return nd
-}
-
-func (llrb *LLRB) Max() *Llrbnode {
-	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	if nd == nil {
-		return nil
-	}
-	for nd.right != nil {
-		nd = nd.right
-	}
-	return nd
-}
-
-// Range from lkey to hkey, incl can be "both", "low", "high", "none"
-func (llrb *LLRB) Range(lkey, hkey []byte, incl string, iter LLRBNodeIterator) {
-	if iter == nil {
-		panic("Range(): iter argument is nil")
-	}
-	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	switch incl {
-	case "both":
-		llrb.rangeFromFind(nd, lkey, hkey, iter)
-	case "high":
-		llrb.rangeAfterFind(nd, lkey, hkey, iter)
-	case "low":
-		llrb.rangeFromTill(nd, lkey, hkey, iter)
-	default:
-		llrb.rangeAfterTill(nd, lkey, hkey, iter)
-	}
-}
-
-// low <= (keys) <= high
-func (llrb *LLRB) rangeFromFind(
-	nd *Llrbnode, lk, hk []byte, iter LLRBNodeIterator) bool {
-
-	if nd == nil {
-		return true
-	}
-	if hk != nil && nd.gtkey(hk) {
-		return llrb.rangeFromFind(nd.left, lk, hk, iter)
-	}
-	if lk != nil && nd.ltkey(lk) {
-		return llrb.rangeFromFind(nd.right, lk, hk, iter)
-	}
-	if !llrb.rangeFromFind(nd.left, lk, hk, iter) {
-		return false
-	}
-	if iter != nil && !iter(nd) {
-		return false
-	}
-	return llrb.rangeFromFind(nd.right, lk, hk, iter)
-}
-
-// low <= (keys) < hk
-func (llrb *LLRB) rangeFromTill(
-	nd *Llrbnode, lk, hk []byte, iter LLRBNodeIterator) bool {
-
-	if nd == nil {
-		return true
-	}
-	if hk != nil && !nd.ltkey(hk) {
-		return llrb.rangeFromTill(nd.left, lk, hk, iter)
-	}
-	if lk != nil && nd.ltkey(lk) {
-		return llrb.rangeFromTill(nd.right, lk, hk, iter)
-	}
-	if !llrb.rangeFromTill(nd.left, lk, hk, iter) {
-		return false
-	}
-	if iter != nil && !iter(nd) {
-		return false
-	}
-	return llrb.rangeFromTill(nd.right, lk, hk, iter)
-}
-
-// low < (keys) <= hk
-func (llrb *LLRB) rangeAfterFind(
-	nd *Llrbnode, lk, hk []byte, iter LLRBNodeIterator) bool {
-
-	if nd == nil {
-		return true
-	}
-	if hk != nil && nd.gtkey(hk) {
-		return llrb.rangeAfterFind(nd.left, lk, hk, iter)
-	}
-	if lk != nil && !nd.gtkey(lk) {
-		return llrb.rangeAfterFind(nd.right, lk, hk, iter)
-	}
-	if !llrb.rangeAfterFind(nd.left, lk, hk, iter) {
-		return false
-	}
-	if iter != nil && !iter(nd) {
-		return false
-	}
-	return llrb.rangeAfterFind(nd.right, lk, hk, iter)
-}
-
-// low < (keys) < hk
-func (llrb *LLRB) rangeAfterTill(
-	nd *Llrbnode, lk, hk []byte, iter LLRBNodeIterator) bool {
-
-	if nd == nil {
-		return true
-	}
-	if hk != nil && !nd.ltkey(hk) {
-		return llrb.rangeAfterTill(nd.left, lk, hk, iter)
-	}
-	if lk != nil && !nd.gtkey(lk) {
-		return llrb.rangeAfterTill(nd.right, lk, hk, iter)
-	}
-	if !llrb.rangeAfterTill(nd.left, lk, hk, iter) {
-		return false
-	}
-	if iter != nil && !iter(nd) {
-		return false
-	}
-	return llrb.rangeAfterTill(nd.right, lk, hk, iter)
-}
-
-//---- LLRB write operations.
-
-func (llrb *LLRB) Upsert(key, value []byte, callb LLRBUpsertCallback) {
-	var root, newnd, oldnd *Llrbnode
-
-	if key == nil {
-		panic("upserting nil key")
-	}
-	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	root, newnd, oldnd = llrb.upsert(nd, 0 /*depth*/, key, value)
-	root.metadata().setblack()
-	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
-	if oldnd == nil {
-		atomic.AddInt64(&llrb.count, 1)
-	} else {
-		atomic.AddInt64(&llrb.keymemory, -int64(len(oldnd.key())))
-		atomic.AddInt64(&llrb.valmemory, -int64(len(oldnd.nodevalue().value())))
-	}
-	atomic.AddInt64(&llrb.keymemory, int64(len(key)))
-	atomic.AddInt64(&llrb.valmemory, int64(len(value)))
-
-	if callb != nil {
-		callb(newnd, oldnd)
-	}
-	llrb.freenode(oldnd)
-
-	return
-}
-
-// returns root, newnd, oldnd
-func (llrb *LLRB) upsert(
-	nd *Llrbnode, depth int64,
-	key, value []byte) (*Llrbnode, *Llrbnode, *Llrbnode) {
-
-	var oldnd, newnd *Llrbnode
-
-	if nd == nil {
-		newnd := llrb.newnode(key, value)
-		llrb.upsertdepth.add(depth)
-		return newnd, newnd, nil
-	}
-
-	nd = llrb.walkdownrot23(nd)
-
-	if nd.gtkey(key) {
-		nd.left, newnd, oldnd = llrb.upsert(nd.left, depth+1, key, value)
-	} else if nd.ltkey(key) {
-		nd.right, newnd, oldnd = llrb.upsert(nd.right, depth+1, key, value)
-	} else {
-		oldnd = llrb.clone(nd)
-		if nv := nd.nodevalue(); nv != nil { // free the value if present
-			nv.pool.free(unsafe.Pointer(nv))
-		}
-		if value != nil { // and new value if need be
-			ptr, mpool := llrb.valarena.alloc(int64(nvaluesize + len(value)))
-			nv := (*nodevalue)(ptr)
-			nv.pool = mpool
-			nd = nd.setnodevalue(nv.setvalue(value))
-		}
-		newnd = nd
-		llrb.upsertdepth.add(depth)
-	}
-
-	nd = llrb.walkuprot23(nd)
-	return nd, newnd, oldnd
-}
-
-func (llrb *LLRB) DeleteMin(callb LLRBDeleteCallback) {
-	var root, deleted *Llrbnode
-	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	root, deleted = llrb.deletemin(nd)
-	if root != nil {
-		root.metadata().setblack()
-	}
-	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
-	if deleted != nil {
-		klen := int64(len(deleted.key()))
-		vlen := int64(len(deleted.nodevalue().value()))
-		atomic.AddInt64(&llrb.keymemory, -klen)
-		atomic.AddInt64(&llrb.valmemory, -vlen)
-		atomic.AddInt64(&llrb.count, -1)
-	}
-
-	if callb != nil {
-		callb(deleted)
-	}
-	llrb.freenode(deleted)
-
-	return
-}
-
-// using 2-3 trees
-func (llrb *LLRB) deletemin(nd *Llrbnode) (newnd, deleted *Llrbnode) {
-	if nd == nil {
-		return nil, nil
-	}
-	if nd.left == nil {
-		return nil, nd
-	}
-	if !isred(nd.left) && !isred(nd.left.left) {
-		nd = moveredleft(nd)
-	}
-	nd.left, deleted = llrb.deletemin(nd.left)
-	return fixup(nd), deleted
-}
-
-func (llrb *LLRB) DeleteMax(callb LLRBDeleteCallback) {
-	var root, deleted *Llrbnode
-
-	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	root, deleted = llrb.deletemax(nd)
-	if root != nil {
-		root.metadata().setblack()
-	}
-	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
-	if deleted != nil {
-		klen := int64(len(deleted.key()))
-		vlen := int64(len(deleted.nodevalue().value()))
-		atomic.AddInt64(&llrb.keymemory, -klen)
-		atomic.AddInt64(&llrb.valmemory, -vlen)
-		atomic.AddInt64(&llrb.count, -1)
-	}
-
-	if callb != nil {
-		callb(deleted)
-	}
-	llrb.freenode(deleted)
-
-	return
-}
-
-// using 2-3 trees
-func (llrb *LLRB) deletemax(nd *Llrbnode) (newnd, deleted *Llrbnode) {
-	if nd == nil {
-		return nil, nil
-	}
-	if isred(nd.left) {
-		nd = rotateright(nd)
-	}
-	if nd.right == nil {
-		return nil, nd
-	}
-	if !isred(nd.right) && !isred(nd.right.left) {
-		nd = moveredright(nd)
-	}
-	nd.right, deleted = llrb.deletemax(nd.right)
-	return fixup(nd), deleted
-}
-
-func (llrb *LLRB) Delete(key []byte, callb LLRBDeleteCallback) {
-	var deleted *Llrbnode
-
-	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	root, deleted := llrb.delete(nd, key)
-	if root != nil {
-		root.metadata().setblack()
-	}
-	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
-	if deleted != nil {
-		klen := int64(len(deleted.key()))
-		vlen := int64(len(deleted.nodevalue().value()))
-		atomic.AddInt64(&llrb.keymemory, -klen)
-		atomic.AddInt64(&llrb.valmemory, -vlen)
-		atomic.AddInt64(&llrb.count, -1)
-	}
-
-	if callb != nil {
-		callb(deleted)
-	}
-	llrb.freenode(deleted)
-
-	return
-}
-
-func (llrb *LLRB) delete(nd *Llrbnode, key []byte) (newnd, deleted *Llrbnode) {
-	if nd == nil {
-		return nil, nil
-	}
-
-	if nd.gtkey(key) {
-		if nd.left == nil { // key not present. Nothing to delete
-			return nd, nil
-		}
-		if !isred(nd.left) && !isred(nd.left.left) {
-			nd = moveredleft(nd)
-		}
-		nd.left, deleted = llrb.delete(nd.left, key)
-
-	} else {
-		if isred(nd.left) {
-			nd = rotateright(nd)
-		}
-		// If @key equals @h.Item and no right children at @h
-		if !nd.ltkey(key) && nd.right == nil {
-			return nil, nd
-		}
-		if nd.right != nil && !isred(nd.right) && !isred(nd.right.left) {
-			nd = moveredright(nd)
-		}
-		// If @key equals @h.Item, and (from above) 'h.Right != nil'
-		if !nd.ltkey(key) {
-			var subdeleted *Llrbnode
-			nd.right, subdeleted = llrb.deletemin(nd.right)
-			if subdeleted == nil {
-				panic("logic")
-			}
-			newnd := llrb.clone(subdeleted)
-			newnd.left, newnd.right = nd.left, nd.right
-			if nd.metadata().isdirty() {
-				newnd.metadata().setdirty()
-			}
-			if nd.metadata().isblack() {
-				newnd.metadata().setblack()
-			} else {
-				newnd.metadata().setred()
-			}
-			newnd.nodevalue().setvalue(subdeleted.nodevalue().value())
-			deleted, nd = nd, newnd
-			llrb.freenode(subdeleted)
-		} else { // Else, @key is bigger than @nd
-			nd.right, deleted = llrb.delete(nd.right, key)
-		}
-	}
-	return fixup(nd), deleted
-}
-
-// rotation routines for 2-3 algorithm
-
-func (llrb *LLRB) walkdownrot23(nd *Llrbnode) *Llrbnode {
-	return nd
-}
-
-func (llrb *LLRB) walkuprot23(nd *Llrbnode) *Llrbnode {
-	if isred(nd.right) && !isred(nd.left) {
-		nd = rotateleft(nd)
-	}
-	if isred(nd.left) && isred(nd.left.left) {
-		nd = rotateright(nd)
-	}
-	if isred(nd.left) && isred(nd.right) {
-		flip(nd)
-	}
-	return nd
-}
-
-// rotation routines for 2-3-4 algorithm
-
-func walkdownrot234(nd *Llrbnode) *Llrbnode {
-	if isred(nd.left) && isred(nd.right) {
-		flip(nd)
-	}
-	return nd
-}
-
-func walkuprot234(nd *Llrbnode) *Llrbnode {
-	if isred(nd.right) && !isred(nd.left) {
-		nd = rotateleft(nd)
-	}
-	if isred(nd.left) && isred(nd.left.left) {
-		nd = rotateright(nd)
-	}
-	return nd
-}
-
 //---- local functions
 
 func (llrb *LLRB) newnode(k, v []byte) *Llrbnode {
@@ -923,6 +890,19 @@ func (llrb *LLRB) newnode(k, v []byte) *Llrbnode {
 	return nd
 }
 
+func (llrb *LLRB) freenode(nd *Llrbnode) {
+	if llrb.mvcc.enabled {
+		panic("llrb.mvcc.enabled call freenode() on writer")
+	}
+	if nd != nil {
+		nv := nd.nodevalue()
+		if nv != nil {
+			nv.pool.free(unsafe.Pointer(nv))
+		}
+		nd.pool.free(unsafe.Pointer(nd))
+	}
+}
+
 func (llrb *LLRB) clone(nd *Llrbnode) (newnd *Llrbnode) {
 	// clone Llrbnode.
 	newndu, mpool := llrb.nodearena.alloc(nd.pool.size)
@@ -941,6 +921,25 @@ func (llrb *LLRB) clone(nd *Llrbnode) (newnd *Llrbnode) {
 		}
 	}
 	return
+}
+
+func (llrb *LLRB) upsertcount(key, value []byte, oldnd *Llrbnode) {
+	if oldnd == nil {
+		atomic.AddInt64(&llrb.count, 1)
+	} else {
+		atomic.AddInt64(&llrb.keymemory, -int64(len(oldnd.key())))
+		atomic.AddInt64(&llrb.valmemory, -int64(len(oldnd.nodevalue().value())))
+	}
+	atomic.AddInt64(&llrb.keymemory, int64(len(key)))
+	atomic.AddInt64(&llrb.valmemory, int64(len(value)))
+}
+
+func (llrb *LLRB) delcount(nd *Llrbnode) {
+	if nd != nil {
+		atomic.AddInt64(&llrb.keymemory, -int64(len(nd.key())))
+		atomic.AddInt64(&llrb.valmemory, -int64(len(nd.nodevalue().value())))
+		atomic.AddInt64(&llrb.count, -1)
+	}
 }
 
 func (llrb *LLRB) equivalent(n1, n2 *Llrbnode) bool {
@@ -1003,18 +1002,5 @@ func validateConfig(config map[string]interface{}) {
 		panic(fmt.Errorf(fmsg, MaxValmem))
 	} else if capacity == 0 {
 		panic("valarena.capacity cannot be ZERO")
-	}
-}
-
-func (llrb *LLRB) freenode(nd *Llrbnode) {
-	if llrb.mvcc.enabled {
-		panic("llrb.mvcc.enabled call freenode() on writer")
-	}
-	if nd != nil {
-		nv := nd.nodevalue()
-		if nv != nil {
-			nv.pool.free(unsafe.Pointer(nv))
-		}
-		nd.pool.free(unsafe.Pointer(nd))
 	}
 }
