@@ -147,7 +147,7 @@ func insertItems(
 	for i := 0; i < count; i++ {
 		key = makekey(key, loadopts.klen[0], loadopts.klen[1])
 		value = makeval(key, loadopts.vlen[0], loadopts.vlen[1])
-		llrb.Upsert(key, value)
+		llrb.Upsert(key, value, nil)
 		seqno++
 	}
 }

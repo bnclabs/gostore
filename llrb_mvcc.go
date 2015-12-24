@@ -244,7 +244,7 @@ func (llrb *LLRB) deleteCow(
 			}
 			newnd.nodevalue().setvalue(subdeleted.nodevalue().value())
 			deleted, ndmvcc = ndmvcc, newnd
-			llrb.Freenode(subdeleted)
+			llrb.freenode(subdeleted)
 		} else { // Else, @key is bigger than @ndmvcc
 			ndmvcc.right, deleted, reclaim =
 				llrb.deleteCow(ndmvcc.right, key, reclaim)
@@ -326,6 +326,6 @@ func (snapshot *LLRBSnapshot) Release() {
 func (snapshot *LLRBSnapshot) Destroy() {
 	llrb := snapshot.llrb
 	for _, nd := range snapshot.reclaim {
-		llrb.Freenode(nd)
+		llrb.freenode(nd)
 	}
 }

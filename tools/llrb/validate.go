@@ -290,23 +290,24 @@ func opDelmin(
 	cmd []interface{}, stats map[string]int) map[string]int {
 
 	refkey, refval := dict.DeleteMin()
-	nd := llrb.DeleteMin()
-	rkey, rval := nd.Key(), nd.Value()
-	llrb.Freenode(nd)
-	if reflect.DeepEqual(refkey, rkey) == false {
-		fmsg := "delmin: key expected %v, got %v\n"
-		log.Fatalf(fmsg, string(refkey), string(rkey))
-	} else if reflect.DeepEqual(refval, rval) == false {
-		fmsg := "delmin: value expected %v, got %v\n"
-		log.Fatalf(fmsg, string(refval), string(rval))
-	}
-	if validateopts.opdump {
-		fmsg := "%v | dict:{%v,%v} llrb:{%v,%v}\n"
-		fmt.Printf(
-			fmsg, cmd, string(refkey), string(refval), string(rkey),
-			string(rval),
-		)
-	}
+	llrb.DeleteMin(
+		func(nd *storage.Llrbnode) {
+			rkey, rval := nd.Key(), nd.Value()
+			if reflect.DeepEqual(refkey, rkey) == false {
+				fmsg := "delmin: key expected %v, got %v\n"
+				log.Fatalf(fmsg, string(refkey), string(rkey))
+			} else if reflect.DeepEqual(refval, rval) == false {
+				fmsg := "delmin: value expected %v, got %v\n"
+				log.Fatalf(fmsg, string(refval), string(rval))
+			}
+			if validateopts.opdump {
+				fmsg := "%v | dict:{%v,%v} llrb:{%v,%v}\n"
+				fmt.Printf(
+					fmsg, cmd, string(refkey), string(refval),
+					string(rkey), string(rval),
+				)
+			}
+		})
 	stats["total"] += 1
 	if refkey != nil {
 		stats["delmin.ok"] += 1
@@ -321,23 +322,24 @@ func opDelmax(
 	cmd []interface{}, stats map[string]int) map[string]int {
 
 	refkey, refval := dict.DeleteMax()
-	nd := llrb.DeleteMax()
-	rkey, rval := nd.Key(), nd.Value()
-	llrb.Freenode(nd)
-	if reflect.DeepEqual(refkey, rkey) == false {
-		fmsg := "delmax: key expected %v, got %v\n"
-		log.Fatalf(fmsg, string(refkey), string(rkey))
-	} else if reflect.DeepEqual(refval, rval) == false {
-		fmsg := "delmax: value expected %v, got %v\n"
-		log.Fatalf(fmsg, string(refval), string(rval))
-	}
-	if validateopts.opdump {
-		fmsg := "%v | dict:{%v,%v} llrb:{%v,%v}\n"
-		fmt.Printf(
-			fmsg, cmd, string(refkey), string(refval), string(rkey),
-			string(rval),
-		)
-	}
+	llrb.DeleteMax(
+		func(nd *storage.Llrbnode) {
+			rkey, rval := nd.Key(), nd.Value()
+			if reflect.DeepEqual(refkey, rkey) == false {
+				fmsg := "delmax: key expected %v, got %v\n"
+				log.Fatalf(fmsg, string(refkey), string(rkey))
+			} else if reflect.DeepEqual(refval, rval) == false {
+				fmsg := "delmax: value expected %v, got %v\n"
+				log.Fatalf(fmsg, string(refval), string(rval))
+			}
+			if validateopts.opdump {
+				fmsg := "%v | dict:{%v,%v} llrb:{%v,%v}\n"
+				fmt.Printf(
+					fmsg, cmd, string(refkey), string(refval),
+					string(rkey), string(rval),
+				)
+			}
+		})
 	stats["total"] += 1
 	if refkey != nil {
 		stats["delmax.ok"] += 1
@@ -363,25 +365,27 @@ func opUpsert(
 			log.Fatalf(fmsg, string(refval), string(val))
 		}
 		refval = dict.Upsert(key, value)
-		newnd, oldnd := llrb.Upsert(key, value)
-		if reflect.DeepEqual(refval, oldnd.Value()) == false {
-			fmsg := "upsert: expected %v, got %v\n"
-			log.Fatalf(fmsg, string(refval), string(oldnd.Value()))
-		} else if reflect.DeepEqual(newnd.Key(), key) == false {
-			fmsg := "upsert: key expected %v, got %v\n"
-			log.Fatalf(fmsg, string(key), string(newnd.Key()))
-		} else if reflect.DeepEqual(newnd.Value(), value) == false {
-			fmsg := "upsert: value expected %v, got %v\n"
-			log.Fatalf(fmsg, string(value), string(newnd.Value()))
-		}
-		if validateopts.opdump {
-			fmsg := "%v | {%v,%v} dict:%v llrb:%v\n"
-			fmt.Printf(
-				fmsg, cmd, string(key), string(value), string(refval),
-				string(oldnd.Value()),
-			)
-		}
-		llrb.Freenode(oldnd)
+		llrb.Upsert(
+			key, value,
+			func(newnd, oldnd *storage.Llrbnode) {
+				if reflect.DeepEqual(refval, oldnd.Value()) == false {
+					fmsg := "upsert: expected %v, got %v\n"
+					log.Fatalf(fmsg, string(refval), string(oldnd.Value()))
+				} else if reflect.DeepEqual(newnd.Key(), key) == false {
+					fmsg := "upsert: key expected %v, got %v\n"
+					log.Fatalf(fmsg, string(key), string(newnd.Key()))
+				} else if reflect.DeepEqual(newnd.Value(), value) == false {
+					fmsg := "upsert: value expected %v, got %v\n"
+					log.Fatalf(fmsg, string(value), string(newnd.Value()))
+				}
+				if validateopts.opdump {
+					fmsg := "%v | {%v,%v} dict:%v llrb:%v\n"
+					fmt.Printf(
+						fmsg, cmd, string(key), string(value), string(refval),
+						string(oldnd.Value()),
+					)
+				}
+			})
 		stats["upsert"] += 1
 	} else {
 		refval = dict.Upsert(key, value)
@@ -389,21 +393,24 @@ func opUpsert(
 			fmsg := "insert: dict old value expected nil, got %v\n"
 			log.Fatalf(fmsg, string(refval))
 		}
-		newnd, oldnd := llrb.Upsert(key, value)
-		llrb.Freenode(oldnd)
-		if oldnd != nil {
-			fmsg := "insert: llrb old value expected nil, got {%v,%v}\n"
-			log.Fatalf(fmsg, string(oldnd.Key()), string(oldnd.Value()))
-		} else if reflect.DeepEqual(newnd.Key(), key) == false {
-			fmsg := "insert: key expected %v, got %v\n"
-			log.Fatalf(fmsg, string(key), string(newnd.Key()))
-		} else if reflect.DeepEqual(newnd.Value(), value) == false {
-			fmsg := "insert: value expected %v, got %v\n"
-			log.Fatalf(fmsg, string(value), string(newnd.Value()))
-		}
-		if validateopts.opdump {
-			fmt.Printf("%v i | {%v,%v}\n", cmd, string(key), string(value))
-		}
+		llrb.Upsert(
+			key, value,
+			func(newnd, oldnd *storage.Llrbnode) {
+				if oldnd != nil {
+					fmsg := "insert: llrb old value expected nil, got {%v,%v}\n"
+					log.Fatalf(fmsg, string(oldnd.Key()), string(oldnd.Value()))
+				} else if reflect.DeepEqual(newnd.Key(), key) == false {
+					fmsg := "insert: key expected %v, got %v\n"
+					log.Fatalf(fmsg, string(key), string(newnd.Key()))
+				} else if reflect.DeepEqual(newnd.Value(), value) == false {
+					fmsg := "insert: value expected %v, got %v\n"
+					log.Fatalf(fmsg, string(value), string(newnd.Value()))
+				}
+				if validateopts.opdump {
+					fmsg := "%v i | {%v,%v}\n"
+					fmt.Printf(fmsg, cmd, string(key), string(value))
+				}
+			})
 		stats["insert"] += 1
 	}
 	stats["total"] += 1
@@ -416,20 +423,22 @@ func opDelete(
 
 	key := []byte(strconv.Itoa(int(cmd[1].(float64))))
 	refval := dict.Delete(key)
-	nd := llrb.Delete(key)
-	val := nd.Value()
-	llrb.Freenode(nd)
-	if (refval == nil && val != nil) || (refval != nil && val == nil) {
-		fmsg := "delete: mismatch with dict expected %v, got %v\n"
-		log.Fatalf(fmsg, string(refval), string(val))
-	} else if reflect.DeepEqual(refval, val) == false {
-		fmsg := "delete: expected %v, got %v\n"
-		log.Fatalf(fmsg, string(refval), string(val))
-	}
-	if validateopts.opdump {
-		fmsg := "%v | dict:%v llrb:%v\n"
-		fmt.Printf(fmsg, cmd, string(refval), string(val))
-	}
+	llrb.Delete(
+		key,
+		func(nd *storage.Llrbnode) {
+			val := nd.Value()
+			if (refval == nil && val != nil) || (refval != nil && val == nil) {
+				fmsg := "delete: mismatch with dict expected %v, got %v\n"
+				log.Fatalf(fmsg, string(refval), string(val))
+			} else if reflect.DeepEqual(refval, val) == false {
+				fmsg := "delete: expected %v, got %v\n"
+				log.Fatalf(fmsg, string(refval), string(val))
+			}
+			if validateopts.opdump {
+				fmsg := "%v | dict:%v llrb:%v\n"
+				fmt.Printf(fmsg, cmd, string(refval), string(val))
+			}
+		})
 	stats["total"] += 1
 	if refval != nil {
 		stats["delete.ok"] += 1

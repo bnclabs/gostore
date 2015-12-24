@@ -13,6 +13,7 @@
 //
 // * LLRB tree cannot be shared between two routines. It is upto the
 //   application to make sure that all methods on LLRB is serialized.
+//
 // * non-mvcc maintanence APIs:
 //
 //		Count()
@@ -33,6 +34,7 @@
 //
 // * all write operations need be serialized in a single routine.
 // * one or more routines can do concurrent read operation.
+//
 // * mvcc APIs with concurrency support:
 //
 //		llrb.Count()
@@ -122,7 +124,9 @@ const MaxKeymem = 4096
 const MinValmem = 32
 const MaxValmem = 10 * 1024 * 1024
 
-type NdIterator func(nd *Llrbnode) bool
+type LLRBNodeIterator func(nd *Llrbnode) bool
+type LLRBUpsertCallback func(newnd, oldnd *Llrbnode)
+type LLRBDeleteCallback func(nd *Llrbnode)
 
 type LLRB struct { // tree container
 	name      string
@@ -228,20 +232,6 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 
 func (llrb *LLRB) Count() int64 {
 	return atomic.LoadInt64(&llrb.count) // concurrency safe.
-}
-
-// TODO: make this local, after implementing the callback for write ops
-func (llrb *LLRB) Freenode(nd *Llrbnode) {
-	if llrb.mvcc.enabled {
-		panic("llrb.mvcc.enabled call Freenode() on writer")
-	}
-	if nd != nil {
-		nv := nd.nodevalue()
-		if nv != nil {
-			nv.pool.free(unsafe.Pointer(nv))
-		}
-		nd.pool.free(unsafe.Pointer(nd))
-	}
 }
 
 func (llrb *LLRB) StatsMem() map[string]interface{} {
@@ -541,27 +531,27 @@ func (llrb *LLRB) Max() *Llrbnode {
 	return nd
 }
 
-// Range from lowkey to highkey, incl can be "both", "low", "high", "none"
-func (llrb *LLRB) Range(lowkey, highkey []byte, incl string, iter NdIterator) {
+// Range from lkey to hkey, incl can be "both", "low", "high", "none"
+func (llrb *LLRB) Range(lkey, hkey []byte, incl string, iter LLRBNodeIterator) {
 	if iter == nil {
 		panic("Range(): iter argument is nil")
 	}
 	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
 	switch incl {
 	case "both":
-		llrb.rangeFromFind(nd, lowkey, highkey, iter)
+		llrb.rangeFromFind(nd, lkey, hkey, iter)
 	case "high":
-		llrb.rangeAfterFind(nd, lowkey, highkey, iter)
+		llrb.rangeAfterFind(nd, lkey, hkey, iter)
 	case "low":
-		llrb.rangeFromTill(nd, lowkey, highkey, iter)
+		llrb.rangeFromTill(nd, lkey, hkey, iter)
 	default:
-		llrb.rangeAfterTill(nd, lowkey, highkey, iter)
+		llrb.rangeAfterTill(nd, lkey, hkey, iter)
 	}
 }
 
 // low <= (keys) <= high
 func (llrb *LLRB) rangeFromFind(
-	nd *Llrbnode, lk, hk []byte, iter NdIterator) bool {
+	nd *Llrbnode, lk, hk []byte, iter LLRBNodeIterator) bool {
 
 	if nd == nil {
 		return true
@@ -583,7 +573,7 @@ func (llrb *LLRB) rangeFromFind(
 
 // low <= (keys) < hk
 func (llrb *LLRB) rangeFromTill(
-	nd *Llrbnode, lk, hk []byte, iter NdIterator) bool {
+	nd *Llrbnode, lk, hk []byte, iter LLRBNodeIterator) bool {
 
 	if nd == nil {
 		return true
@@ -605,7 +595,7 @@ func (llrb *LLRB) rangeFromTill(
 
 // low < (keys) <= hk
 func (llrb *LLRB) rangeAfterFind(
-	nd *Llrbnode, lk, hk []byte, iter NdIterator) bool {
+	nd *Llrbnode, lk, hk []byte, iter LLRBNodeIterator) bool {
 
 	if nd == nil {
 		return true
@@ -627,7 +617,7 @@ func (llrb *LLRB) rangeAfterFind(
 
 // low < (keys) < hk
 func (llrb *LLRB) rangeAfterTill(
-	nd *Llrbnode, lk, hk []byte, iter NdIterator) bool {
+	nd *Llrbnode, lk, hk []byte, iter LLRBNodeIterator) bool {
 
 	if nd == nil {
 		return true
@@ -649,15 +639,14 @@ func (llrb *LLRB) rangeAfterTill(
 
 //---- LLRB write operations.
 
-// caller should free old-Llrbnode if it is not null.
-func (llrb *LLRB) Upsert(k, v []byte) (newnd, oldnd *Llrbnode) {
-	var root *Llrbnode
+func (llrb *LLRB) Upsert(key, value []byte, callb LLRBUpsertCallback) {
+	var root, newnd, oldnd *Llrbnode
 
-	if k == nil {
+	if key == nil {
 		panic("upserting nil key")
 	}
 	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	root, newnd, oldnd = llrb.upsert(nd, 0 /*depth*/, k, v)
+	root, newnd, oldnd = llrb.upsert(nd, 0 /*depth*/, key, value)
 	root.metadata().setblack()
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 	if oldnd == nil {
@@ -666,9 +655,15 @@ func (llrb *LLRB) Upsert(k, v []byte) (newnd, oldnd *Llrbnode) {
 		atomic.AddInt64(&llrb.keymemory, -int64(len(oldnd.key())))
 		atomic.AddInt64(&llrb.valmemory, -int64(len(oldnd.nodevalue().value())))
 	}
-	atomic.AddInt64(&llrb.keymemory, int64(len(k)))
-	atomic.AddInt64(&llrb.valmemory, int64(len(v)))
-	return newnd, oldnd
+	atomic.AddInt64(&llrb.keymemory, int64(len(key)))
+	atomic.AddInt64(&llrb.valmemory, int64(len(value)))
+
+	if callb != nil {
+		callb(newnd, oldnd)
+	}
+	llrb.freenode(oldnd)
+
+	return
 }
 
 // returns root, newnd, oldnd
@@ -709,8 +704,8 @@ func (llrb *LLRB) upsert(
 	return nd, newnd, oldnd
 }
 
-func (llrb *LLRB) DeleteMin() (deleted *Llrbnode) {
-	var root *Llrbnode
+func (llrb *LLRB) DeleteMin(callb LLRBDeleteCallback) {
+	var root, deleted *Llrbnode
 	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
 	root, deleted = llrb.deletemin(nd)
 	if root != nil {
@@ -718,11 +713,19 @@ func (llrb *LLRB) DeleteMin() (deleted *Llrbnode) {
 	}
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 	if deleted != nil {
-		atomic.AddInt64(&llrb.keymemory, -int64(len(deleted.key())))
-		atomic.AddInt64(&llrb.valmemory, -int64(len(deleted.nodevalue().value())))
+		klen := int64(len(deleted.key()))
+		vlen := int64(len(deleted.nodevalue().value()))
+		atomic.AddInt64(&llrb.keymemory, -klen)
+		atomic.AddInt64(&llrb.valmemory, -vlen)
 		atomic.AddInt64(&llrb.count, -1)
 	}
-	return deleted
+
+	if callb != nil {
+		callb(deleted)
+	}
+	llrb.freenode(deleted)
+
+	return
 }
 
 // using 2-3 trees
@@ -740,8 +743,8 @@ func (llrb *LLRB) deletemin(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 	return fixup(nd), deleted
 }
 
-func (llrb *LLRB) DeleteMax() (deleted *Llrbnode) {
-	var root *Llrbnode
+func (llrb *LLRB) DeleteMax(callb LLRBDeleteCallback) {
+	var root, deleted *Llrbnode
 
 	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
 	root, deleted = llrb.deletemax(nd)
@@ -750,11 +753,19 @@ func (llrb *LLRB) DeleteMax() (deleted *Llrbnode) {
 	}
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 	if deleted != nil {
-		atomic.AddInt64(&llrb.keymemory, -int64(len(deleted.key())))
-		atomic.AddInt64(&llrb.valmemory, -int64(len(deleted.nodevalue().value())))
+		klen := int64(len(deleted.key()))
+		vlen := int64(len(deleted.nodevalue().value()))
+		atomic.AddInt64(&llrb.keymemory, -klen)
+		atomic.AddInt64(&llrb.valmemory, -vlen)
 		atomic.AddInt64(&llrb.count, -1)
 	}
-	return deleted
+
+	if callb != nil {
+		callb(deleted)
+	}
+	llrb.freenode(deleted)
+
+	return
 }
 
 // using 2-3 trees
@@ -775,7 +786,9 @@ func (llrb *LLRB) deletemax(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 	return fixup(nd), deleted
 }
 
-func (llrb *LLRB) Delete(key []byte) *Llrbnode {
+func (llrb *LLRB) Delete(key []byte, callb LLRBDeleteCallback) {
+	var deleted *Llrbnode
+
 	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
 	root, deleted := llrb.delete(nd, key)
 	if root != nil {
@@ -783,11 +796,19 @@ func (llrb *LLRB) Delete(key []byte) *Llrbnode {
 	}
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 	if deleted != nil {
-		atomic.AddInt64(&llrb.keymemory, -int64(len(deleted.key())))
-		atomic.AddInt64(&llrb.valmemory, -int64(len(deleted.nodevalue().value())))
+		klen := int64(len(deleted.key()))
+		vlen := int64(len(deleted.nodevalue().value()))
+		atomic.AddInt64(&llrb.keymemory, -klen)
+		atomic.AddInt64(&llrb.valmemory, -vlen)
 		atomic.AddInt64(&llrb.count, -1)
 	}
-	return deleted
+
+	if callb != nil {
+		callb(deleted)
+	}
+	llrb.freenode(deleted)
+
+	return
 }
 
 func (llrb *LLRB) delete(nd *Llrbnode, key []byte) (newnd, deleted *Llrbnode) {
@@ -834,7 +855,7 @@ func (llrb *LLRB) delete(nd *Llrbnode, key []byte) (newnd, deleted *Llrbnode) {
 			}
 			newnd.nodevalue().setvalue(subdeleted.nodevalue().value())
 			deleted, nd = nd, newnd
-			llrb.Freenode(subdeleted)
+			llrb.freenode(subdeleted)
 		} else { // Else, @key is bigger than @nd
 			nd.right, deleted = llrb.delete(nd.right, key)
 		}
@@ -982,5 +1003,18 @@ func validateConfig(config map[string]interface{}) {
 		panic(fmt.Errorf(fmsg, MaxValmem))
 	} else if capacity == 0 {
 		panic("valarena.capacity cannot be ZERO")
+	}
+}
+
+func (llrb *LLRB) freenode(nd *Llrbnode) {
+	if llrb.mvcc.enabled {
+		panic("llrb.mvcc.enabled call freenode() on writer")
+	}
+	if nd != nil {
+		nv := nd.nodevalue()
+		if nv != nil {
+			nv.pool.free(unsafe.Pointer(nv))
+		}
+		nd.pool.free(unsafe.Pointer(nd))
 	}
 }
