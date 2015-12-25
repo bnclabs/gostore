@@ -28,8 +28,6 @@
 //		Has(), Get(), Min(), Max(), Range()
 //		Upsert(), DeleteMin(), DeleteMax(), Delete()
 //
-//		TODO: add callbacks for Upsert(), DeleteMin(), DeleteMax(), Delete()
-//
 // mvcc use case:
 //
 // * all write operations need be serialized in a single routine.
@@ -608,6 +606,19 @@ func walkuprot234(nd *Llrbnode) *Llrbnode {
 	return nd
 }
 
+func (llrb *LLRB) Destroy() error {
+	if llrb.dead == false {
+		if llrb.mvcc.enabled {
+			return llrb.mvcc.writer.Destroy()
+		}
+		llrb.nodearena.release()
+		llrb.valarena.release()
+		llrb.dead = true
+		return nil
+	}
+	panic("Destroy() on a dead tree")
+}
+
 //---- Maintanence APIs.
 
 func (llrb *LLRB) Count() int64 {
@@ -615,9 +626,6 @@ func (llrb *LLRB) Count() int64 {
 }
 
 func (llrb *LLRB) StatsMem() map[string]interface{} {
-	if llrb.mvcc.enabled {
-		panic("llrb.mvcc.enabled call StatsMem() on writer")
-	}
 	mstats := map[string]interface{}{}
 	overhead, useful := llrb.nodearena.memory()
 	mstats["node.overhead"] = overhead
@@ -637,9 +645,6 @@ func (llrb *LLRB) StatsMem() map[string]interface{} {
 }
 
 func (llrb *LLRB) StatsUpsert() map[string]interface{} {
-	if llrb.mvcc.enabled {
-		panic("llrb.mvcc.enabled call StatsUpsert() on writer")
-	}
 	return map[string]interface{}{
 		"upsertdepth.samples":     llrb.upsertdepth.samples(),
 		"upsertdepth.min":         llrb.upsertdepth.min(),
@@ -651,9 +656,6 @@ func (llrb *LLRB) StatsUpsert() map[string]interface{} {
 }
 
 func (llrb *LLRB) StatsHeight() map[string]interface{} {
-	if llrb.mvcc.enabled {
-		panic("llrb.mvcc.enabled call StatsHeight() on writer")
-	}
 	heightav := &averageInt{}
 	root := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
 	heightStats(root, 0, heightav)
@@ -681,57 +683,7 @@ func heightStats(nd *Llrbnode, d int64, av *averageInt) {
 	}
 }
 
-func (llrb *LLRB) ValidateReds() bool {
-	if llrb.mvcc.enabled {
-		panic("llrb.mvcc.enabled call ValidateReds() on r-snapshot")
-	}
-	root := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	if validatereds(root, isred(root)) != true {
-		return false
-	}
-	return true
-}
-
-func validatereds(nd *Llrbnode, fromred bool) bool {
-	if nd == nil {
-		return true
-	}
-	if fromred && isred(nd) {
-		panic("consequetive red spotted")
-	}
-	if validatereds(nd.left, isred(nd)) == false {
-		return false
-	}
-	return validatereds(nd.right, isred(nd))
-}
-
-func (llrb *LLRB) ValidateBlacks() int {
-	if llrb.mvcc.enabled {
-		panic("llrb.mvcc.enabled call ValidateBlacks() on r-snapshot")
-	}
-	root := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	return validateblacks(root, 0)
-}
-
-func validateblacks(nd *Llrbnode, count int) int {
-	if nd == nil {
-		return count
-	}
-	if !isred(nd) {
-		count++
-	}
-	x := validateblacks(nd.left, count)
-	y := validateblacks(nd.right, count)
-	if x != y {
-		panic(fmt.Errorf("blacks on left %v, on right %v\n", x, y))
-	}
-	return x
-}
-
 func (llrb *LLRB) LogNodeutilz() {
-	if llrb.mvcc.enabled {
-		panic("llrb.mvcc.enabled call LogNodeutilz() on writer")
-	}
 	log.Infof("%v Node utilization:\n", llrb.logPrefix)
 	arenapools := llrb.nodearena.mpools
 	sizes := []int{}
@@ -755,9 +707,6 @@ func (llrb *LLRB) LogNodeutilz() {
 }
 
 func (llrb *LLRB) LogValueutilz() {
-	if llrb.mvcc.enabled {
-		panic("llrb.mvcc.enabled call LogValueutilz() on writer")
-	}
 	log.Infof("%v Value utilization:\n", llrb.logPrefix)
 	arenapools := llrb.valarena.mpools
 	sizes := []int{}
@@ -781,9 +730,6 @@ func (llrb *LLRB) LogValueutilz() {
 }
 
 func (llrb *LLRB) LogNodememory() {
-	if llrb.mvcc.enabled {
-		panic("llrb.mvcc.enabled call LogNodememory() on writer")
-	}
 	stats := llrb.StatsMem()
 	min := humanize.Bytes(uint64(llrb.config["nodearena.minblock"].(int)))
 	max := humanize.Bytes(uint64(llrb.config["nodearena.maxblock"].(int)))
@@ -802,9 +748,6 @@ func (llrb *LLRB) LogNodememory() {
 }
 
 func (llrb *LLRB) LogValuememory() {
-	if llrb.mvcc.enabled {
-		panic("llrb.mvcc.enabled call LogValuememory() on writer")
-	}
 	stats := llrb.StatsMem()
 	min := humanize.Bytes(uint64(llrb.config["valarena.minblock"].(int)))
 	max := humanize.Bytes(uint64(llrb.config["valarena.maxblock"].(int)))
@@ -823,9 +766,6 @@ func (llrb *LLRB) LogValuememory() {
 }
 
 func (llrb *LLRB) LogUpsertdepth() {
-	if llrb.mvcc.enabled {
-		panic("llrb.mvcc.enabled call LogUpsertdepth() on writer")
-	}
 	stats := llrb.StatsUpsert()
 	samples := stats["upsertdepth.samples"].(int64)
 	min := stats["upsertdepth.min"].(int64)
@@ -837,9 +777,6 @@ func (llrb *LLRB) LogUpsertdepth() {
 }
 
 func (llrb *LLRB) LogTreeheight() {
-	if llrb.mvcc.enabled {
-		panic("llrb.mvcc.enabled call LogTreeheight() on writer")
-	}
 	// log height statistics
 	stats := llrb.StatsHeight()
 	samples := stats["samples"]
@@ -850,22 +787,51 @@ func (llrb *LLRB) LogTreeheight() {
 	log.Infof(fmsg, llrb.logPrefix, samples, min, max, mean, varn, sd)
 }
 
+func (llrb *LLRB) ValidateReds() bool {
+	root := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
+	if validatereds(root, isred(root)) != true {
+		return false
+	}
+	return true
+}
+
+func validatereds(nd *Llrbnode, fromred bool) bool {
+	if nd == nil {
+		return true
+	}
+	if fromred && isred(nd) {
+		panic("consequetive red spotted")
+	}
+	if validatereds(nd.left, isred(nd)) == false {
+		return false
+	}
+	return validatereds(nd.right, isred(nd))
+}
+
+func (llrb *LLRB) ValidateBlacks() int {
+	root := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
+	return validateblacks(root, 0)
+}
+
+func validateblacks(nd *Llrbnode, count int) int {
+	if nd == nil {
+		return count
+	}
+	if !isred(nd) {
+		count++
+	}
+	x := validateblacks(nd.left, count)
+	y := validateblacks(nd.right, count)
+	if x != y {
+		panic(fmt.Errorf("blacks on left %v, on right %v\n", x, y))
+	}
+	return x
+}
+
 func (llrb *LLRB) PPrint() {
 	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
 	fmt.Printf("root: ")
 	nd.pprint("  ")
-}
-
-func (llrb *LLRB) Destroy() {
-	if llrb.mvcc.enabled {
-		// TODO: handle destroy gracefully for MVCC enabled LLRB tree.
-	} else if llrb.dead == false {
-		llrb.nodearena.release()
-		llrb.valarena.release()
-		llrb.dead = true
-	} else {
-		panic("Destroy() on dead tree")
-	}
 }
 
 //---- local functions

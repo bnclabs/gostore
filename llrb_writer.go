@@ -2,6 +2,7 @@ package storage
 
 import "sync/atomic"
 import "unsafe"
+import "errors"
 
 type LLRBWriter struct {
 	llrb  *LLRB
@@ -47,69 +48,101 @@ const (
 	cmdLlrbWriterClose
 )
 
-func (writer *LLRBWriter) Upsert(key, value []byte, callb LLRBUpsertCallback) {
+func (writer *LLRBWriter) Upsert(key, value []byte, callb LLRBUpsertCallback) error {
 	if key == nil {
-		panic("upserting nil key")
+		return errors.New("upserting nil key")
 	}
 	respch := make(chan []interface{}, 0)
 	cmd := []interface{}{cmdLlrbWriterUpsert, key, value, callb, respch}
-	failsafeRequest(writer.reqch, respch, cmd, writer.finch)
+	_, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
+	return err
 }
 
-func (writer *LLRBWriter) DeleteMin(callb LLRBDeleteCallback) {
+func (writer *LLRBWriter) DeleteMin(callb LLRBDeleteCallback) error {
 	respch := make(chan []interface{}, 0)
 	cmd := []interface{}{cmdLlrbWriterDeleteMin, callb, respch}
-	failsafeRequest(writer.reqch, respch, cmd, writer.finch)
+	_, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
+	return err
 }
 
-func (writer *LLRBWriter) DeleteMax(callb LLRBDeleteCallback) {
+func (writer *LLRBWriter) DeleteMax(callb LLRBDeleteCallback) error {
 	respch := make(chan []interface{}, 0)
 	cmd := []interface{}{cmdLlrbWriterDeleteMax, callb, respch}
-	failsafeRequest(writer.reqch, respch, cmd, writer.finch)
+	_, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
+	return err
 }
 
-func (writer *LLRBWriter) Delete(key []byte, callb LLRBDeleteCallback) {
+func (writer *LLRBWriter) Delete(key []byte, callb LLRBDeleteCallback) error {
 	respch := make(chan []interface{}, 0)
 	cmd := []interface{}{cmdLlrbWriterDelete, key, callb, respch}
-	failsafeRequest(writer.reqch, respch, cmd, writer.finch)
+	_, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
+	return err
 }
 
-func (writer *LLRBWriter) Destroy() bool {
+func (writer *LLRBWriter) Destroy() error {
 	respch := make(chan []interface{}, 0)
 	cmd := []interface{}{cmdLlrbWriterDestroy, respch}
-	resp, _ := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
-	// responseError(err, resp, 1)
-	return resp[0].(bool)
+	_, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
+	return err
 }
 
-func (writer *LLRBWriter) StatsMem() map[string]interface{} {
-	return nil
+func (writer *LLRBWriter) StatsMem() (map[string]interface{}, error) {
+	respch := make(chan []interface{}, 1)
+	cmd := []interface{}{cmdLlrbWriterStatsMem, respch}
+	resp, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
+	err = responseError(err, resp, 1)
+	return resp[0].(map[string]interface{}), err
 }
 
-func (writer *LLRBWriter) StatsUpsert() map[string]interface{} {
-	return nil
+func (writer *LLRBWriter) StatsUpsert() (map[string]interface{}, error) {
+	respch := make(chan []interface{}, 1)
+	cmd := []interface{}{cmdLlrbWriterStatsUpsert, respch}
+	resp, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
+	return resp[0].(map[string]interface{}), err
 }
 
 func (writer *LLRBWriter) StatsHeight() map[string]interface{} {
-	return nil
+	respch := make(chan []interface{}, 1)
+	cmd := []interface{}{cmdLlrbWriterStatsHeight, respch}
+	resp, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
+	err = responseError(err, resp, 1)
+	return resp[0].(map[string]interface{})
 }
 
 func (writer *LLRBWriter) LogNodeutilz() {
+	respch := make(chan []interface{}, 1)
+	cmd := []interface{}{cmdLlrbWriterLogNodeutilz, respch}
+	failsafeRequest(writer.reqch, respch, cmd, writer.finch)
 }
 
 func (writer *LLRBWriter) LogValueutilz() {
+	respch := make(chan []interface{}, 1)
+	cmd := []interface{}{cmdLlrbWriterLogValueutilz, respch}
+	failsafeRequest(writer.reqch, respch, cmd, writer.finch)
 }
 
 func (writer *LLRBWriter) LogNodememory() {
+	respch := make(chan []interface{}, 1)
+	cmd := []interface{}{cmdLlrbWriterLogNodememory, respch}
+	failsafeRequest(writer.reqch, respch, cmd, writer.finch)
 }
 
 func (writer *LLRBWriter) LogValuememory() {
+	respch := make(chan []interface{}, 1)
+	cmd := []interface{}{cmdLlrbWriterLogValuememory, respch}
+	failsafeRequest(writer.reqch, respch, cmd, writer.finch)
 }
 
 func (writer *LLRBWriter) LogUpsertdepth() {
+	respch := make(chan []interface{}, 1)
+	cmd := []interface{}{cmdLlrbWriterLogUpsertdepth, respch}
+	failsafeRequest(writer.reqch, respch, cmd, writer.finch)
 }
 
 func (writer *LLRBWriter) LogTreeheight() {
+	respch := make(chan []interface{}, 1)
+	cmd := []interface{}{cmdLlrbWriterLogTreeheight, respch}
+	failsafeRequest(writer.reqch, respch, cmd, writer.finch)
 }
 
 func (writer *LLRBWriter) run() {
@@ -207,15 +240,44 @@ loop:
 			close(respch)
 
 		case cmdLlrbWriterDestroy:
+			// TODO:
+			//	1. no more read-snapshots
+			//  2. wait for read-snapshots to end.
+			//  3. and then destory the tree.
+
 		case cmdLlrbWriterStatsMem:
+			respch := msg[1].(chan []interface{})
+			stats := llrb.StatsMem()
+			respch <- []interface{}{stats}
+
 		case cmdLlrbWriterStatsUpsert:
+			respch := msg[1].(chan []interface{})
+			stats := llrb.StatsUpsert()
+			respch <- []interface{}{stats}
+
 		case cmdLlrbWriterStatsHeight:
+			respch := msg[1].(chan []interface{})
+			stats := llrb.StatsHeight()
+			respch <- []interface{}{stats}
+
 		case cmdLlrbWriterLogNodeutilz:
+			llrb.LogNodeutilz()
+
 		case cmdLlrbWriterLogNodememory:
+			llrb.LogNodememory()
+
 		case cmdLlrbWriterLogValueutilz:
+			llrb.LogValueutilz()
+
 		case cmdLlrbWriterLogValuememory:
+			llrb.LogValuememory()
+
 		case cmdLlrbWriterLogUpsertdepth:
+			llrb.LogUpsertdepth()
+
 		case cmdLlrbWriterLogTreeheight:
+			llrb.LogTreeheight()
+
 		case cmdLlrbWriterClose:
 			break loop
 		}
