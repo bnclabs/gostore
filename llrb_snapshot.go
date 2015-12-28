@@ -3,12 +3,13 @@ package storage
 import "sync/atomic"
 import "unsafe"
 
-//---- LLRB MVCC write operations.
+//---- LLRB MVCC snapshot readers.
 
 // snapshotting
 
 type LLRBSnapshot struct {
 	llrb     *LLRB
+	clock    *vectorclock
 	root     unsafe.Pointer
 	reclaim  []*Llrbnode
 	next     unsafe.Pointer // *LLRBSnapshot
@@ -16,27 +17,28 @@ type LLRBSnapshot struct {
 }
 
 func (llrb *LLRB) NewSnapshot() *LLRBSnapshot {
-	location := &llrb.mvcc.readerhd
-	reference := atomic.LoadPointer(location)
-	for reference != nil {
-		location = &((*LLRBSnapshot)(reference).next)
-		reference = atomic.LoadPointer(location)
+	// track to the tail of read-snapshot list.
+	location := &llrb.mvcc.snapshot
+	upsnapshot := atomic.LoadPointer(location)
+	for upsnapshot != nil {
+		location = &((*LLRBSnapshot)(upsnapshot).next)
+		upsnapshot = atomic.LoadPointer(location)
 	}
 	snapshot := &LLRBSnapshot{
-		llrb: llrb,
-		root: atomic.LoadPointer(&llrb.root),
+		llrb:  llrb,
+		root:  atomic.LoadPointer(&llrb.root),
+		clock: llrb.clock.clone(),
 	}
-	if len(llrb.mvcc.cowednodes) > 0 {
-		snapshot.reclaim = make([]*Llrbnode, len(llrb.mvcc.cowednodes))
+
+	if len(llrb.mvcc.reclaim) > 0 {
+		snapshot.reclaim = make([]*Llrbnode, len(llrb.mvcc.reclaim))
 	}
-	copy(snapshot.reclaim, llrb.mvcc.cowednodes)
-	llrb.mvcc.cowednodes = llrb.mvcc.cowednodes[:0]
+	copy(snapshot.reclaim, llrb.mvcc.reclaim)
+
+	llrb.mvcc.reclaim = llrb.mvcc.reclaim[:0]
+
 	atomic.StorePointer(location, unsafe.Pointer(snapshot))
 	return snapshot
-}
-
-func (snapshot *LLRBSnapshot) RefCount() {
-	atomic.AddInt32(&snapshot.refcount, 1)
 }
 
 func (snapshot *LLRBSnapshot) Release() {
@@ -50,4 +52,14 @@ func (snapshot *LLRBSnapshot) Destroy() {
 	for _, nd := range snapshot.reclaim {
 		llrb.freenode(nd)
 	}
+}
+
+func (snapshot *LLRBSnapshot) ReclaimNodes() bool {
+	if atomic.LoadInt32(&snapshot.refcount) == 0 {
+		for _, nd := range snapshot.reclaim {
+			snapshot.llrb.freenode(nd)
+		}
+		return true
+	}
+	return false
 }

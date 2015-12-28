@@ -131,11 +131,13 @@ func TestLLRBBasic(t *testing.T) {
 	for _, kv := range inserts {
 		llrb.Upsert(
 			kv[0], kv[1],
-			func(newnd, oldnd *Llrbnode) {
+			func(llrb *LLRB, newnd, oldnd *Llrbnode) {
 				if oldnd != nil {
 					t.Errorf("expected old Llrbnode as nil")
 				}
 				newnd.metadata().setvbno(vbno).setvbuuid(vbuuid).setbnseq(seqno)
+				llrb.UpdateVbuuids([]uint16{vbno}, []uint64{vbuuid})
+				llrb.UpdateSeqnos([]uint16{vbno}, []uint64{seqno})
 			})
 		seqno++
 	}
@@ -166,7 +168,7 @@ func TestLLRBBasic(t *testing.T) {
 	newvalue := []byte("value11")
 	llrb.Upsert(
 		inserts[0][0], newvalue,
-		func(newnd, oldnd *Llrbnode) {
+		func(llrb *LLRB, newnd, oldnd *Llrbnode) {
 			nd.metadata().setvbno(vbno).setvbuuid(vbuuid).setbnseq(seqno)
 			vs := oldnd.nodevalue().value()
 			if bytes.Compare(vs, inserts[0][1]) != 0 {
@@ -181,7 +183,7 @@ func TestLLRBBasic(t *testing.T) {
 		})
 	// deletes
 	llrb.DeleteMin(
-		func(nd *Llrbnode) {
+		func(llrb *LLRB, nd *Llrbnode) {
 			k, v = nd.key(), nd.nodevalue().value()
 			fmsg := "expected %v, got %v"
 			if bytes.Compare(k, inserts[0][0]) != 0 {
@@ -193,7 +195,7 @@ func TestLLRBBasic(t *testing.T) {
 			}
 		})
 	llrb.DeleteMax(
-		func(nd *Llrbnode) {
+		func(llrb *LLRB, nd *Llrbnode) {
 			k, v = nd.key(), nd.nodevalue().value()
 			fmsg := "expected %v, got %v"
 			if bytes.Compare(k, []byte("key5")) != 0 {
@@ -206,7 +208,7 @@ func TestLLRBBasic(t *testing.T) {
 		})
 	llrb.Delete(
 		[]byte("key2"),
-		func(nd *Llrbnode) {
+		func(llrb *LLRB, nd *Llrbnode) {
 			v = nd.nodevalue().value()
 			fmsg := "expected %v, got %v"
 			if bytes.Compare(v, []byte("value2")) != 0 {
@@ -235,7 +237,7 @@ func TestLLRBBasicRange(t *testing.T) {
 	for _, kv := range inserts {
 		llrb.Upsert(
 			kv[0], kv[1],
-			func(newnd, oldnd *Llrbnode) {
+			func(llrb *LLRB, newnd, oldnd *Llrbnode) {
 				if oldnd != nil {
 					t.Errorf("expected old Llrbnode as nil")
 				}
@@ -348,7 +350,7 @@ func TestLLRBInsert(t *testing.T) {
 		key, value = makekeyvalue(key, value)
 		llrb.Upsert(
 			key, value,
-			func(newnd, oldnd *Llrbnode) {
+			func(llrb *LLRB, newnd, oldnd *Llrbnode) {
 				if oldnd != nil {
 					t.Errorf("expected old Llrbnode to be nil")
 				} else if x := llrb.Count(); x != int64(i+1) {
@@ -417,7 +419,7 @@ func TestLLRBUpsert(t *testing.T) {
 		key, value = makekeyvalue(key, value)
 		llrb.Upsert(
 			key, value,
-			func(newnd, oldnd *Llrbnode) {
+			func(llrb *LLRB, newnd, oldnd *Llrbnode) {
 				if oldnd != nil {
 					t.Errorf("expected old Llrbnode to be nil")
 				} else if x := llrb.Count(); x != int64(i+1) {
@@ -437,7 +439,7 @@ func TestLLRBUpsert(t *testing.T) {
 		newvalues = append(newvalues, value)
 		llrb.Upsert(
 			key, value,
-			func(newnd, oldnd *Llrbnode) {
+			func(llrb *LLRB, newnd, oldnd *Llrbnode) {
 				if oldnd == nil {
 					t.Errorf("unexpected nil")
 				} else if x := newnd.metadata().vbno(); x != vbno {
@@ -502,7 +504,7 @@ func TestLLRBDelete(t *testing.T) {
 		key, value = makekeyvalue(key, value)
 		llrb.Upsert(
 			key, value,
-			func(newnd, oldnd *Llrbnode) {
+			func(llrb *LLRB, newnd, oldnd *Llrbnode) {
 				if oldnd != nil {
 					t.Errorf("expected nil")
 				} else if x := llrb.Count(); x != int64(i+1) {
@@ -518,7 +520,7 @@ func TestLLRBDelete(t *testing.T) {
 	for i, key := range keys {
 		llrb.Delete(
 			key,
-			func(nd *Llrbnode) {
+			func(llrb *LLRB, nd *Llrbnode) {
 				if nd == nil {
 					t.Errorf("unexpected nil")
 				} else if x := nd.metadata().vbno(); x != vbno {
@@ -578,7 +580,7 @@ func TestLLRBRange(t *testing.T) {
 		key, value = makekeyvalue(key, value)
 		llrb.Upsert(
 			key, value,
-			func(newnd, oldnd *Llrbnode) {
+			func(llrb *LLRB, newnd, oldnd *Llrbnode) {
 				if oldnd != nil {
 					t.Errorf("expected nil")
 				} else if x := llrb.Count(); x != int64(i+1) {
@@ -639,6 +641,10 @@ func makekeyvalue(key, value []byte) ([]byte, []byte) {
 
 func makenewconfig() map[string]interface{} {
 	config := map[string]interface{}{
+		"maxvb":                   1024,
+		"mvcc.enabled":            false,
+		"mvcc.snapshot.tick":      0,
+		"mvcc.writer.chanbuffer":  1000,
 		"nodearena.minblock":      96,
 		"nodearena.maxblock":      1024,
 		"nodearena.capacity":      1024 * 1024 * 1024,
@@ -647,8 +653,6 @@ func makenewconfig() map[string]interface{} {
 		"valarena.maxblock":       1024 * 1024,
 		"valarena.capacity":       10 * 1024 * 1024 * 1024,
 		"valarena.pool.capacity":  10 * 2 * 1024 * 1024,
-		"mvcc.enabled":            false,
-		"mvcc.snapshotTick":       0,
 	}
 	return config
 }

@@ -5,9 +5,10 @@
 //   memory fragmentation.
 // * configurable metadata like
 //   vbno, bornseqno, deadseqno, vbuuid
-// * supports multi-version-concurrency-control, where writes serialized
-//   over a write snapshot and there can be zero or more concurrent
+// * supports multi-version-concurrency-control, where writes are
+//   serialized and there can be zero or more concurrent
 //	 read-snapshots.
+//  * iterator callbacks are used in Range() APIs
 //
 // non-mvcc use case:
 //
@@ -50,7 +51,24 @@
 //		writer.Destroy()
 //		writer.Upsert(), writer.DeleteMin(), writer.DeleteMax(), writer.Delete()
 //
+// * Upsert() and Delete() APIs accept callbacks for applications to set
+//   node's metadata fields like vbno, vbuuid, seqno etc...
+// * In cases of {vbno,seqno} based mutations, application can use the
+//   callback to directly set the clock informations.
+//
 // configuration:
+//
+// "maxvb" - integer
+//		maximum number of vbuckets that will use this llrb tree.
+//
+// "mvcc.enabled" - boolean
+//		consume LLRB as Multi-Version-Concurrency-Control-led tree.
+//
+// "mvcc.snapshot.tick" - int
+//		interval in milli-second for generating read-snapshots
+//
+// "mvcc.writer.chanbuffer" - int
+//		buffer size for mvcc writer's i/p channel
 //
 // "nodearena.minblock" - integer
 //		minimum node-block size that shall be requested from the arena.
@@ -96,21 +114,11 @@
 //
 // "log.file" - string
 //		log to file, if empty log to console
-//
-// "mvcc.enabled" - boolean
-//		consume LLRB as Multi-Version-Concurrency-Control-led tree.
-//
-// "mvcc.snapshot" - int
-//		interval in milli-second for generating read-snapshots
-//
-// "mvcc.writer.chanbuffer" - int
-//		buffer size for mvcc writer's i/p channel
 
 package storage
 
 import "fmt"
 import "unsafe"
-import "time"
 import "sort"
 import "bytes"
 import "sync/atomic"
@@ -123,8 +131,8 @@ const MinValmem = 32
 const MaxValmem = 10 * 1024 * 1024
 
 type LLRBNodeIterator func(nd *Llrbnode) bool
-type LLRBUpsertCallback func(newnd, oldnd *Llrbnode)
-type LLRBDeleteCallback func(nd *Llrbnode)
+type LLRBUpsertCallback func(llrb *LLRB, newnd, oldnd *Llrbnode)
+type LLRBDeleteCallback func(llrb *LLRB, nd *Llrbnode)
 
 type LLRB struct { // tree container
 	name      string
@@ -132,9 +140,11 @@ type LLRB struct { // tree container
 	valarena  *memarena
 	root      unsafe.Pointer // root *Llrbnode of LLRB tree
 	dead      bool
+	clock     *vectorclock // current clock
 
 	// config
 	fmask     metadataMask // only 12 bits
+	maxvb     int
 	config    map[string]interface{}
 	logPrefix string
 
@@ -149,13 +159,10 @@ type LLRB struct { // tree container
 
 	// mvcc
 	mvcc struct {
-		enabled    bool
-		writer     *LLRBWriter
-		readerhd   unsafe.Pointer // *LLRBSnapshot
-		cowednodes []*Llrbnode
-
-		// config
-		snapshotTick time.Duration
+		enabled  bool
+		reclaim  []*Llrbnode
+		writer   *LLRBWriter
+		snapshot unsafe.Pointer // *LLRBSnapshot
 
 		// stats
 		reclaimstats map[string]*averageInt
@@ -165,6 +172,9 @@ type LLRB struct { // tree container
 func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	validateConfig(config)
 	llrb := &LLRB{name: name}
+
+	llrb.maxvb = config["maxvb"].(int)
+	llrb.clock = newvectorclock(make([]uint16, llrb.maxvb))
 
 	// setup nodearena for key and metadata
 	minblock := int64(config["nodearena.minblock"].(int))
@@ -209,8 +219,7 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	// mvcc
 	llrb.mvcc.enabled = config["mvcc.enabled"].(bool)
 	if llrb.mvcc.enabled {
-		llrb.mvcc.snapshotTick = time.Duration(config["mvcc.snapshotTick"].(int))
-		llrb.mvcc.cowednodes = make([]*Llrbnode, 0, 64)
+		llrb.mvcc.reclaim = make([]*Llrbnode, 0, 64)
 		llrb.mvcc.reclaimstats = map[string]*averageInt{
 			"upsert": &averageInt{},
 			"delmin": &averageInt{},
@@ -225,8 +234,7 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 //---- LLRB read operations.
 
 func (llrb *LLRB) Has(key []byte) bool {
-	nd := llrb.Get(key)
-	return nd != nil
+	return llrb.Get(key) != nil
 }
 
 func (llrb *LLRB) Get(key []byte) (nd *Llrbnode) {
@@ -243,22 +251,22 @@ func (llrb *LLRB) Get(key []byte) (nd *Llrbnode) {
 	return nil // key is not present in the tree
 }
 
-func (llrb *LLRB) Min() *Llrbnode {
-	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	if nd == nil {
+func (llrb *LLRB) Min() (nd *Llrbnode) {
+	if nd = (*Llrbnode)(atomic.LoadPointer(&llrb.root)); nd == nil {
 		return nil
 	}
+
 	for nd.left != nil {
 		nd = nd.left
 	}
 	return nd
 }
 
-func (llrb *LLRB) Max() *Llrbnode {
-	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	if nd == nil {
+func (llrb *LLRB) Max() (nd *Llrbnode) {
+	if nd = (*Llrbnode)(atomic.LoadPointer(&llrb.root)); nd == nil {
 		return nil
 	}
+
 	for nd.right != nil {
 		nd = nd.right
 	}
@@ -270,6 +278,7 @@ func (llrb *LLRB) Range(lkey, hkey []byte, incl string, iter LLRBNodeIterator) {
 	if iter == nil {
 		panic("Range(): iter argument is nil")
 	}
+
 	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
 	switch incl {
 	case "both":
@@ -387,7 +396,7 @@ func (llrb *LLRB) Upsert(key, value []byte, callb LLRBUpsertCallback) {
 	llrb.upsertcount(key, value, oldnd)
 
 	if callb != nil {
-		callb(newnd, oldnd)
+		callb(llrb, newnd, oldnd)
 	}
 	llrb.freenode(oldnd)
 }
@@ -442,7 +451,7 @@ func (llrb *LLRB) DeleteMin(callb LLRBDeleteCallback) {
 	llrb.delcount(deleted)
 
 	if callb != nil {
-		callb(deleted)
+		callb(llrb, deleted)
 	}
 	llrb.freenode(deleted)
 }
@@ -475,7 +484,7 @@ func (llrb *LLRB) DeleteMax(callb LLRBDeleteCallback) {
 	llrb.delcount(deleted)
 
 	if callb != nil {
-		callb(deleted)
+		callb(llrb, deleted)
 	}
 	llrb.freenode(deleted)
 }
@@ -511,7 +520,7 @@ func (llrb *LLRB) Delete(key []byte, callb LLRBDeleteCallback) {
 	llrb.delcount(deleted)
 
 	if callb != nil {
-		callb(deleted)
+		callb(llrb, deleted)
 	}
 	llrb.freenode(deleted)
 }
@@ -609,14 +618,23 @@ func walkuprot234(nd *Llrbnode) *Llrbnode {
 func (llrb *LLRB) Destroy() error {
 	if llrb.dead == false {
 		if llrb.mvcc.enabled {
-			return llrb.mvcc.writer.Destroy()
+			llrb.mvcc.writer.Destroy()
 		}
 		llrb.nodearena.release()
 		llrb.valarena.release()
 		llrb.dead = true
+		llrb.root, llrb.clock = nil, nil
 		return nil
 	}
 	panic("Destroy() on a dead tree")
+}
+
+func (llrb *LLRB) UpdateVbuuids(vbnos []uint16, vbuuids []uint64) {
+	llrb.clock.updatevbuuids(vbnos, vbuuids)
+}
+
+func (llrb *LLRB) UpdateSeqnos(vbnos []uint16, seqnos []uint64) {
+	llrb.clock.updateseqnos(vbnos, seqnos)
 }
 
 //---- Maintanence APIs.

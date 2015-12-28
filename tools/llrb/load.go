@@ -108,6 +108,10 @@ func doLoad(args []string) {
 	}
 
 	config := map[string]interface{}{
+		"maxvb":                   1024,
+		"mvcc.enabled":            false,
+		"mvcc.snapshot.tick":      0,
+		"mvcc.writer.chanbuffer":  1000,
 		"nodearena.minblock":      loadopts.nodearena[0],
 		"nodearena.maxblock":      loadopts.nodearena[1],
 		"nodearena.capacity":      loadopts.nodearena[2],
@@ -116,8 +120,6 @@ func doLoad(args []string) {
 		"valarena.maxblock":       loadopts.valarena[1],
 		"valarena.capacity":       loadopts.valarena[2],
 		"valarena.pool.capacity":  loadopts.valarena[3],
-		"mvcc.enabled":            false,
-		"mvcc.snapshotTick":       0,
 	}
 	llrb := storage.NewLLRB("load", config, nil)
 	now := time.Now()

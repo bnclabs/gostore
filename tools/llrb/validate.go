@@ -85,6 +85,10 @@ func doValidate(args []string) {
 func withLLRB(count int, opch chan [][]interface{}) {
 	dict := storage.NewDict()
 	config := map[string]interface{}{
+		"maxvb":                   1024,
+		"mvcc.enabled":            false,
+		"mvcc.snapshot.tick":      0,
+		"mvcc.writer.chanbuffer":  1000,
 		"nodearena.minblock":      loadopts.nodearena[0],
 		"nodearena.maxblock":      loadopts.nodearena[1],
 		"nodearena.capacity":      loadopts.nodearena[2],
@@ -94,8 +98,6 @@ func withLLRB(count int, opch chan [][]interface{}) {
 		"valarena.capacity":       loadopts.valarena[2],
 		"valarena.pool.capacity":  loadopts.valarena[3],
 		"metadata.mvalue":         true,
-		"mvcc.enabled":            false,
-		"mvcc.snapshotTick":       0,
 	}
 	llrb := storage.NewLLRB("validate", config, nil)
 	stats := map[string]int{
@@ -291,7 +293,7 @@ func opDelmin(
 
 	refkey, refval := dict.DeleteMin()
 	llrb.DeleteMin(
-		func(nd *storage.Llrbnode) {
+		func(llrb *storage.LLRB, nd *storage.Llrbnode) {
 			rkey, rval := nd.Key(), nd.Value()
 			if reflect.DeepEqual(refkey, rkey) == false {
 				fmsg := "delmin: key expected %v, got %v\n"
@@ -323,7 +325,7 @@ func opDelmax(
 
 	refkey, refval := dict.DeleteMax()
 	llrb.DeleteMax(
-		func(nd *storage.Llrbnode) {
+		func(llrb *storage.LLRB, nd *storage.Llrbnode) {
 			rkey, rval := nd.Key(), nd.Value()
 			if reflect.DeepEqual(refkey, rkey) == false {
 				fmsg := "delmax: key expected %v, got %v\n"
@@ -367,7 +369,7 @@ func opUpsert(
 		refval = dict.Upsert(key, value)
 		llrb.Upsert(
 			key, value,
-			func(newnd, oldnd *storage.Llrbnode) {
+			func(llrb *storage.LLRB, newnd, oldnd *storage.Llrbnode) {
 				if reflect.DeepEqual(refval, oldnd.Value()) == false {
 					fmsg := "upsert: expected %v, got %v\n"
 					log.Fatalf(fmsg, string(refval), string(oldnd.Value()))
@@ -395,7 +397,7 @@ func opUpsert(
 		}
 		llrb.Upsert(
 			key, value,
-			func(newnd, oldnd *storage.Llrbnode) {
+			func(llrb *storage.LLRB, newnd, oldnd *storage.Llrbnode) {
 				if oldnd != nil {
 					fmsg := "insert: llrb old value expected nil, got {%v,%v}\n"
 					log.Fatalf(fmsg, string(oldnd.Key()), string(oldnd.Value()))
@@ -425,7 +427,7 @@ func opDelete(
 	refval := dict.Delete(key)
 	llrb.Delete(
 		key,
-		func(nd *storage.Llrbnode) {
+		func(llrb *storage.LLRB, nd *storage.Llrbnode) {
 			val := nd.Value()
 			if (refval == nil && val != nil) || (refval != nil && val == nil) {
 				fmsg := "delete: mismatch with dict expected %v, got %v\n"

@@ -2,12 +2,14 @@ package storage
 
 import "sync/atomic"
 import "unsafe"
+import "time"
 import "errors"
 
 type LLRBWriter struct {
-	llrb  *LLRB
-	reqch chan []interface{}
-	finch chan bool
+	llrb    *LLRB
+	waiters []chan *LLRBSnapshot
+	reqch   chan []interface{}
+	finch   chan bool
 }
 
 func (llrb *LLRB) MVCCWriter() *LLRBWriter {
@@ -24,6 +26,10 @@ func (llrb *LLRB) MVCCWriter() *LLRBWriter {
 		finch: make(chan bool),
 	}
 	go llrb.mvcc.writer.run()
+
+	tick := llrb.config["mvcc.snapshot.tick"].(int)
+	go llrb.mvcc.writer.snapshotticker(tick, llrb.mvcc.writer.finch)
+
 	return llrb.mvcc.writer
 }
 
@@ -33,6 +39,8 @@ const (
 	cmdLlrbWriterDeleteMin
 	cmdLlrbWriterDeleteMax
 	cmdLlrbWriterDelete
+	cmdLlrbWriterMakeSnapshot
+	cmdLlrbWriterGetSnapshot
 	cmdLlrbWriterDestroy
 	// maintanence commands
 	cmdLlrbWriterStatsMem
@@ -44,8 +52,6 @@ const (
 	cmdLlrbWriterLogValuememory
 	cmdLlrbWriterLogUpsertdepth
 	cmdLlrbWriterLogTreeheight
-
-	cmdLlrbWriterClose
 )
 
 func (writer *LLRBWriter) Upsert(key, value []byte, callb LLRBUpsertCallback) error {
@@ -77,6 +83,16 @@ func (writer *LLRBWriter) Delete(key []byte, callb LLRBDeleteCallback) error {
 	cmd := []interface{}{cmdLlrbWriterDelete, key, callb, respch}
 	_, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
 	return err
+}
+
+func (writer *LLRBWriter) MakeSnapshot() error {
+	cmd := []interface{}{cmdLlrbWriterMakeSnapshot}
+	return failsafePost(writer.reqch, cmd, writer.finch)
+}
+
+func (writer *LLRBWriter) GetSnapshot(waiter chan *LLRBSnapshot) error {
+	cmd := []interface{}{cmdLlrbWriterGetSnapshot, waiter}
+	return failsafePost(writer.reqch, cmd, writer.finch)
 }
 
 func (writer *LLRBWriter) Destroy() error {
@@ -150,8 +166,21 @@ func (writer *LLRBWriter) run() {
 	reclaim := make([]*Llrbnode, 0, 64)
 	llrb := writer.llrb
 
+	defer func() {
+		close(writer.finch)
+		time.Sleep(100 * time.Millisecond) // TODO: no magic
+		for _, waiter := range writer.waiters {
+			close(waiter)
+		}
+		for msg := range writer.reqch {
+			if msg[0].(byte) == cmdLlrbWriterGetSnapshot {
+				close(msg[1].(chan *LLRBSnapshot))
+			}
+		}
+	}()
+
 	reclaimNodes := func(opname string, reclaim []*Llrbnode) {
-		llrb.mvcc.cowednodes = append(llrb.mvcc.cowednodes, reclaim...)
+		llrb.mvcc.reclaim = append(llrb.mvcc.reclaim, reclaim...)
 		llrb.mvcc.reclaimstats[opname].add(int64(len(reclaim)))
 	}
 
@@ -176,7 +205,7 @@ loop:
 			llrb.upsertcount(key, val, oldnd)
 
 			if callb != nil {
-				callb(newnd, oldnd)
+				callb(llrb, newnd, oldnd)
 			}
 
 			llrb.freenode(oldnd)
@@ -196,7 +225,7 @@ loop:
 
 			llrb.delcount(deleted)
 			if callb != nil {
-				callb(deleted)
+				callb(llrb, deleted)
 			}
 			llrb.freenode(deleted)
 			close(respch)
@@ -215,7 +244,7 @@ loop:
 
 			llrb.delcount(deleted)
 			if callb != nil {
-				callb(deleted)
+				callb(llrb, deleted)
 			}
 			llrb.freenode(deleted)
 			close(respch)
@@ -234,16 +263,32 @@ loop:
 
 			llrb.delcount(deleted)
 			if callb != nil {
-				callb(deleted)
+				callb(llrb, deleted)
 			}
 			llrb.freenode(deleted)
 			close(respch)
 
+		case cmdLlrbWriterMakeSnapshot:
+			if len(writer.waiters) > 0 {
+				writer.publishsnapshot(llrb)
+			}
+			writer.purgesnapshot(llrb)
+
+		case cmdLlrbWriterGetSnapshot:
+			waiter := msg[1].(chan *LLRBSnapshot)
+			writer.waiters = append(writer.waiters, waiter)
+
 		case cmdLlrbWriterDestroy:
-			// TODO:
-			//	1. no more read-snapshots
-			//  2. wait for read-snapshots to end.
-			//  3. and then destory the tree.
+			ch := make(chan bool)
+			go func() {
+				for llrb.mvcc.snapshot != nil {
+					writer.purgesnapshot(llrb)
+					time.Sleep(100 * time.Millisecond) // TODO: no magic
+				}
+				close(ch)
+			}()
+			<-ch
+			break loop
 
 		case cmdLlrbWriterStatsMem:
 			respch := msg[1].(chan []interface{})
@@ -277,9 +322,6 @@ loop:
 
 		case cmdLlrbWriterLogTreeheight:
 			llrb.LogTreeheight()
-
-		case cmdLlrbWriterClose:
-			break loop
 		}
 	}
 }
@@ -564,4 +606,42 @@ func (writer *LLRBWriter) fixup(
 		reclaim = writer.flip(nd, reclaim)
 	}
 	return nd, reclaim
+}
+
+func (writer *LLRBWriter) snapshotticker(interval int, finch chan bool) {
+	tick := time.Tick(time.Duration(interval) * time.Millisecond)
+loop:
+	for {
+		<-tick
+		select { // break out if writer has exited
+		case <-finch:
+			break loop
+		default:
+		}
+		if err := writer.MakeSnapshot(); err != nil {
+			// log error.
+		}
+	}
+}
+
+func (writer *LLRBWriter) publishsnapshot(llrb *LLRB) {
+	snapshot := llrb.NewSnapshot()
+	for _, waiter := range writer.waiters {
+		waiter <- snapshot
+		snapshot.refcount++
+	}
+}
+
+func (writer *LLRBWriter) purgesnapshot(llrb *LLRB) {
+	location := &llrb.mvcc.snapshot
+	upsnapshot := atomic.LoadPointer(location)
+	for upsnapshot != nil {
+		snapshot := (*LLRBSnapshot)(upsnapshot)
+		if snapshot.ReclaimNodes() == false {
+			break
+		}
+		location = &snapshot.next
+		upsnapshot = atomic.LoadPointer(location)
+	}
+	atomic.StorePointer(location, upsnapshot)
 }
