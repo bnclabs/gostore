@@ -156,7 +156,7 @@ func BenchmarkMdGetaccess(b *testing.B) {
 
 func BenchmarkMdSetbnseq(b *testing.B) {
 	md := &metadata{}
-	md.initMetadata(0x10, 0x10)
+	md.initMetadata(0x10, metadataMask(0).enableBornSeqno())
 	for i := 0; i < b.N; i++ {
 		md.setbnseq(0x12345)
 	}
@@ -164,7 +164,7 @@ func BenchmarkMdSetbnseq(b *testing.B) {
 
 func BenchmarkMdGetbnseq(b *testing.B) {
 	md := &metadata{}
-	md.initMetadata(0x10, 0x10)
+	md.initMetadata(0x10, metadataMask(0).enableBornSeqno())
 	md.setbnseq(0x12345)
 	for i := 0; i < b.N; i++ {
 		md.bnseq()
@@ -173,7 +173,7 @@ func BenchmarkMdGetbnseq(b *testing.B) {
 
 func BenchmarkMdSetddseq(b *testing.B) {
 	md := &metadata{}
-	md.initMetadata(0x10, 0x10)
+	md.initMetadata(0x10, metadataMask(0).enableBornSeqno().enableDeadSeqno())
 	for i := 0; i < b.N; i++ {
 		md.setddseq(0x12345)
 	}
@@ -181,7 +181,7 @@ func BenchmarkMdSetddseq(b *testing.B) {
 
 func BenchmarkMdGetddseq(b *testing.B) {
 	md := &metadata{}
-	md.initMetadata(0x10, 0x10)
+	md.initMetadata(0x10, metadataMask(0).enableBornSeqno().enableDeadSeqno())
 	md.setddseq(0x12345)
 	for i := 0; i < b.N; i++ {
 		md.ddseq()
@@ -190,7 +190,8 @@ func BenchmarkMdGetddseq(b *testing.B) {
 
 func BenchmarkMdSetMvalue(b *testing.B) {
 	md := &metadata{}
-	md.initMetadata(0x10, 0x10)
+	fmask := metadataMask(0).enableBornSeqno().enableDeadSeqno().enableMvalue()
+	md.initMetadata(0x10, fmask)
 	for i := 0; i < b.N; i++ {
 		md.setmvalue(0x12345, 4)
 	}
@@ -198,7 +199,8 @@ func BenchmarkMdSetMvalue(b *testing.B) {
 
 func BenchmarkMdGetmvalue(b *testing.B) {
 	md := &metadata{}
-	md.initMetadata(0x10, 0x10)
+	fmask := metadataMask(0).enableBornSeqno().enableDeadSeqno().enableMvalue()
+	md.initMetadata(0x10, fmask)
 	md.setmvalue(0x12345, 4)
 	for i := 0; i < b.N; i++ {
 		md.mvalue()
@@ -207,7 +209,9 @@ func BenchmarkMdGetmvalue(b *testing.B) {
 
 func BenchmarkMdSetvbuuid(b *testing.B) {
 	md := &metadata{}
-	md.initMetadata(0x10, 0x10)
+	fmask := metadataMask(0).enableBornSeqno().enableDeadSeqno()
+	fmask = fmask.enableMvalue().enableVbuuid()
+	md.initMetadata(0x10, fmask)
 	for i := 0; i < b.N; i++ {
 		md.setvbuuid(0x12345)
 	}
@@ -215,7 +219,9 @@ func BenchmarkMdSetvbuuid(b *testing.B) {
 
 func BenchmarkMdGetvbuuid(b *testing.B) {
 	md := &metadata{}
-	md.initMetadata(0x10, 0x10)
+	fmask := metadataMask(0).enableBornSeqno().enableDeadSeqno()
+	fmask = fmask.enableMvalue().enableVbuuid()
+	md.initMetadata(0x10, fmask)
 	md.setvbuuid(0x12345)
 	for i := 0; i < b.N; i++ {
 		md.vbuuid()
