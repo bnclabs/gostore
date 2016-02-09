@@ -174,7 +174,7 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	llrb := &LLRB{name: name}
 
 	llrb.maxvb = config["maxvb"].(int)
-	llrb.clock = newvectorclock(make([]uint16, llrb.maxvb))
+	llrb.clock = newvectorclock(llrb.maxvb)
 
 	// setup nodearena for key and metadata
 	minblock := int64(config["nodearena.minblock"].(int))

@@ -4,6 +4,19 @@ LLRB:
 * add llrb tree validation rules, based on sedgewick paper.
 * add test cases for DeleteMin() and DeleteMax().
 
+clock:
+* exhaust all possible combination of clock comparision TestVectorclockOrder.
+  * subset on LHS, fullset on RHS
+  * subset on RHS, fullset on LHS
+* fullset having a lesser seqno for vbucket not present in subset.
+* fullset having a lesser seqno for vbucket present in subset.
+* subset having a lesser seqno.
+* fullset, subset having all equal seqnos.
+* fullset, subset having all equal seqnos.
+* fullset having a greater seqno for vbucket not present in subset.
+* fullset having a greater seqno for vbucket present in subset.
+* subset having a greater seqno.
+
 * CBOR in ; JSON out.
 * CBOR based json-pointer lookup is essential for all KV operation.
 * delta operation on KV is essential for reducing the log file size.
