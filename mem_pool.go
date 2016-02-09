@@ -1,3 +1,5 @@
+// functions and objects method are not re-entrant.
+
 package storage
 
 //#include <stdlib.h>
@@ -17,6 +19,7 @@ type mempool struct {
 	mallocated int64
 }
 
+// size of each chunk in the block and no. of chunks in the block.
 func newmempool(size, n int64) *mempool {
 	if (n & 0x7) != 0 {
 		panic("number of blocks in a pool should be multiple of 8")
@@ -36,6 +39,7 @@ func newmempool(size, n int64) *mempool {
 	return pool
 }
 
+// allocate and amortize
 func (pool *mempool) alloc() (unsafe.Pointer, bool) {
 	var safeoff int64
 
@@ -49,7 +53,7 @@ func (pool *mempool) alloc() (unsafe.Pointer, bool) {
 	sz, k := pool.size, int64(findfirstset8(byt))
 	ptr := uintptr(pool.base) + uintptr(((pool.freeoff*8)*sz)+(k*sz))
 	pool.freelist[pool.freeoff] = clearbit8(byt, uint8(k))
-	// recompute freeoff
+	// recompute freeoff - cost of memmgnt is amortized here
 	safeoff, pool.freeoff = pool.freeoff, -1
 	for i := safeoff; i < int64(len(pool.freelist)); i++ {
 		if pool.freelist[i] != 0 {
@@ -61,6 +65,7 @@ func (pool *mempool) alloc() (unsafe.Pointer, bool) {
 	return unsafe.Pointer(ptr), true
 }
 
+// O(1)
 func (pool *mempool) free(ptr unsafe.Pointer) {
 	if ptr == nil {
 		panic("mempool.free(): nil pointer")
@@ -70,8 +75,8 @@ func (pool *mempool) free(ptr unsafe.Pointer) {
 		panic("mempool.free(): unaligned pointer")
 	}
 	nthblock := diffptr / uint64(pool.size)
-	nthoff := int64(nthblock / 8)
-	pool.freelist[nthoff] = setbit8(pool.freelist[nthoff], uint8(nthblock%8))
+	nthoff, k := int64(nthblock/8), uint8(nthblock%8)
+	pool.freelist[nthoff] = setbit8(pool.freelist[nthoff], k)
 	if pool.freeoff == -1 || nthoff < pool.freeoff {
 		pool.freeoff = nthoff
 	}
@@ -82,6 +87,7 @@ func (pool *mempool) release() {
 	C.free(pool.base)
 	pool.freelist, pool.freeoff = nil, -1
 	pool.capacity, pool.base = 0, nil
+	atomic.StoreInt64(&pool.mallocated, 0)
 }
 
 // compare whether pool's base ptr is less than other pool's base ptr.

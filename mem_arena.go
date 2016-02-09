@@ -1,3 +1,9 @@
+// hard limits:
+//
+// sizeinterval						   - 32
+// maximum no. of pools per chunk size - 256
+// maximum size of an arena            - 2^40
+
 package storage
 
 import "unsafe"
@@ -10,6 +16,8 @@ const sizeinterval = 32
 const maxpools = 256                           // len(arena.blocksizes)
 const maxarenasize = 1024 * 1024 * 1024 * 1024 // 1TB
 
+// each arena manages mem-pool of different chunk-size,
+// for each chunk-size can have zero or more mem-pools
 type memarena struct {
 	minblock   int64              // minimum block size allocatable by arena
 	maxblock   int64              // maximum block size allocatable by arena
@@ -28,8 +36,11 @@ func newmemarena(minblock, maxblock, capacity, pcapacity int64) *memarena {
 		mpools:    make(map[int64]mempools),
 	}
 	arena.blocksizes = Blocksizes(arena.minblock, arena.maxblock)
-	if len(arena.blocksizes) > 256 || capacity > maxarenasize {
+	if len(arena.blocksizes) > 256 {
 		panic(fmt.Errorf("number of pools in arena exeeds %v", maxpools))
+	} else if capacity > maxarenasize {
+		fmsg := "arena cannot exceed %v bytes (%v)"
+		panic(fmt.Errorf(fmsg, capacity, maxarenasize))
 	}
 	for _, size := range arena.blocksizes {
 		arena.mpools[size] = make(mempools, 0, maxpools)
@@ -43,7 +54,8 @@ func (arena *memarena) alloc(n int64) (ptr unsafe.Pointer, mpool *mempool) {
 	var ok bool
 	// check argument
 	if largest := arena.blocksizes[len(arena.blocksizes)-1]; n > largest {
-		return nil, nil
+		fmsg := "alloc size %v exceeds maxblock size %v"
+		panic(fmt.Errorf(fmsg, n, largest))
 	}
 	// try to get from existing pool
 	size := SuitableSize(arena.blocksizes, n)
