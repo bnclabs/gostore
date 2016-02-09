@@ -9,15 +9,20 @@ var crcisotab = crc64.MakeTable(crc64.ISO)
 type KVIterator func(key, value []byte) bool
 
 type Dict struct {
-	dict map[uint64][2][]byte
+	dict     map[uint64][2][]byte
+	sortkeys []string
+	hashks   []uint64
 }
 
 func NewDict() *Dict {
-	return &Dict{dict: make(map[uint64][2][]byte)}
+	return &Dict{
+		dict:     make(map[uint64][2][]byte),
+		sortkeys: make([]string, 0, 10000),
+	}
 }
 
 func (d *Dict) RSnapshot(_ int) *Dict {
-	newd := &Dict{dict: make(map[uint64][2][]byte)}
+	newd := NewDict()
 	for k, v := range d.dict {
 		newd.dict[k] = v
 	}
@@ -55,8 +60,8 @@ func (d *Dict) Max() (key, value []byte) {
 	if len(d.dict) == 0 {
 		return nil, nil
 	}
-	keys := d.sorted()
-	kv := d.dict[keys[len(keys)-1]]
+	hashks := d.sorted()
+	kv := d.dict[hashks[len(hashks)-1]]
 	return kv[0], kv[1]
 }
 
@@ -135,14 +140,13 @@ func (d *Dict) Range(lowkey, highkey []byte, incl string, iter KVIterator) {
 }
 
 func (d *Dict) sorted() []uint64 {
-	keys := make([]string, 0, len(d.dict))
+	d.sortkeys, d.hashks = d.sortkeys[:0], d.hashks[:0]
 	for _, kv := range d.dict {
-		keys = append(keys, string(kv[0]))
+		d.sortkeys = append(d.sortkeys, bytes2str(kv[0]))
 	}
-	sort.Strings(keys)
-	hashks := make([]uint64, 0, len(d.dict))
-	for _, key := range keys {
-		hashks = append(hashks, crc64.Checksum([]byte(key), crcisotab))
+	sort.Strings(d.sortkeys)
+	for _, key := range d.sortkeys {
+		d.hashks = append(d.hashks, crc64.Checksum(str2bytes(key), crcisotab))
 	}
-	return hashks
+	return d.hashks
 }
