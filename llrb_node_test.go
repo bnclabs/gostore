@@ -208,7 +208,7 @@ func BenchmarkNodefields(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		nd.metadata().initMetadata(0x1234, 0)
+		nd.metadata().initMetadata(0x1234, metadataMask(0).enableMvalue())
 		nd.setkeysize(len(key))
 		nd.keysize()
 		nd.setnodevalue(nil)
