@@ -136,8 +136,8 @@ func TestLLRBBasic(t *testing.T) {
 					t.Errorf("expected old Llrbnode as nil")
 				}
 				newnd.metadata().setvbno(vbno).setvbuuid(vbuuid).setbnseq(seqno)
-				llrb.UpdateVbuuids([]uint16{vbno}, []uint64{vbuuid})
-				llrb.UpdateSeqnos([]uint16{vbno}, []uint64{seqno})
+				llrb.clock.updatevbuuids([]uint16{vbno}, []uint64{vbuuid})
+				llrb.clock.updateseqnos([]uint16{vbno}, []uint64{seqno})
 			})
 		seqno++
 	}

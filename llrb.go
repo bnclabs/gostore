@@ -17,21 +17,22 @@
 //
 // * non-mvcc maintanence APIs:
 //
-//		Count()
-//		StatsMem(), StatsUpsert(), StatsHeight()
-//		ValidateReds(), ValidateBlacks()
-//		LogNodeutilz(), LogNodememory(), LogValueutilz()
-//		LogValuememory() LogUpsertdepth(), LogTreeheight(), PPrint()
+//		llrb.StatsMem(), llrb.StatsUpsert(), llrb.StatsHeight()
+//		llrb.ValidateReds(), llrb.ValidateBlacks()
+//		llrb.LogNodeutilz(), llrb.LogNodememory(), llrb.LogValueutilz()
+//		llrb.LogValuememory() llrb.LogUpsertdepth(), llrb.LogTreeheight(),
+//		llrb.PPrint()
 //
 // * non-mvcc Tree/Memory APIs:
 //
-//		Destroy()
-//		Has(), Get(), Min(), Max(), Range()
-//		Upsert(), DeleteMin(), DeleteMax(), Delete()
+//		llrb.Count(), llrb.Has(), llrb.Get(), llrb.Min(), llrb.Max(),
+//		llrb.Range()
+//		llrb.Upsert(), llrb.DeleteMin(), llrb.DeleteMax(), llrb.Delete()
+//		llrb.Destroy()
 //
 // mvcc use case:
 //
-// * all write operations need be serialized in a single routine.
+// * all write operations shall be serialized in a single routine.
 // * one or more routines can do concurrent read operation.
 //
 // * mvcc APIs with concurrency support:
@@ -44,7 +45,7 @@
 // * mvcc APIs that needs to be serialized, on write-snapshot:
 //
 //		writer.StatsMem(), writer.StatsUpsert(), writer.StatsHeight()
-//		writer.LogNodeutilz(), writer.LogNodememory(), LogValueutilz(),
+//		writer.LogNodeutilz(), writer.LogNodememory(), writer.LogValueutilz(),
 //		writer.LogValuememory() writer.LogUpsertdepth(),
 //		writer.LogTreeheight(), writer.PPrint()
 //
@@ -61,14 +62,12 @@
 // "maxvb" - integer
 //		maximum number of vbuckets that will use this llrb tree.
 //
-// "mvcc.enabled" - boolean
-//		consume LLRB as Multi-Version-Concurrency-Control-led tree.
+// "log.level" - string
+//		one of the following
+//		"ignore", "fatal", "error", "warn", "info", "verbose", "debug", "trace"
 //
-// "mvcc.snapshot.tick" - int
-//		interval in milli-second for generating read-snapshots
-//
-// "mvcc.writer.chanbuffer" - int
-//		buffer size for mvcc writer's i/p channel
+// "log.file" - string
+//		log to file, if empty log to console
 //
 // "nodearena.minblock" - integer
 //		minimum node-block size that shall be requested from the arena.
@@ -108,13 +107,14 @@
 // "metadata.vbuuid" - boolean
 //		use metadata field to book-keep node's vbuuid.
 //
-// "log.level" - string
-//		one of the following
-//		"ignore", "fatal", "error", "warn", "info", "verbose", "debug", "trace"
+// "mvcc.enabled" - boolean
+//		consume LLRB as Multi-Version-Concurrency-Control-led tree.
 //
-// "log.file" - string
-//		log to file, if empty log to console
-
+// "mvcc.snapshot.tick" - int
+//		interval in milli-second for generating read-snapshots
+//
+// "mvcc.writer.chanbuffer" - int
+//		buffer size for mvcc writer's i/p channel
 package storage
 
 import "fmt"
@@ -130,8 +130,15 @@ const MaxKeymem = 4096
 const MinValmem = 32
 const MaxValmem = 10 * 1024 * 1024
 
+// LLRBNodeIterator callback from Range API.
 type LLRBNodeIterator func(nd *Llrbnode) bool
+
+// LLRBUpsertCallback callback from Upsert API. Don't keep any reference
+// to newnd and oldnd.
 type LLRBUpsertCallback func(llrb *LLRB, newnd, oldnd *Llrbnode)
+
+// LLRBDeleteCallback callback from Delete API. Don't keep any reference
+// to nd.
 type LLRBDeleteCallback func(llrb *LLRB, nd *Llrbnode)
 
 type LLRB struct { // tree container
@@ -170,44 +177,23 @@ type LLRB struct { // tree container
 }
 
 func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
-	validateConfig(config)
 	llrb := &LLRB{name: name}
+
+	llrb.validateConfig(config)
 
 	llrb.maxvb = config["maxvb"].(int)
 	llrb.clock = newvectorclock(llrb.maxvb)
 
-	// setup nodearena for key and metadata
-	minblock := int64(config["nodearena.minblock"].(int))
-	maxblock := int64(config["nodearena.maxblock"].(int))
-	capacity := int64(config["nodearena.capacity"].(int))
-	pcapacity := int64(config["nodearena.pool.capacity"].(int))
-	llrb.nodearena = newmemarena(minblock, maxblock, capacity, pcapacity)
-
-	// setup value arena
-	minblock = int64(config["valarena.minblock"].(int))
-	maxblock = int64(config["valarena.maxblock"].(int))
-	capacity = int64(config["valarena.capacity"].(int))
-	pcapacity = int64(config["valarena.pool.capacity"].(int))
-	llrb.valarena = newmemarena(minblock, maxblock, capacity, pcapacity)
+	// setup arena for nodes and node-values.
+	llrb.nodearena = llrb.newnodearena(config)
+	llrb.valarena = llrb.newvaluearena(config)
 
 	// set up logger
 	setLogger(logg, config)
 	llrb.logPrefix = fmt.Sprintf("[LLRB-%s]", name)
 
 	// set up metadata options
-	llrb.fmask = metadataMask(0)
-	if conf, ok := config["metadata.bornseqno"]; ok && conf.(bool) {
-		llrb.fmask = llrb.fmask.enableBornSeqno()
-	}
-	if conf, ok := config["metadata.deadseqno"]; ok && conf.(bool) {
-		llrb.fmask = llrb.fmask.enableDeadSeqno()
-	}
-	if conf, ok := config["metadata.mvalue"]; ok && conf.(bool) {
-		llrb.fmask = llrb.fmask.enableMvalue()
-	}
-	if conf, ok := config["metadata.vbuuid"]; ok && conf.(bool) {
-		llrb.fmask = llrb.fmask.enableVbuuid()
-	}
+	llrb.fmask = llrb.setupfmask(config)
 	llrb.config = config
 
 	// statistics
@@ -596,25 +582,6 @@ func (llrb *LLRB) walkuprot23(nd *Llrbnode) *Llrbnode {
 	return nd
 }
 
-// rotation routines for 2-3-4 algorithm
-
-func walkdownrot234(nd *Llrbnode) *Llrbnode {
-	if isred(nd.left) && isred(nd.right) {
-		flip(nd)
-	}
-	return nd
-}
-
-func walkuprot234(nd *Llrbnode) *Llrbnode {
-	if isred(nd.right) && !isred(nd.left) {
-		nd = rotateleft(nd)
-	}
-	if isred(nd.left) && isred(nd.left.left) {
-		nd = rotateright(nd)
-	}
-	return nd
-}
-
 func (llrb *LLRB) Destroy() error {
 	if llrb.dead == false {
 		if llrb.mvcc.enabled {
@@ -627,14 +594,6 @@ func (llrb *LLRB) Destroy() error {
 		return nil
 	}
 	panic("Destroy() on a dead tree")
-}
-
-func (llrb *LLRB) UpdateVbuuids(vbnos []uint16, vbuuids []uint64) {
-	llrb.clock.updatevbuuids(vbnos, vbuuids)
-}
-
-func (llrb *LLRB) UpdateSeqnos(vbnos []uint16, seqnos []uint64) {
-	llrb.clock.updateseqnos(vbnos, seqnos)
 }
 
 //---- Maintanence APIs.
@@ -889,17 +848,17 @@ func (llrb *LLRB) freenode(nd *Llrbnode) {
 
 func (llrb *LLRB) clone(nd *Llrbnode) (newnd *Llrbnode) {
 	// clone Llrbnode.
-	newndu, mpool := llrb.nodearena.alloc(nd.pool.size)
-	newnd = (*Llrbnode)(newndu)
+	newndptr, mpool := llrb.nodearena.alloc(nd.pool.size)
+	newnd = (*Llrbnode)(newndptr)
 	memcpy(unsafe.Pointer(newnd), unsafe.Pointer(nd), int(nd.pool.size))
 	newnd.pool = mpool
 	// clone value if value is present.
 	if nd.metadata().ismvalue() {
 		if mvalue, level := nd.metadata().mvalue(); level == 0 && mvalue != 0 {
 			nv := (*nodevalue)(unsafe.Pointer((uintptr)(mvalue)))
-			newnvu, mpool := llrb.valarena.alloc(nv.pool.size)
-			memcpy(newnvu, unsafe.Pointer(nv), int(nv.pool.size))
-			newnv := (*nodevalue)(newnvu)
+			newnvptr, mpool := llrb.valarena.alloc(nv.pool.size)
+			memcpy(newnvptr, unsafe.Pointer(nv), int(nv.pool.size))
+			newnv := (*nodevalue)(newnvptr)
 			newnv.pool = mpool
 			newnd.setnodevalue(newnv)
 		}
@@ -961,30 +920,21 @@ func (llrb *LLRB) equivalent(n1, n2 *Llrbnode) bool {
 	return true
 }
 
-func validateConfig(config map[string]interface{}) {
-	minblock := config["nodearena.minblock"].(int)
-	maxblock := config["nodearena.maxblock"].(int)
-	capacity := config["nodearena.capacity"].(int)
-	if minblock < MinKeymem {
-		fmsg := "nodearena.minblock < %v configuration"
-		panic(fmt.Errorf(fmsg, MinKeymem))
-	} else if maxblock > MaxKeymem {
-		fmsg := "nodearena.maxblock > %v configuration"
-		panic(fmt.Errorf(fmsg, MaxKeymem))
-	} else if capacity == 0 {
-		panic("nodearena.capacity cannot be ZERO")
-	}
+// rotation routines for 2-3-4 algorithm, not used.
 
-	minblock = config["valarena.minblock"].(int)
-	maxblock = config["valarena.maxblock"].(int)
-	capacity = config["valarena.capacity"].(int)
-	if minblock < MinValmem {
-		fmsg := "valarena.minblock < %v configuration"
-		panic(fmt.Errorf(fmsg, MinValmem))
-	} else if maxblock > MaxValmem {
-		fmsg := "valarena.maxblock > %v configuration"
-		panic(fmt.Errorf(fmsg, MaxValmem))
-	} else if capacity == 0 {
-		panic("valarena.capacity cannot be ZERO")
+func walkdownrot234(nd *Llrbnode) *Llrbnode {
+	if isred(nd.left) && isred(nd.right) {
+		flip(nd)
 	}
+	return nd
+}
+
+func walkuprot234(nd *Llrbnode) *Llrbnode {
+	if isred(nd.right) && !isred(nd.left) {
+		nd = rotateleft(nd)
+	}
+	if isred(nd.left) && isred(nd.left.left) {
+		nd = rotateright(nd)
+	}
+	return nd
 }

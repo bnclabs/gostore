@@ -14,7 +14,7 @@ func TestNodeValue(t *testing.T) {
 
 	ptr, mpool := marena.alloc(blocksize)
 	nv := (*nodevalue)(ptr)
-	nv = nv.setvalsize(len(value)).setvalue(value)
+	nv = nv.setvalsize(int64(len(value))).setvalue(value)
 	if x := nv.valsize(); x != len(value) {
 		t.Errorf("expected %v, got %v", len(value), x)
 	} else if v := nv.value(); bytes.Compare(value, v) != 0 {
@@ -32,7 +32,7 @@ func BenchmarkValueSize(b *testing.B) {
 	ptr, mpool := marena.alloc(blocksize)
 	nv := (*nodevalue)(ptr)
 	nv.pool = mpool
-	nv = nv.setvalsize(len(value)).setvalue(value)
+	nv = nv.setvalsize(int64(len(value))).setvalue(value)
 
 	b.ResetTimer()
 
@@ -52,7 +52,7 @@ func BenchmarkSetValue(b *testing.B) {
 	ptr, mpool := marena.alloc(blocksize)
 	nv := (*nodevalue)(ptr)
 	nv.pool = mpool
-	nv = nv.setvalsize(len(value)).setvalue(value)
+	nv = nv.setvalsize(int64(len(value))).setvalue(value)
 
 	b.ResetTimer()
 
@@ -71,7 +71,7 @@ func BenchmarkGetValue(b *testing.B) {
 	ptr, mpool := marena.alloc(blocksize)
 	nv := (*nodevalue)(ptr)
 	nv.pool = mpool
-	nv = nv.setvalsize(len(value)).setvalue(value)
+	nv = nv.setvalsize(int64(len(value))).setvalue(value)
 
 	b.ResetTimer()
 

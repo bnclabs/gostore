@@ -5,7 +5,7 @@ import "bytes"
 import "reflect"
 import "fmt"
 
-const llrbnodesize = 24 // plus + metadata-size + key-size
+const llrbnodesize = 24 // + metadatasize + keysize
 type Llrbnode struct {
 	left     *Llrbnode // TODO: unsafe.Pointer ???
 	right    *Llrbnode // TODO: unsafe.Pointer ???
@@ -13,11 +13,29 @@ type Llrbnode struct {
 	mdmarker unsafe.Pointer
 }
 
-// Exported methods
+//---- Exported methods on metadata.
 
 func (nd *Llrbnode) Setvbno(vbno uint16) {
 	if nd != nil {
 		nd.metadata().setvbno(vbno)
+	}
+}
+
+func (nd *Llrbnode) SetBornseqno(seqno uint64) {
+	if nd != nil {
+		nd.metadata().setbnseq(seqno)
+	}
+}
+
+func (nd *Llrbnode) SetDeadseqno(seqno uint64) {
+	if nd != nil {
+		nd.metadata().setddseq(seqno)
+	}
+}
+
+func (nd *Llrbnode) SetVbuuid(vbuuid uint64) {
+	if nd != nil {
+		nd.metadata().setvbuuid(vbuuid)
 	}
 }
 
@@ -28,12 +46,6 @@ func (nd *Llrbnode) Vbno() uint16 {
 	return 0
 }
 
-func (nd *Llrbnode) SetBornseqno(seqno uint64) {
-	if nd != nil {
-		nd.metadata().setbnseq(seqno)
-	}
-}
-
 func (nd *Llrbnode) Bornseqno() uint64 {
 	if nd != nil {
 		return nd.metadata().bnseq()
@@ -41,23 +53,11 @@ func (nd *Llrbnode) Bornseqno() uint64 {
 	return 0
 }
 
-func (nd *Llrbnode) SetDeadseqno(seqno uint64) {
-	if nd != nil {
-		nd.metadata().setddseq(seqno)
-	}
-}
-
 func (nd *Llrbnode) Deadseqno() uint64 {
 	if nd != nil {
 		return nd.metadata().ddseq()
 	}
 	return 0
-}
-
-func (nd *Llrbnode) SetVbuuid(vbuuid uint64) {
-	if nd != nil {
-		nd.metadata().setvbuuid(vbuuid)
-	}
 }
 
 func (nd *Llrbnode) Vbuuid() uint64 {
@@ -81,7 +81,52 @@ func (nd *Llrbnode) Value() []byte {
 	return nil
 }
 
-// maintanence methods.
+//---- local methods on metadata.
+
+func (nd *Llrbnode) metadata() *metadata {
+	return (*metadata)(unsafe.Pointer(&nd.mdmarker))
+}
+
+func (nd *Llrbnode) setkey(key []byte) *Llrbnode {
+	var dst []byte
+	sl := (*reflect.SliceHeader)(unsafe.Pointer(&dst))
+	sl.Len = len(key)
+	sl.Cap = len(key)
+	baseptr := (uintptr)(unsafe.Pointer(&nd.mdmarker))
+	sl.Data = baseptr + uintptr(nd.metadata().sizeof())
+	return nd.setkeysize(copy(dst, key))
+}
+
+func (nd *Llrbnode) setkeysize(size int) *Llrbnode {
+	nd.metadata().setkeysize(size)
+	return nd
+}
+
+func (nd *Llrbnode) setnodevalue(nv *nodevalue) *Llrbnode {
+	arg := (uintptr)(unsafe.Pointer(nv))
+	nd.metadata().setmvalue(uint64(arg), 0)
+	return nd
+}
+
+func (nd *Llrbnode) key() (k []byte) {
+	sl := (*reflect.SliceHeader)(unsafe.Pointer(&k))
+	sl.Len = nd.keysize()
+	sl.Cap = sl.Len
+	baseptr := (uintptr)(unsafe.Pointer(&nd.mdmarker))
+	sl.Data = baseptr + uintptr(nd.metadata().sizeof())
+	return
+}
+
+func (nd *Llrbnode) keysize() int {
+	return nd.metadata().keysize()
+}
+
+func (nd *Llrbnode) nodevalue() *nodevalue {
+	nv, _ := nd.metadata().mvalue()
+	return (*nodevalue)(unsafe.Pointer(uintptr(nv)))
+}
+
+//---- maintanence methods.
 
 func (nd *Llrbnode) repr() string {
 	bnseqno, ddseqno := int64(-1), int64(-1)
@@ -110,50 +155,7 @@ func (nd *Llrbnode) pprint(prefix string) {
 	nd.right.pprint(prefix)
 }
 
-func (nd *Llrbnode) metadata() *metadata {
-	return (*metadata)(unsafe.Pointer(&nd.mdmarker))
-}
-
-//---- field operations
-
-func (nd *Llrbnode) setkeysize(size int) *Llrbnode {
-	nd.metadata().setkeysize(size)
-	return nd
-}
-
-func (nd *Llrbnode) keysize() int {
-	return nd.metadata().keysize()
-}
-
-func (nd *Llrbnode) setkey(key []byte) *Llrbnode {
-	var dst []byte
-	sl := (*reflect.SliceHeader)(unsafe.Pointer(&dst))
-	sl.Len = len(key)
-	sl.Cap = len(key)
-	baseptr := (uintptr)(unsafe.Pointer(&nd.mdmarker))
-	sl.Data = baseptr + uintptr(nd.metadata().sizeof())
-	return nd.setkeysize(copy(dst, key))
-}
-
-func (nd *Llrbnode) key() (k []byte) {
-	sl := (*reflect.SliceHeader)(unsafe.Pointer(&k))
-	sl.Len = nd.keysize()
-	sl.Cap = sl.Len
-	baseptr := (uintptr)(unsafe.Pointer(&nd.mdmarker))
-	sl.Data = baseptr + uintptr(nd.metadata().sizeof())
-	return
-}
-
-func (nd *Llrbnode) setnodevalue(nv *nodevalue) *Llrbnode {
-	arg := (uintptr)(unsafe.Pointer(nv))
-	nd.metadata().setmvalue(uint64(arg), 0)
-	return nd
-}
-
-func (nd *Llrbnode) nodevalue() *nodevalue {
-	nv, _ := nd.metadata().mvalue()
-	return (*nodevalue)(unsafe.Pointer(uintptr(nv)))
-}
+//---- indexer api
 
 func (nd *Llrbnode) ltkey(other []byte) bool {
 	var key []byte

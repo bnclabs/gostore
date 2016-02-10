@@ -1,26 +1,31 @@
+// hardlimits:
+//
+// maximum size of value : 2^40 bytes
+
 package storage
 
 import "unsafe"
 import "reflect"
 
-const nvaluesize = 16 // plus value size
+const nvaluesize = 16 // + valuesize
 type nodevalue struct {
-	hdr1     uint64 // vsize(32)
+	hdr1     uint64 // valuesize[39:]
 	pool     *mempool
 	valstart unsafe.Pointer // just a place-holder
 }
 
-func (nv *nodevalue) setvalsize(size int) *nodevalue {
+func (nv *nodevalue) setvalsize(size int64) *nodevalue {
 	if nv != nil {
-		nv.hdr1 = (nv.hdr1 & 0xffffffff00000000) | (uint64(size) & 0xffffffff)
+		nv.hdr1 = (nv.hdr1 & 0xffffff0000000000) | (uint64(size) & 0xffffffffff)
 	}
 	return nv
 }
 
 func (nv *nodevalue) valsize() int {
-	return int(nv.hdr1 & 0xffffffff)
+	return int(nv.hdr1 & 0xffffffffff)
 
 }
+
 func (nv *nodevalue) setvalue(val []byte) *nodevalue {
 	if nv != nil {
 		var dst []byte
@@ -28,7 +33,7 @@ func (nv *nodevalue) setvalue(val []byte) *nodevalue {
 		sl.Len = len(val)
 		sl.Cap = len(val)
 		sl.Data = (uintptr)(unsafe.Pointer(&nv.valstart))
-		return nv.setvalsize(copy(dst, val))
+		return nv.setvalsize(int64(copy(dst, val)))
 	}
 	return nv
 }
