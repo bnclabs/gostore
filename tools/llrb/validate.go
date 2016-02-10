@@ -22,8 +22,8 @@ var validateopts struct {
 	bagdir string
 	mvcc   bool
 	// LLRB specific structures
-	nodearena [4]int // min,max,cap
-	valarena  [4]int // min,max,cap
+	nodearena [4]int // min,max,cap,pcap
+	valarena  [4]int // min,max,cap,pcap
 	args      []string
 }
 
