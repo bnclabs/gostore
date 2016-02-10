@@ -528,7 +528,7 @@ func validateStats(
 
 	if dolog {
 		fmt.Printf("validateStats:  ok\n")
-		fmt.Printf("  total commands   : %v\n", total)
+		fmt.Printf("  total operations : %v\n", total)
 		fmt.Printf("  inserts/upserts  : {%v,%v}\n", insert, upsert)
 		fmsg := "  ds/dn/dx {ok/na} : {%v,%v} {%v,%v} {%v,%v}\n"
 		fmt.Printf(fmsg, dels[0], dels[1], dmax[0], dmax[1], dmin[0], dmin[1])

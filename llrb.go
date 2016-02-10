@@ -35,22 +35,24 @@
 // * all write operations shall be serialized in a single routine.
 // * one or more routines can do concurrent read operation.
 //
+//		llrb.Count()
+//		llrb.Destroy()
+//
 // * mvcc APIs with concurrency support:
 //
-//		llrb.Count()
 //		snapshot.Has(), snapshot.Get(), snapshot.Min(), snapshot.Max(),
 //		snapshot.Range()
 //		snapshot.ValidateReds(), snapshot.ValidateBlacks()
 //
 // * mvcc APIs that needs to be serialized, on write-snapshot:
 //
+//		writer.Upsert(), writer.DeleteMin(), writer.DeleteMax(), writer.Delete()
+//		writer.MakeSnapshot(), writer.GetSnapshot()
+//
 //		writer.StatsMem(), writer.StatsUpsert(), writer.StatsHeight()
 //		writer.LogNodeutilz(), writer.LogNodememory(), writer.LogValueutilz(),
 //		writer.LogValuememory() writer.LogUpsertdepth(),
-//		writer.LogTreeheight(), writer.PPrint()
-//
-//		writer.Destroy()
-//		writer.Upsert(), writer.DeleteMin(), writer.DeleteMax(), writer.Delete()
+//		writer.LogTreeheight()
 //
 // * Upsert() and Delete() APIs accept callbacks for applications to set
 //   node's metadata fields like vbno, vbuuid, seqno etc...
@@ -212,6 +214,7 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 			"delmax": &averageInt{},
 			"delete": &averageInt{},
 		}
+		llrb.mvcc.writer = llrb.MVCCWriter()
 	}
 
 	return llrb
@@ -379,7 +382,7 @@ func (llrb *LLRB) Upsert(key, value []byte, callb LLRBUpsertCallback) {
 	root.metadata().setblack()
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 
-	llrb.upsertcount(key, value, oldnd)
+	llrb.upsertcounts(key, value, oldnd)
 
 	if callb != nil {
 		callb(llrb, newnd, oldnd)
@@ -411,7 +414,7 @@ func (llrb *LLRB) upsert(
 		if nv := nd.nodevalue(); nv != nil { // free the value if present
 			nv.pool.free(unsafe.Pointer(nv))
 		}
-		if value != nil { // and new value if need be
+		if value != nil { // add new value if need be
 			ptr, mpool := llrb.valarena.alloc(int64(nvaluesize + len(value)))
 			nv := (*nodevalue)(ptr)
 			nv.pool = mpool
@@ -451,10 +454,10 @@ func (llrb *LLRB) deletemin(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 		return nil, nd
 	}
 	if !isred(nd.left) && !isred(nd.left.left) {
-		nd = moveredleft(nd)
+		nd = llrb.moveredleft(nd)
 	}
 	nd.left, deleted = llrb.deletemin(nd.left)
-	return fixup(nd), deleted
+	return llrb.fixup(nd), deleted
 }
 
 func (llrb *LLRB) DeleteMax(callb LLRBDeleteCallback) {
@@ -481,16 +484,16 @@ func (llrb *LLRB) deletemax(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 		return nil, nil
 	}
 	if isred(nd.left) {
-		nd = rotateright(nd)
+		nd = llrb.rotateright(nd)
 	}
 	if nd.right == nil {
 		return nil, nd
 	}
 	if !isred(nd.right) && !isred(nd.right.left) {
-		nd = moveredright(nd)
+		nd = llrb.moveredright(nd)
 	}
 	nd.right, deleted = llrb.deletemax(nd.right)
-	return fixup(nd), deleted
+	return llrb.fixup(nd), deleted
 }
 
 func (llrb *LLRB) Delete(key []byte, callb LLRBDeleteCallback) {
@@ -521,27 +524,27 @@ func (llrb *LLRB) delete(nd *Llrbnode, key []byte) (newnd, deleted *Llrbnode) {
 			return nd, nil
 		}
 		if !isred(nd.left) && !isred(nd.left.left) {
-			nd = moveredleft(nd)
+			nd = llrb.moveredleft(nd)
 		}
 		nd.left, deleted = llrb.delete(nd.left, key)
 
 	} else {
 		if isred(nd.left) {
-			nd = rotateright(nd)
+			nd = llrb.rotateright(nd)
 		}
 		// If @key equals @h.Item and no right children at @h
 		if !nd.ltkey(key) && nd.right == nil {
 			return nil, nd
 		}
 		if nd.right != nil && !isred(nd.right) && !isred(nd.right.left) {
-			nd = moveredright(nd)
+			nd = llrb.moveredright(nd)
 		}
 		// If @key equals @h.Item, and (from above) 'h.Right != nil'
 		if !nd.ltkey(key) {
 			var subdeleted *Llrbnode
 			nd.right, subdeleted = llrb.deletemin(nd.right)
 			if subdeleted == nil {
-				panic("logic")
+				panic("fatal logic, call the programmer")
 			}
 			newnd := llrb.clone(subdeleted)
 			newnd.left, newnd.right = nd.left, nd.right
@@ -560,7 +563,7 @@ func (llrb *LLRB) delete(nd *Llrbnode, key []byte) (newnd, deleted *Llrbnode) {
 			nd.right, deleted = llrb.delete(nd.right, key)
 		}
 	}
-	return fixup(nd), deleted
+	return llrb.fixup(nd), deleted
 }
 
 // rotation routines for 2-3 algorithm
@@ -571,13 +574,86 @@ func (llrb *LLRB) walkdownrot23(nd *Llrbnode) *Llrbnode {
 
 func (llrb *LLRB) walkuprot23(nd *Llrbnode) *Llrbnode {
 	if isred(nd.right) && !isred(nd.left) {
-		nd = rotateleft(nd)
+		nd = llrb.rotateleft(nd)
 	}
 	if isred(nd.left) && isred(nd.left.left) {
-		nd = rotateright(nd)
+		nd = llrb.rotateright(nd)
 	}
 	if isred(nd.left) && isred(nd.right) {
-		flip(nd)
+		llrb.flip(nd)
+	}
+	return nd
+}
+
+func (llrb *LLRB) rotateleft(nd *Llrbnode) *Llrbnode {
+	y := nd.right
+	if y.metadata().isblack() {
+		panic("rotating a black link ? call the programmer")
+	}
+	nd.right = y.left
+	y.left = nd
+	if nd.metadata().isblack() {
+		y.metadata().setblack()
+	} else {
+		y.metadata().setred()
+	}
+	nd.metadata().setred()
+	return y
+}
+
+func (llrb *LLRB) rotateright(nd *Llrbnode) *Llrbnode {
+	x := nd.left
+	if x.metadata().isblack() {
+		panic("rotating a black link ? call the programmer")
+	}
+	nd.left = x.right
+	x.right = nd
+	if nd.metadata().isblack() {
+		x.metadata().setblack()
+	} else {
+		x.metadata().setred()
+	}
+	nd.metadata().setred()
+	return x
+}
+
+// REQUIRE: Left and Right children must be present
+func (llrb *LLRB) flip(nd *Llrbnode) {
+	nd.left.metadata().togglelink()
+	nd.right.metadata().togglelink()
+	nd.metadata().togglelink()
+}
+
+// REQUIRE: Left and Right children must be present
+func (llrb *LLRB) moveredleft(nd *Llrbnode) *Llrbnode {
+	llrb.flip(nd)
+	if isred(nd.right.left) {
+		nd.right = llrb.rotateright(nd.right)
+		nd = llrb.rotateleft(nd)
+		llrb.flip(nd)
+	}
+	return nd
+}
+
+// REQUIRE: Left and Right children must be present
+func (llrb *LLRB) moveredright(nd *Llrbnode) *Llrbnode {
+	llrb.flip(nd)
+	if isred(nd.left.left) {
+		nd = llrb.rotateright(nd)
+		llrb.flip(nd)
+	}
+	return nd
+}
+
+func (llrb *LLRB) fixup(nd *Llrbnode) *Llrbnode {
+	if isred(nd.right) {
+		nd = llrb.rotateleft(nd)
+	}
+	if isred(nd.left) && isred(nd.left.left) {
+		nd = llrb.rotateright(nd)
+	}
+	if isred(nd.left) && isred(nd.right) {
+		llrb.flip(nd)
 	}
 	return nd
 }
@@ -585,7 +661,7 @@ func (llrb *LLRB) walkuprot23(nd *Llrbnode) *Llrbnode {
 func (llrb *LLRB) Destroy() error {
 	if llrb.dead == false {
 		if llrb.mvcc.enabled {
-			llrb.mvcc.writer.Destroy()
+			llrb.mvcc.writer.destroy()
 		}
 		llrb.nodearena.release()
 		llrb.valarena.release()
@@ -866,7 +942,7 @@ func (llrb *LLRB) clone(nd *Llrbnode) (newnd *Llrbnode) {
 	return
 }
 
-func (llrb *LLRB) upsertcount(key, value []byte, oldnd *Llrbnode) {
+func (llrb *LLRB) upsertcounts(key, value []byte, oldnd *Llrbnode) {
 	if oldnd == nil {
 		atomic.AddInt64(&llrb.count, 1)
 	} else {
@@ -922,19 +998,19 @@ func (llrb *LLRB) equivalent(n1, n2 *Llrbnode) bool {
 
 // rotation routines for 2-3-4 algorithm, not used.
 
-func walkdownrot234(nd *Llrbnode) *Llrbnode {
+func (llrb *LLRB) walkdownrot234(nd *Llrbnode) *Llrbnode {
 	if isred(nd.left) && isred(nd.right) {
-		flip(nd)
+		llrb.flip(nd)
 	}
 	return nd
 }
 
-func walkuprot234(nd *Llrbnode) *Llrbnode {
+func (llrb *LLRB) walkuprot234(nd *Llrbnode) *Llrbnode {
 	if isred(nd.right) && !isred(nd.left) {
-		nd = rotateleft(nd)
+		nd = llrb.rotateleft(nd)
 	}
 	if isred(nd.left) && isred(nd.left.left) {
-		nd = rotateright(nd)
+		nd = llrb.rotateright(nd)
 	}
 	return nd
 }

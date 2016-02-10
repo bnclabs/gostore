@@ -95,13 +95,6 @@ func (writer *LLRBWriter) GetSnapshot(waiter chan *LLRBSnapshot) error {
 	return failsafePost(writer.reqch, cmd, writer.finch)
 }
 
-func (writer *LLRBWriter) Destroy() error {
-	respch := make(chan []interface{}, 0)
-	cmd := []interface{}{cmdLlrbWriterDestroy, respch}
-	_, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
-	return err
-}
-
 func (writer *LLRBWriter) StatsMem() (map[string]interface{}, error) {
 	respch := make(chan []interface{}, 1)
 	cmd := []interface{}{cmdLlrbWriterStatsMem, respch}
@@ -161,6 +154,13 @@ func (writer *LLRBWriter) LogTreeheight() {
 	failsafeRequest(writer.reqch, respch, cmd, writer.finch)
 }
 
+func (writer *LLRBWriter) destroy() error {
+	respch := make(chan []interface{}, 0)
+	cmd := []interface{}{cmdLlrbWriterDestroy, respch}
+	_, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
+	return err
+}
+
 func (writer *LLRBWriter) run() {
 	var root, newnd, oldnd *Llrbnode
 	reclaim := make([]*Llrbnode, 0, 64)
@@ -195,20 +195,20 @@ loop:
 			respch := msg[4].(chan []interface{})
 
 			nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-			depth := int64(1) /*upsertdepth*/
+			depth := int64(0) /*upsertdepth*/
 			root, newnd, oldnd, reclaim =
 				writer.upsert(nd, depth, key, val, reclaim)
-			reclaimNodes("upsert", reclaim)
 			root.metadata().setblack()
 			atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 
-			llrb.upsertcount(key, val, oldnd)
+			llrb.upsertcounts(key, val, oldnd)
 
 			if callb != nil {
 				callb(llrb, newnd, oldnd)
 			}
-
 			llrb.freenode(oldnd)
+
+			reclaimNodes("upsert", reclaim)
 			close(respch)
 
 		case cmdLlrbWriterDeleteMin:
@@ -356,7 +356,7 @@ func (writer *LLRBWriter) upsert(
 		if nv := ndmvcc.nodevalue(); nv != nil { // free the value if present
 			nv.pool.free(unsafe.Pointer(nv))
 		}
-		if value != nil { // and new value if need be
+		if value != nil { // add new value if need be
 			ptr, mpool := llrb.valarena.alloc(int64(nvaluesize + len(value)))
 			nv := (*nodevalue)(ptr)
 			nv.pool = mpool
@@ -469,7 +469,7 @@ func (writer *LLRBWriter) delete(
 			var subd *Llrbnode
 			ndmvcc.right, subd, reclaim = writer.deletemin(ndmvcc.right, reclaim)
 			if subd == nil {
-				panic("logic")
+				panic("fatal logic, call the programmer")
 			}
 			newnd = writer.llrb.clone(subd)
 			newnd.left, newnd.right = ndmvcc.left, ndmvcc.right
@@ -524,7 +524,7 @@ func (writer *LLRBWriter) rotateleft(
 	reclaim = append(reclaim, nd.right)
 	y := writer.llrb.clone(nd.right)
 	if y.metadata().isblack() {
-		panic("rotating a black link")
+		panic("rotating a black link ? call the programmer")
 	}
 	nd.right = y.left
 	y.left = nd
@@ -543,7 +543,7 @@ func (writer *LLRBWriter) rotateright(
 	reclaim = append(reclaim, nd.left)
 	x := writer.llrb.clone(nd.left)
 	if x.metadata().isblack() {
-		panic("rotating a black link")
+		panic("rotating a black link ? call the programmer")
 	}
 	nd.left = x.right
 	x.right = nd
@@ -606,42 +606,4 @@ func (writer *LLRBWriter) fixup(
 		reclaim = writer.flip(nd, reclaim)
 	}
 	return nd, reclaim
-}
-
-func (writer *LLRBWriter) snapshotticker(interval int, finch chan bool) {
-	tick := time.Tick(time.Duration(interval) * time.Millisecond)
-loop:
-	for {
-		<-tick
-		select { // break out if writer has exited
-		case <-finch:
-			break loop
-		default:
-		}
-		if err := writer.MakeSnapshot(); err != nil {
-			// log error.
-		}
-	}
-}
-
-func (writer *LLRBWriter) publishsnapshot(llrb *LLRB) {
-	snapshot := llrb.NewSnapshot()
-	for _, waiter := range writer.waiters {
-		waiter <- snapshot
-		snapshot.refcount++
-	}
-}
-
-func (writer *LLRBWriter) purgesnapshot(llrb *LLRB) {
-	location := &llrb.mvcc.snapshot
-	upsnapshot := atomic.LoadPointer(location)
-	for upsnapshot != nil {
-		snapshot := (*LLRBSnapshot)(upsnapshot)
-		if snapshot.ReclaimNodes() == false {
-			break
-		}
-		location = &snapshot.next
-		upsnapshot = atomic.LoadPointer(location)
-	}
-	atomic.StorePointer(location, upsnapshot)
 }

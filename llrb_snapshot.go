@@ -1,11 +1,52 @@
+// LLRB MVCC snapshot readers.
+
 package storage
 
 import "sync/atomic"
 import "unsafe"
+import "time"
 
-//---- LLRB MVCC snapshot readers.
+//---- snapshot methods
 
-// snapshotting
+func (writer *LLRBWriter) snapshotticker(interval int, finch chan bool) {
+	tick := time.Tick(time.Duration(interval) * time.Millisecond)
+loop:
+	for {
+		<-tick
+		select { // break out if writer has exited
+		case <-finch:
+			break loop
+		default:
+		}
+		if err := writer.MakeSnapshot(); err != nil {
+			// log error.
+		}
+	}
+}
+
+func (writer *LLRBWriter) publishsnapshot(llrb *LLRB) {
+	snapshot := llrb.NewSnapshot()
+	for _, waiter := range writer.waiters {
+		waiter <- snapshot
+		snapshot.refcount++
+	}
+}
+
+func (writer *LLRBWriter) purgesnapshot(llrb *LLRB) {
+	location := &llrb.mvcc.snapshot
+	upsnapshot := atomic.LoadPointer(location)
+	for upsnapshot != nil {
+		snapshot := (*LLRBSnapshot)(upsnapshot)
+		if snapshot.ReclaimNodes() == false {
+			break
+		}
+		location = &snapshot.next
+		upsnapshot = atomic.LoadPointer(location)
+	}
+	atomic.StorePointer(location, upsnapshot)
+}
+
+// read-snapshots
 
 type LLRBSnapshot struct {
 	llrb     *LLRB
