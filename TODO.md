@@ -1,4 +1,6 @@
 LLRB:
+* test mvcc.writer.DeleteMin() on a tree with single node.
+* monster validation should randomly include value for upsert.
 * amend Get API to return the depth of the key inside the tree,
   can be used for debugging.
 * add llrb tree validation rules, based on sedgewick paper.

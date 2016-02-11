@@ -9,41 +9,23 @@ import "time"
 //---- snapshot methods
 
 func (writer *LLRBWriter) snapshotticker(interval int, finch chan bool) {
-	tick := time.Tick(time.Duration(interval) * time.Millisecond)
+	tick := time.NewTicker(time.Duration(interval) * time.Millisecond)
+	defer func() {
+		tick.Stop()
+	}()
+
 loop:
 	for {
-		<-tick
+		<-tick.C
 		select { // break out if writer has exited
 		case <-finch:
 			break loop
 		default:
 		}
 		if err := writer.MakeSnapshot(); err != nil {
-			// log error.
+			// TODO: log error.
 		}
 	}
-}
-
-func (writer *LLRBWriter) publishsnapshot(llrb *LLRB) {
-	snapshot := llrb.NewSnapshot()
-	for _, waiter := range writer.waiters {
-		waiter <- snapshot
-		snapshot.refcount++
-	}
-}
-
-func (writer *LLRBWriter) purgesnapshot(llrb *LLRB) {
-	location := &llrb.mvcc.snapshot
-	upsnapshot := atomic.LoadPointer(location)
-	for upsnapshot != nil {
-		snapshot := (*LLRBSnapshot)(upsnapshot)
-		if snapshot.ReclaimNodes() == false {
-			break
-		}
-		location = &snapshot.next
-		upsnapshot = atomic.LoadPointer(location)
-	}
-	atomic.StorePointer(location, upsnapshot)
 }
 
 // read-snapshots
@@ -71,12 +53,9 @@ func (llrb *LLRB) NewSnapshot() *LLRBSnapshot {
 		clock: llrb.clock.clone(),
 	}
 
-	if len(llrb.mvcc.reclaim) > 0 {
-		snapshot.reclaim = make([]*Llrbnode, len(llrb.mvcc.reclaim))
-	}
+	snapshot.reclaim = make([]*Llrbnode, len(llrb.mvcc.reclaim))
 	copy(snapshot.reclaim, llrb.mvcc.reclaim)
-
-	llrb.mvcc.reclaim = llrb.mvcc.reclaim[:0]
+	llrb.mvcc.reclaim = llrb.mvcc.reclaim[:0] // reset writer reclaims
 
 	atomic.StorePointer(location, unsafe.Pointer(snapshot))
 	return snapshot
@@ -84,8 +63,6 @@ func (llrb *LLRB) NewSnapshot() *LLRBSnapshot {
 
 func (snapshot *LLRBSnapshot) Release() {
 	atomic.AddInt32(&snapshot.refcount, -1)
-	if atomic.LoadInt32(&snapshot.refcount) == 0 {
-	}
 }
 
 func (snapshot *LLRBSnapshot) Destroy() {

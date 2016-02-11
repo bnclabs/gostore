@@ -206,7 +206,6 @@ loop:
 			if callb != nil {
 				callb(llrb, newnd, oldnd)
 			}
-			llrb.freenode(oldnd)
 
 			reclaimNodes("upsert", reclaim)
 			close(respch)
@@ -217,17 +216,18 @@ loop:
 
 			nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
 			root, deleted, reclaim := writer.deletemin(nd, reclaim)
-			reclaimNodes("delmin", reclaim)
 			if root != nil {
 				root.metadata().setblack()
 			}
 			atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 
 			llrb.delcount(deleted)
+
 			if callb != nil {
 				callb(llrb, deleted)
 			}
-			llrb.freenode(deleted)
+
+			reclaimNodes("delmin", reclaim)
 			close(respch)
 
 		case cmdLlrbWriterDeleteMax:
@@ -236,17 +236,18 @@ loop:
 
 			nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
 			root, deleted, reclaim := writer.deletemax(nd, reclaim)
-			reclaimNodes("delmax", reclaim)
 			if root != nil {
 				root.metadata().setblack()
 			}
 			atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 
 			llrb.delcount(deleted)
+
 			if callb != nil {
 				callb(llrb, deleted)
 			}
-			llrb.freenode(deleted)
+
+			reclaimNodes("delmax", reclaim)
 			close(respch)
 
 		case cmdLlrbWriterDelete:
@@ -255,23 +256,30 @@ loop:
 
 			nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
 			root, deleted, reclaim := writer.delete(nd, key, reclaim)
-			reclaimNodes("delete", reclaim)
 			if root != nil {
 				root.metadata().setblack()
 			}
 			atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 
 			llrb.delcount(deleted)
+
 			if callb != nil {
 				callb(llrb, deleted)
 			}
-			llrb.freenode(deleted)
+
+			reclaimNodes("delete", reclaim)
 			close(respch)
 
 		case cmdLlrbWriterMakeSnapshot:
 			if len(writer.waiters) > 0 {
-				writer.publishsnapshot(llrb)
+				snapshot := llrb.NewSnapshot()
+				for _, waiter := range writer.waiters {
+					waiter <- snapshot
+					atomic.AddInt32(&snapshot.refcount, 1)
+					close(waiter)
+				}
 			}
+			writer.waiters = writer.waiters[:0]
 			writer.purgesnapshot(llrb)
 
 		case cmdLlrbWriterGetSnapshot:
@@ -333,6 +341,8 @@ func (writer *LLRBWriter) upsert(
 	reclaim []*Llrbnode) (*Llrbnode, *Llrbnode, *Llrbnode, []*Llrbnode) {
 
 	var oldnd, newnd *Llrbnode
+	var dirty bool
+
 	llrb := writer.llrb
 
 	if nd == nil {
@@ -352,17 +362,21 @@ func (writer *LLRBWriter) upsert(
 		ndmvcc.right, newnd, oldnd, reclaim =
 			writer.upsert(ndmvcc.right, depth+1, key, value, reclaim)
 	} else {
-		oldnd = nd
+		oldnd, dirty = nd, false
 		if nv := ndmvcc.nodevalue(); nv != nil { // free the value if present
 			nv.pool.free(unsafe.Pointer(nv))
+			ndmvcc, dirty = ndmvcc.setnodevalue(nil), true
 		}
 		if value != nil { // add new value if need be
 			ptr, mpool := llrb.valarena.alloc(int64(nvaluesize + len(value)))
 			nv := (*nodevalue)(ptr)
 			nv.pool = mpool
-			ndmvcc = ndmvcc.setnodevalue(nv.setvalue(value))
+			ndmvcc, dirty = ndmvcc.setnodevalue(nv.setvalue(value)), true
 		}
 		newnd = ndmvcc
+		if dirty {
+			ndmvcc.metadata().setdirty()
+		}
 		llrb.upsertdepth.add(depth)
 	}
 
@@ -379,12 +393,13 @@ func (writer *LLRBWriter) deletemin(
 	if nd == nil {
 		return nil, nil, reclaim
 	}
+
+	reclaim = append(reclaim, nd)
+
 	if nd.left == nil {
-		reclaim = append(reclaim, nd)
 		return nil, nd, reclaim
 	}
 
-	reclaim = append(reclaim, nd)
 	ndmvcc := writer.llrb.clone(nd)
 
 	if !isred(ndmvcc.left) && !isred(ndmvcc.left.left) {
@@ -606,4 +621,18 @@ func (writer *LLRBWriter) fixup(
 		reclaim = writer.flip(nd, reclaim)
 	}
 	return nd, reclaim
+}
+
+func (writer *LLRBWriter) purgesnapshot(llrb *LLRB) {
+	location := &llrb.mvcc.snapshot
+	upsnapshot := atomic.LoadPointer(location)
+	for upsnapshot != nil {
+		snapshot := (*LLRBSnapshot)(upsnapshot)
+		if snapshot.ReclaimNodes() == false {
+			break
+		}
+		location = &snapshot.next
+		upsnapshot = atomic.LoadPointer(location)
+	}
+	atomic.StorePointer(location, upsnapshot)
 }
