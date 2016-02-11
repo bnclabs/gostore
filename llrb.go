@@ -136,12 +136,15 @@ const MaxValmem = 10 * 1024 * 1024
 type LLRBNodeIterator func(nd *Llrbnode) bool
 
 // LLRBUpsertCallback callback from Upsert API. Don't keep any reference
-// to newnd and oldnd.
+// to newnd and oldnd:
+// * oldnd can only be read.
+// * newnd can be read or updated.
 type LLRBUpsertCallback func(llrb *LLRB, newnd, oldnd *Llrbnode)
 
 // LLRBDeleteCallback callback from Delete API. Don't keep any reference
-// to nd.
-type LLRBDeleteCallback func(llrb *LLRB, nd *Llrbnode)
+// to nd:
+// * deleted node can only be read.
+type LLRBDeleteCallback func(llrb *LLRB, deleted *Llrbnode)
 
 type LLRB struct { // tree container
 	name      string
@@ -396,6 +399,7 @@ func (llrb *LLRB) upsert(
 	key, value []byte) (*Llrbnode, *Llrbnode, *Llrbnode) {
 
 	var oldnd, newnd *Llrbnode
+	var dirty bool
 
 	if nd == nil {
 		newnd := llrb.newnode(key, value)
@@ -410,17 +414,21 @@ func (llrb *LLRB) upsert(
 	} else if nd.ltkey(key) {
 		nd.right, newnd, oldnd = llrb.upsert(nd.right, depth+1, key, value)
 	} else {
-		oldnd = llrb.clone(nd)
+		oldnd, dirty = llrb.clone(nd), false
 		if nv := nd.nodevalue(); nv != nil { // free the value if present
 			nv.pool.free(unsafe.Pointer(nv))
+			nd, dirty = nd.setnodevalue(nil), true
 		}
 		if value != nil { // add new value if need be
 			ptr, mpool := llrb.valarena.alloc(int64(nvaluesize + len(value)))
 			nv := (*nodevalue)(ptr)
 			nv.pool = mpool
-			nd = nd.setnodevalue(nv.setvalue(value))
+			nd, dirty = nd.setnodevalue(nv.setvalue(value)), true
 		}
 		newnd = nd
+		if dirty {
+			nd.metadata().setdirty()
+		}
 		llrb.upsertdepth.add(depth)
 	}
 
