@@ -1,6 +1,7 @@
 package storage
 
 import "unsafe"
+import "sync/atomic"
 
 // hard limits:
 //
@@ -165,11 +166,14 @@ func (md *metadata) isdirty() bool {
 //---- deleted, after marking it as deleted there is no going back :)
 
 func (md *metadata) isdeleted() bool {
-	return (md.hdr & uint64(mdFlagDeleted)) == uint64(mdFlagDeleted)
+	hdr := atomic.LoadUint64(&md.hdr)
+	return (hdr & uint64(mdFlagDeleted)) == uint64(mdFlagDeleted)
 }
 
 func (md *metadata) setdeleted() *metadata {
-	md.hdr = md.hdr | uint64(mdFlagDeleted)
+	hdr := atomic.LoadUint64(&md.hdr)
+	hdr = hdr | uint64(mdFlagDeleted)
+	atomic.StoreUint64(&md.hdr, hdr)
 	return md
 }
 
