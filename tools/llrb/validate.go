@@ -86,7 +86,7 @@ func withLLRB(count int, opch chan [][]interface{}) {
 	dict := storage.NewDict()
 	config := map[string]interface{}{
 		"maxvb":                   1024,
-		"mvcc.enabled":            false,
+		"mvcc.enabled":            validateopts.mvcc,
 		"mvcc.snapshot.tick":      0,
 		"mvcc.writer.chanbuffer":  1000,
 		"nodearena.minblock":      loadopts.nodearena[0],
