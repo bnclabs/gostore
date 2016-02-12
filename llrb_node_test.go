@@ -3,6 +3,8 @@ package storage
 import "testing"
 import "bytes"
 import "fmt"
+import "strings"
+import "unsafe"
 
 var _ = fmt.Sprintf("dummy")
 
@@ -60,6 +62,71 @@ func Testnode(t *testing.T) {
 	}
 
 	mpool.free(ptr)
+}
+
+func TestNodeFields(t *testing.T) {
+	minblock, maxblock := int64(96), int64(1024*1024*10)
+	capacity, pcapacity := int64(1024*1024*1024), int64(1024*1024)
+	marena := newmemarena(minblock, maxblock, capacity, pcapacity)
+	blocksize, key := int64(1024), make([]byte, 512)
+	copy(key, "hello world")
+
+	ptr, mpool := marena.alloc(blocksize)
+	nd := (*Llrbnode)(ptr)
+	fmask := metadataMask(0).enableBornSeqno().enableDeadSeqno().enableVbuuid()
+	fmask = fmask.enableMvalue()
+	nd.metadata().initMetadata(0, fmask)
+	nd.pool = mpool
+
+	ptr, mpool = marena.alloc(blocksize)
+	nv := (*nodevalue)(ptr)
+	nv.pool = mpool
+	nd.metadata().setmvalue((uint64)((uintptr)(unsafe.Pointer(nv))), 0)
+
+	// metadata fields
+	vbno, bornsno := uint16(0x1111), uint64(0x1111222233334444)
+	deadsno, vbuuid := uint64(0x1111222233384444), uint64(0xABCDEFABCDEF4444)
+	nd.Setvbno(vbno).SetBornseqno(bornsno)
+	nd.SetDeadseqno(deadsno).SetVbuuid(vbuuid)
+	if x := nd.Vbno(); x != vbno {
+		t.Errorf("expected %v, got %v", vbno, x)
+	} else if x := nd.Bornseqno(); x != bornsno {
+		t.Errorf("expected %v, got %v", bornsno, x)
+	} else if x := nd.Deadseqno(); x != deadsno {
+		t.Errorf("expected %v, got %v", deadsno, x)
+	} else if x := nd.Vbuuid(); x != vbuuid {
+		t.Errorf("expected %v, got %v", deadsno, x)
+	}
+
+	// key, value
+	key, value := []byte("hello world"), []byte("say cheese")
+	nd.setkeysize(len(key)).setkey(key)
+	nd.nodevalue().setvalsize(int64(len(value))).setvalue(value)
+	if x := nd.keysize(); x != len(key) {
+		t.Errorf("expected %v, got %v", len(key), x)
+	} else if x := nd.Key(); bytes.Compare(x, key) != 0 {
+		t.Errorf("expected %v, got %v", key, x)
+	} else if x := nd.nodevalue().valsize(); x != len(value) {
+		t.Errorf("expected %v, got %v", len(value), x)
+	} else if x := nd.Value(); bytes.Compare(x, value) != 0 {
+		t.Errorf("expected %v, got %v", value, x)
+	}
+
+	// isred, isblack
+	nd.metadata().setred()
+	if isred(nd) != true {
+		t.Errorf("expected %v, got %v", true, false)
+	}
+	nd.metadata().setblack()
+	if isblack(nd) != true {
+		t.Errorf("expected %v, got %v", true, false)
+	}
+
+	// repr
+	if s := nd.repr(); strings.Contains(s, " ") != true {
+		t.Errorf("repr: %v", s)
+	}
+
 }
 
 func TestLtkey(t *testing.T) {

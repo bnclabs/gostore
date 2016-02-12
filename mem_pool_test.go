@@ -21,6 +21,15 @@ func TestNewmempool(t *testing.T) {
 	} else if mpool.size != size {
 		t.Errorf("expected %v, got %v", size, mpool.size)
 	}
+	// panic case
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Errorf("expected panic")
+			}
+		}()
+		newmempool(size, 9)
+	}()
 }
 
 func TestMpoolAlloc(t *testing.T) {
@@ -83,6 +92,24 @@ func TestMpoolAlloc(t *testing.T) {
 	} else if x := mpool.available() + mpool.allocated(); x != mpool.capacity {
 		t.Errorf("expected %v, got %v", mpool.capacity, x)
 	}
+
+	// panic case
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Errorf("expected panic")
+			}
+		}()
+		mpool.free(nil)
+	}()
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Errorf("expected panic")
+			}
+		}()
+		mpool.free(unsafe.Pointer(((uintptr)(ptrs[0])) + 1))
+	}()
 
 	// release
 	mpool.release()

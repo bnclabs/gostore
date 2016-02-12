@@ -15,28 +15,32 @@ type Llrbnode struct {
 
 //---- Exported methods on metadata.
 
-func (nd *Llrbnode) Setvbno(vbno uint16) {
+func (nd *Llrbnode) Setvbno(vbno uint16) *Llrbnode {
 	if nd != nil {
 		nd.metadata().setvbno(vbno)
 	}
+	return nd
 }
 
-func (nd *Llrbnode) SetBornseqno(seqno uint64) {
+func (nd *Llrbnode) SetBornseqno(seqno uint64) *Llrbnode {
 	if nd != nil {
 		nd.metadata().setbnseq(seqno)
 	}
+	return nd
 }
 
-func (nd *Llrbnode) SetDeadseqno(seqno uint64) {
+func (nd *Llrbnode) SetDeadseqno(seqno uint64) *Llrbnode {
 	if nd != nil {
 		nd.metadata().setddseq(seqno)
 	}
+	return nd
 }
 
-func (nd *Llrbnode) SetVbuuid(vbuuid uint64) {
+func (nd *Llrbnode) SetVbuuid(vbuuid uint64) *Llrbnode {
 	if nd != nil {
 		nd.metadata().setvbuuid(vbuuid)
 	}
+	return nd
 }
 
 func (nd *Llrbnode) Vbno() uint16 {

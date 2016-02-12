@@ -2,6 +2,7 @@ package storage
 
 import "testing"
 import "fmt"
+import "errors"
 
 var _ = fmt.Sprintf("dummy")
 
@@ -50,6 +51,95 @@ func TestZerosin32(t *testing.T) {
 		t.Errorf("expected %v, got %v", 16, x)
 	} else if x = zerosin32(0x55555555); x != 16 {
 		t.Errorf("expected %v, got %v", 16, x)
+	}
+}
+
+func TestFailsafeRequest(t *testing.T) {
+	reqch := make(chan []interface{}, 10)
+	respch := make(chan []interface{}, 1)
+	finch := make(chan bool)
+	donech := make(chan bool)
+
+	go func() {
+		resp, err := failsafeRequest(reqch, respch, []interface{}{"case1"}, finch)
+		if err != nil {
+			t.Errorf("case1: %v", err)
+		} else if resp[0].(string) != "ok1" {
+			t.Errorf("expected %v, got %v\n", "ok1", resp[0].(string))
+		}
+		donech <- true
+	}()
+	if cmd := <-reqch; cmd[0].(string) != "case1" {
+		t.Errorf("expected %v, got %v\n", "case1", cmd[0])
+	} else {
+		respch <- []interface{}{"ok1"}
+	}
+	<-donech
+
+	go func() {
+		resp, err := failsafeRequest(reqch, respch, []interface{}{"case2"}, finch)
+		if resp != nil {
+			t.Errorf("expected nil, got %v\n", resp)
+		} else if err.Error() != "closed" {
+			t.Errorf("expected closed, got %v\n", err.Error())
+		}
+		donech <- true
+	}()
+	if cmd := <-reqch; cmd[0].(string) != "case2" {
+		t.Errorf("expected %v, got %v\n", "case2", cmd[0])
+	}
+	close(finch)
+	<-donech
+
+	go func() {
+		resp, err := failsafeRequest(reqch, respch, []interface{}{"case3"}, finch)
+		if resp != nil {
+			t.Errorf("expected nil, got %v\n", resp)
+		} else if err.Error() != "closed" {
+			t.Errorf("expected closed, got %v\n", err.Error())
+		}
+		donech <- true
+	}()
+	<-donech
+}
+
+func TestFailsafePost(t *testing.T) {
+	reqch := make(chan []interface{}, 10)
+	finch := make(chan bool)
+	donech := make(chan bool)
+
+	go func() {
+		err := failsafePost(reqch, []interface{}{"post1"}, finch)
+		if err != nil {
+			t.Errorf("post1: %v", err)
+		}
+		donech <- true
+	}()
+	if cmd := <-reqch; cmd[0].(string) != "post1" {
+		t.Errorf("expected %v, got %v\n", "post1", cmd[0])
+	}
+	<-donech
+
+	close(finch)
+	go func() {
+		err := failsafePost(nil, []interface{}{"post2"}, finch)
+		if err.Error() != "closed" {
+			t.Errorf("expected closed, got %v\n", err.Error())
+		}
+		donech <- true
+	}()
+	<-donech
+}
+
+func TestResponseError(t *testing.T) {
+	err := errors.New("error")
+	resp := []interface{}{err, errors.New("resperr")}
+	if e := responseError(err, resp, 0).Error(); e != "error" {
+		t.Errorf("expected error, got %v", e)
+	}
+	resp = []interface{}{err, errors.New("resperr")}
+	if e := responseError(nil, resp, 1).Error(); e != "resperr" {
+		t.Errorf("expected resperr, got %v", e)
 	}
 }
 

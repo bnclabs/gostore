@@ -73,6 +73,34 @@ func TestNewmarena(t *testing.T) {
 		t.Errorf("expected %v, got %v", x, y)
 	}
 	marena.release()
+
+	// panic cases
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Errorf("expected panic")
+			}
+		}()
+		min, max := int64(0), int64(0x1234567812344556)
+		newmemarena(min, max, capacity, pcapacity)
+	}()
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Errorf("expected panic")
+			}
+		}()
+		min, max := int64(0), int64(359399435061660672)
+		newmemarena(min, max, capacity, pcapacity)
+	}()
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Errorf("expected panic")
+			}
+		}()
+		newmemarena(int64(32), 1024, maxarenasize+1, pcapacity)
+	}()
 }
 
 func TestArenaAlloc(t *testing.T) {
@@ -91,6 +119,15 @@ func TestArenaAlloc(t *testing.T) {
 	} else if x, y := marena.allocated(), int64(1024*1024); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
+	// panic case
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Errorf("expected panic")
+			}
+		}()
+		marena.alloc(maxblock + 1)
+	}()
 	marena.release()
 }
 

@@ -25,18 +25,16 @@
 //
 // * non-mvcc Tree/Memory APIs:
 //
-//		llrb.Count(), llrb.Has(), llrb.Get(), llrb.Min(), llrb.Max(),
-//		llrb.Range()
+//		llrb.Count(), llrb.Destroy()
+//      llrb.Has(), llrb.Get(), llrb.Min(), llrb.Max(), llrb.Range()
 //		llrb.Upsert(), llrb.DeleteMin(), llrb.DeleteMax(), llrb.Delete()
-//		llrb.Destroy()
 //
 // mvcc use case:
 //
 // * all write operations shall be serialized in a single routine.
 // * one or more routines can do concurrent read operation.
 //
-//		llrb.Count()
-//		llrb.Destroy()
+//		llrb.Count(), llrb.Destroy()
 //
 // * mvcc APIs with concurrency support:
 //

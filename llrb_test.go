@@ -11,35 +11,39 @@ import "bytes"
 var _ = fmt.Sprintf("dummy")
 
 func TestNewLLRB(t *testing.T) {
-	config := makenewconfig()
+	config := makellrbconfig()
+
 	llrb := NewLLRB("test", config, nil)
 	if llrb == nil {
 		t.Errorf("unexpected nil")
 	}
-	nodavail := config["nodearena.capacity"].(int)
-	valavail := config["valarena.capacity"].(int)
+
 	mstats := llrb.StatsMem()
-	if overhead := mstats["node.overhead"].(int64); overhead != 2112 {
-		t.Errorf("expected %v, got %v", 0, 2112)
-	} else if useful := mstats["node.useful"].(int64); useful != 0 {
-		t.Errorf("expected %v, got %v", 0, useful)
-	} else if overhead = mstats["value.overhead"].(int64); overhead != 2112 {
-		t.Errorf("expected %v, got %v", 0, overhead)
-	} else if useful = mstats["value.useful"].(int64); useful != 0 {
-		t.Errorf("expected %v, got %v", 0, overhead)
-	} else if x, y := int64(0), mstats["node.allocated"].(int64); x != y {
-		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(0), mstats["value.allocated"].(int64); x != y {
-		t.Errorf("expected %v, got %v", x, y)
-	}
-	x, y := int64(nodavail), mstats["node.available"].(int64)
-	if x != y {
+
+	ovrhd, used, allc := int64(2112), int64(0), int64(0)
+	nodavail := int64(config["nodearena.capacity"].(int))
+	if x := mstats["node.overhead"].(int64); x != ovrhd {
+		t.Errorf("expected %v, got %v", ovrhd, x)
+	} else if x := mstats["node.useful"].(int64); x != used {
+		t.Errorf("expected %v, got %v", used, x)
+	} else if x := mstats["node.allocated"].(int64); x != allc {
+		t.Errorf("expected %v, got %v", allc, x)
+	} else if x, y := nodavail, mstats["node.available"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
-	x, y = int64(valavail), mstats["value.available"].(int64)
-	if x != y {
+
+	ovrhd, used, allc = int64(2112), int64(0), int64(0)
+	valavail := int64(config["valarena.capacity"].(int))
+	if x := mstats["value.overhead"].(int64); x != ovrhd {
+		t.Errorf("expected %v, got %v", ovrhd, x)
+	} else if x := mstats["value.useful"].(int64); x != used {
+		t.Errorf("expected %v, got %v", used, x)
+	} else if x := mstats["value.allocated"].(int64); x != allc {
+		t.Errorf("expected %v, got %v", allc, x)
+	} else if x, y := valavail, mstats["value.available"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
+
 	if x, y := int64(0), mstats["keymemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	} else if x, y := int64(0), mstats["valmemory"].(int64); x != y {
@@ -48,7 +52,7 @@ func TestNewLLRB(t *testing.T) {
 }
 
 func TestNewLLRBNode(t *testing.T) {
-	config := makenewconfig()
+	config := makellrbconfig()
 	config["metadata.bornseqno"] = true
 	config["metadata.deadseqno"] = true
 	config["metadata.mvalue"] = true
@@ -79,8 +83,8 @@ func TestNewLLRBNode(t *testing.T) {
 	llrb.freenode(nd)
 }
 
-func TestNewLLRBNodeNegative(t *testing.T) {
-	llrb := NewLLRB("test", makenewconfig(), nil)
+func TestNewLLRBNodePanic(t *testing.T) {
+	llrb := NewLLRB("test", makellrbconfig(), nil)
 	key, value := makekeyvalue(make([]byte, 128), make([]byte, 1024))
 	func() {
 		defer func() {
@@ -93,7 +97,7 @@ func TestNewLLRBNodeNegative(t *testing.T) {
 }
 
 func TestCloneLLRBNode(t *testing.T) {
-	config := makenewconfig()
+	config := makellrbconfig()
 	config["metadata.mvalue"] = true
 	llrb := NewLLRB("test", config, nil)
 	key, value := makekeyvalue(make([]byte, 128), make([]byte, 1024))
@@ -111,7 +115,7 @@ func TestCloneLLRBNode(t *testing.T) {
 }
 
 func TestLLRBBasic(t *testing.T) {
-	config := makenewconfig()
+	config := makellrbconfig()
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
@@ -220,7 +224,7 @@ func TestLLRBBasic(t *testing.T) {
 }
 
 func TestLLRBBasicRange(t *testing.T) {
-	config := makenewconfig()
+	config := makellrbconfig()
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
@@ -336,7 +340,7 @@ func TestLLRBBasicRange(t *testing.T) {
 }
 
 func TestLLRBInsert(t *testing.T) {
-	config := makenewconfig()
+	config := makellrbconfig()
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
@@ -362,23 +366,29 @@ func TestLLRBInsert(t *testing.T) {
 	}
 	// check memory accounting
 	mstats := llrb.StatsMem()
-	if overhead := mstats["node.overhead"].(int64); overhead != 3814 {
-		t.Errorf("expected %v, got %v", 3541, overhead)
-	} else if useful := mstats["node.useful"].(int64); useful != 2096640 {
-		t.Errorf("expected %v, got %v", 2096640, useful)
-	} else if overhead := mstats["value.overhead"].(int64); overhead != 22656 {
-		t.Errorf("expected %v, got %v", 22656, overhead)
-	} else if useful := mstats["value.useful"].(int64); useful != 20971520 {
-		t.Errorf("expected %v, got %v", 20971520, useful)
-	} else if x, y := int64(1600000), mstats["node.allocated"].(int64); x != y {
-		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(1280000), mstats["value.allocated"].(int64); x != y {
-		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(1072141824), mstats["node.available"].(int64); x != y {
-		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(10736138240), mstats["value.available"].(int64); x != y {
-		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(1000000), mstats["keymemory"].(int64); x != y {
+	overhead, useful := int64(3814), int64(2096640)
+	allocated, avail := int64(1600000), int64(1072141824)
+	if x := mstats["node.overhead"].(int64); x != overhead {
+		t.Errorf("expected %v, got %v", overhead, x)
+	} else if x := mstats["node.useful"].(int64); x != useful {
+		t.Errorf("expected %v, got %v", useful, x)
+	} else if x := mstats["node.allocated"].(int64); x != allocated {
+		t.Errorf("expected %v, got %v", allocated, x)
+	} else if x := mstats["node.available"].(int64); x != avail {
+		t.Errorf("expected %v, got %v", avail, x)
+	}
+	overhead, useful = int64(22656), int64(20971520)
+	allocated, avail = int64(1280000), int64(10736138240)
+	if x := mstats["value.overhead"].(int64); x != overhead {
+		t.Errorf("expected %v, got %v", overhead, x)
+	} else if x := mstats["value.useful"].(int64); x != useful {
+		t.Errorf("expected %v, got %v", useful, x)
+	} else if x := mstats["value.allocated"].(int64); x != allocated {
+		t.Errorf("expected %v, got %v", allocated, x)
+	} else if x := mstats["value.available"].(int64); x != avail {
+		t.Errorf("expected %v, got %v", avail, x)
+	}
+	if x, y := int64(1000000), mstats["keymemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	} else if x, y = int64(1000000), mstats["valmemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
@@ -405,7 +415,7 @@ func TestLLRBInsert(t *testing.T) {
 }
 
 func TestLLRBUpsert(t *testing.T) {
-	config := makenewconfig()
+	config := makellrbconfig()
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
@@ -490,7 +500,7 @@ func TestLLRBUpsert(t *testing.T) {
 }
 
 func TestLLRBDelete(t *testing.T) {
-	config := makenewconfig()
+	config := makellrbconfig()
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
@@ -565,7 +575,7 @@ func TestLLRBDelete(t *testing.T) {
 }
 
 func TestLLRBRange(t *testing.T) {
-	config := makenewconfig()
+	config := makellrbconfig()
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
@@ -639,11 +649,11 @@ func makekeyvalue(key, value []byte) ([]byte, []byte) {
 	return key, value
 }
 
-func makenewconfig() map[string]interface{} {
+func makellrbconfig() map[string]interface{} {
 	config := map[string]interface{}{
 		"maxvb":                   1024,
 		"mvcc.enabled":            false,
-		"mvcc.snapshot.tick":      0,
+		"mvcc.snapshot.tick":      5, // 5 millisecond
 		"mvcc.writer.chanbuffer":  1000,
 		"nodearena.minblock":      96,
 		"nodearena.maxblock":      1024,

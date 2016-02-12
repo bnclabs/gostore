@@ -2,6 +2,9 @@ package storage
 
 import "testing"
 import "bytes"
+import "fmt"
+
+var _ = fmt.Sprintf("dummy")
 
 func TestDict(t *testing.T) {
 	d := NewDict()
@@ -28,6 +31,9 @@ func TestDict(t *testing.T) {
 	if v := d.Get(inserts[2][0]); bytes.Compare(v, inserts[2][1]) != 0 {
 		t.Errorf("expected %v, got %v", string(inserts[2][1]), string(v))
 	}
+	if v := d.Get([]byte("missingkey")); v != nil {
+		t.Errorf("expected %v, got %v", nil, v)
+	}
 	if k, v := d.Min(); bytes.Compare(k, inserts[0][0]) != 0 {
 		t.Errorf("expected %v, got %v", string(inserts[0][0]), string(k))
 	} else if bytes.Compare(v, inserts[0][1]) != 0 {
@@ -43,7 +49,7 @@ func TestDict(t *testing.T) {
 	if bytes.Compare(v, inserts[0][1]) != 0 {
 		t.Errorf("expected %v, got %v\n", string(inserts[0][1]), string(v))
 	}
-	// deletes
+	// delete-min
 	if k, v := d.DeleteMin(); bytes.Compare(k, inserts[0][0]) != 0 {
 		t.Errorf("expected %v, got %v", string(inserts[0][0]), string(k))
 	} else if bytes.Compare(v, []byte("value11")) != 0 {
@@ -51,6 +57,7 @@ func TestDict(t *testing.T) {
 	} else if int(d.Count()) != (len(inserts) - 1) {
 		t.Errorf("expected %v, got %v", len(inserts)-1, d.Count())
 	}
+	// delete-max
 	if k, v := d.DeleteMax(); bytes.Compare(k, []byte("key5")) != 0 {
 		t.Errorf("expected %v, got %v", "key5", string(k))
 	} else if bytes.Compare(v, []byte("value5")) != 0 {
@@ -58,10 +65,25 @@ func TestDict(t *testing.T) {
 	} else if int(d.Count()) != (len(inserts) - 2) {
 		t.Errorf("expected %v, got %v", len(inserts)-2, d.Count())
 	}
+	// delete
 	if v := d.Delete([]byte("key2")); bytes.Compare(v, []byte("value2")) != 0 {
 		t.Errorf("expected %v, got %v", "value2", string(v))
 	} else if int(d.Count()) != (len(inserts) - 3) {
 		t.Errorf("expected %v, got %v", len(inserts)-3, d.Count())
+	}
+	// test corner cases for Min, Max, DeleteMin, DeleteMax
+	d.DeleteMin()
+	d.DeleteMin()
+	if k, v := d.Min(); k != nil || v != nil {
+		t.Errorf("expected {nil,nil}, got {%v,%v}", k, v)
+	} else if k, v := d.Max(); k != nil || v != nil {
+		t.Errorf("expected {nil,nil}, got {%v,%v}", k, v)
+	} else if k, v := d.DeleteMin(); k != nil || v != nil {
+		t.Errorf("expected {nil,nil}, got {%v,%v}", k, v)
+	} else if k, v := d.DeleteMax(); k != nil || v != nil {
+		t.Errorf("expected {nil,nil}, got {%v,%v}", k, v)
+	} else if v := d.Delete([]byte("hello")); v != nil {
+		t.Errorf("expected nil, got %v", v)
 	}
 }
 
@@ -151,20 +173,66 @@ func TestDictRange(t *testing.T) {
 	if ln != (len(inserts) - 1) {
 		t.Errorf("expected %v, got %v", len(inserts)-1, ln)
 	}
+	// corner case with low as nil
+	ln = 0
+	d.Range(
+		nil, inserts[4][0], "high",
+		func(k, v []byte) bool { ln += 1; return true })
+	if ln != 5 {
+		t.Errorf("expected %v, got %v", 5, ln)
+	}
+	// corner case with high as nil
+	ln = 0
+	d.Range(
+		inserts[0][0], nil, "none",
+		func(k, v []byte) bool { ln += 1; return true })
+	if ln != 4 {
+		t.Errorf("expected %v, got %v", 4, ln)
+	}
+	// corner case with return as false
+	ln = 0
+	d.Range(
+		inserts[0][0], nil, "low",
+		func(k, v []byte) bool { ln += 1; return false })
+	if ln != 1 {
+		t.Errorf("expected %v, got %v", 1, ln)
+	}
 	// corner case on the high side.
-	i, ln = 0, 0
+	ln = 0
 	d.Range(
 		inserts[0][0], inserts[0][0], "high",
-		func(k, v []byte) bool { return true })
+		func(k, v []byte) bool { ln += 1; return true })
 	if ln != 0 {
 		t.Errorf("expected %v, got %v", 0, ln)
 	}
 	// corner case on the low side.
-	i, ln = 0, 0
+	ln = 0
 	d.Range(
 		inserts[4][0], inserts[4][0], "low",
-		func(k, v []byte) bool { return true })
+		func(k, v []byte) bool { ln += 1; return true })
 	if ln != 0 {
 		t.Errorf("expected %v, got %v", 0, ln)
+	}
+}
+
+func TestDictRsnapshot(t *testing.T) {
+	d := NewDict()
+	inserts := [][2][]byte{
+		[2][]byte{[]byte("key1"), []byte("value1")},
+		[2][]byte{[]byte("key2"), []byte("value2")},
+		[2][]byte{[]byte("key3"), []byte("value3")},
+		[2][]byte{[]byte("key4"), []byte("value4")},
+		[2][]byte{[]byte("key5"), []byte("value5")},
+	}
+	for _, kv := range inserts {
+		if v := d.Upsert(kv[0], kv[1]); v != nil {
+			t.Errorf("expected nil")
+		}
+	}
+
+	rd := d.RSnapshot()
+	d.Upsert(inserts[1][0], []byte("newvalue"))
+	if v := rd.Get(inserts[1][0]); bytes.Compare(v, inserts[1][1]) != 0 {
+		t.Errorf("expected %v, got %v", inserts[1][1], v)
 	}
 }

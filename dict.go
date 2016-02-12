@@ -21,7 +21,7 @@ func NewDict() *Dict {
 	}
 }
 
-func (d *Dict) RSnapshot(_ int) *Dict {
+func (d *Dict) RSnapshot() *Dict {
 	newd := NewDict()
 	for k, v := range d.dict {
 		newd.dict[k] = v
@@ -125,10 +125,7 @@ func (d *Dict) Range(lowkey, highkey []byte, incl string, iter KVIterator) {
 		}
 		for i := start; i < len(keys); i++ {
 			kv := d.dict[keys[i]]
-			if highkey == nil {
-				iter(kv[0], kv[1])
-				continue
-			} else if bytes.Compare(kv[0], highkey) < cmp {
+			if highkey == nil || (bytes.Compare(kv[0], highkey) < cmp) {
 				if iter(kv[0], kv[1]) == false {
 					break
 				}
