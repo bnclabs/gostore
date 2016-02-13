@@ -1,5 +1,8 @@
 LLRB:
 * test mvcc.writer.DeleteMin() on a tree with single node.
+* change config["mvcc.enabled"] to config["mvcc.enable"].
+* snapshot.Count(), don't use llrb.count
+* should llrb.clone() copy value also ? can it be optimized for mvcc ?
 * monster validation should randomly include value for upsert.
 * amend Get API to return the depth of the key inside the tree,
   can be used for debugging.

@@ -12,6 +12,7 @@ import "strings"
 // supply a logger object implementing this interface or
 // gofast will fall back to the DefaultLogger{}.
 type Logger interface {
+	SetLogLevel(string)
 	Fatalf(format string, v ...interface{})
 	Errorf(format string, v ...interface{})
 	Warnf(format string, v ...interface{})
@@ -19,15 +20,6 @@ type Logger interface {
 	Verbosef(format string, v ...interface{})
 	Debugf(format string, v ...interface{})
 	Tracef(format string, v ...interface{})
-}
-
-// DefaultLogger with default log-file as os.Stdout and,
-// default log-level as LogLevelInfo. Applications can
-// supply a Logger{} object when instantiating the
-// Transport.
-type DefaultLogger struct {
-	level  logLevel
-	output io.Writer
 }
 
 type logLevel int
@@ -68,6 +60,19 @@ func setLogger(logger Logger, config map[string]interface{}) Logger {
 	}
 	log = &DefaultLogger{level: level, output: logfd}
 	return log
+}
+
+// DefaultLogger with default log-file as os.Stdout and,
+// default log-level as LogLevelInfo. Applications can
+// supply a Logger{} object when instantiating the
+// Transport.
+type DefaultLogger struct {
+	level  logLevel
+	output io.Writer
+}
+
+func (l *DefaultLogger) SetLogLevel(level string) {
+	l.level = string2logLevel(level)
 }
 
 func (l *DefaultLogger) Fatalf(format string, v ...interface{}) {

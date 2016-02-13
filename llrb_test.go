@@ -18,6 +18,7 @@ func TestNewLLRB(t *testing.T) {
 		t.Errorf("unexpected nil")
 	}
 
+	// StatsMem
 	mstats := llrb.StatsMem()
 
 	ovrhd, used, allc := int64(2112), int64(0), int64(0)
@@ -49,6 +50,8 @@ func TestNewLLRB(t *testing.T) {
 	} else if x, y := int64(0), mstats["valmemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
+
+	llrb.Destroy()
 }
 
 func TestNewLLRBNode(t *testing.T) {
@@ -58,6 +61,7 @@ func TestNewLLRBNode(t *testing.T) {
 	config["metadata.mvalue"] = true
 	config["metadata.vbuuid"] = true
 	llrb := NewLLRB("test", config, nil)
+
 	key, value := makekeyvalue(make([]byte, 128), make([]byte, 1024))
 	vbno, vbuuid := uint16(10), uint64(0xABCD)
 	bnseqno, ddseqno := uint64(12345678), uint64(12345690)
@@ -81,6 +85,8 @@ func TestNewLLRBNode(t *testing.T) {
 		t.Errorf("expected %x, got %x", ddseqno, x)
 	}
 	llrb.freenode(nd)
+
+	llrb.Destroy()
 }
 
 func TestNewLLRBNodePanic(t *testing.T) {
@@ -94,12 +100,15 @@ func TestNewLLRBNodePanic(t *testing.T) {
 		}()
 		llrb.newnode(key, value)
 	}()
+
+	llrb.Destroy()
 }
 
 func TestCloneLLRBNode(t *testing.T) {
 	config := makellrbconfig()
 	config["metadata.mvalue"] = true
 	llrb := NewLLRB("test", config, nil)
+
 	key, value := makekeyvalue(make([]byte, 128), make([]byte, 1024))
 	nd := llrb.newnode(key, value)
 	nd.metadata().setblack().setdirty()
@@ -112,18 +121,11 @@ func TestCloneLLRBNode(t *testing.T) {
 	if llrb.equivalent(nd, newnd) == false {
 		t.Errorf("expected %v, got %v", nd.repr(), newnd.repr())
 	}
+
+	llrb.Destroy()
 }
 
-func TestLLRBBasic(t *testing.T) {
-	config := makellrbconfig()
-	config["metadata.mvalue"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
-	llrb := NewLLRB("test", config, nil)
-	if llrb.Count() != 0 {
-		t.Fatalf("expected an empty dict")
-	}
-	// inserts
+func TestLLRBBasicLookup(t *testing.T) {
 	inserts := [][2][]byte{
 		[2][]byte{[]byte("key1"), []byte("value1")},
 		[2][]byte{[]byte("key2"), []byte("value2")},
@@ -131,21 +133,14 @@ func TestLLRBBasic(t *testing.T) {
 		[2][]byte{[]byte("key4"), []byte("value4")},
 		[2][]byte{[]byte("key5"), []byte("value5")},
 	}
-	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
-	for _, kv := range inserts {
-		llrb.Upsert(
-			kv[0], kv[1],
-			func(llrb *LLRB, newnd, oldnd *Llrbnode) {
-				if oldnd != nil {
-					t.Errorf("expected old Llrbnode as nil")
-				}
-				newnd.metadata().setvbno(vbno).setvbuuid(vbuuid).setbnseq(seqno)
-				llrb.clock.updatevbuuids([]uint16{vbno}, []uint64{vbuuid})
-				llrb.clock.updateseqnos([]uint16{vbno}, []uint64{seqno})
-			})
-		seqno++
-	}
-	// lookups
+
+	config := makellrbconfig()
+	config["metadata.mvalue"] = true
+	config["metadata.bornseqno"] = true
+	config["metadata.vbuuid"] = true
+	llrb := makellrb(t, "basiclookup", inserts, config)
+
+	// get
 	if llrb.Has(inserts[1][0]) == false {
 		t.Errorf("expected key - %v", string(inserts[0][0]))
 	}
@@ -154,6 +149,10 @@ func TestLLRBBasic(t *testing.T) {
 	if bytes.Compare(v, inserts[2][1]) != 0 {
 		t.Errorf("expected %v, got %v", string(inserts[2][1]), string(v))
 	}
+	if nd := llrb.Get([]byte("key10")); nd != nil {
+		t.Errorf("expected nil when Get() on missing key")
+	}
+	// min
 	nd = llrb.Min()
 	k, v := nd.key(), nd.nodevalue().value()
 	if bytes.Compare(k, inserts[0][0]) != 0 {
@@ -161,6 +160,7 @@ func TestLLRBBasic(t *testing.T) {
 	} else if bytes.Compare(v, inserts[0][1]) != 0 {
 		t.Errorf("expected %v, got %v", string(inserts[0][1]), string(v))
 	}
+	// max
 	nd = llrb.Max()
 	k, v = nd.key(), nd.nodevalue().value()
 	if bytes.Compare(k, []byte("key5")) != 0 {
@@ -168,12 +168,33 @@ func TestLLRBBasic(t *testing.T) {
 	} else if bytes.Compare(v, []byte("value5")) != 0 {
 		t.Errorf("expected %v, got %v", "value5", string(v))
 	}
+
+	llrb.Destroy()
+}
+
+func TestLLRBBasicUpdates(t *testing.T) {
+	inserts := [][2][]byte{
+		[2][]byte{[]byte("key1"), []byte("value1")},
+		[2][]byte{[]byte("key2"), []byte("value2")},
+		[2][]byte{[]byte("key3"), []byte("value3")},
+		[2][]byte{[]byte("key4"), []byte("value4")},
+		[2][]byte{[]byte("key5"), []byte("value5")},
+	}
+
+	config := makellrbconfig()
+	config["metadata.mvalue"] = true
+	config["metadata.bornseqno"] = true
+	config["metadata.vbuuid"] = true
+	llrb := makellrb(t, "basicupdates", inserts, config)
+
 	// update
 	newvalue := []byte("value11")
+	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(1234567890)
+	countref := llrb.Count()
 	llrb.Upsert(
 		inserts[0][0], newvalue,
 		func(llrb *LLRB, newnd, oldnd *Llrbnode) {
-			nd.metadata().setvbno(vbno).setvbuuid(vbuuid).setbnseq(seqno)
+			newnd.metadata().setvbno(vbno).setvbuuid(vbuuid).setbnseq(seqno)
 			vs := oldnd.nodevalue().value()
 			if bytes.Compare(vs, inserts[0][1]) != 0 {
 				fmsg := "expected %v, got %v\n"
@@ -185,22 +206,51 @@ func TestLLRBBasic(t *testing.T) {
 				t.Errorf(fmsg, string(newvalue), string(vs))
 			}
 		})
-	// deletes
+	// check
+	if countref != llrb.Count() {
+		t.Errorf("expected %v, got %v", countref, llrb.Count())
+	} else if nd := llrb.Get(inserts[0][0]); nd == nil {
+		t.Errorf("expeced valid node")
+	} else if bytes.Compare(newvalue, nd.nodevalue().value()) != 0 {
+		t.Errorf("expected %v, got %v", newvalue, nd.nodevalue().value())
+	}
+	// validate
+	if llrb.ValidateReds() == false {
+		t.Errorf("validate-reds failed")
+	}
+	llrb.ValidateBlacks()
+
+	// delete
+	countref, key, value := llrb.Count(), []byte(nil), []byte(nil)
 	llrb.DeleteMin(
 		func(llrb *LLRB, nd *Llrbnode) {
-			k, v = nd.key(), nd.nodevalue().value()
+			key, value = nd.key(), nd.Value()
 			fmsg := "expected %v, got %v"
-			if bytes.Compare(k, inserts[0][0]) != 0 {
-				t.Errorf(fmsg, string(inserts[0][0]), string(k))
-			} else if bytes.Compare(v, []byte("value11")) != 0 {
-				t.Errorf(fmsg, string(inserts[0][1]), string(v))
+			if bytes.Compare(key, inserts[0][0]) != 0 {
+				t.Errorf(fmsg, string(inserts[0][0]), string(key))
+			} else if bytes.Compare(value, []byte("value11")) != 0 {
+				t.Errorf(fmsg, string(inserts[0][1]), string(value))
 			} else if llrb.Count() != int64(len(inserts)-1) {
 				t.Errorf(fmsg, len(inserts)-1, llrb.Count())
 			}
 		})
+	// check
+	if countref-1 != llrb.Count() {
+		t.Errorf("expected %v, got %v", countref-1, llrb.Count())
+	} else if nd := llrb.Get(key); nd != nil {
+		t.Errorf("expeced node as nil")
+	}
+	// validate
+	if llrb.ValidateReds() == false {
+		t.Errorf("validate-reds failed")
+	}
+	llrb.ValidateBlacks()
+
+	// delete-max
+	countref, key, value = llrb.Count(), nil, nil
 	llrb.DeleteMax(
 		func(llrb *LLRB, nd *Llrbnode) {
-			k, v = nd.key(), nd.nodevalue().value()
+			k, v := nd.key(), nd.nodevalue().value()
 			fmsg := "expected %v, got %v"
 			if bytes.Compare(k, []byte("key5")) != 0 {
 				t.Errorf(fmsg, "key5", string(k))
@@ -210,10 +260,24 @@ func TestLLRBBasic(t *testing.T) {
 				t.Errorf(fmsg, len(inserts)-2, llrb.Count())
 			}
 		})
+	// check
+	if countref-1 != llrb.Count() {
+		t.Errorf("expected %v, got %v", countref-1, llrb.Count())
+	} else if nd := llrb.Get(key); nd != nil {
+		t.Errorf("expeced node as nil")
+	}
+	// validate
+	if llrb.ValidateReds() == false {
+		t.Errorf("validate-reds failed")
+	}
+	llrb.ValidateBlacks()
+
+	// delete-min
+	countref, key, value = llrb.Count(), nil, nil
 	llrb.Delete(
 		[]byte("key2"),
 		func(llrb *LLRB, nd *Llrbnode) {
-			v = nd.nodevalue().value()
+			v := nd.nodevalue().value()
 			fmsg := "expected %v, got %v"
 			if bytes.Compare(v, []byte("value2")) != 0 {
 				t.Errorf(fmsg, "value2", string(v))
@@ -221,6 +285,19 @@ func TestLLRBBasic(t *testing.T) {
 				t.Errorf(fmsg, len(inserts)-3, llrb.Count())
 			}
 		})
+	// check
+	if countref-1 != llrb.Count() {
+		t.Errorf("expected %v, got %v", countref-1, llrb.Count())
+	} else if nd := llrb.Get(key); nd != nil {
+		t.Errorf("expeced node as nil")
+	}
+	// validate
+	if llrb.ValidateReds() == false {
+		t.Errorf("validate-reds failed")
+	}
+	llrb.ValidateBlacks()
+
+	llrb.Destroy()
 }
 
 func TestLLRBBasicRange(t *testing.T) {
@@ -337,6 +414,13 @@ func TestLLRBBasicRange(t *testing.T) {
 	if ln != 0 {
 		t.Errorf("expected %v, got %v", 0, ln)
 	}
+	// validate
+	if llrb.ValidateReds() == false {
+		t.Errorf("validate-reds failed")
+	}
+	llrb.ValidateBlacks()
+
+	llrb.Destroy()
 }
 
 func TestLLRBInsert(t *testing.T) {
@@ -364,6 +448,11 @@ func TestLLRBInsert(t *testing.T) {
 			})
 		seqno++
 	}
+	// validate
+	if llrb.ValidateReds() == false {
+		t.Errorf("validate-reds failed")
+	}
+	llrb.ValidateBlacks()
 	// check memory accounting
 	mstats := llrb.StatsMem()
 	overhead, useful := int64(3814), int64(2096640)
@@ -412,6 +501,8 @@ func TestLLRBInsert(t *testing.T) {
 		}
 		seqno++
 	}
+
+	llrb.Destroy()
 }
 
 func TestLLRBUpsert(t *testing.T) {
@@ -440,6 +531,11 @@ func TestLLRBUpsert(t *testing.T) {
 			})
 		seqno++
 	}
+	// validate
+	if llrb.ValidateReds() == false {
+		t.Errorf("validate-reds failed")
+	}
+	llrb.ValidateBlacks()
 
 	// upsert same items
 	newvalues := make([][]byte, 0)
@@ -469,6 +565,11 @@ func TestLLRBUpsert(t *testing.T) {
 			})
 		seqno++
 	}
+	// validate
+	if llrb.ValidateReds() == false {
+		t.Errorf("validate-reds failed")
+	}
+	llrb.ValidateBlacks()
 
 	// check memory accounting
 	mstats := llrb.StatsMem()
@@ -497,6 +598,8 @@ func TestLLRBUpsert(t *testing.T) {
 	} else if x, y = int64(2000000), mstats["valmemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
+
+	llrb.Destroy()
 }
 
 func TestLLRBDelete(t *testing.T) {
@@ -525,9 +628,15 @@ func TestLLRBDelete(t *testing.T) {
 			})
 		seqno++
 	}
+	// validate
+	if llrb.ValidateReds() == false {
+		t.Errorf("validate-reds failed")
+	}
+	llrb.ValidateBlacks()
+
 	// Delete items
-	vbno, vbuuid, seqno = uint16(10), uint64(0xABCD), uint64(12345678)
-	for i, key := range keys {
+	seqno = uint64(12345678)
+	for i, key := range keys[:count/2] {
 		llrb.Delete(
 			key,
 			func(llrb *LLRB, nd *Llrbnode) {
@@ -547,6 +656,50 @@ func TestLLRBDelete(t *testing.T) {
 			})
 		seqno++
 	}
+	// validate
+	if llrb.ValidateReds() == false {
+		t.Errorf("validate-reds failed")
+	}
+	llrb.ValidateBlacks()
+
+	// delete minimums
+	for i := 0; i < len(keys[count/2:(3*count)/4]); i++ {
+		llrb.DeleteMin(
+			func(llrb *LLRB, nd *Llrbnode) {
+				if nd == nil {
+					t.Errorf("unexpected nil")
+				} else if x := nd.metadata().vbno(); x != vbno {
+					t.Errorf("expected %v, got %v", vbno, x)
+				} else if x := nd.metadata().vbuuid(); x != vbuuid {
+					t.Errorf("expected %v, got %v", vbuuid, x)
+				}
+			})
+	}
+	// validate
+	if llrb.ValidateReds() == false {
+		t.Errorf("validate-reds failed")
+	}
+	llrb.ValidateBlacks()
+
+	// delete maximums
+	for i := 0; i < len(keys[(3*count)/4:]); i++ {
+		llrb.DeleteMax(
+			func(llrb *LLRB, nd *Llrbnode) {
+				if nd == nil {
+					t.Errorf("unexpected nil")
+				} else if x := nd.metadata().vbno(); x != vbno {
+					t.Errorf("expected %v, got %v", vbno, x)
+				} else if x := nd.metadata().vbuuid(); x != vbuuid {
+					t.Errorf("expected %v, got %v", vbuuid, x)
+				}
+			})
+	}
+	// validate
+	if llrb.ValidateReds() == false {
+		t.Errorf("validate-reds failed")
+	}
+	llrb.ValidateBlacks()
+
 	// check memory accounting
 	mstats := llrb.StatsMem()
 	if overhead := mstats["node.overhead"].(int64); overhead != 3814 {
@@ -572,6 +725,8 @@ func TestLLRBDelete(t *testing.T) {
 	} else if x, y = int64(0), mstats["valmemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
+
+	llrb.Destroy()
 }
 
 func TestLLRBRange(t *testing.T) {
@@ -631,6 +786,13 @@ func TestLLRBRange(t *testing.T) {
 			}
 		}
 	}
+	// validate
+	if llrb.ValidateReds() == false {
+		t.Errorf("validate-reds failed")
+	}
+	llrb.ValidateBlacks()
+
+	llrb.Destroy()
 }
 
 func makekeyvalue(key, value []byte) ([]byte, []byte) {
@@ -663,6 +825,33 @@ func makellrbconfig() map[string]interface{} {
 		"valarena.maxblock":       1024 * 1024,
 		"valarena.capacity":       10 * 1024 * 1024 * 1024,
 		"valarena.pool.capacity":  10 * 2 * 1024 * 1024,
+		"log.level":               "ignore",
 	}
 	return config
+}
+
+func makellrb(
+	t *testing.T, nm string, inserts [][2][]byte,
+	config map[string]interface{}) *LLRB {
+
+	llrb := NewLLRB(nm, config, nil)
+	if llrb.Count() != 0 {
+		t.Fatalf("expected an empty dict")
+	}
+	// inserts
+	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
+	for _, kv := range inserts {
+		llrb.Upsert(
+			kv[0], kv[1],
+			func(llrb *LLRB, newnd, oldnd *Llrbnode) {
+				if oldnd != nil {
+					t.Errorf("expected old Llrbnode as nil")
+				}
+				newnd.metadata().setvbno(vbno).setvbuuid(vbuuid).setbnseq(seqno)
+				llrb.clock.updatevbuuids([]uint16{vbno}, []uint64{vbuuid})
+				llrb.clock.updateseqnos([]uint16{vbno}, []uint64{seqno})
+			})
+		seqno++
+	}
+	return llrb
 }

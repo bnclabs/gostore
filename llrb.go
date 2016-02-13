@@ -17,11 +17,12 @@
 //
 // * non-mvcc maintanence APIs:
 //
-//		llrb.StatsMem(), llrb.StatsUpsert(), llrb.StatsHeight()
-//		llrb.ValidateReds(), llrb.ValidateBlacks()
 //		llrb.LogNodeutilz(), llrb.LogNodememory(), llrb.LogValueutilz()
 //		llrb.LogValuememory() llrb.LogUpsertdepth(), llrb.LogTreeheight(),
 //		llrb.PPrint()
+//
+//		llrb.StatsMem(), llrb.StatsUpsert(), llrb.StatsHeight()
+//		llrb.ValidateReds(), llrb.ValidateBlacks()
 //
 // * non-mvcc Tree/Memory APIs:
 //
@@ -48,6 +49,7 @@
 //		writer.MakeSnapshot(), writer.GetSnapshot()
 //
 //		writer.StatsMem(), writer.StatsUpsert(), writer.StatsHeight()
+//
 //		writer.LogNodeutilz(), writer.LogNodememory(), writer.LogValueutilz(),
 //		writer.LogValuememory() writer.LogUpsertdepth(),
 //		writer.LogTreeheight()
@@ -125,9 +127,16 @@ import "sync/atomic"
 
 import humanize "github.com/dustin/go-humanize"
 
+// MinKeymem minimum key size that is valid across the system.
 const MinKeymem = 96
+
+// MaxKeymem maximum key size that is valid across the system.
 const MaxKeymem = 4096
+
+// MinValmem minimum value size that is valid across the system.
 const MinValmem = 32
+
+// MaxValmem maximum value size that is valid across the system.
 const MaxValmem = 10 * 1024 * 1024
 
 // LLRBNodeIterator callback from Range API.
@@ -215,9 +224,10 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 			"delmax": &averageInt{},
 			"delete": &averageInt{},
 		}
-		llrb.mvcc.writer = llrb.MVCCWriter()
 	}
 
+	log.Infof("%v configuration %v\n", llrb.logPrefix, config)
+	log.Infof("%v started ...\n", llrb.logPrefix)
 	return llrb
 }
 
@@ -379,7 +389,7 @@ func (llrb *LLRB) Upsert(key, value []byte, callb LLRBUpsertCallback) {
 		panic("upserting nil key")
 	}
 	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	root, newnd, oldnd = llrb.upsert(nd, 0 /*depth*/, key, value)
+	root, newnd, oldnd = llrb.upsert(nd, 1 /*depth*/, key, value)
 	root.metadata().setblack()
 	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 
@@ -916,9 +926,6 @@ func (llrb *LLRB) newnode(k, v []byte) *Llrbnode {
 }
 
 func (llrb *LLRB) freenode(nd *Llrbnode) {
-	if llrb.mvcc.enabled {
-		panic("llrb.mvcc.enabled call freenode() on writer")
-	}
 	if nd != nil {
 		nv := nd.nodevalue()
 		if nv != nil {
