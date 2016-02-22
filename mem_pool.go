@@ -6,8 +6,17 @@ package storage
 import "C"
 
 import "unsafe"
+import "reflect"
 import "sync/atomic"
 import "encoding/binary"
+
+var poolblkinit = make([]byte, 1024)
+
+func init() {
+	for i := 0; i < len(poolblkinit); i++ {
+		poolblkinit[i] = 0xff
+	}
+}
 
 // mempool manages a memory block sliced up into equal sized chunks.
 type mempool struct {
@@ -62,6 +71,7 @@ func (pool *mempool) alloc() (unsafe.Pointer, bool) {
 		}
 	}
 	atomic.AddInt64(&pool.mallocated, pool.size)
+	pool.initblock(ptr)
 	return unsafe.Pointer(ptr), true
 }
 
@@ -123,6 +133,20 @@ func (pool *mempool) checkallocated() int64 {
 		blocks += int64(zerosin8(pool.freelist[i]))
 	}
 	return blocks * pool.size
+}
+
+func (pool *mempool) initblock(block uintptr) {
+	var dst []byte
+	initsz := len(poolblkinit)
+	sl := (*reflect.SliceHeader)(unsafe.Pointer(&dst))
+	sl.Data, sl.Len = block, initsz
+	for i := int64(0); i < pool.size/int64(initsz); i++ {
+		copy(dst, poolblkinit)
+		sl.Data = (uintptr)(uint64(sl.Data) + uint64(initsz))
+	}
+	if sl.Len = int(pool.size) % len(poolblkinit); sl.Len > 0 {
+		copy(dst, poolblkinit)
+	}
 }
 
 // mempools sortable based on base-pointer.
