@@ -167,6 +167,12 @@ func (snapshot *LLRBSnapshot) ValidateBlacks() int {
 	return snapshot.llrb.validateblacks(root, 0)
 }
 
+func (snapshot *LLRBSnapshot) ValidateHeight() bool {
+	root := (*Llrbnode)(atomic.LoadPointer(&snapshot.root))
+	heightav := &averageInt{}
+	return snapshot.llrb.validateheight(root, heightav)
+}
+
 func (snapshot *LLRBSnapshot) Dotdump(buffer io.Writer) {
 	lines := []string{
 		"digraph llrb {",

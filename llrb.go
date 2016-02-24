@@ -106,6 +106,7 @@
 package storage
 
 import "fmt"
+import "math"
 import "encoding/json"
 import "unsafe"
 import "sort"
@@ -720,7 +721,7 @@ func (llrb *LLRB) StatsUpsert() map[string]interface{} {
 func (llrb *LLRB) StatsHeight() map[string]interface{} {
 	heightav := &averageInt{}
 	root := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	heightStats(root, 0, heightav)
+	llrb.heightStats(root, 0, heightav)
 	return map[string]interface{}{
 		"samples":     heightav.samples(),
 		"min":         heightav.min(),
@@ -731,17 +732,17 @@ func (llrb *LLRB) StatsHeight() map[string]interface{} {
 	}
 }
 
-func heightStats(nd *Llrbnode, d int64, av *averageInt) {
+func (llrb *LLRB) heightStats(nd *Llrbnode, d int64, av *averageInt) {
 	if nd == nil {
 		return
 	}
 	d++
 	av.add(d)
 	if nd.left != nil {
-		heightStats(nd.left, d, av)
+		llrb.heightStats(nd.left, d, av)
 	}
 	if nd.right != nil {
-		heightStats(nd.right, d, av)
+		llrb.heightStats(nd.right, d, av)
 	}
 }
 
@@ -836,8 +837,8 @@ func (llrb *LLRB) LogUpsertdepth() {
 	max := stats["upsertdepth.max"].(int64)
 	mean := stats["upsertdepth.mean"]
 	varn, sd := stats["upsertdepth.variance"], stats["upsertdepth.stddeviance"]
-	fmsg := "%v average upsertdepth (samples %v)\n" +
-		"  <%v to %v> mean %v  varn %2.2f  sd %2.2f\n"
+	fmsg := "%v average upsertdepth\n" +
+		"  samples %v : <%v to %v> mean %v  varn %2.2f  sd %2.2f\n"
 	log.Infof(fmsg, llrb.logPrefix, samples, min, max, mean, varn, sd)
 }
 
@@ -847,8 +848,8 @@ func (llrb *LLRB) LogTreeheight() {
 	min, max := stats["min"], stats["max"]
 	mean := stats["mean"]
 	varn, sd := stats["variance"], stats["stddeviance"]
-	fmsg := "%v average heightstats (samples %v)\n" +
-		"  <%v to %v> mean %v  varn %2.2f  sd %2.2f\n"
+	fmsg := "%v average heightstats\n" +
+		"  samples %v : <%v to %v> mean %v  varn %2.2f  sd %2.2f\n"
 	log.Infof(fmsg, llrb.logPrefix, samples, min, max, mean, varn, sd)
 }
 
@@ -893,7 +894,16 @@ func (llrb *LLRB) validateblacks(nd *Llrbnode, count int) int {
 	return x
 }
 
-func (llrb *LLRB) ValidateDepth() {
+func (llrb *LLRB) ValidateHeight() bool {
+	root := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
+	heightav := &averageInt{}
+	return llrb.validateheight(root, heightav)
+}
+
+func (llrb *LLRB) validateheight(nd *Llrbnode, av *averageInt) bool {
+	llrb.heightStats(nd, 0, av)
+	nf := float64(llrb.Count())
+	return float64(av.max()) < (3 * math.Log2(nf))
 }
 
 func (llrb *LLRB) PPrint() {

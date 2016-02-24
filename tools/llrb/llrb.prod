@@ -7,19 +7,25 @@ operation  : (weigh 0.1 0.01) get
            | (weigh 0.4 0.009) upsert
            | (weigh 0.4 0.004) min
            | (weigh 0.5 0.001) max
-           | (weigh 0.5 0.001) validate
+           | (weigh 0.5 0.001) control
            | (weigh 0.55 0.007) delmin
            | (weigh 0.6 0.006) delmax
            | (weigh 0.7 0.005) delete.
 
-get      : "[ " "\"get\", " key " ]".
-min      : "[ " "\"min\"" " ]".
-max      : "[ " "\"max\"" " ]".
 delmin   : "[ " "\"delmin\"" " ]".
 delmax   : "[ " "\"delmax\"" " ]".
 upsert   : "[ " "\"upsert\", " key " ]".
 delete   : "[ " "\"delete\", " key " ]".
-validate : "[ " "\"validate\"" " ]".
+get      : "[ " "\"get\", " key " ]".
+min      : "[ " "\"min\"" " ]".
+max      : "[ " "\"max\"" " ]".
 
-key    : (range 1000 3000).
+control  : (weigh 0.1 0.01) validate
+         | (weigh 0.4 0.01) snapshot
+         | (weigh 0.5 0.01) release.
+validate : "[ " "\"validate\", " "\"validate\"" " ]".
+snapshot : "[ " "\"snapshot\", " (range 1 10) " ]".
+release  : "[ " "\"release\", " (range 1 10) " ]".
+
+key    : (range 1000 5000).
 

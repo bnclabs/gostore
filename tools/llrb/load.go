@@ -1,6 +1,7 @@
 package main
 
 import "time"
+import "bytes"
 import "os"
 import "fmt"
 import "runtime"
@@ -22,6 +23,7 @@ var loadopts struct {
 	memtick   int
 	mprof     string
 	pprof     string
+	dotfile   string
 	args      []string
 }
 
@@ -155,10 +157,9 @@ func insertItems(
 }
 
 func printutilization(llrb *storage.LLRB) {
-	llrb.LogNodememory()
-	llrb.LogNodeutilz()
-	llrb.LogValuememory()
-	llrb.LogValueutilz()
+	buffer := bytes.NewBuffer(nil)
+	llrb.Logmemory(buffer)
+	fmt.Printf("LLRB Memory:\n%v\n", string(buffer.Bytes()))
 	llrb.LogUpsertdepth()
 	llrb.LogTreeheight()
 }
