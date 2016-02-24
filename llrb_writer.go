@@ -3,6 +3,7 @@ package storage
 import "sync/atomic"
 import "unsafe"
 import "time"
+import "io"
 import "errors"
 
 type LLRBWriter struct {
@@ -49,10 +50,7 @@ const (
 	cmdLlrbWriterStatsMem
 	cmdLlrbWriterStatsUpsert
 	cmdLlrbWriterStatsHeight
-	cmdLlrbWriterLogNodeutilz
-	cmdLlrbWriterLogNodememory
-	cmdLlrbWriterLogValueutilz
-	cmdLlrbWriterLogValuememory
+	cmdLlrbWriterLogmemory
 	cmdLlrbWriterLogUpsertdepth
 	cmdLlrbWriterLogTreeheight
 )
@@ -119,27 +117,9 @@ func (writer *LLRBWriter) StatsHeight() (map[string]interface{}, error) {
 	return resp[0].(map[string]interface{}), err
 }
 
-func (writer *LLRBWriter) LogNodeutilz() {
+func (writer *LLRBWriter) Logmemory(w io.Writer) {
 	respch := make(chan []interface{}, 1)
-	cmd := []interface{}{cmdLlrbWriterLogNodeutilz, respch}
-	failsafeRequest(writer.reqch, respch, cmd, writer.finch)
-}
-
-func (writer *LLRBWriter) LogValueutilz() {
-	respch := make(chan []interface{}, 1)
-	cmd := []interface{}{cmdLlrbWriterLogValueutilz, respch}
-	failsafeRequest(writer.reqch, respch, cmd, writer.finch)
-}
-
-func (writer *LLRBWriter) LogNodememory() {
-	respch := make(chan []interface{}, 1)
-	cmd := []interface{}{cmdLlrbWriterLogNodememory, respch}
-	failsafeRequest(writer.reqch, respch, cmd, writer.finch)
-}
-
-func (writer *LLRBWriter) LogValuememory() {
-	respch := make(chan []interface{}, 1)
-	cmd := []interface{}{cmdLlrbWriterLogValuememory, respch}
+	cmd := []interface{}{cmdLlrbWriterLogmemory, w, respch}
 	failsafeRequest(writer.reqch, respch, cmd, writer.finch)
 }
 
@@ -316,23 +296,21 @@ loop:
 			stats := llrb.StatsHeight()
 			respch <- []interface{}{stats}
 
-		case cmdLlrbWriterLogNodeutilz:
-			llrb.LogNodeutilz()
-
-		case cmdLlrbWriterLogNodememory:
-			llrb.LogNodememory()
-
-		case cmdLlrbWriterLogValueutilz:
-			llrb.LogValueutilz()
-
-		case cmdLlrbWriterLogValuememory:
-			llrb.LogValuememory()
+		case cmdLlrbWriterLogmemory:
+			w := msg[1].(io.Writer)
+			respch := msg[2].(chan []interface{})
+			llrb.Logmemory(w)
+			respch <- []interface{}{}
 
 		case cmdLlrbWriterLogUpsertdepth:
+			respch := msg[1].(chan []interface{})
 			llrb.LogUpsertdepth()
+			respch <- []interface{}{}
 
 		case cmdLlrbWriterLogTreeheight:
+			respch := msg[1].(chan []interface{})
 			llrb.LogTreeheight()
+			respch <- []interface{}{}
 		}
 	}
 }

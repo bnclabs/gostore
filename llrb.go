@@ -106,6 +106,7 @@
 package storage
 
 import "fmt"
+import "encoding/json"
 import "unsafe"
 import "sort"
 import "io"
@@ -214,8 +215,12 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 		}
 	}
 
-	log.Infof("%v configuration %v\n", llrb.logPrefix, config)
 	log.Infof("%v started ...\n", llrb.logPrefix)
+	if data, err := json.Marshal(config); err != nil {
+		panic(err)
+	} else {
+		log.Infof("%v configuration %v\n", llrb.logPrefix, string(data))
+	}
 	return llrb
 }
 
@@ -740,53 +745,8 @@ func heightStats(nd *Llrbnode, d int64, av *averageInt) {
 	}
 }
 
-func (llrb *LLRB) LogNodeutilz() {
-	log.Infof("%v Node utilization:\n", llrb.logPrefix)
-	arenapools := llrb.nodearena.mpools
-	sizes := []int{}
-	for size := range arenapools {
-		sizes = append(sizes, int(size))
-	}
-	sort.Ints(sizes)
-	for _, size := range sizes {
-		mpools := arenapools[int64(size)]
-		allocated, capacity := int64(0), int64(0)
-		if len(mpools) > 0 {
-			for _, mpool := range mpools {
-				allocated += mpool.allocated()
-				capacity += mpool.capacity
-			}
-			z := (float64(allocated) / float64(capacity)) * 100
-			fmsg := "%v  %6v %10v/%-4v %2.2f%%\n"
-			log.Infof(fmsg, llrb.logPrefix, size, capacity, len(mpools), z)
-		}
-	}
-}
-
-func (llrb *LLRB) LogValueutilz() {
-	log.Infof("%v Value utilization:\n", llrb.logPrefix)
-	arenapools := llrb.valarena.mpools
-	sizes := []int{}
-	for size := range arenapools {
-		sizes = append(sizes, int(size))
-	}
-	sort.Ints(sizes)
-	for _, size := range sizes {
-		mpools := arenapools[int64(size)]
-		allocated, capacity := int64(0), int64(0)
-		if len(mpools) > 0 {
-			for _, mpool := range mpools {
-				allocated += mpool.allocated()
-				capacity += mpool.capacity
-			}
-			z := (float64(allocated) / float64(capacity)) * 100
-			fmsg := "%v  %6v %10v/%-4v %2.2f%%\n"
-			log.Infof(fmsg, llrb.logPrefix, size, capacity, len(mpools), z)
-		}
-	}
-}
-
-func (llrb *LLRB) LogNodememory() {
+func (llrb *LLRB) Logmemory(writer io.Writer) {
+	// node memory
 	stats := llrb.StatsMem()
 	min := humanize.Bytes(uint64(llrb.config["nodearena.minblock"].(int)))
 	max := humanize.Bytes(uint64(llrb.config["nodearena.maxblock"].(int)))
@@ -798,28 +758,75 @@ func (llrb *LLRB) LogNodememory() {
 	avail := humanize.Bytes(uint64(stats["node.available"].(int64)))
 	nblocks := len(stats["node.blocks"].([]int64))
 	kmem := humanize.Bytes(uint64(stats["keymemory"].(int64)))
-	fmsg := "%v Nodes blksz:{%v-%v / %v} cap:{%v/%v}\n"
-	log.Infof(fmsg, llrb.logPrefix, min, max, nblocks, cp, pcp)
-	fmsg = "%v Nodes mem:{%v,%v - %v,%v} avail - %v\n"
-	log.Infof(fmsg, llrb.logPrefix, use, overh, alloc, kmem, avail)
-}
+	fmsg := "  node %v blocks over {%v %v} cap %v poolcap %v\n" +
+		"  %v useful, overhd %v allocated %v for keymem %v avail - %v\n"
+	out := fmt.Sprintf(
+		fmsg, nblocks, min, max, cp, pcp, use, overh, alloc, kmem, avail)
+	writer.Write([]byte(out))
 
-func (llrb *LLRB) LogValuememory() {
-	stats := llrb.StatsMem()
-	min := humanize.Bytes(uint64(llrb.config["valarena.minblock"].(int)))
-	max := humanize.Bytes(uint64(llrb.config["valarena.maxblock"].(int)))
-	cp := humanize.Bytes(uint64(llrb.config["valarena.capacity"].(int)))
-	pcp := humanize.Bytes(uint64(llrb.config["valarena.pool.capacity"].(int)))
-	overh := humanize.Bytes(uint64(stats["value.overhead"].(int64)))
-	use := humanize.Bytes(uint64(stats["value.useful"].(int64)))
-	alloc := humanize.Bytes(uint64(stats["value.allocated"].(int64)))
-	avail := humanize.Bytes(uint64(stats["value.available"].(int64)))
+	// node utilization
+	arenapools := llrb.nodearena.mpools
+	sizes := []int{}
+	for size := range arenapools {
+		sizes = append(sizes, int(size))
+	}
+	sort.Ints(sizes)
+	outs := []string{}
+	fmsg = "  %4v blocks %3v pools of %v each, utilz: %2.2f%%\n"
+	for _, size := range sizes {
+		mpools := arenapools[int64(size)]
+		allocated, capct := int64(0), int64(0)
+		if len(mpools) > 0 {
+			for _, mpool := range mpools {
+				allocated += mpool.allocated()
+				capct += mpool.capacity
+			}
+			z := (float64(allocated) / float64(capct)) * 100
+			outs = append(outs, fmt.Sprintf(fmsg, size, len(mpools), capct, z))
+		}
+	}
+	writer.Write([]byte(strings.Join(outs, "\n")))
+
+	// value memory
+	stats = llrb.StatsMem()
+	min = humanize.Bytes(uint64(llrb.config["valarena.minblock"].(int)))
+	max = humanize.Bytes(uint64(llrb.config["valarena.maxblock"].(int)))
+	cp = humanize.Bytes(uint64(llrb.config["valarena.capacity"].(int)))
+	pcp = humanize.Bytes(uint64(llrb.config["valarena.pool.capacity"].(int)))
+	overh = humanize.Bytes(uint64(stats["value.overhead"].(int64)))
+	use = humanize.Bytes(uint64(stats["value.useful"].(int64)))
+	alloc = humanize.Bytes(uint64(stats["value.allocated"].(int64)))
+	avail = humanize.Bytes(uint64(stats["value.available"].(int64)))
 	vblocks := len(stats["value.blocks"].([]int64))
 	vmem := humanize.Bytes(uint64(stats["valmemory"].(int64)))
-	fmsg := "%v Value blksz:{%v-%v / %v} cap:{%v/%v}\n"
-	log.Infof(fmsg, llrb.logPrefix, min, max, vblocks, cp, pcp)
-	fmsg = "%v Value mem:{%v,%v - %v,%v} avail - %v\n"
-	log.Infof(fmsg, llrb.logPrefix, use, overh, alloc, vmem, avail)
+	fmsg = "  value %v blocks over {%v %v} cap %v poolcap %v\n" +
+		"  %v useful, overhd %v allocated %v for valmem %v avail - %v\n"
+	out = fmt.Sprintf(
+		fmsg, vblocks, min, max, cp, pcp, use, overh, alloc, vmem, avail)
+	writer.Write([]byte(out))
+
+	// value utilization
+	arenapools = llrb.valarena.mpools
+	sizes = []int{}
+	for size := range arenapools {
+		sizes = append(sizes, int(size))
+	}
+	sort.Ints(sizes)
+	outs = []string{}
+	fmsg = "  %4v blocks %3v pools of %v each, utilz: %2.2f%%"
+	for _, size := range sizes {
+		mpools := arenapools[int64(size)]
+		allocated, capct := int64(0), int64(0)
+		if len(mpools) > 0 {
+			for _, mpool := range mpools {
+				allocated += mpool.allocated()
+				capct += mpool.capacity
+			}
+			z := (float64(allocated) / float64(capct)) * 100
+			outs = append(outs, fmt.Sprintf(fmsg, size, len(mpools), capct, z))
+		}
+	}
+	writer.Write([]byte(strings.Join(outs, "\n")))
 }
 
 func (llrb *LLRB) LogUpsertdepth() {
@@ -829,60 +836,64 @@ func (llrb *LLRB) LogUpsertdepth() {
 	max := stats["upsertdepth.max"].(int64)
 	mean := stats["upsertdepth.mean"]
 	varn, sd := stats["upsertdepth.variance"], stats["upsertdepth.stddeviance"]
-	fmsg := "%v UpsertDepth (%v) %v-%v %v/%2.2f/%2.2f\n"
+	fmsg := "%v average upsertdepth (samples %v)\n" +
+		"  <%v to %v> mean %v  varn %2.2f  sd %2.2f\n"
 	log.Infof(fmsg, llrb.logPrefix, samples, min, max, mean, varn, sd)
 }
 
 func (llrb *LLRB) LogTreeheight() {
-	// log height statistics
 	stats := llrb.StatsHeight()
 	samples := stats["samples"]
 	min, max := stats["min"], stats["max"]
 	mean := stats["mean"]
 	varn, sd := stats["variance"], stats["stddeviance"]
-	fmsg := "%v HeightStats (%v) %v-%v %v/%2.2f/%2.2f\n"
+	fmsg := "%v average heightstats (samples %v)\n" +
+		"  <%v to %v> mean %v  varn %2.2f  sd %2.2f\n"
 	log.Infof(fmsg, llrb.logPrefix, samples, min, max, mean, varn, sd)
 }
 
 func (llrb *LLRB) ValidateReds() bool {
 	root := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	if validatereds(root, isred(root)) != true {
+	if llrb.validatereds(root, isred(root)) != true {
 		return false
 	}
 	return true
 }
 
-func validatereds(nd *Llrbnode, fromred bool) bool {
+func (llrb *LLRB) validatereds(nd *Llrbnode, fromred bool) bool {
 	if nd == nil {
 		return true
 	}
 	if fromred && isred(nd) {
 		panic("consequetive red spotted")
 	}
-	if validatereds(nd.left, isred(nd)) == false {
+	if llrb.validatereds(nd.left, isred(nd)) == false {
 		return false
 	}
-	return validatereds(nd.right, isred(nd))
+	return llrb.validatereds(nd.right, isred(nd))
 }
 
 func (llrb *LLRB) ValidateBlacks() int {
 	root := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	return validateblacks(root, 0)
+	return llrb.validateblacks(root, 0)
 }
 
-func validateblacks(nd *Llrbnode, count int) int {
+func (llrb *LLRB) validateblacks(nd *Llrbnode, count int) int {
 	if nd == nil {
 		return count
 	}
 	if !isred(nd) {
 		count++
 	}
-	x := validateblacks(nd.left, count)
-	y := validateblacks(nd.right, count)
+	x := llrb.validateblacks(nd.left, count)
+	y := llrb.validateblacks(nd.right, count)
 	if x != y {
-		panic(fmt.Errorf("blacks on left %v, on right %v\n", x, y))
+		panic(fmt.Errorf("no. of blacks {left,right} : {%v,%v}\n", x, y))
 	}
 	return x
+}
+
+func (llrb *LLRB) ValidateDepth() {
 }
 
 func (llrb *LLRB) PPrint() {

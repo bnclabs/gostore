@@ -156,7 +156,7 @@ func (snapshot *LLRBSnapshot) Range(lkey, hkey []byte, incl string, iter LLRBNod
 
 func (snapshot *LLRBSnapshot) ValidateReds() bool {
 	root := (*Llrbnode)(atomic.LoadPointer(&snapshot.root))
-	if validatereds(root, isred(root)) != true {
+	if snapshot.llrb.validatereds(root, isred(root)) != true {
 		return false
 	}
 	return true
@@ -164,7 +164,7 @@ func (snapshot *LLRBSnapshot) ValidateReds() bool {
 
 func (snapshot *LLRBSnapshot) ValidateBlacks() int {
 	root := (*Llrbnode)(atomic.LoadPointer(&snapshot.root))
-	return validateblacks(root, 0)
+	return snapshot.llrb.validateblacks(root, 0)
 }
 
 func (snapshot *LLRBSnapshot) Dotdump(buffer io.Writer) {
