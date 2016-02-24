@@ -262,13 +262,14 @@ func llrb_opValidate(
 
 	llrb_validateEqual(dict, llrb, dolog)
 	llrb_validateStats(dict, llrb, stats, dolog)
-	ok := llrb.ValidateReds()
-	if dolog || !ok {
+	if ok := llrb.ValidateReds(); dolog {
 		fmt.Printf("ValidateReds:   %v\n", ok)
 	}
-	count := llrb.ValidateBlacks()
-	if dolog || !ok {
+	if count := llrb.ValidateBlacks(); dolog {
 		fmt.Printf("ValidateBlacks: %v\n", count)
+	}
+	if ok := llrb.ValidateHeight(); dolog {
+		fmt.Printf("ValidateHeight: %v\n", ok)
 	}
 	stats["total"] += 1
 	stats["validate"] += 1
