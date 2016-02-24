@@ -3,7 +3,9 @@ package storage
 import "unsafe"
 import "bytes"
 import "reflect"
+import "strings"
 import "fmt"
+import "io"
 
 const llrbnodesize = 24 // + metadatasize + keysize
 type Llrbnode struct {
@@ -157,6 +159,29 @@ func (nd *Llrbnode) pprint(prefix string) {
 	nd.left.pprint(prefix)
 	fmt.Printf("%vright: ", prefix)
 	nd.right.pprint(prefix)
+}
+
+func (nd *Llrbnode) dotdump(buffer io.Writer) {
+	key := string(nd.key())
+	mddot := nd.metadata().dotdump()
+	lines := []string{
+		fmt.Sprintf("  %v [label=\"{%v|%v}\"];\n", key, key, mddot),
+	}
+	if nd.left != nil {
+		line := fmt.Sprintf("  %v -> %v;\n", key, string(nd.left.key()))
+		lines = append(lines, line)
+	}
+	if nd.right != nil {
+		line := fmt.Sprintf("  %v -> %v;\n", key, string(nd.right.key()))
+		lines = append(lines, line)
+	}
+	buffer.Write([]byte(strings.Join(lines, "")))
+	if nd.left != nil {
+		nd.left.dotdump(buffer)
+	}
+	if nd.right != nil {
+		nd.right.dotdump(buffer)
+	}
 }
 
 //---- indexer api

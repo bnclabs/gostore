@@ -102,7 +102,6 @@ func (writer *LLRBWriter) StatsMem() (map[string]interface{}, error) {
 	respch := make(chan []interface{}, 1)
 	cmd := []interface{}{cmdLlrbWriterStatsMem, respch}
 	resp, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
-	err = responseError(err, resp, 1)
 	return resp[0].(map[string]interface{}), err
 }
 
@@ -113,12 +112,11 @@ func (writer *LLRBWriter) StatsUpsert() (map[string]interface{}, error) {
 	return resp[0].(map[string]interface{}), err
 }
 
-func (writer *LLRBWriter) StatsHeight() map[string]interface{} {
+func (writer *LLRBWriter) StatsHeight() (map[string]interface{}, error) {
 	respch := make(chan []interface{}, 1)
 	cmd := []interface{}{cmdLlrbWriterStatsHeight, respch}
 	resp, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
-	err = responseError(err, resp, 1)
-	return resp[0].(map[string]interface{})
+	return resp[0].(map[string]interface{}), err
 }
 
 func (writer *LLRBWriter) LogNodeutilz() {
@@ -346,7 +344,6 @@ func (writer *LLRBWriter) upsert(
 	reclaim []*Llrbnode) (*Llrbnode, *Llrbnode, *Llrbnode, []*Llrbnode) {
 
 	var oldnd, newnd *Llrbnode
-	var dirty bool
 
 	llrb := writer.llrb
 
@@ -367,21 +364,19 @@ func (writer *LLRBWriter) upsert(
 		ndmvcc.right, newnd, oldnd, reclaim =
 			writer.upsert(ndmvcc.right, depth+1, key, value, reclaim)
 	} else {
-		oldnd, dirty = nd, false
+		oldnd = nd
 		if nv := ndmvcc.nodevalue(); nv != nil { // free the value if present
 			nv.pool.free(unsafe.Pointer(nv))
-			ndmvcc, dirty = ndmvcc.setnodevalue(nil), true
+			ndmvcc = ndmvcc.setnodevalue(nil)
 		}
 		if value != nil { // add new value if need be
 			ptr, mpool := llrb.valarena.alloc(int64(nvaluesize + len(value)))
 			nv := (*nodevalue)(ptr)
 			nv.pool = mpool
-			ndmvcc, dirty = ndmvcc.setnodevalue(nv.setvalue(value)), true
+			ndmvcc = ndmvcc.setnodevalue(nv.setvalue(value))
 		}
+		ndmvcc.metadata().setdirty()
 		newnd = ndmvcc
-		if dirty {
-			ndmvcc.metadata().setdirty()
-		}
 		llrb.upsertdepth.add(depth)
 	}
 
@@ -433,6 +428,7 @@ func (writer *LLRBWriter) deletemax(
 		ndmvcc, reclaim = writer.rotateright(ndmvcc, reclaim)
 	}
 	if ndmvcc.right == nil {
+		reclaim = append(reclaim, ndmvcc)
 		return nil, ndmvcc, reclaim
 	}
 
@@ -475,6 +471,7 @@ func (writer *LLRBWriter) delete(
 
 		// If @key equals @h.Item and no right children at @h
 		if !ndmvcc.ltkey(key) && ndmvcc.right == nil {
+			reclaim = append(reclaim, ndmvcc)
 			return nil, ndmvcc, reclaim
 		}
 
@@ -503,6 +500,7 @@ func (writer *LLRBWriter) delete(
 			}
 			newnd.nodevalue().setvalue(subd.nodevalue().value())
 			deleted, ndmvcc = ndmvcc, newnd
+			reclaim = append(reclaim, deleted)
 		} else { // Else, @key is bigger than @ndmvcc
 			ndmvcc.right, deleted, reclaim =
 				writer.delete(ndmvcc.right, key, reclaim)
@@ -541,8 +539,11 @@ func (writer *LLRBWriter) walkuprot23(
 func (writer *LLRBWriter) rotateleft(
 	nd *Llrbnode, reclaim []*Llrbnode) (*Llrbnode, []*Llrbnode) {
 
-	reclaim = append(reclaim, nd.right)
-	y := writer.llrb.clone(nd.right)
+	y, ok := writer.cloneifdirty(nd.right)
+	if ok {
+		reclaim = append(reclaim, nd.right)
+	}
+
 	if y.metadata().isblack() {
 		panic("rotating a black link ? call the programmer")
 	}
@@ -560,8 +561,11 @@ func (writer *LLRBWriter) rotateleft(
 func (writer *LLRBWriter) rotateright(
 	nd *Llrbnode, reclaim []*Llrbnode) (*Llrbnode, []*Llrbnode) {
 
-	reclaim = append(reclaim, nd.left)
-	x := writer.llrb.clone(nd.left)
+	x, ok := writer.cloneifdirty(nd.left)
+	if ok {
+		reclaim = append(reclaim, nd.left)
+	}
+
 	if x.metadata().isblack() {
 		panic("rotating a black link ? call the programmer")
 	}
@@ -578,8 +582,15 @@ func (writer *LLRBWriter) rotateright(
 
 // REQUIRE: Left and Right children must be present
 func (writer *LLRBWriter) flip(nd *Llrbnode, reclaim []*Llrbnode) []*Llrbnode {
-	reclaim = append(reclaim, nd.left, nd.right)
-	x, y := writer.llrb.clone(nd.left), writer.llrb.clone(nd.right)
+	x, ok := writer.cloneifdirty(nd.left)
+	if ok {
+		reclaim = append(reclaim, nd.left)
+	}
+	y, ok := writer.cloneifdirty(nd.right)
+	if ok {
+		reclaim = append(reclaim, nd.right)
+	}
+
 	x.metadata().togglelink()
 	y.metadata().togglelink()
 	nd.metadata().togglelink()
@@ -647,4 +658,11 @@ func (writer *LLRBWriter) purgesnapshot(llrb *LLRB) string {
 		return "all"
 	}
 	return "partial"
+}
+
+func (writer *LLRBWriter) cloneifdirty(nd *Llrbnode) (*Llrbnode, bool) {
+	if nd.metadata().isdirty() { // already cloned
+		return nd, false
+	}
+	return writer.llrb.clone(nd), true
 }

@@ -5,6 +5,8 @@ package storage
 import "sync/atomic"
 import "unsafe"
 import "time"
+import "strings"
+import "io"
 import "strconv"
 
 //---- snapshot methods
@@ -82,7 +84,9 @@ func (snapshot *LLRBSnapshot) Release() {
 }
 
 func (snapshot *LLRBSnapshot) ReclaimNodes() bool {
-	if atomic.LoadInt32(&snapshot.refcount) == 0 {
+	if atomic.LoadInt32(&snapshot.refcount) < 0 {
+		panic("snapshot refcount gone negative")
+	} else if atomic.LoadInt32(&snapshot.refcount) == 0 {
 		for _, nd := range snapshot.reclaim {
 			snapshot.llrb.freenode(nd)
 		}
@@ -161,4 +165,16 @@ func (snapshot *LLRBSnapshot) ValidateReds() bool {
 func (snapshot *LLRBSnapshot) ValidateBlacks() int {
 	root := (*Llrbnode)(atomic.LoadPointer(&snapshot.root))
 	return validateblacks(root, 0)
+}
+
+func (snapshot *LLRBSnapshot) Dotdump(buffer io.Writer) {
+	lines := []string{
+		"digraph llrb {",
+		"  node[shape=record];",
+		"}",
+	}
+	buffer.Write([]byte(strings.Join(lines[:len(lines)-1], "\n")))
+	nd := (*Llrbnode)(atomic.LoadPointer(&snapshot.root))
+	nd.dotdump(buffer)
+	buffer.Write([]byte(lines[len(lines)-1]))
 }

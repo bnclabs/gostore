@@ -19,7 +19,7 @@
 //
 //		llrb.LogNodeutilz(), llrb.LogNodememory(), llrb.LogValueutilz()
 //		llrb.LogValuememory() llrb.LogUpsertdepth(), llrb.LogTreeheight(),
-//		llrb.PPrint()
+//		llrb.PPrint() llrb.Dotdump()
 //
 //		llrb.StatsMem(), llrb.StatsUpsert(), llrb.StatsHeight()
 //		llrb.ValidateReds(), llrb.ValidateBlacks()
@@ -43,6 +43,8 @@
 //		snapshot.Range()
 //		snapshot.ValidateReds(), snapshot.ValidateBlacks()
 //
+//      snapshot.Dotdump()
+//
 // * mvcc APIs that needs to be serialized, on write-snapshot:
 //
 //		writer.Upsert(), writer.DeleteMin(), writer.DeleteMax(), writer.Delete()
@@ -51,8 +53,9 @@
 //		writer.StatsMem(), writer.StatsUpsert(), writer.StatsHeight()
 //
 //		writer.LogNodeutilz(), writer.LogNodememory(), writer.LogValueutilz(),
-//		writer.LogValuememory() writer.LogUpsertdepth(),
-//		writer.LogTreeheight()
+//		writer.LogValuememory() writer.LogUpsertdepth(), writer.LogTreeheight()
+//
+//      writer.Dotdump()
 //
 // * Upsert() and Delete() APIs accept callbacks for applications to set
 //   node's metadata fields like vbno, vbuuid, seqno etc...
@@ -122,6 +125,8 @@ package storage
 import "fmt"
 import "unsafe"
 import "sort"
+import "io"
+import "strings"
 import "bytes"
 import "sync/atomic"
 
@@ -901,6 +906,18 @@ func (llrb *LLRB) PPrint() {
 	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
 	fmt.Printf("root: ")
 	nd.pprint("  ")
+}
+
+func (llrb *LLRB) Dotdump(buffer io.Writer) {
+	lines := []string{
+		"digraph llrb {",
+		"  node[shape=record];\n",
+		"}",
+	}
+	buffer.Write([]byte(strings.Join(lines[:len(lines)-1], "\n")))
+	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
+	nd.dotdump(buffer)
+	buffer.Write([]byte(lines[len(lines)-1]))
 }
 
 //---- local functions

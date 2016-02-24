@@ -2,6 +2,9 @@ package storage
 
 import "unsafe"
 import "sync/atomic"
+import "strings"
+import "strconv"
+import "fmt"
 
 // hard limits:
 //
@@ -88,6 +91,28 @@ type metadata struct {
 func (md *metadata) initMetadata(vbno uint16, fmask metadataMask) *metadata {
 	md.hdr = md.hdr&0xffffffff00000000 | ((uint64(vbno) << 16) | uint64(fmask))
 	return md
+}
+
+func (md *metadata) dotdump() string {
+	s := []string{
+		"acc-" + strconv.Itoa(int(md.access())),
+		"<here> vb-" + strconv.Itoa(int(md.vbno())),
+	}
+	if md.isdirty() {
+		s = append(s, "dirty")
+	}
+	if md.isdeleted() {
+		s = append(s, "deleted")
+	}
+	mask := md.hdr & 0xffff
+	offset := 0
+	for i := uint(0); i < 12; i++ {
+		if ((mask >> i) & 1) > 0 {
+			s = append(s, fmt.Sprintf("%v-%x", i, md.fields[offset]))
+			offset++
+		}
+	}
+	return "{" + strings.Join(s, "|") + "}"
 }
 
 func (md *metadata) sizeof() int {

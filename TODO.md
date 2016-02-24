@@ -1,5 +1,7 @@
 LLRB:
 * test mvcc.writer.DeleteMin() on a tree with single node.
+* dotdump hightlight red/black edges.
+* mvcc.writer export it via method Writer()
 * change config["mvcc.enabled"] to config["mvcc.enable"].
 * snapshot.Count(), don't use llrb.count
 * should llrb.clone() copy value also ? can it be optimized for mvcc ?
