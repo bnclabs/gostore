@@ -130,26 +130,31 @@ func (arena *memarena) available() int64 {
 	return arena.capacity - arena.allocated()
 }
 
-func SuitableSize(sizes []int64, size int64) int64 {
-	switch len(sizes) {
+// SuitableSize for size, pick the optimal block-size among the
+// list of blocksizes to acheive MEMUtilization.
+func SuitableSize(blocksizes []int64, size int64) int64 {
+	switch len(blocksizes) {
 	case 1:
-		return sizes[0]
+		return blocksizes[0]
 
 	case 2:
-		if size <= sizes[0] {
-			return sizes[0]
+		if size <= blocksizes[0] {
+			return blocksizes[0]
 		}
-		return sizes[1]
+		return blocksizes[1]
 
 	default:
-		pivot := len(sizes) / 2
-		if sizes[pivot] < size {
-			return SuitableSize(sizes[pivot+1:], size)
+		pivot := len(blocksizes) / 2
+		if blocksizes[pivot] < size {
+			return SuitableSize(blocksizes[pivot+1:], size)
 		}
-		return SuitableSize(sizes[:pivot+1], size)
+		return SuitableSize(blocksizes[:pivot+1], size)
 	}
 }
 
+// Blocksizes for allocation size that can range between minblock
+// to maxblock, compute the minimum number of block sizes to manage
+// without degrading below MEMUtilization.
 func Blocksizes(minblock, maxblock int64) []int64 {
 	if maxblock < minblock { // validate and cure the input params
 		panic("minblock < maxblock")

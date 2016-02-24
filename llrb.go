@@ -1,125 +1,108 @@
-// LLRB algorithm
+// Package storage implement a collection of indexing and persistance
+// algorithm.
 //
-// * index key, value (value is optional).
-// * custom memory management, application to use copy on GC to fix
-//   memory fragmentation.
-// * configurable metadata like
-//   vbno, bornseqno, deadseqno, vbuuid
-// * supports multi-version-concurrency-control, where writes are
-//   serialized and there can be zero or more concurrent
-//	 read-snapshots.
-//  * iterator callbacks are used in Range() APIs
+// LLRB:
 //
-// non-mvcc use case:
+//   * index key, value (value is optional).
+//   * custom memory management
+//   * copy on GC to control memory fragmentation.
+//   * configurable metadata like vbno, bornseqno, deadseqno, vbuuid etc..
+//   * in single-threaded configuration, reads and writes are expected
+//     to be serialzed.
+//   * supports multi-version-concurrency-control, where writes are
+//     serialized but there can be zero or more concurrent readers.
 //
-// * LLRB tree cannot be shared between two routines. It is upto the
-//   application to make sure that all methods on LLRB is serialized.
+// metadata fields are part of index entry, and describes them as:
 //
-// * non-mvcc maintanence APIs:
+//   a. 16 bit vbucket-number virtual bucket for the key.
+//   b. 20 bit access time bits time.Now()[44:24].
+//   i. and upto 12 optional fields that are configured.
+//   1. 64 bit unique vbucket id for the vbucket number a.
+//   2. 64 bit born-seqno vbucket seqno in which this entry was upserted.
+//   3. 64 bit dead-seqno vbucket seqno in which this entry was deleted.
+//   4. 64 bit mvalue either pointer to memory or fpos to disk to pick value.
 //
-//		llrb.LogNodeutilz(), llrb.LogNodememory(), llrb.LogValueutilz()
-//		llrb.LogValuememory() llrb.LogUpsertdepth(), llrb.LogTreeheight(),
-//		llrb.PPrint() llrb.Dotdump()
+// mvalue:
 //
-//		llrb.StatsMem(), llrb.StatsUpsert(), llrb.StatsHeight()
-//		llrb.ValidateReds(), llrb.ValidateBlacks()
+//   * value can be kept in memory or backed by disk.
+//   * if value is kept in memory mvalue[:3] describes the memory offset to
+//     fetch the entry value.
+//   * if value is backed by disk then mvalue[2:], whose value might be 1-7
+//     will pick a file that contains the value and mvalue[:3] describes the
+//     file-position to fetch the entry value.
 //
-// * non-mvcc Tree/Memory APIs:
+// llrb hard limits:
 //
-//		llrb.Count(), llrb.Destroy()
-//      llrb.Has(), llrb.Get(), llrb.Min(), llrb.Max(), llrb.Range()
-//		llrb.Upsert(), llrb.DeleteMin(), llrb.DeleteMax(), llrb.Delete()
-//
-// mvcc use case:
-//
-// * all write operations shall be serialized in a single routine.
-// * one or more routines can do concurrent read operation.
-//
-//		llrb.Count(), llrb.Destroy()
-//
-// * mvcc APIs with concurrency support:
-//
-//		snapshot.Has(), snapshot.Get(), snapshot.Min(), snapshot.Max(),
-//		snapshot.Range()
-//		snapshot.ValidateReds(), snapshot.ValidateBlacks()
-//
-//      snapshot.Dotdump()
-//
-// * mvcc APIs that needs to be serialized, on write-snapshot:
-//
-//		writer.Upsert(), writer.DeleteMin(), writer.DeleteMax(), writer.Delete()
-//		writer.MakeSnapshot(), writer.GetSnapshot()
-//
-//		writer.StatsMem(), writer.StatsUpsert(), writer.StatsHeight()
-//
-//		writer.LogNodeutilz(), writer.LogNodememory(), writer.LogValueutilz(),
-//		writer.LogValuememory() writer.LogUpsertdepth(), writer.LogTreeheight()
-//
-//      writer.Dotdump()
-//
-// * Upsert() and Delete() APIs accept callbacks for applications to set
-//   node's metadata fields like vbno, vbuuid, seqno etc...
-// * In cases of {vbno,seqno} based mutations, application can use the
-//   callback to directly set the clock informations.
+//   * maximum vbuckets - 65535
+//   * maximum access   - 2^20 counted in steps of 16.777216mS
+//   * maximum key size - 4096 bytes
+//   * maximum born seqno - 2^64 - 1
+//   * maximum dead seqno - 2^64 - 1
 //
 // configuration:
 //
-// "maxvb" - integer
-//		maximum number of vbuckets that will use this llrb tree.
+//   "maxvb" - integer
 //
-// "log.level" - string
-//		one of the following
-//		"ignore", "fatal", "error", "warn", "info", "verbose", "debug", "trace"
+//      maximum number of vbuckets that will used in this llrb tree.
 //
-// "log.file" - string
-//		log to file, if empty log to console
+//   "log.level" - string
 //
-// "nodearena.minblock" - integer
-//		minimum node-block size that shall be requested from the arena.
+//     can be "ignore", "fatal", "error", "warn", "info", "verbose",
+//     "debug", or "trace"
 //
-// "nodearena.maxblock" - integer
-//		maximum node-block size that shall be requested from the arena.
+//   "log.file" - string
 //
-// "nodearena.capacity" - integer
-//		capacity in bytes that the arena shall manage for node-blocks
-//		using one or more pools.
+//     log to file, if empty log to console
 //
-// "nodearena.pool.capacity" - integer
-//		limit the size of a pool, irrespective of pool's block size.
+//   "nodearena.minblock" - integer
 //
-// "valarena.minblock" - integer
-//		minimum value-block size that shall be requested from the arena.
+//     minimum node-block size that shall be requested from the arena.
 //
-// "valarena.maxblock" - integer
-//		maximum value-block size that shall be requested from the arena.
+//   "nodearena.maxblock" - integer
 //
-// "valarena.capacity" - integer
-//		capacity in bytes that the arena shall manage for node-blocks
-//		using one or more pools.
+//     maximum node-block size that shall be requested from the arena.
 //
-// "valarena.pool.capacity" - integer
-//		limit the size of a pool, irrespective of pool's block size.
+//   "nodearena.capacity" - integer
 //
-// "metadata.bornseqno" - boolean
-//		use metadata field to book-keep node's born sequence number.
+//     capacity in bytes that the arena shall manage for node-blocks
+//     using one or more pools.
 //
-// "metadata.deadseqno" - boolean
-//		use metadata field to book-keep node's dead sequence number.
+//   "nodearena.pool.capacity" - integer
+//     limit the size of a pool, irrespective of pool's block size.
 //
-// "metadata.mvalue" - boolean
-//		value is not nil and its blocks allocated from value-arena
+//   "valarena.minblock" - integer
+//     minimum value-block size that shall be requested from the arena.
 //
-// "metadata.vbuuid" - boolean
-//		use metadata field to book-keep node's vbuuid.
+//   "valarena.maxblock" - integer
+//     maximum value-block size that shall be requested from the arena.
 //
-// "mvcc.enabled" - boolean
-//		consume LLRB as Multi-Version-Concurrency-Control-led tree.
+//   "valarena.capacity" - integer
+//     capacity in bytes that the arena shall manage for node-blocks
+//     using one or more pools.
 //
-// "mvcc.snapshot.tick" - int
-//		interval in milli-second for generating read-snapshots
+//   "valarena.pool.capacity" - integer
+//     limit the size of a pool, irrespective of pool's block size.
 //
-// "mvcc.writer.chanbuffer" - int
-//		buffer size for mvcc writer's i/p channel
+//   "metadata.bornseqno" - boolean
+//     if true, use metadata field to book-keep node's born sequence number.
+//
+//   "metadata.deadseqno" - boolean
+//     if true, use metadata field to book-keep node's dead sequence number.
+//
+//   "metadata.mvalue" - boolean
+//     if true, and expect to index value for each key entry.
+//
+//   "metadata.vbuuid" - boolean
+//     if true, use metadata field to book-keep node's vbuuid.
+//
+//   "mvcc.enabled" - boolean
+//     consume LLRB as Multi-Version-Concurrency-Control-led tree.
+//
+//   "mvcc.snapshot.tick" - int
+//     interval in milli-second for generating read-snapshots
+//
+//   "mvcc.writer.chanbuffer" - int
+//     buffer size for mvcc writer's i/p channel
 package storage
 
 import "fmt"

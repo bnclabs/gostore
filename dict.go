@@ -8,12 +8,14 @@ var crcisotab = crc64.MakeTable(crc64.ISO)
 
 type KVIterator func(key, value []byte) bool
 
+// Dict is a reference data structure, for validation purpose.
 type Dict struct {
 	dict     map[uint64][2][]byte
 	sortkeys []string
 	hashks   []uint64
 }
 
+// NewDict create a new golang map for indexing key,value.
 func NewDict() *Dict {
 	return &Dict{
 		dict:     make(map[uint64][2][]byte),

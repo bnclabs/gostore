@@ -6,22 +6,6 @@ import "strings"
 import "strconv"
 import "fmt"
 
-// hard limits:
-//
-// maximum vbuckets - 65535
-// maximum access   - 2^20 time unit
-// maximum key size - 4096 bytes
-// maximum born seqno - 2^64 - 1
-// maximum dead seqno - 2^64 - 1
-//
-// - vbuuid, unique id for each vbucket shall be a uint64 number
-//
-// mvalue:
-//
-// always 8 bit aligned and bottom 3 bit shall specifies the level -
-// if level is 0, then mvalue is pointer into memory
-// else if level is [1,7], then mvalue is file-position into [file1-file7]
-
 // {vbuuid, mvalue, dead-seqnos, born-seqnos}
 var mdlookup = [16]int{
 	0, // 0x0
