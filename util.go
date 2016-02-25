@@ -114,3 +114,10 @@ func str2bytes(str string) []byte {
 	sl := &reflect.SliceHeader{Data: st.Data, Len: st.Len, Cap: st.Len}
 	return *(*[]byte)(unsafe.Pointer(sl))
 }
+
+func llndornil(nd *Llrbnode) Node {
+	if nd == nil {
+		return nil
+	}
+	return nd
+}

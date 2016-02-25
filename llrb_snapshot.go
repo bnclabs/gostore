@@ -29,7 +29,7 @@ loop:
 			break loop
 		default:
 		}
-		if err := writer.MakeSnapshot(id); err != nil {
+		if err := writer.makeSnapshot(id); err != nil {
 			log.Errorf("%v make snapshot $%v failed: %v\n", llrb.logPrefix, err)
 			break loop
 		}
@@ -121,6 +121,23 @@ func (snapshot *LLRBSnapshot) Release() {
 	log.Debugf("%v deref snapshot\n", snapshot.logPrefix)
 }
 
+// Validate implement Snapshot interface.
+func (snapshot *LLRBSnapshot) Validate() {
+	snapshot.llrb.validate(snapshot.root)
+}
+
+func (snapshot *LLRBSnapshot) Dotdump(buffer io.Writer) {
+	lines := []string{
+		"digraph llrb {",
+		"  node[shape=record];",
+		"}",
+	}
+	buffer.Write([]byte(strings.Join(lines[:len(lines)-1], "\n")))
+	nd := snapshot.root
+	nd.dotdump(buffer)
+	buffer.Write([]byte(lines[len(lines)-1]))
+}
+
 //---- Reader{} interface.
 
 // Has implement Reader{} interface.
@@ -172,65 +189,18 @@ func (snapshot *LLRBSnapshot) Max() Node {
 }
 
 // Range implement Reader{} interface.
-func (snapshot *LLRBSnapshot) Range(lkey, hkey []byte, incl string, iter NodeIterator) {
-	nd := snapshot.root
+func (s *LLRBSnapshot) Range(lkey, hkey []byte, incl string, iter NodeIterator) {
+	nd := s.root
 	switch incl {
 	case "both":
-		snapshot.llrb.rangeFromFind(nd, lkey, hkey, iter)
+		s.llrb.rangeFromFind(nd, lkey, hkey, iter)
 	case "high":
-		snapshot.llrb.rangeAfterFind(nd, lkey, hkey, iter)
+		s.llrb.rangeAfterFind(nd, lkey, hkey, iter)
 	case "low":
-		snapshot.llrb.rangeFromTill(nd, lkey, hkey, iter)
+		s.llrb.rangeFromTill(nd, lkey, hkey, iter)
 	default:
-		snapshot.llrb.rangeAfterTill(nd, lkey, hkey, iter)
+		s.llrb.rangeAfterTill(nd, lkey, hkey, iter)
 	}
-}
-
-//---- TODO: TBD APIs
-
-func (snapshot *LLRBSnapshot) ValidateReds() bool {
-	root := snapshot.root
-	if snapshot.llrb.validatereds(root, isred(root)) != true {
-		return false
-	}
-	return true
-}
-
-func (snapshot *LLRBSnapshot) ValidateBlacks() int {
-	root := snapshot.root
-	return snapshot.llrb.validateblacks(root, 0)
-}
-
-func (snapshot *LLRBSnapshot) ValidateHeight() bool {
-	root := snapshot.root
-	heightav := &averageInt{}
-	return snapshot.llrb.validateheight(root, heightav)
-}
-
-func (snapshot *LLRBSnapshot) ValidateDirty() (rv bool) {
-	rv = true
-	snapshot.Range(
-		nil, nil, "both",
-		func(nd Node) bool {
-			if nd.(*Llrbnode).metadata().isdirty() {
-				rv = false
-				return false
-			}
-			return true
-		})
-	return rv
-}
-
-func (snapshot *LLRBSnapshot) Dotdump(buffer io.Writer) {
-	lines := []string{
-		"digraph llrb {",
-		"  node[shape=record];",
-		"}",
-	}
-	buffer.Write([]byte(strings.Join(lines[:len(lines)-1], "\n")))
-	nd := snapshot.root
-	nd.dotdump(buffer)
-	buffer.Write([]byte(lines[len(lines)-1]))
 }
 
 //---- local methods.

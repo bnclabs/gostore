@@ -1,5 +1,3 @@
-// +build ignore
-
 package storage
 
 import "testing"
@@ -21,36 +19,43 @@ func TestNewLLRBMvcc(t *testing.T) {
 	}
 	nodavail := config["nodearena.capacity"].(int)
 	valavail := config["valarena.capacity"].(int)
-	mstats := llrb.StatsMem()
-	if overhead := mstats["node.overhead"].(int64); overhead != 2112 {
+
+	llrb.MVCCWriter()
+
+	stats, err := llrb.Stats(9)
+	if err != nil {
+		t.Error(stats)
+	}
+
+	if overhead := stats["llrb.node.overhead"].(int64); overhead != 2112 {
 		t.Errorf("expected %v, got %v", 0, 2112)
-	} else if useful := mstats["node.useful"].(int64); useful != 0 {
+	} else if useful := stats["llrb.node.useful"].(int64); useful != 0 {
 		t.Errorf("expected %v, got %v", 0, useful)
-	} else if overhead = mstats["value.overhead"].(int64); overhead != 2112 {
+	} else if overhead = stats["llrb.value.overhead"].(int64); overhead != 2112 {
 		t.Errorf("expected %v, got %v", 0, overhead)
-	} else if useful = mstats["value.useful"].(int64); useful != 0 {
+	} else if useful = stats["llrb.value.useful"].(int64); useful != 0 {
 		t.Errorf("expected %v, got %v", 0, overhead)
-	} else if x, y := int64(0), mstats["node.allocated"].(int64); x != y {
+	} else if x, y := int64(0), stats["llrb.node.allocated"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(0), mstats["value.allocated"].(int64); x != y {
+	} else if x, y = int64(0), stats["llrb.value.allocated"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
-	x, y := int64(nodavail), mstats["node.available"].(int64)
+	x, y := int64(nodavail), stats["llrb.node.available"].(int64)
 	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
-	x, y = int64(valavail), mstats["value.available"].(int64)
+	x, y = int64(valavail), stats["llrb.value.available"].(int64)
 	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
-	if x, y := int64(0), mstats["keymemory"].(int64); x != y {
+	if x, y := int64(0), stats["llrb.keymemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y := int64(0), mstats["valmemory"].(int64); x != y {
+	} else if x, y := int64(0), stats["llrb.valmemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
 }
 
-func TestLLRBMvcclBasicSnapshot(t *testing.T) {
+func TestLLRBMvccBasicSnapshot(t *testing.T) {
 	inserts := [][2][]byte{
 		[2][]byte{[]byte("key1"), []byte("value1")},
 		[2][]byte{[]byte("key2"), []byte("value2")},
@@ -67,17 +72,16 @@ func TestLLRBMvcclBasicSnapshot(t *testing.T) {
 	llrb := makellrbmvcc(t, "bmvccsnapshot", inserts, config)
 	writer := llrb.mvcc.writer
 
-	waitch := make(chan *LLRBSnapshot, 1)
-	if err := writer.GetSnapshot(waitch); err != nil {
+	snapshot, err := llrb.RSnapshot()
+	if err != nil {
 		t.Error(err)
 	}
-	snapshot := <-waitch
-	if len(snapshot.reclaim) == 0 {
+	if len(snapshot.(*LLRBSnapshot).reclaim) == 0 {
 		t.Errorf("expected reclaim nodes to be greater than zero")
 	}
 	snapshot.Release()
 
-	snapshot, err := validatesnapshot(100 /*mS*/, writer)
+	snapshot, err = validatesnapshot(100 /*mS*/, writer)
 	if err != nil {
 		t.Error(err)
 	}
@@ -103,17 +107,16 @@ func TestLLRBMvcclBasicLookup(t *testing.T) {
 	llrb := makellrbmvcc(t, "bmvcclookup", inserts, config)
 	writer := llrb.mvcc.writer
 
-	waitch := make(chan *LLRBSnapshot, 1)
-	if err := writer.GetSnapshot(waitch); err != nil {
+	snapshot, err := llrb.RSnapshot()
+	if err != nil {
 		t.Error(err)
 	}
-	snapshot := <-waitch
-	if len(snapshot.reclaim) == 0 {
+	if len(snapshot.(*LLRBSnapshot).reclaim) == 0 {
 		t.Errorf("expected reclaim nodes to be greater than zero")
 	}
 	snapshot.Release()
 
-	snapshot, err := validatesnapshot(100 /*mS*/, writer)
+	snapshot, err = validatesnapshot(100 /*mS*/, writer)
 	if err != nil {
 		t.Error(err)
 	}
@@ -123,7 +126,7 @@ func TestLLRBMvcclBasicLookup(t *testing.T) {
 		t.Errorf("expected key - %v", string(inserts[0][0]))
 	}
 	nd := snapshot.Get(inserts[2][0])
-	v := nd.nodevalue().value()
+	v := nd.Value()
 	if bytes.Compare(v, inserts[2][1]) != 0 {
 		t.Errorf("expected %v, got %v", string(inserts[2][1]), string(v))
 	}
@@ -132,7 +135,7 @@ func TestLLRBMvcclBasicLookup(t *testing.T) {
 	}
 	// min
 	nd = snapshot.Min()
-	k, v := nd.key(), nd.nodevalue().value()
+	k, v := nd.Key(), nd.Value()
 	if bytes.Compare(k, inserts[0][0]) != 0 {
 		t.Errorf("expected %v, got %v", string(inserts[0][0]), string(k))
 	} else if bytes.Compare(v, inserts[0][1]) != 0 {
@@ -140,7 +143,7 @@ func TestLLRBMvcclBasicLookup(t *testing.T) {
 	}
 	// max
 	nd = snapshot.Max()
-	k, v = nd.key(), nd.nodevalue().value()
+	k, v = nd.Key(), nd.Value()
 	if bytes.Compare(k, []byte("key5")) != 0 {
 		t.Errorf("expected %v, got %v", "key5", string(k))
 	} else if bytes.Compare(v, []byte("value5")) != 0 {
@@ -172,120 +175,153 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 	newvalue := []byte("value11")
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(1234567890)
 	countref := llrb.Count()
-	writer.Upsert(
+	llrb.Upsert(
 		inserts[0][0], newvalue,
-		func(llrb *LLRB, newnd, oldnd *Llrbnode) {
-			newnd.metadata().setvbno(vbno).setvbuuid(vbuuid).setbnseq(seqno)
-			vs := oldnd.nodevalue().value()
+		func(index Index, newnd, oldnd Node) {
+			newnd.Setvbno(vbno).SetVbuuid(vbuuid).SetBornseqno(seqno)
+			vs := oldnd.Value()
 			if bytes.Compare(vs, inserts[0][1]) != 0 {
 				fmsg := "expected %v, got %v\n"
 				t.Errorf(fmsg, string(inserts[0][1]), string(vs))
 			}
-			vs = newnd.nodevalue().value()
+			vs = newnd.Value()
 			if bytes.Compare(vs, newvalue) != 0 {
 				fmsg := "expected %v, got %v\n"
 				t.Errorf(fmsg, string(newvalue), string(vs))
 			}
 		})
 
-	// check
-	if countref != llrb.Count() {
-		t.Errorf("expected %v, got %v", countref, llrb.Count())
-	} else if nd := llrb.Get(inserts[0][0]); nd == nil {
-		t.Errorf("expeced valid node")
-	} else if x := nd.nodevalue().value(); bytes.Compare(newvalue, x) != 0 {
-		t.Errorf("expected %v, got %v", newvalue, nd.nodevalue().value())
-	}
-
-	// snapshot
-	snapshot, err := validatesnapshot(100 /*mS*/, writer)
+	snapshot, err := llrb.RSnapshot()
 	if err != nil {
 		t.Error(err)
 	}
+
+	// check
+	if countref != llrb.Count() {
+		t.Errorf("expected %v, got %v", countref, llrb.Count())
+	} else if nd := snapshot.Get(inserts[0][0]); nd == nil {
+		t.Errorf("expeced valid node")
+	} else if x := nd.Value(); bytes.Compare(newvalue, x) != 0 {
+		t.Errorf("expected %v, got %v", newvalue, nd.Value())
+	}
+
 	snapshot.Release()
+
+	// snapshot
+	snapshot, err = validatesnapshot(100 /*mS*/, writer)
+	if err != nil {
+		t.Error(err)
+	}
 
 	//-- delete
 	countref, key, value := llrb.Count(), []byte(nil), []byte(nil)
-	writer.DeleteMin(
-		func(llrb *LLRB, nd *Llrbnode) {
+	llrb.DeleteMin(
+		func(index Index, nd Node) {
 			key, value = nd.Key(), nd.Value()
 			fmsg := "expected %v, got %v"
 			if bytes.Compare(key, inserts[0][0]) != 0 {
 				t.Errorf(fmsg, string(inserts[0][0]), string(key))
 			} else if bytes.Compare(value, []byte("value11")) != 0 {
 				t.Errorf(fmsg, string(inserts[0][1]), string(value))
-			} else if llrb.Count() != int64(len(inserts)-1) {
-				t.Errorf(fmsg, len(inserts)-1, llrb.Count())
+			} else if index.Count() != int64(len(inserts)-1) {
+				t.Errorf(fmsg, len(inserts)-1, index.Count())
 			}
 		})
+
 	time.Sleep(100 * time.Millisecond)
-	// check
+
+	// check with old snapshot
 	if countref-1 != llrb.Count() {
 		t.Errorf("expected %v, got %v", countref-1, llrb.Count())
 	} else if nd := snapshot.Get(key); bytes.Compare(nd.Value(), value) != 0 {
-		t.Errorf("expected %v, got %v", value, nd.Value())
+		t.Errorf("expected %q, got %q", string(value), string(nd.Value()))
 	}
+
+	snapshot.Release()
+
 	// snapshot
 	snapshot, err = validatesnapshot(100 /*mS*/, writer)
 	if err != nil {
 		t.Error(err)
 	}
-	snapshot.Release()
+
+	// and then with new snapshot
+	if nd := snapshot.Get(key); nd != nil {
+		t.Errorf("expected nil")
+	}
 
 	// delete-max
 	countref, key, value = llrb.Count(), nil, nil
-	writer.DeleteMax(
-		func(llrb *LLRB, nd *Llrbnode) {
-			key, value := nd.Key(), nd.Value()
+	llrb.DeleteMax(
+		func(index Index, nd Node) {
+			key, value = nd.Key(), nd.Value()
 			fmsg := "expected %v, got %v"
 			if bytes.Compare(key, []byte("key5")) != 0 {
 				t.Errorf(fmsg, "key5", string(key))
 			} else if bytes.Compare(value, []byte("value5")) != 0 {
 				t.Errorf(fmsg, "value5", string(value))
-			} else if llrb.Count() != int64(len(inserts)-2) {
-				t.Errorf(fmsg, len(inserts)-2, llrb.Count())
+			} else if index.Count() != int64(len(inserts)-2) {
+				t.Errorf(fmsg, len(inserts)-2, index.Count())
 			}
 		})
+
 	time.Sleep(100 * time.Millisecond)
+
 	// check
 	if countref-1 != llrb.Count() {
 		t.Errorf("expected %v, got %v", countref-1, llrb.Count())
 	} else if nd := snapshot.Get(key); bytes.Compare(nd.Value(), value) != 0 {
 		t.Errorf("expected %v, got %v", value, nd.Value())
 	}
+
+	snapshot.Release()
+
 	// snapshot
 	snapshot, err = validatesnapshot(100 /*mS*/, writer)
 	if err != nil {
 		t.Error(err)
 	}
-	snapshot.Release()
+
+	if nd := snapshot.Get(key); nd != nil {
+		t.Errorf("expected nil")
+	}
 
 	// delete-min
 	countref, key, value = llrb.Count(), []byte("key2"), nil
-	writer.Delete(
+	llrb.Delete(
 		key,
-		func(llrb *LLRB, nd *Llrbnode) {
-			value = nd.nodevalue().value()
+		func(index Index, nd Node) {
+			value = nd.Value()
 			fmsg := "expected %v, got %v"
 			if bytes.Compare(value, []byte("value2")) != 0 {
 				t.Errorf(fmsg, "value2", string(value))
-			} else if llrb.Count() != int64(len(inserts)-3) {
-				t.Errorf(fmsg, len(inserts)-3, llrb.Count())
+			} else if index.Count() != int64(len(inserts)-3) {
+				t.Errorf(fmsg, len(inserts)-3, index.Count())
 			}
 		})
+
 	time.Sleep(100 * time.Millisecond)
+
 	// check
 	if countref-1 != llrb.Count() {
 		t.Errorf("expected %v, got %v", countref-1, llrb.Count())
 	} else if nd := snapshot.Get(key); bytes.Compare(nd.Value(), value) != 0 {
 		t.Errorf("expected %v, got %v", value, nd.Value())
 	}
+
+	snapshot.Release()
+
 	// snapshot
 	snapshot, err = validatesnapshot(100 /*mS*/, writer)
 	if err != nil {
 		t.Error(err)
 	}
+
+	if nd := snapshot.Get(key); nd != nil {
+		t.Errorf("expected nil")
+	}
 	snapshot.Release()
+
 	llrb.Destroy()
 }
 
@@ -316,8 +352,8 @@ func TestLLRBMvccBasicRange(t *testing.T) {
 	i, ln := 0, 0
 	snapshot.Range(
 		inserts[0][0], inserts[4][0], "both",
-		func(nd *Llrbnode) bool {
-			k, v := nd.key(), nd.nodevalue().value()
+		func(nd Node) bool {
+			k, v := nd.Key(), nd.Value()
 			if bytes.Compare(inserts[i][0], k) != 0 {
 				t.Errorf("expected key %v, got %v", inserts[i][0], string(k))
 			} else if bytes.Compare(inserts[i][1], v) != 0 {
@@ -334,8 +370,8 @@ func TestLLRBMvccBasicRange(t *testing.T) {
 	i, ln = 1, 0
 	snapshot.Range(
 		inserts[0][0], inserts[4][0], "none",
-		func(nd *Llrbnode) bool {
-			k, v := nd.key(), nd.nodevalue().value()
+		func(nd Node) bool {
+			k, v := nd.Key(), nd.Value()
 			if bytes.Compare(inserts[i][0], k) != 0 {
 				t.Errorf("expected key %v, got %v", inserts[i][0], string(k))
 			} else if bytes.Compare(inserts[i][1], v) != 0 {
@@ -352,8 +388,8 @@ func TestLLRBMvccBasicRange(t *testing.T) {
 	i, ln = 1, 0
 	snapshot.Range(
 		inserts[0][0], inserts[4][0], "high",
-		func(nd *Llrbnode) bool {
-			k, v := nd.key(), nd.nodevalue().value()
+		func(nd Node) bool {
+			k, v := nd.Key(), nd.Value()
 			if bytes.Compare(inserts[i][0], k) != 0 {
 				t.Errorf("expected key %v, got %v", inserts[i][0], string(k))
 			} else if bytes.Compare(inserts[i][1], v) != 0 {
@@ -370,8 +406,8 @@ func TestLLRBMvccBasicRange(t *testing.T) {
 	i, ln = 0, 0
 	snapshot.Range(
 		inserts[0][0], inserts[4][0], "low",
-		func(nd *Llrbnode) bool {
-			k, v := nd.key(), nd.nodevalue().value()
+		func(nd Node) bool {
+			k, v := nd.Key(), nd.Value()
 			if bytes.Compare(inserts[i][0], k) != 0 {
 				t.Errorf("expected key %v, got %v", inserts[i][0], string(k))
 			} else if bytes.Compare(inserts[i][1], v) != 0 {
@@ -388,7 +424,7 @@ func TestLLRBMvccBasicRange(t *testing.T) {
 	i, ln = 0, 0
 	snapshot.Range(
 		inserts[0][0], inserts[0][0], "high",
-		func(nd *Llrbnode) bool { return true })
+		func(nd Node) bool { return true })
 	if ln != 0 {
 		t.Errorf("expected %v, got %v", 0, ln)
 	}
@@ -396,7 +432,7 @@ func TestLLRBMvccBasicRange(t *testing.T) {
 	i, ln = 0, 0
 	snapshot.Range(
 		inserts[4][0], inserts[4][0], "low",
-		func(nd *Llrbnode) bool { return true })
+		func(nd Node) bool { return true })
 	if ln != 0 {
 		t.Errorf("expected %v, got %v", 0, ln)
 	}
@@ -430,35 +466,35 @@ func TestLLRBMvccInsert(t *testing.T) {
 	}
 
 	// check memory accounting
-	mstats, err := writer.StatsMem()
+	stats, err := llrb.Stats(9)
 	if err != nil {
 		t.Error(err)
 	}
 	overhead, useful := int64(4906), int64(2096640)
 	allocated, avail := int64(960000), int64(1072781824)
-	if x := mstats["node.overhead"].(int64); x != overhead {
+	if x := stats["llrb.node.overhead"].(int64); x != overhead {
 		t.Errorf("expected %v, got %v", overhead, x)
-	} else if x := mstats["node.useful"].(int64); x != useful {
+	} else if x := stats["llrb.node.useful"].(int64); x != useful {
 		t.Errorf("expected %v, got %v", useful, x)
-	} else if x := mstats["node.allocated"].(int64); x != allocated {
+	} else if x := stats["llrb.node.allocated"].(int64); x != allocated {
 		t.Errorf("expected %v, got %v", allocated, x)
-	} else if x := mstats["node.available"].(int64); x != avail {
+	} else if x := stats["llrb.node.available"].(int64); x != avail {
 		t.Errorf("expected %v, got %v", avail, x)
 	}
 	overhead, useful = int64(22656), int64(20971520)
 	allocated, avail = int64(1280000), int64(10736138240)
-	if x := mstats["value.overhead"].(int64); x != overhead {
+	if x := stats["llrb.value.overhead"].(int64); x != overhead {
 		t.Errorf("expected %v, got %v", overhead, x)
-	} else if x := mstats["value.useful"].(int64); x != useful {
+	} else if x := stats["llrb.value.useful"].(int64); x != useful {
 		t.Errorf("expected %v, got %v", useful, x)
-	} else if x := mstats["value.allocated"].(int64); x != allocated {
+	} else if x := stats["llrb.value.allocated"].(int64); x != allocated {
 		t.Errorf("expected %v, got %v", allocated, x)
-	} else if x := mstats["value.available"].(int64); x != avail {
+	} else if x := stats["llrb.value.available"].(int64); x != avail {
 		t.Errorf("expected %v, got %v", avail, x)
 	}
-	if x, y := int64(100000), mstats["keymemory"].(int64); x != y {
+	if x, y := int64(100000), stats["llrb.keymemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(1000000), mstats["valmemory"].(int64); x != y {
+	} else if x, y = int64(1000000), stats["llrb.valmemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
 	// Get items
@@ -467,14 +503,14 @@ func TestLLRBMvccInsert(t *testing.T) {
 		nd := snapshot.Get(key)
 		if nd == nil {
 			t.Fatalf("unexpected nil")
-		} else if x := nd.metadata().vbno(); x != vbno {
+		} else if x := nd.Vbno(); x != vbno {
 			t.Errorf("expected %v, got %v", vbno, x)
-		} else if x := nd.metadata().vbuuid(); x != vbuuid {
+		} else if x := nd.Vbuuid(); x != vbuuid {
 			t.Errorf("expected %v, got %v", vbuuid, x)
-		} else if x := nd.metadata().bnseq(); x != seqno {
+		} else if x := nd.Bornseqno(); x != seqno {
 			t.Errorf("expected %v, got %v", seqno, x)
 		}
-		x, y := values[i], nd.nodevalue().value()
+		x, y := values[i], nd.Value()
 		if bytes.Compare(x, y) != 0 {
 			t.Errorf("expected %v, got %v", x, y)
 		}
@@ -517,18 +553,17 @@ func TestLLRBMvccUpsert(t *testing.T) {
 	for i, key := range keys {
 		_, value := makekeyvalue(nil, make([]byte, 200))
 		newvalues = append(newvalues, value)
-		writer.Upsert(
+		llrb.Upsert(
 			key, value,
-			func(llrb *LLRB, newnd, oldnd *Llrbnode) {
+			func(index Index, newnd, oldnd Node) {
 				if oldnd == nil {
 					t.Errorf("unexpected nil")
-				} else if x := oldnd.metadata().vbno(); x != vbno {
+				} else if x := oldnd.Vbno(); x != vbno {
 					t.Errorf("expected %v, got %v", vbno, x)
-				} else if x := oldnd.metadata().vbuuid(); x != vbuuid {
+				} else if x := oldnd.Vbuuid(); x != vbuuid {
 					t.Errorf("expected %v, got %v", vbuuid, x)
 				}
-				x, y := values[i], oldnd.nodevalue().value()
-				z := newnd.nodevalue().value()
+				x, y, z := values[i], oldnd.Value(), newnd.Value()
 				if bytes.Compare(x, y) != 0 {
 					fmsg := "%q expected old %s, got %s"
 					t.Errorf(fmsg, string(key), string(x), string(y))
@@ -537,7 +572,8 @@ func TestLLRBMvccUpsert(t *testing.T) {
 					t.Errorf(fmsg, string(key), string(value), string(z))
 				}
 
-				newnd.metadata().setvbno(vbno).setvbuuid(vbuuid).setbnseq(seqno)
+				newnd.Setvbno(vbno).SetVbuuid(vbuuid).SetBornseqno(seqno)
+				llrb := index.(*LLRB)
 				llrb.clock.updatevbuuids([]uint16{vbno}, []uint64{vbuuid})
 				llrb.clock.updateseqnos([]uint16{vbno}, []uint64{seqno})
 			})
@@ -551,33 +587,39 @@ func TestLLRBMvccUpsert(t *testing.T) {
 	snapshot.Release()
 
 	// check memory accounting
-	mstats, err := writer.StatsMem()
+	stats, err := llrb.Stats(9)
 	if err != nil {
 		t.Error(err)
 	}
-	if overhead := mstats["node.overhead"].(int64); overhead != 4906 {
+	if overhead := stats["llrb.node.overhead"].(int64); overhead != 4906 {
 		t.Errorf("expected %v, got %v", 4906, overhead)
-	} else if useful := mstats["node.useful"].(int64); useful != 2096640 {
+	} else if useful := stats["llrb.node.useful"].(int64); useful != 2096640 {
 		t.Errorf("expected %v, got %v", 2096640, useful)
-	} else if overhead := mstats["value.overhead"].(int64); overhead != 34422 {
+	}
+	overhead := stats["llrb.value.overhead"].(int64)
+	if overhead != 34422 {
 		t.Errorf("expected %v, got %v", 34422, overhead)
-	} else if useful := mstats["value.useful"].(int64); useful != 41941504 {
+	} else if useful := stats["llrb.value.useful"].(int64); useful != 41941504 {
 		t.Errorf("expected %v, got %v", 41941504, useful)
-	} else if x, y := int64(960000), mstats["node.allocated"].(int64); x != y {
-		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y := int64(2240000), mstats["value.allocated"].(int64); x != y {
-		t.Errorf("expected %v, got %v", x, y)
 	}
-	x, y := int64(1072781824), mstats["node.available"].(int64)
+	x, y := int64(960000), stats["llrb.node.allocated"].(int64)
 	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
-	x, y = int64(10735178240), mstats["value.available"].(int64)
+	x, y = int64(2240000), stats["llrb.value.allocated"].(int64)
 	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(100000), mstats["keymemory"].(int64); x != y {
+	}
+	x, y = int64(1072781824), stats["llrb.node.available"].(int64)
+	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(2000000), mstats["valmemory"].(int64); x != y {
+	}
+	x, y = int64(10735178240), stats["llrb.value.available"].(int64)
+	if x != y {
+		t.Errorf("expected %v, got %v", x, y)
+	} else if x, y = int64(100000), stats["llrb.keymemory"].(int64); x != y {
+		t.Errorf("expected %v, got %v", x, y)
+	} else if x, y = int64(2000000), stats["llrb.valmemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
 
@@ -613,19 +655,19 @@ func TestLLRBMvccDelete(t *testing.T) {
 	// Delete items
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(0x12345678)
 	for i, key := range keys[:count/2] {
-		writer.Delete(
+		llrb.Delete(
 			key,
-			func(llrb *LLRB, nd *Llrbnode) {
+			func(index Index, nd Node) {
 				if nd == nil {
 					t.Errorf("unexpected nil")
-				} else if x := nd.metadata().vbno(); x != vbno {
+				} else if x := nd.Vbno(); x != vbno {
 					t.Errorf("expected %v, got %v", vbno, x)
-				} else if x := nd.metadata().vbuuid(); x != vbuuid {
+				} else if x := nd.Vbuuid(); x != vbuuid {
 					t.Errorf("expected %v, got %v", vbuuid, x)
-				} else if x := nd.metadata().bnseq(); x != seqno {
+				} else if x := nd.Bornseqno(); x != seqno {
 					t.Errorf("expected %v, got %v", seqno, x)
 				}
-				x, y := values[i], nd.nodevalue().value()
+				x, y := values[i], nd.Value()
 				if bytes.Compare(x, y) != 0 {
 					t.Errorf("expected %s, got %s", x, y)
 				}
@@ -641,13 +683,13 @@ func TestLLRBMvccDelete(t *testing.T) {
 
 	// delete minimums
 	for i := 0; i < len(keys[count/2:(2*count)/3]); i++ {
-		writer.DeleteMin(
-			func(llrb *LLRB, nd *Llrbnode) {
+		llrb.DeleteMin(
+			func(index Index, nd Node) {
 				if nd == nil {
 					t.Errorf("unexpected nil")
-				} else if x := nd.metadata().vbno(); x != vbno {
+				} else if x := nd.Vbno(); x != vbno {
 					t.Errorf("expected %v, got %v", vbno, x)
-				} else if x := nd.metadata().vbuuid(); x != vbuuid {
+				} else if x := nd.Vbuuid(); x != vbuuid {
 					t.Errorf("expected %v, got %v", vbuuid, x)
 				}
 			})
@@ -661,13 +703,13 @@ func TestLLRBMvccDelete(t *testing.T) {
 
 	// delete maximums
 	for i := 0; i < len(keys[(2*count)/3:]); i++ {
-		writer.DeleteMax(
-			func(llrb *LLRB, nd *Llrbnode) {
+		llrb.DeleteMax(
+			func(index Index, nd Node) {
 				if nd == nil {
 					t.Errorf("unexpected nil")
-				} else if x := nd.metadata().vbno(); x != vbno {
+				} else if x := nd.Vbno(); x != vbno {
 					t.Errorf("expected %v, got %v", vbno, x)
-				} else if x := nd.metadata().vbuuid(); x != vbuuid {
+				} else if x := nd.Vbuuid(); x != vbuuid {
 					t.Errorf("expected %v, got %v", vbuuid, x)
 				}
 			})
@@ -685,31 +727,35 @@ func TestLLRBMvccDelete(t *testing.T) {
 		t.Errorf("expected 0, got %v", x)
 	}
 	// check memory accounting
-	mstats, err := writer.StatsMem()
+	stats, err := llrb.Stats(9)
 	if err != nil {
 		t.Error(err)
 	}
-	if overhead := mstats["node.overhead"].(int64); overhead != 4906 {
+	if overhead := stats["llrb.node.overhead"].(int64); overhead != 4906 {
 		t.Errorf("expected %v, got %v", 4906, overhead)
-	} else if useful := mstats["node.useful"].(int64); useful != 2096640 {
+	} else if useful := stats["llrb.node.useful"].(int64); useful != 2096640 {
 		t.Errorf("expected %v, got %v", 2096640, useful)
-	} else if x, y := int64(0), mstats["node.allocated"].(int64); x != y {
-		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(1073741824), mstats["node.available"].(int64); x != y {
-		t.Errorf("expected %v, got %v", x, y)
-	} else if overhead := mstats["value.overhead"].(int64); overhead != 22656 {
-		t.Errorf("expected %v, got %v", 22656, overhead)
-	} else if useful := mstats["value.useful"].(int64); useful != 20971520 {
-		t.Errorf("expected %v, got %v", 20971520, useful)
-	} else if x, y = int64(0), mstats["value.allocated"].(int64); x != y {
+	} else if x, y := int64(0), stats["llrb.node.allocated"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
-	x, y := int64(10737418240), mstats["value.available"].(int64)
+	x, y := int64(1073741824), stats["llrb.node.available"].(int64)
 	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(0), mstats["keymemory"].(int64); x != y {
+	}
+	overhead := stats["llrb.value.overhead"].(int64)
+	if overhead != 22656 {
+		t.Errorf("expected %v, got %v", 22656, overhead)
+	} else if useful := stats["llrb.value.useful"].(int64); useful != 20971520 {
+		t.Errorf("expected %v, got %v", 20971520, useful)
+	} else if x, y = int64(0), stats["llrb.value.allocated"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(0), mstats["valmemory"].(int64); x != y {
+	}
+	x, y = int64(10737418240), stats["llrb.value.available"].(int64)
+	if x != y {
+		t.Errorf("expected %v, got %v", x, y)
+	} else if x, y = int64(0), stats["llrb.keymemory"].(int64); x != y {
+		t.Errorf("expected %v, got %v", x, y)
+	} else if x, y = int64(0), stats["llrb.valmemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
 
@@ -725,7 +771,9 @@ func TestLLRBMvccRange(t *testing.T) {
 
 	llrb := makellrbmvcc(t, "mvccrange", nil, config)
 	writer := llrb.mvcc.writer
+
 	d := NewDict()
+
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(0x12345678)
 	keys, values := make([][]byte, 0), make([][]byte, 0)
 	// insert 10K items
@@ -733,17 +781,17 @@ func TestLLRBMvccRange(t *testing.T) {
 	for i := 0; i < count; i++ {
 		key, value := make([]byte, 10), make([]byte, 100)
 		key, value = makekeyvalue(key, value)
-		writer.Upsert(
+		llrb.Upsert(
 			key, value,
-			func(llrb *LLRB, newnd, oldnd *Llrbnode) {
+			func(index Index, newnd, oldnd Node) {
 				if oldnd != nil {
 					t.Errorf("expected nil")
 				} else if x := llrb.Count(); x != int64(i+1) {
 					t.Errorf("expected %v, got %v", i, x)
 				}
-				newnd.metadata().setvbno(vbno).setvbuuid(vbuuid).setbnseq(seqno)
+				newnd.Setvbno(vbno).SetVbuuid(vbuuid).SetBornseqno(seqno)
 			})
-		d.Upsert(key, value)
+		d.Upsert(key, value, nil)
 		keys, values = append(keys, key), append(values, value)
 		seqno++
 	}
@@ -762,14 +810,14 @@ func TestLLRBMvccRange(t *testing.T) {
 		y := rand.Intn(len(keys))
 		lowkey, highkey := keys[x], keys[y]
 		llrbks, llrbvs := make([][]byte, 0), make([][]byte, 0)
-		snapshot.Range(lowkey, highkey, incl, func(nd *Llrbnode) bool {
-			llrbks = append(llrbks, nd.key())
-			llrbvs = append(llrbvs, nd.nodevalue().value())
+		snapshot.Range(lowkey, highkey, incl, func(nd Node) bool {
+			llrbks = append(llrbks, nd.Key())
+			llrbvs = append(llrbvs, nd.Value())
 			return true
 		})
 		dks, dvs := make([][]byte, 0), make([][]byte, 0)
-		d.Range(lowkey, highkey, incl, func(k, v []byte) bool {
-			dks, dvs = append(dks, k), append(dvs, v)
+		d.Range(lowkey, highkey, incl, func(nd Node) bool {
+			dks, dvs = append(dks, nd.Key()), append(dvs, nd.Value())
 			return true
 		})
 		if len(llrbks) != len(dks) {
@@ -795,18 +843,18 @@ func makellrbmvcc(
 	if llrb.Count() != 0 {
 		t.Fatalf("expected an empty dict")
 	}
-	writer := llrb.MVCCWriter()
+	llrb.MVCCWriter()
 
 	// inserts
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(0x12345678)
 	for _, kv := range inserts {
-		writer.Upsert(
+		llrb.Upsert(
 			kv[0], kv[1],
-			func(llrb *LLRB, newnd, oldnd *Llrbnode) {
+			func(index Index, newnd, oldnd Node) {
 				if oldnd != nil {
 					t.Errorf("expected old Llrbnode as nil")
 				}
-				newnd.metadata().setvbno(vbno).setvbuuid(vbuuid).setbnseq(seqno)
+				newnd.Setvbno(vbno).SetVbuuid(vbuuid).SetBornseqno(seqno)
 				llrb.clock.updatevbuuids([]uint16{vbno}, []uint64{vbuuid})
 				llrb.clock.updateseqnos([]uint16{vbno}, []uint64{seqno})
 			})
@@ -815,24 +863,18 @@ func makellrbmvcc(
 	return llrb
 }
 
-func validatesnapshot(sleep int, writer *LLRBWriter) (*LLRBSnapshot, error) {
+func validatesnapshot(sleep int, writer *LLRBWriter) (Snapshot, error) {
 	time.Sleep(time.Duration(sleep) * time.Millisecond)
 
-	waitch := make(chan *LLRBSnapshot, 1)
-	if err := writer.GetSnapshot(waitch); err != nil {
+	snapshot, err := writer.llrb.RSnapshot()
+	if err != nil {
 		return nil, err
 	}
-	snapshot := <-waitch
-	if len(snapshot.reclaim) != 0 {
-		return nil, fmt.Errorf("expected reclaim nodes to be zero")
+	if len(snapshot.(*LLRBSnapshot).reclaim) != 0 {
+		panic("expected snapshot.reclaim to be ZERO")
 	}
 
 	// validate
-	if snapshot.ValidateReds() == false {
-		return nil, fmt.Errorf("validate-reds failed")
-	} else if snapshot.ValidateDirty() == false {
-		return nil, fmt.Errorf("validate-dirty failed")
-	}
-	snapshot.ValidateBlacks()
+	snapshot.Validate()
 	return snapshot, nil
 }

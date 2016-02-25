@@ -71,6 +71,17 @@ type Index interface {
 	// Destroy to delete an index and clean up its resources.
 	Destroy() error
 
+	// Stats return a map of index statistics, involved ranges from 1-9
+	// where 1 being quick set of statistics and 9 being very involved set
+	// of statistics.
+	Stats(involved int) (map[string]interface{}, error)
+
+	// Log current state of index.
+	Log(involved int)
+
+	// Validate check whether index is in sane state.
+	Validate()
+
 	Reader
 	Writer
 }
@@ -89,6 +100,9 @@ type Snapshot interface {
 
 	// Release snapshot after reading, don't hold on to it beyond few seconds.
 	Release()
+
+	// Validate check whether index is in sane state.
+	Validate()
 
 	Reader
 }
@@ -120,14 +134,14 @@ type Reader interface {
 // Writer interface methods for updating index data structure.
 type Writer interface {
 	// Upsert a key/value pair.
-	Upsert(key, value []byte, callb UpsertCallback)
+	Upsert(key, value []byte, callb UpsertCallback) error
 
 	// DeleteMin delete the last entry in the index.
-	DeleteMin(callb DeleteCallback)
+	DeleteMin(callb DeleteCallback) error
 
 	// Delete the first entry in the index.
-	DeleteMax(callb DeleteCallback)
+	DeleteMax(callb DeleteCallback) error
 
 	// Delete entry specified by key.
-	Delete(key []byte, callb DeleteCallback)
+	Delete(key []byte, callb DeleteCallback) error
 }

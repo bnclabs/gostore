@@ -108,32 +108,46 @@ func (llrb *LLRB) heightStats(nd *Llrbnode, d int64, av *averageInt) {
 	}
 }
 
-func (llrb *LLRB) validatereds(nd *Llrbnode, fromred bool) bool {
-	if nd == nil {
-		return true
+func (llrb *LLRB) countblacks(nd *Llrbnode, count int) int {
+	if nd != nil {
+		if !isred(nd) {
+			count++
+		}
+		x := llrb.countblacks(nd.left, count)
+		y := llrb.countblacks(nd.right, count)
+		if x != y {
+			panic(fmt.Errorf("no. of blacks {left,right} : {%v,%v}\n", x, y))
+		}
+		return x
 	}
-	if fromred && isred(nd) {
-		panic("consequetive red spotted")
-	}
-	if llrb.validatereds(nd.left, isred(nd)) == false {
-		return false
-	}
-	return llrb.validatereds(nd.right, isred(nd))
+	return count
 }
 
-func (llrb *LLRB) validateblacks(nd *Llrbnode, count int) int {
-	if nd == nil {
-		return count
+func (llrb *LLRB) validate(root *Llrbnode) {
+	llrb.validatereds(root, isred(root))
+	llrb.countblacks(root, 0)
+
+	heightav := &averageInt{}
+	llrb.validateheight(root, heightav)
+
+	llrb.rangeFromFind(
+		root, nil, nil,
+		func(nd Node) bool {
+			if nd.(*Llrbnode).metadata().isdirty() {
+				panic("unexpected dirty node on a full tree scan")
+			}
+			return true
+		})
+}
+
+func (llrb *LLRB) validatereds(nd *Llrbnode, fromred bool) {
+	if nd != nil {
+		if fromred && isred(nd) {
+			panic("consequetive red spotted")
+		}
+		llrb.validatereds(nd.left, isred(nd))
+		llrb.validatereds(nd.right, isred(nd))
 	}
-	if !isred(nd) {
-		count++
-	}
-	x := llrb.validateblacks(nd.left, count)
-	y := llrb.validateblacks(nd.right, count)
-	if x != y {
-		panic(fmt.Errorf("no. of blacks {left,right} : {%v,%v}\n", x, y))
-	}
-	return x
 }
 
 func (llrb *LLRB) validateheight(nd *Llrbnode, av *averageInt) bool {

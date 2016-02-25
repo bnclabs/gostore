@@ -3,8 +3,6 @@ package storage
 import "sync/atomic"
 import "unsafe"
 import "time"
-import "io"
-import "errors"
 
 type LLRBWriter struct {
 	llrb    *LLRB
@@ -47,91 +45,66 @@ const (
 	cmdLlrbWriterGetSnapshot
 	cmdLlrbWriterDestroy
 	// maintanence commands
-	cmdLlrbWriterStatsMem
-	cmdLlrbWriterStatsUpsert
-	cmdLlrbWriterStatsHeight
-	cmdLlrbWriterLogmemory
-	cmdLlrbWriterLogUpsertdepth
-	cmdLlrbWriterLogTreeheight
+	cmdLlrbWriterStats
+	cmdLlrbWriterValidate
+	cmdLlrbWriterLog
 )
 
-func (writer *LLRBWriter) Upsert(key, value []byte, callb UpsertCallback) error {
-	if key == nil {
-		return errors.New("upserting nil key")
-	}
+func (writer *LLRBWriter) wupsert(key, value []byte, callb UpsertCallback) error {
 	respch := make(chan []interface{}, 0)
 	cmd := []interface{}{cmdLlrbWriterUpsert, key, value, callb, respch}
 	_, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
 	return err
 }
 
-func (writer *LLRBWriter) DeleteMin(callb DeleteCallback) error {
+func (writer *LLRBWriter) wdeleteMin(callb DeleteCallback) error {
 	respch := make(chan []interface{}, 0)
 	cmd := []interface{}{cmdLlrbWriterDeleteMin, callb, respch}
 	_, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
 	return err
 }
 
-func (writer *LLRBWriter) DeleteMax(callb DeleteCallback) error {
+func (writer *LLRBWriter) wdeleteMax(callb DeleteCallback) error {
 	respch := make(chan []interface{}, 0)
 	cmd := []interface{}{cmdLlrbWriterDeleteMax, callb, respch}
 	_, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
 	return err
 }
 
-func (writer *LLRBWriter) Delete(key []byte, callb DeleteCallback) error {
+func (writer *LLRBWriter) wdelete(key []byte, callb DeleteCallback) error {
 	respch := make(chan []interface{}, 0)
 	cmd := []interface{}{cmdLlrbWriterDelete, key, callb, respch}
 	_, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
 	return err
 }
 
-func (writer *LLRBWriter) MakeSnapshot(id string) error {
+func (writer *LLRBWriter) makeSnapshot(id string) error {
 	cmd := []interface{}{cmdLlrbWriterMakeSnapshot, id}
 	return failsafePost(writer.reqch, cmd, writer.finch)
 }
 
-func (writer *LLRBWriter) GetSnapshot(waiter chan *LLRBSnapshot) error {
+func (writer *LLRBWriter) getSnapshot(waiter chan *LLRBSnapshot) error {
 	cmd := []interface{}{cmdLlrbWriterGetSnapshot, waiter}
 	return failsafePost(writer.reqch, cmd, writer.finch)
 }
 
-func (writer *LLRBWriter) StatsMem() (map[string]interface{}, error) {
+func (writer *LLRBWriter) stats(involved int) (map[string]interface{}, error) {
 	respch := make(chan []interface{}, 1)
-	cmd := []interface{}{cmdLlrbWriterStatsMem, respch}
+	cmd := []interface{}{cmdLlrbWriterStats, involved, respch}
 	resp, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
-	return resp[0].(map[string]interface{}), err
+	return resp[0].(map[string]interface{}), responseError(err, resp, 1)
 }
 
-func (writer *LLRBWriter) StatsUpsert() (map[string]interface{}, error) {
+func (writer *LLRBWriter) validate() error {
 	respch := make(chan []interface{}, 1)
-	cmd := []interface{}{cmdLlrbWriterStatsUpsert, respch}
-	resp, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
-	return resp[0].(map[string]interface{}), err
+	cmd := []interface{}{cmdLlrbWriterValidate, respch}
+	_, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
+	return err
 }
 
-func (writer *LLRBWriter) StatsHeight() (map[string]interface{}, error) {
+func (writer *LLRBWriter) log(involved int) {
 	respch := make(chan []interface{}, 1)
-	cmd := []interface{}{cmdLlrbWriterStatsHeight, respch}
-	resp, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
-	return resp[0].(map[string]interface{}), err
-}
-
-func (writer *LLRBWriter) Logmemory(w io.Writer) {
-	respch := make(chan []interface{}, 1)
-	cmd := []interface{}{cmdLlrbWriterLogmemory, w, respch}
-	failsafeRequest(writer.reqch, respch, cmd, writer.finch)
-}
-
-func (writer *LLRBWriter) LogUpsertdepth() {
-	respch := make(chan []interface{}, 1)
-	cmd := []interface{}{cmdLlrbWriterLogUpsertdepth, respch}
-	failsafeRequest(writer.reqch, respch, cmd, writer.finch)
-}
-
-func (writer *LLRBWriter) LogTreeheight() {
-	respch := make(chan []interface{}, 1)
-	cmd := []interface{}{cmdLlrbWriterLogTreeheight, respch}
+	cmd := []interface{}{cmdLlrbWriterLog, involved, respch}
 	failsafeRequest(writer.reqch, respch, cmd, writer.finch)
 }
 
@@ -185,7 +158,7 @@ loop:
 			llrb.upsertcounts(key, val, oldnd)
 
 			if callb != nil {
-				callb(llrb, newnd, oldnd)
+				callb(llrb, llndornil(newnd), llndornil(oldnd))
 			}
 			if newnd.metadata().isdirty() == false {
 				panic("expected this to be dirty")
@@ -209,7 +182,7 @@ loop:
 			llrb.delcount(deleted)
 
 			if callb != nil {
-				callb(llrb, deleted)
+				callb(llrb, llndornil(deleted))
 			}
 
 			reclaimNodes("delmin", reclaim)
@@ -228,7 +201,7 @@ loop:
 			llrb.delcount(deleted)
 
 			if callb != nil {
-				callb(llrb, deleted)
+				callb(llrb, llndornil(deleted))
 			}
 
 			reclaimNodes("delmax", reclaim)
@@ -247,7 +220,7 @@ loop:
 			llrb.delcount(deleted)
 
 			if callb != nil {
-				callb(llrb, deleted)
+				callb(llrb, llndornil(deleted))
 			}
 
 			reclaimNodes("delete", reclaim)
@@ -282,35 +255,21 @@ loop:
 			<-ch
 			break loop
 
-		case cmdLlrbWriterStatsMem:
-			respch := msg[1].(chan []interface{})
-			stats := llrb.StatsMem()
-			respch <- []interface{}{stats}
-
-		case cmdLlrbWriterStatsUpsert:
-			respch := msg[1].(chan []interface{})
-			stats := llrb.StatsUpsert()
-			respch <- []interface{}{stats}
-
-		case cmdLlrbWriterStatsHeight:
-			respch := msg[1].(chan []interface{})
-			stats := llrb.StatsHeight()
-			respch <- []interface{}{stats}
-
-		case cmdLlrbWriterLogmemory:
-			w := msg[1].(io.Writer)
+		case cmdLlrbWriterStats:
+			involved := msg[1].(int)
 			respch := msg[2].(chan []interface{})
-			llrb.Logmemory(w)
+			stats, err := llrb.stats(involved)
+			respch <- []interface{}{stats, err}
+
+		case cmdLlrbWriterValidate:
+			respch := msg[1].(chan []interface{})
+			llrb.validate(llrb.root)
 			respch <- []interface{}{}
 
-		case cmdLlrbWriterLogUpsertdepth:
-			respch := msg[1].(chan []interface{})
-			llrb.LogUpsertdepth()
-			respch <- []interface{}{}
-
-		case cmdLlrbWriterLogTreeheight:
-			respch := msg[1].(chan []interface{})
-			llrb.LogTreeheight()
+		case cmdLlrbWriterLog:
+			involved := msg[1].(int)
+			respch := msg[2].(chan []interface{})
+			llrb.log(involved)
 			respch <- []interface{}{}
 		}
 	}

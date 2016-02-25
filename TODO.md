@@ -1,7 +1,10 @@
 LLRB:
 * improve panic messages.
+* check the difference between upsertdepth and tree height statistics
+  and try to reason with it.
 * keymemory == 'sum of all Node.Key()'
 * valmemory == 'sum of all Node.Value()'
+* count stats in LLRB{} and LLRBSnapshot{}
 * test mvcc.writer.DeleteMin() on a tree with single node.
 * update access field.
 * dotdump hightlight red/black edges.

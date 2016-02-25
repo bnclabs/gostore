@@ -11,7 +11,8 @@
 //   * in single-threaded configuration, reads and writes are expected
 //     to be serialzed.
 //   * supports multi-version-concurrency-control, where writes are
-//     serialized but there can be zero or more concurrent readers.
+//     serialized, even if there are concurrent writers but there can be
+//     zero or more concurrent readers.
 //
 // metadata fields are part of index entry, and describes them as:
 //
@@ -109,9 +110,7 @@
 package storage
 
 import "fmt"
-import "encoding/json"
 import "unsafe"
-import "sort"
 import "io"
 import "strings"
 import "bytes"
@@ -213,11 +212,7 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	}
 
 	log.Infof("%v started ...\n", llrb.logPrefix)
-	if data, err := json.Marshal(config); err != nil {
-		panic(err)
-	} else {
-		log.Infof("%v configuration %v\n", llrb.logPrefix, string(data))
-	}
+	llrb.logconfig(config)
 	return llrb
 }
 
@@ -237,7 +232,7 @@ func (llrb *LLRB) Isactive() bool {
 func (llrb *LLRB) RSnapshot() (Snapshot, error) {
 	if llrb.mvcc.enabled {
 		waitch := make(chan *LLRBSnapshot, 1)
-		if err := llrb.mvcc.writer.GetSnapshot(waitch); err != nil {
+		if err := llrb.mvcc.writer.getSnapshot(waitch); err != nil {
 			return nil, err
 		}
 		snapshot := <-waitch
@@ -265,6 +260,33 @@ func (llrb *LLRB) Destroy() error {
 		return nil
 	}
 	panic("Destroy() on already dead tree")
+}
+
+// Stats implement Indexer{} interface.
+func (llrb *LLRB) Stats(involved int) (map[string]interface{}, error) {
+	if llrb.mvcc.enabled {
+		return llrb.mvcc.writer.stats(involved)
+	}
+	return llrb.stats(involved)
+}
+
+// Validate implement Indexer{} interface.
+func (llrb *LLRB) Validate() {
+	if llrb.mvcc.enabled {
+		if err := llrb.mvcc.writer.validate(); err != nil {
+			panic(err)
+		}
+	}
+	llrb.validate(llrb.root)
+}
+
+// Log implement Indexer{} interface.
+func (llrb *LLRB) Log(involved int) {
+	if llrb.mvcc.enabled {
+		llrb.mvcc.writer.log(involved)
+		return
+	}
+	llrb.log(involved)
 }
 
 //---- Reader{} interface.
@@ -328,6 +350,9 @@ func (llrb *LLRB) Max() Node {
 
 // Range from lkey to hkey, incl can be "both", "low", "high", "none"
 func (llrb *LLRB) Range(lkey, hkey []byte, incl string, iter NodeIterator) {
+	if llrb.mvcc.enabled {
+		panic("mvcc enabled, use snapshots for reading")
+	}
 	switch incl {
 	case "both":
 		llrb.rangeFromFind(llrb.root, lkey, hkey, iter)
@@ -343,10 +368,15 @@ func (llrb *LLRB) Range(lkey, hkey []byte, incl string, iter NodeIterator) {
 //---- Writer{} interface
 
 // Upsert implement Writer{} interface.
-func (llrb *LLRB) Upsert(key, value []byte, callb UpsertCallback) {
+func (llrb *LLRB) Upsert(key, value []byte, callb UpsertCallback) error {
 	if key == nil {
 		panic("upserting nil key")
 	}
+
+	if llrb.mvcc.enabled {
+		return llrb.mvcc.writer.wupsert(key, value, callb)
+	}
+
 	root, newnd, oldnd := llrb.upsert(llrb.root, 1 /*depth*/, key, value)
 	root.metadata().setblack()
 	llrb.root = root
@@ -354,14 +384,15 @@ func (llrb *LLRB) Upsert(key, value []byte, callb UpsertCallback) {
 	llrb.upsertcounts(key, value, oldnd)
 
 	if callb != nil {
-		callb(llrb, newnd, oldnd)
+		callb(llrb, llndornil(newnd), llndornil(oldnd))
 	}
-	if newnd.metadata().isdirty() == false {
-		panic("expected this to be dirty")
-	} else {
+	if newnd.metadata().isdirty() {
 		newnd.metadata().cleardirty()
+	} else {
+		panic("expected this to be dirty")
 	}
 	llrb.freenode(oldnd)
+	return nil
 }
 
 // returns root, newnd, oldnd
@@ -408,7 +439,11 @@ func (llrb *LLRB) upsert(
 }
 
 // DeleteMin implement Writer{} interface.
-func (llrb *LLRB) DeleteMin(callb DeleteCallback) {
+func (llrb *LLRB) DeleteMin(callb DeleteCallback) error {
+	if llrb.mvcc.enabled {
+		return llrb.mvcc.writer.wdeleteMin(callb)
+	}
+
 	root, deleted := llrb.deletemin(llrb.root)
 	if root != nil {
 		root.metadata().setblack()
@@ -418,9 +453,10 @@ func (llrb *LLRB) DeleteMin(callb DeleteCallback) {
 	llrb.delcount(deleted)
 
 	if callb != nil {
-		callb(llrb, deleted)
+		callb(llrb, llndornil(deleted))
 	}
 	llrb.freenode(deleted)
+	return nil
 }
 
 // using 2-3 trees
@@ -439,7 +475,11 @@ func (llrb *LLRB) deletemin(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 }
 
 // DeleteMax implements Writer{} interface.
-func (llrb *LLRB) DeleteMax(callb DeleteCallback) {
+func (llrb *LLRB) DeleteMax(callb DeleteCallback) error {
+	if llrb.mvcc.enabled {
+		return llrb.mvcc.writer.wdeleteMax(callb)
+	}
+
 	root, deleted := llrb.deletemax(llrb.root)
 	if root != nil {
 		root.metadata().setblack()
@@ -449,9 +489,10 @@ func (llrb *LLRB) DeleteMax(callb DeleteCallback) {
 	llrb.delcount(deleted)
 
 	if callb != nil {
-		callb(llrb, deleted)
+		callb(llrb, llndornil(deleted))
 	}
 	llrb.freenode(deleted)
+	return nil
 }
 
 // using 2-3 trees
@@ -473,7 +514,11 @@ func (llrb *LLRB) deletemax(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 }
 
 // Delete implement Writer{} interface.
-func (llrb *LLRB) Delete(key []byte, callb DeleteCallback) {
+func (llrb *LLRB) Delete(key []byte, callb DeleteCallback) error {
+	if llrb.mvcc.enabled {
+		return llrb.mvcc.writer.wdelete(key, callb)
+	}
+
 	root, deleted := llrb.delete(llrb.root, key)
 	if root != nil {
 		root.metadata().setblack()
@@ -483,9 +528,10 @@ func (llrb *LLRB) Delete(key []byte, callb DeleteCallback) {
 	llrb.delcount(deleted)
 
 	if callb != nil {
-		callb(llrb, deleted)
+		callb(llrb, llndornil(deleted))
 	}
 	llrb.freenode(deleted)
+	return nil
 }
 
 func (llrb *LLRB) delete(nd *Llrbnode, key []byte) (newnd, deleted *Llrbnode) {
@@ -633,188 +679,6 @@ func (llrb *LLRB) fixup(nd *Llrbnode) *Llrbnode {
 	return nd
 }
 
-//---- Maintanence APIs.
-
-func (llrb *LLRB) StatsMem() map[string]interface{} {
-	mstats := map[string]interface{}{}
-	overhead, useful := llrb.nodearena.memory()
-	mstats["node.overhead"] = overhead
-	mstats["node.useful"] = useful
-	mstats["node.allocated"] = llrb.nodearena.allocated()
-	mstats["node.available"] = llrb.nodearena.available()
-	mstats["node.blocks"] = llrb.nodearena.blocksizes
-	overhead, useful = llrb.valarena.memory()
-	mstats["value.overhead"] = overhead
-	mstats["value.useful"] = useful
-	mstats["value.allocated"] = llrb.valarena.allocated()
-	mstats["value.available"] = llrb.valarena.available()
-	mstats["value.blocks"] = llrb.valarena.blocksizes
-	mstats["keymemory"] = llrb.keymemory
-	mstats["valmemory"] = llrb.valmemory
-	return mstats
-}
-
-func (llrb *LLRB) StatsUpsert() map[string]interface{} {
-	return map[string]interface{}{
-		"upsertdepth.samples":     llrb.upsertdepth.samples(),
-		"upsertdepth.min":         llrb.upsertdepth.min(),
-		"upsertdepth.max":         llrb.upsertdepth.max(),
-		"upsertdepth.mean":        llrb.upsertdepth.mean(),
-		"upsertdepth.variance":    llrb.upsertdepth.variance(),
-		"upsertdepth.stddeviance": llrb.upsertdepth.sd(),
-	}
-}
-
-func (llrb *LLRB) StatsHeight() map[string]interface{} {
-	heightav := &averageInt{}
-	llrb.heightStats(llrb.root, 0, heightav)
-	return map[string]interface{}{
-		"samples":     heightav.samples(),
-		"min":         heightav.min(),
-		"max":         heightav.max(),
-		"mean":        heightav.mean(),
-		"variance":    heightav.variance(),
-		"stddeviance": heightav.sd(),
-	}
-}
-
-func (llrb *LLRB) Logmemory(writer io.Writer) {
-	// node memory
-	stats := llrb.StatsMem()
-	min := humanize.Bytes(uint64(llrb.config["nodearena.minblock"].(int)))
-	max := humanize.Bytes(uint64(llrb.config["nodearena.maxblock"].(int)))
-	cp := humanize.Bytes(uint64(llrb.config["nodearena.capacity"].(int)))
-	pcp := humanize.Bytes(uint64(llrb.config["nodearena.pool.capacity"].(int)))
-	overh := humanize.Bytes(uint64(stats["node.overhead"].(int64)))
-	use := humanize.Bytes(uint64(stats["node.useful"].(int64)))
-	alloc := humanize.Bytes(uint64(stats["node.allocated"].(int64)))
-	avail := humanize.Bytes(uint64(stats["node.available"].(int64)))
-	nblocks := len(stats["node.blocks"].([]int64))
-	kmem := humanize.Bytes(uint64(stats["keymemory"].(int64)))
-	fmsg := "  node %v blocks over {%v %v} cap %v poolcap %v\n" +
-		"  %v useful, overhd %v allocated %v for keymem %v avail - %v\n"
-	out := fmt.Sprintf(
-		fmsg, nblocks, min, max, cp, pcp, use, overh, alloc, kmem, avail)
-	writer.Write([]byte(out))
-
-	// node utilization
-	arenapools := llrb.nodearena.mpools
-	sizes := []int{}
-	for size := range arenapools {
-		sizes = append(sizes, int(size))
-	}
-	sort.Ints(sizes)
-	outs := []string{}
-	fmsg = "  %4v blocks %3v pools of %v each, utilz: %2.2f%%\n"
-	for _, size := range sizes {
-		mpools := arenapools[int64(size)]
-		allocated, capct := int64(0), int64(0)
-		if len(mpools) > 0 {
-			for _, mpool := range mpools {
-				allocated += mpool.allocated()
-				capct += mpool.capacity
-			}
-			z := (float64(allocated) / float64(capct)) * 100
-			outs = append(outs, fmt.Sprintf(fmsg, size, len(mpools), capct, z))
-		}
-	}
-	writer.Write([]byte(strings.Join(outs, "\n")))
-
-	// value memory
-	stats = llrb.StatsMem()
-	min = humanize.Bytes(uint64(llrb.config["valarena.minblock"].(int)))
-	max = humanize.Bytes(uint64(llrb.config["valarena.maxblock"].(int)))
-	cp = humanize.Bytes(uint64(llrb.config["valarena.capacity"].(int)))
-	pcp = humanize.Bytes(uint64(llrb.config["valarena.pool.capacity"].(int)))
-	overh = humanize.Bytes(uint64(stats["value.overhead"].(int64)))
-	use = humanize.Bytes(uint64(stats["value.useful"].(int64)))
-	alloc = humanize.Bytes(uint64(stats["value.allocated"].(int64)))
-	avail = humanize.Bytes(uint64(stats["value.available"].(int64)))
-	vblocks := len(stats["value.blocks"].([]int64))
-	vmem := humanize.Bytes(uint64(stats["valmemory"].(int64)))
-	fmsg = "  value %v blocks over {%v %v} cap %v poolcap %v\n" +
-		"  %v useful, overhd %v allocated %v for valmem %v avail - %v\n"
-	out = fmt.Sprintf(
-		fmsg, vblocks, min, max, cp, pcp, use, overh, alloc, vmem, avail)
-	writer.Write([]byte(out))
-
-	// value utilization
-	arenapools = llrb.valarena.mpools
-	sizes = []int{}
-	for size := range arenapools {
-		sizes = append(sizes, int(size))
-	}
-	sort.Ints(sizes)
-	outs = []string{}
-	fmsg = "  %4v blocks %3v pools of %v each, utilz: %2.2f%%"
-	for _, size := range sizes {
-		mpools := arenapools[int64(size)]
-		allocated, capct := int64(0), int64(0)
-		if len(mpools) > 0 {
-			for _, mpool := range mpools {
-				allocated += mpool.allocated()
-				capct += mpool.capacity
-			}
-			z := (float64(allocated) / float64(capct)) * 100
-			outs = append(outs, fmt.Sprintf(fmsg, size, len(mpools), capct, z))
-		}
-	}
-	writer.Write([]byte(strings.Join(outs, "\n")))
-}
-
-func (llrb *LLRB) LogUpsertdepth() {
-	stats := llrb.StatsUpsert()
-	samples := stats["upsertdepth.samples"].(int64)
-	min := stats["upsertdepth.min"].(int64)
-	max := stats["upsertdepth.max"].(int64)
-	mean := stats["upsertdepth.mean"]
-	varn, sd := stats["upsertdepth.variance"], stats["upsertdepth.stddeviance"]
-	fmsg := "%v average upsertdepth\n" +
-		"  samples %v : <%v to %v> mean %v  varn %2.2f  sd %2.2f\n"
-	log.Infof(fmsg, llrb.logPrefix, samples, min, max, mean, varn, sd)
-}
-
-func (llrb *LLRB) LogTreeheight() {
-	stats := llrb.StatsHeight()
-	samples := stats["samples"]
-	min, max := stats["min"], stats["max"]
-	mean := stats["mean"]
-	varn, sd := stats["variance"], stats["stddeviance"]
-	fmsg := "%v average heightstats\n" +
-		"  samples %v : <%v to %v> mean %v  varn %2.2f  sd %2.2f\n"
-	log.Infof(fmsg, llrb.logPrefix, samples, min, max, mean, varn, sd)
-}
-
-func (llrb *LLRB) ValidateReds() bool {
-	if llrb.validatereds(llrb.root, isred(llrb.root)) != true {
-		return false
-	}
-	return true
-}
-
-func (llrb *LLRB) ValidateBlacks() int {
-	return llrb.validateblacks(llrb.root, 0)
-}
-
-func (llrb *LLRB) ValidateHeight() bool {
-	heightav := &averageInt{}
-	return llrb.validateheight(llrb.root, heightav)
-}
-
-func (llrb *LLRB) ValidateDirty() (rv bool) {
-	rv = true
-	llrb.Range(
-		nil, nil, "both",
-		func(nd Node) bool {
-			if nd.(*Llrbnode).metadata().isdirty() {
-				rv = false
-				return false
-			}
-			return true
-		})
-	return rv
-}
-
 func (llrb *LLRB) Dotdump(buffer io.Writer) {
 	lines := []string{
 		"digraph llrb {",
@@ -930,6 +794,30 @@ func (llrb *LLRB) equivalent(n1, n2 *Llrbnode) bool {
 		}
 	}
 	return true
+}
+
+func (llrb *LLRB) logconfig(config map[string]interface{}) {
+	// key arena
+	stats, err := llrb.stats(1)
+	if err != nil {
+		panic(err)
+	}
+	kblocks := len(stats["llrb.node.blocks"].([]int64))
+	min := humanize.Bytes(uint64(llrb.config["nodearena.minblock"].(int)))
+	max := humanize.Bytes(uint64(llrb.config["nodearena.maxblock"].(int)))
+	cp := humanize.Bytes(uint64(llrb.config["nodearena.capacity"].(int)))
+	pcp := humanize.Bytes(uint64(llrb.config["nodearena.pool.capacity"].(int)))
+	fmsg := "%v key arena %v blocks over {%v %v} cap %v poolcap %v\n"
+	log.Infof(fmsg, llrb.logPrefix, kblocks, min, max, cp, pcp)
+
+	// value arena
+	vblocks := len(stats["llrb.value.blocks"].([]int64))
+	min = humanize.Bytes(uint64(llrb.config["valarena.minblock"].(int)))
+	max = humanize.Bytes(uint64(llrb.config["valarena.maxblock"].(int)))
+	cp = humanize.Bytes(uint64(llrb.config["valarena.capacity"].(int)))
+	pcp = humanize.Bytes(uint64(llrb.config["valarena.pool.capacity"].(int)))
+	fmsg = "%v value arena %v blocks over {%v %v} cap %v poolcap %v\n"
+	log.Infof(fmsg, llrb.logPrefix, vblocks, min, max, cp, pcp)
 }
 
 // rotation routines for 2-3-4 algorithm, not used.

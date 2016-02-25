@@ -3,7 +3,10 @@ package storage
 import "sort"
 import "bytes"
 import "strconv"
+import "fmt"
 import "hash/crc64"
+
+var _ = fmt.Sprintf("dummy")
 
 var crcisotab = crc64.MakeTable(crc64.ISO)
 
@@ -57,6 +60,21 @@ func (d *Dict) Destroy() error {
 	return nil
 }
 
+// Stats implement Index{} interface.
+func (d *Dict) Stats(involved int) (map[string]interface{}, error) {
+	panic("not implemented")
+}
+
+// Validate implement Index{} interface.
+func (d *Dict) Validate() {
+	panic("not implemented")
+}
+
+// Log implement Index{} interface.
+func (d *Dict) Log(involved int) {
+	panic("not implemented")
+}
+
 //---- Snapshot{} interface{}
 
 // Id implement Snapshot{} interface.
@@ -81,8 +99,8 @@ func (d *Dict) Has(key []byte) bool {
 // Get implement Reader{} interface.
 func (d *Dict) Get(key []byte) Node {
 	hashv := crc64.Checksum(key, crcisotab)
-	if dn, ok := d.dict[hashv]; ok {
-		return dn
+	if nd, ok := d.dict[hashv]; ok {
+		return nd
 	}
 	return nil
 }
@@ -93,8 +111,8 @@ func (d *Dict) Min() Node {
 		return nil
 	}
 	hashv := d.sorted()[0]
-	dn := d.dict[hashv]
-	return dn
+	nd := d.dict[hashv]
+	return nd
 }
 
 // Max implement Reader{} interface.
@@ -103,8 +121,8 @@ func (d *Dict) Max() Node {
 		return nil
 	}
 	hashks := d.sorted()
-	dn := d.dict[hashks[len(hashks)-1]]
-	return dn
+	nd := d.dict[hashks[len(hashks)-1]]
+	return nd
 }
 
 // Range implement Reader{} interface.
@@ -120,8 +138,8 @@ func (d *Dict) Range(lowkey, highkey []byte, incl string, iter NodeIterator) {
 			cmp = 0
 		}
 		for start = 0; start < len(keys); start++ {
-			dn := d.dict[keys[start]]
-			if bytes.Compare(dn.key, lowkey) >= cmp {
+			nd := d.dict[keys[start]]
+			if bytes.Compare(nd.key, lowkey) >= cmp {
 				break
 			}
 		}
@@ -132,9 +150,9 @@ func (d *Dict) Range(lowkey, highkey []byte, incl string, iter NodeIterator) {
 			cmp = 1
 		}
 		for i := start; i < len(keys); i++ {
-			dn := d.dict[keys[i]]
-			if highkey == nil || (bytes.Compare(dn.key, highkey) < cmp) {
-				if iter(dn) == false {
+			nd := d.dict[keys[i]]
+			if highkey == nil || (bytes.Compare(nd.key, highkey) < cmp) {
+				if iter(nd) == false {
 					break
 				}
 				continue
@@ -147,43 +165,56 @@ func (d *Dict) Range(lowkey, highkey []byte, incl string, iter NodeIterator) {
 //---- Writer{} interface.
 
 // Upsert implement Writer{} interface.
-func (d *Dict) Upsert(key, value []byte, callb UpsertCallback) {
+func (d *Dict) Upsert(key, value []byte, callb UpsertCallback) error {
+	newnd := newdictnode(key, value)
 	hashv := crc64.Checksum(key, crcisotab)
-	olddn, newdn := d.dict[hashv], newdictnode(key, value)
-	d.dict[hashv] = newdn
-	callb(d, newdn, olddn)
+	oldnd, ok := d.dict[hashv]
+	if callb != nil {
+		if ok == false {
+			callb(d, newnd, nil)
+		} else {
+			callb(d, newnd, oldnd)
+		}
+	}
+	d.dict[hashv] = newnd
+	return nil
 }
 
 // DeleteMin implement Writer{} interface.
-func (d *Dict) DeleteMin(callb DeleteCallback) {
+func (d *Dict) DeleteMin(callb DeleteCallback) error {
 	if len(d.dict) > 0 {
-		dn := d.Min()
-		d.Delete(dn.Key(), callb)
+		nd := d.Min()
+		d.Delete(nd.Key(), callb)
 	}
+	return nil
 }
 
 // DeleteMax implement Writer{} interface.
-func (d *Dict) DeleteMax(callb DeleteCallback) {
+func (d *Dict) DeleteMax(callb DeleteCallback) error {
 	if len(d.dict) > 0 {
-		dn := d.Max()
-		d.Delete(dn.Key(), callb)
+		nd := d.Max()
+		d.Delete(nd.Key(), callb)
 	}
+	return nil
 }
 
 // Delete implement Writer{} interface.
-func (d *Dict) Delete(key []byte, callb DeleteCallback) {
+func (d *Dict) Delete(key []byte, callb DeleteCallback) error {
 	if len(d.dict) > 0 {
 		hashv := crc64.Checksum(key, crcisotab)
 		deleted := d.dict[hashv]
-		callb(d, deleted)
+		if callb != nil {
+			callb(d, deleted)
+		}
 		delete(d.dict, hashv)
 	}
+	return nil
 }
 
 func (d *Dict) sorted() []uint64 {
 	d.sortkeys, d.hashks = d.sortkeys[:0], d.hashks[:0]
-	for _, dn := range d.dict {
-		d.sortkeys = append(d.sortkeys, bytes2str(dn.key))
+	for _, nd := range d.dict {
+		d.sortkeys = append(d.sortkeys, bytes2str(nd.key))
 	}
 	sort.Strings(d.sortkeys)
 	for _, key := range d.sortkeys {
