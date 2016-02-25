@@ -1,3 +1,5 @@
+// +build ignore
+
 package storage
 
 import "testing"
@@ -20,35 +22,44 @@ func TestDict(t *testing.T) {
 		[2][]byte{[]byte("key5"), []byte("value5")},
 	}
 	for _, kv := range inserts {
-		if v := d.Upsert(kv[0], kv[1]); v != nil {
-			t.Errorf("expected nil")
-		}
+		d.Upsert(
+			kv[0], kv[1],
+			func(index Index, newnd, oldnd Node) {
+				if oldnd.Value() != nil {
+					t.Errorf("expected nil")
+				}
+			})
 	}
 	// lookups
 	if d.Has(inserts[1][0]) == false {
 		t.Errorf("expected key %v", string(inserts[0][0]))
 	}
-	if v := d.Get(inserts[2][0]); bytes.Compare(v, inserts[2][1]) != 0 {
-		t.Errorf("expected %v, got %v", string(inserts[2][1]), string(v))
+	nd := d.Get(inserts[2][0])
+	if bytes.Compare(nd.Value(), inserts[2][1]) != 0 {
+		t.Errorf("expected %v, got %v", string(inserts[2][1]), string(nd.Value()))
 	}
-	if v := d.Get([]byte("missingkey")); v != nil {
-		t.Errorf("expected %v, got %v", nil, v)
+	if nd := d.Get([]byte("missingkey")); nd.Value() != nil {
+		t.Errorf("expected %v, got %v", nil, string(nd.Value()))
 	}
-	if k, v := d.Min(); bytes.Compare(k, inserts[0][0]) != 0 {
-		t.Errorf("expected %v, got %v", string(inserts[0][0]), string(k))
-	} else if bytes.Compare(v, inserts[0][1]) != 0 {
-		t.Errorf("expected %v, got %v", string(inserts[0][1]), string(v))
+	if nd := d.Min(); bytes.Compare(nd.Key(), inserts[0][0]) != 0 {
+		t.Errorf("expected %v, got %v", string(inserts[0][0]), string(nd.Key()))
+	} else if bytes.Compare(nd.Value(), inserts[0][1]) != 0 {
+		t.Errorf("expected %v, got %v", string(inserts[0][1]), string(nd.Value()))
 	}
-	if k, v := d.Max(); bytes.Compare(k, []byte("key5")) != 0 {
-		t.Errorf("expected %v, got %v", "key5", string(k))
-	} else if bytes.Compare(v, []byte("value5")) != 0 {
-		t.Errorf("expected %v, got %v", "value5", string(v))
+	if nd := d.Max(); bytes.Compare(nd.Key(), []byte("key5")) != 0 {
+		t.Errorf("expected %v, got %v", "key5", string(nd.Key()))
+	} else if bytes.Compare(nd.Value(), []byte("value5")) != 0 {
+		t.Errorf("expected %v, got %v", "value5", string(nd.Value()))
 	}
 	// upsert
-	v := d.Upsert(inserts[0][0], []byte("value11"))
-	if bytes.Compare(v, inserts[0][1]) != 0 {
-		t.Errorf("expected %v, got %v\n", string(inserts[0][1]), string(v))
-	}
+	d.Upsert(
+		inserts[0][0], []byte("value11"),
+		func(index Index, newnd, oldnd Node) {
+			if v := oldnd.Value(); bytes.Compare(v, inserts[0][1]) != 0 {
+				fmsg := "expected %v, got %v\n"
+				t.Errorf(fmsg, string(inserts[0][1]), string(v))
+			}
+		})
 	// delete-min
 	if k, v := d.DeleteMin(); bytes.Compare(k, inserts[0][0]) != 0 {
 		t.Errorf("expected %v, got %v", string(inserts[0][0]), string(k))

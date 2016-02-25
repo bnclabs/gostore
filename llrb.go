@@ -4,9 +4,10 @@
 // LLRB:
 //
 //   * index key, value (value is optional).
+//	 * each key shall be unique within the index sample-set.
 //   * custom memory management
 //   * copy on GC to control memory fragmentation.
-//   * configurable metadata like vbno, bornseqno, deadseqno, vbuuid etc..
+//   * configurable metadata - like vbno, bornseqno, deadseqno, vbuuid etc..
 //   * in single-threaded configuration, reads and writes are expected
 //     to be serialzed.
 //   * supports multi-version-concurrency-control, where writes are
@@ -22,6 +23,8 @@
 //   3. 64 bit dead-seqno vbucket seqno in which this entry was deleted.
 //   4. 64 bit mvalue either pointer to memory or fpos to disk to pick value.
 //
+//   few more will to be added...
+//
 // mvalue:
 //
 //   * value can be kept in memory or backed by disk.
@@ -29,15 +32,15 @@
 //     fetch the entry value.
 //   * if value is backed by disk then mvalue[2:], whose value might be 1-7
 //     will pick a file that contains the value and mvalue[:3] describes the
-//     file-position to fetch the entry value.
+//     file-position to fetch the entry from file.
 //
 // llrb hard limits:
 //
-//   * maximum vbuckets - 65535
-//   * maximum access   - 2^20 counted in steps of 16.777216mS
-//   * maximum key size - 4096 bytes
-//   * maximum born seqno - 2^64 - 1
-//   * maximum dead seqno - 2^64 - 1
+//   * maximum vbuckets   - 65535
+//   * maximum access     - 2^20 counted in steps of 16.7mS for 290 minutes
+//   * maximum key size   - 4096 bytes
+//   * maximum born seqno - (2^64 - 1)
+//   * maximum dead seqno - (2^64 - 1)
 //
 // configuration:
 //
@@ -106,14 +109,12 @@
 package storage
 
 import "fmt"
-import "math"
 import "encoding/json"
 import "unsafe"
 import "sort"
 import "io"
 import "strings"
 import "bytes"
-import "sync/atomic"
 
 import humanize "github.com/dustin/go-humanize"
 
@@ -129,25 +130,12 @@ const MinValmem = 32
 // MaxValmem maximum value size that is valid across the system.
 const MaxValmem = 10 * 1024 * 1024
 
-// LLRBNodeIterator callback from Range API.
-type LLRBNodeIterator func(nd *Llrbnode) bool
-
-// LLRBUpsertCallback callback from Upsert API. Don't keep any reference
-// to newnd and oldnd:
-// * oldnd can only be read.
-// * newnd can be read or updated.
-type LLRBUpsertCallback func(llrb *LLRB, newnd, oldnd *Llrbnode)
-
-// LLRBDeleteCallback callback from Delete API. Don't keep any reference
-// to nd:
-// * deleted node can only be read.
-type LLRBDeleteCallback func(llrb *LLRB, deleted *Llrbnode)
-
+// LLRB to manage in-memory sorted index using left-leaning-red-black trees.
 type LLRB struct { // tree container
 	name      string
 	nodearena *memarena
 	valarena  *memarena
-	root      unsafe.Pointer // root *Llrbnode of LLRB tree
+	root      *Llrbnode
 	dead      bool
 	clock     *vectorclock // current clock
 
@@ -159,6 +147,13 @@ type LLRB struct { // tree container
 
 	// statistics
 	count       int64 // number of nodes in the tree
+	lookups     int64
+	ranges      int64
+	inserts     int64
+	upserts     int64
+	delmins     int64
+	delmaxs     int64
+	deletes     int64
 	keymemory   int64 // memory used by all keys
 	valmemory   int64 // memory used by all values
 	upsertdepth *averageInt
@@ -178,6 +173,7 @@ type LLRB struct { // tree container
 	}
 }
 
+// NewLLRB a new instance of in-memory sorted index.
 func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	llrb := &LLRB{name: name}
 
@@ -225,14 +221,68 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	return llrb
 }
 
-//---- LLRB read operations.
+// ---- Index{} interface
 
+// Count implement Index{} interface.
+func (llrb *LLRB) Count() int64 {
+	return llrb.count
+}
+
+// Isactive implement Index{} interface.
+func (llrb *LLRB) Isactive() bool {
+	return llrb.dead == false
+}
+
+// RSnapshot implement Index{} interface.
+func (llrb *LLRB) RSnapshot() (Snapshot, error) {
+	if llrb.mvcc.enabled {
+		waitch := make(chan *LLRBSnapshot, 1)
+		if err := llrb.mvcc.writer.GetSnapshot(waitch); err != nil {
+			return nil, err
+		}
+		snapshot := <-waitch
+		return snapshot, nil
+	}
+	panic("RSnapshot(): mvcc is not enabled")
+}
+
+// Destroy implement Index{} interface.
+func (llrb *LLRB) Destroy() error {
+	if llrb.dead == false {
+		if llrb.mvcc.enabled {
+			llrb.mvcc.writer.destroy()
+			llrb.mvcc.reclaim, llrb.mvcc.writer = nil, nil
+			if llrb.mvcc.snapshot != nil {
+				panic("Destroy(): snapshot had to be nil, call the programmer")
+			}
+			llrb.mvcc.reclaimstats = nil
+		}
+		llrb.nodearena.release()
+		llrb.valarena.release()
+		llrb.root, llrb.clock = nil, nil
+		llrb.config, llrb.strsl = nil, nil
+		llrb.dead = true
+		return nil
+	}
+	panic("Destroy() on already dead tree")
+}
+
+//---- Reader{} interface.
+
+// Has implement Reader{} interface.
 func (llrb *LLRB) Has(key []byte) bool {
+	if llrb.mvcc.enabled {
+		panic("mvcc enabled, use snapshots for reading")
+	}
 	return llrb.Get(key) != nil
 }
 
-func (llrb *LLRB) Get(key []byte) (nd *Llrbnode) {
-	nd = (*Llrbnode)(atomic.LoadPointer(&llrb.root))
+// Get implement Reader{} interface.
+func (llrb *LLRB) Get(key []byte) Node {
+	if llrb.mvcc.enabled {
+		panic("mvcc enabled, use snapshots for reading")
+	}
+	nd := llrb.root
 	for nd != nil {
 		if nd.gtkey(key) {
 			nd = nd.left
@@ -245,8 +295,13 @@ func (llrb *LLRB) Get(key []byte) (nd *Llrbnode) {
 	return nil // key is not present in the tree
 }
 
-func (llrb *LLRB) Min() (nd *Llrbnode) {
-	if nd = (*Llrbnode)(atomic.LoadPointer(&llrb.root)); nd == nil {
+// Min implement Reader{} interface.
+func (llrb *LLRB) Min() Node {
+	var nd *Llrbnode
+
+	if llrb.mvcc.enabled {
+		panic("mvcc enabled, use snapshots for reading")
+	} else if nd = llrb.root; nd == nil {
 		return nil
 	}
 
@@ -256,8 +311,12 @@ func (llrb *LLRB) Min() (nd *Llrbnode) {
 	return nd
 }
 
-func (llrb *LLRB) Max() (nd *Llrbnode) {
-	if nd = (*Llrbnode)(atomic.LoadPointer(&llrb.root)); nd == nil {
+// Max implement Reader{} interface.
+func (llrb *LLRB) Max() Node {
+	var nd *Llrbnode
+	if llrb.mvcc.enabled {
+		panic("mvcc enabled, use snapshots for reading")
+	} else if nd = llrb.root; nd == nil {
 		return nil
 	}
 
@@ -268,124 +327,29 @@ func (llrb *LLRB) Max() (nd *Llrbnode) {
 }
 
 // Range from lkey to hkey, incl can be "both", "low", "high", "none"
-func (llrb *LLRB) Range(lkey, hkey []byte, incl string, iter LLRBNodeIterator) {
-	if iter == nil {
-		panic("Range(): iter argument is nil")
-	}
-
-	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
+func (llrb *LLRB) Range(lkey, hkey []byte, incl string, iter NodeIterator) {
 	switch incl {
 	case "both":
-		llrb.rangeFromFind(nd, lkey, hkey, iter)
+		llrb.rangeFromFind(llrb.root, lkey, hkey, iter)
 	case "high":
-		llrb.rangeAfterFind(nd, lkey, hkey, iter)
+		llrb.rangeAfterFind(llrb.root, lkey, hkey, iter)
 	case "low":
-		llrb.rangeFromTill(nd, lkey, hkey, iter)
+		llrb.rangeFromTill(llrb.root, lkey, hkey, iter)
 	default:
-		llrb.rangeAfterTill(nd, lkey, hkey, iter)
+		llrb.rangeAfterTill(llrb.root, lkey, hkey, iter)
 	}
 }
 
-// low <= (keys) <= high
-func (llrb *LLRB) rangeFromFind(
-	nd *Llrbnode, lk, hk []byte, iter LLRBNodeIterator) bool {
+//---- Writer{} interface
 
-	if nd == nil {
-		return true
-	}
-	if hk != nil && nd.gtkey(hk) {
-		return llrb.rangeFromFind(nd.left, lk, hk, iter)
-	}
-	if lk != nil && nd.ltkey(lk) {
-		return llrb.rangeFromFind(nd.right, lk, hk, iter)
-	}
-	if !llrb.rangeFromFind(nd.left, lk, hk, iter) {
-		return false
-	}
-	if iter != nil && !iter(nd) {
-		return false
-	}
-	return llrb.rangeFromFind(nd.right, lk, hk, iter)
-}
-
-// low <= (keys) < hk
-func (llrb *LLRB) rangeFromTill(
-	nd *Llrbnode, lk, hk []byte, iter LLRBNodeIterator) bool {
-
-	if nd == nil {
-		return true
-	}
-	if hk != nil && !nd.ltkey(hk) {
-		return llrb.rangeFromTill(nd.left, lk, hk, iter)
-	}
-	if lk != nil && nd.ltkey(lk) {
-		return llrb.rangeFromTill(nd.right, lk, hk, iter)
-	}
-	if !llrb.rangeFromTill(nd.left, lk, hk, iter) {
-		return false
-	}
-	if iter != nil && !iter(nd) {
-		return false
-	}
-	return llrb.rangeFromTill(nd.right, lk, hk, iter)
-}
-
-// low < (keys) <= hk
-func (llrb *LLRB) rangeAfterFind(
-	nd *Llrbnode, lk, hk []byte, iter LLRBNodeIterator) bool {
-
-	if nd == nil {
-		return true
-	}
-	if hk != nil && nd.gtkey(hk) {
-		return llrb.rangeAfterFind(nd.left, lk, hk, iter)
-	}
-	if lk != nil && !nd.gtkey(lk) {
-		return llrb.rangeAfterFind(nd.right, lk, hk, iter)
-	}
-	if !llrb.rangeAfterFind(nd.left, lk, hk, iter) {
-		return false
-	}
-	if iter != nil && !iter(nd) {
-		return false
-	}
-	return llrb.rangeAfterFind(nd.right, lk, hk, iter)
-}
-
-// low < (keys) < hk
-func (llrb *LLRB) rangeAfterTill(
-	nd *Llrbnode, lk, hk []byte, iter LLRBNodeIterator) bool {
-
-	if nd == nil {
-		return true
-	}
-	if hk != nil && !nd.ltkey(hk) {
-		return llrb.rangeAfterTill(nd.left, lk, hk, iter)
-	}
-	if lk != nil && !nd.gtkey(lk) {
-		return llrb.rangeAfterTill(nd.right, lk, hk, iter)
-	}
-	if !llrb.rangeAfterTill(nd.left, lk, hk, iter) {
-		return false
-	}
-	if iter != nil && !iter(nd) {
-		return false
-	}
-	return llrb.rangeAfterTill(nd.right, lk, hk, iter)
-}
-
-//---- LLRB write operations.
-
-func (llrb *LLRB) Upsert(key, value []byte, callb LLRBUpsertCallback) {
-	var root, newnd, oldnd *Llrbnode
-
+// Upsert implement Writer{} interface.
+func (llrb *LLRB) Upsert(key, value []byte, callb UpsertCallback) {
 	if key == nil {
 		panic("upserting nil key")
 	}
-	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	root, newnd, oldnd = llrb.upsert(nd, 1 /*depth*/, key, value)
+	root, newnd, oldnd := llrb.upsert(llrb.root, 1 /*depth*/, key, value)
 	root.metadata().setblack()
-	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
+	llrb.root = root
 
 	llrb.upsertcounts(key, value, oldnd)
 
@@ -443,14 +407,13 @@ func (llrb *LLRB) upsert(
 	return nd, newnd, oldnd
 }
 
-func (llrb *LLRB) DeleteMin(callb LLRBDeleteCallback) {
-	var root, deleted *Llrbnode
-	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	root, deleted = llrb.deletemin(nd)
+// DeleteMin implement Writer{} interface.
+func (llrb *LLRB) DeleteMin(callb DeleteCallback) {
+	root, deleted := llrb.deletemin(llrb.root)
 	if root != nil {
 		root.metadata().setblack()
 	}
-	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
+	llrb.root = root
 
 	llrb.delcount(deleted)
 
@@ -475,15 +438,13 @@ func (llrb *LLRB) deletemin(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 	return llrb.fixup(nd), deleted
 }
 
-func (llrb *LLRB) DeleteMax(callb LLRBDeleteCallback) {
-	var root, deleted *Llrbnode
-
-	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	root, deleted = llrb.deletemax(nd)
+// DeleteMax implements Writer{} interface.
+func (llrb *LLRB) DeleteMax(callb DeleteCallback) {
+	root, deleted := llrb.deletemax(llrb.root)
 	if root != nil {
 		root.metadata().setblack()
 	}
-	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
+	llrb.root = root
 
 	llrb.delcount(deleted)
 
@@ -511,15 +472,13 @@ func (llrb *LLRB) deletemax(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 	return llrb.fixup(nd), deleted
 }
 
-func (llrb *LLRB) Delete(key []byte, callb LLRBDeleteCallback) {
-	var deleted *Llrbnode
-
-	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	root, deleted := llrb.delete(nd, key)
+// Delete implement Writer{} interface.
+func (llrb *LLRB) Delete(key []byte, callb DeleteCallback) {
+	root, deleted := llrb.delete(llrb.root, key)
 	if root != nil {
 		root.metadata().setblack()
 	}
-	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
+	llrb.root = root
 
 	llrb.delcount(deleted)
 
@@ -674,25 +633,7 @@ func (llrb *LLRB) fixup(nd *Llrbnode) *Llrbnode {
 	return nd
 }
 
-func (llrb *LLRB) Destroy() error {
-	if llrb.dead == false {
-		if llrb.mvcc.enabled {
-			llrb.mvcc.writer.destroy()
-		}
-		llrb.nodearena.release()
-		llrb.valarena.release()
-		llrb.dead = true
-		llrb.root, llrb.clock = nil, nil
-		return nil
-	}
-	panic("Destroy() on a dead tree")
-}
-
 //---- Maintanence APIs.
-
-func (llrb *LLRB) Count() int64 {
-	return atomic.LoadInt64(&llrb.count) // concurrency safe.
-}
 
 func (llrb *LLRB) StatsMem() map[string]interface{} {
 	mstats := map[string]interface{}{}
@@ -708,8 +649,8 @@ func (llrb *LLRB) StatsMem() map[string]interface{} {
 	mstats["value.allocated"] = llrb.valarena.allocated()
 	mstats["value.available"] = llrb.valarena.available()
 	mstats["value.blocks"] = llrb.valarena.blocksizes
-	mstats["keymemory"] = atomic.LoadInt64(&llrb.keymemory)
-	mstats["valmemory"] = atomic.LoadInt64(&llrb.valmemory)
+	mstats["keymemory"] = llrb.keymemory
+	mstats["valmemory"] = llrb.valmemory
 	return mstats
 }
 
@@ -726,8 +667,7 @@ func (llrb *LLRB) StatsUpsert() map[string]interface{} {
 
 func (llrb *LLRB) StatsHeight() map[string]interface{} {
 	heightav := &averageInt{}
-	root := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	llrb.heightStats(root, 0, heightav)
+	llrb.heightStats(llrb.root, 0, heightav)
 	return map[string]interface{}{
 		"samples":     heightav.samples(),
 		"min":         heightav.min(),
@@ -735,20 +675,6 @@ func (llrb *LLRB) StatsHeight() map[string]interface{} {
 		"mean":        heightav.mean(),
 		"variance":    heightav.variance(),
 		"stddeviance": heightav.sd(),
-	}
-}
-
-func (llrb *LLRB) heightStats(nd *Llrbnode, d int64, av *averageInt) {
-	if nd == nil {
-		return
-	}
-	d++
-	av.add(d)
-	if nd.left != nil {
-		llrb.heightStats(nd.left, d, av)
-	}
-	if nd.right != nil {
-		llrb.heightStats(nd.right, d, av)
 	}
 }
 
@@ -860,76 +786,33 @@ func (llrb *LLRB) LogTreeheight() {
 }
 
 func (llrb *LLRB) ValidateReds() bool {
-	root := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	if llrb.validatereds(root, isred(root)) != true {
+	if llrb.validatereds(llrb.root, isred(llrb.root)) != true {
 		return false
 	}
 	return true
 }
 
-func (llrb *LLRB) validatereds(nd *Llrbnode, fromred bool) bool {
-	if nd == nil {
-		return true
-	}
-	if fromred && isred(nd) {
-		panic("consequetive red spotted")
-	}
-	if llrb.validatereds(nd.left, isred(nd)) == false {
-		return false
-	}
-	return llrb.validatereds(nd.right, isred(nd))
-}
-
 func (llrb *LLRB) ValidateBlacks() int {
-	root := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	return llrb.validateblacks(root, 0)
-}
-
-func (llrb *LLRB) validateblacks(nd *Llrbnode, count int) int {
-	if nd == nil {
-		return count
-	}
-	if !isred(nd) {
-		count++
-	}
-	x := llrb.validateblacks(nd.left, count)
-	y := llrb.validateblacks(nd.right, count)
-	if x != y {
-		panic(fmt.Errorf("no. of blacks {left,right} : {%v,%v}\n", x, y))
-	}
-	return x
+	return llrb.validateblacks(llrb.root, 0)
 }
 
 func (llrb *LLRB) ValidateHeight() bool {
-	root := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
 	heightav := &averageInt{}
-	return llrb.validateheight(root, heightav)
-}
-
-func (llrb *LLRB) validateheight(nd *Llrbnode, av *averageInt) bool {
-	llrb.heightStats(nd, 0, av)
-	nf := float64(llrb.Count())
-	return float64(av.max()) < (3 * math.Log2(nf))
+	return llrb.validateheight(llrb.root, heightav)
 }
 
 func (llrb *LLRB) ValidateDirty() (rv bool) {
 	rv = true
 	llrb.Range(
 		nil, nil, "both",
-		func(nd *Llrbnode) bool {
-			if nd.metadata().isdirty() {
+		func(nd Node) bool {
+			if nd.(*Llrbnode).metadata().isdirty() {
 				rv = false
 				return false
 			}
 			return true
 		})
 	return rv
-}
-
-func (llrb *LLRB) PPrint() {
-	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	fmt.Printf("root: ")
-	nd.pprint("  ")
 }
 
 func (llrb *LLRB) Dotdump(buffer io.Writer) {
@@ -939,8 +822,7 @@ func (llrb *LLRB) Dotdump(buffer io.Writer) {
 		"}",
 	}
 	buffer.Write([]byte(strings.Join(lines[:len(lines)-1], "\n")))
-	nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-	nd.dotdump(buffer)
+	llrb.root.dotdump(buffer)
 	buffer.Write([]byte(lines[len(lines)-1]))
 }
 
@@ -998,20 +880,20 @@ func (llrb *LLRB) clone(nd *Llrbnode) (newnd *Llrbnode) {
 
 func (llrb *LLRB) upsertcounts(key, value []byte, oldnd *Llrbnode) {
 	if oldnd == nil {
-		atomic.AddInt64(&llrb.count, 1)
+		llrb.count++
 	} else {
-		atomic.AddInt64(&llrb.keymemory, -int64(len(oldnd.key())))
-		atomic.AddInt64(&llrb.valmemory, -int64(len(oldnd.nodevalue().value())))
+		llrb.keymemory -= int64(len(oldnd.key()))
+		llrb.valmemory -= int64(len(oldnd.nodevalue().value()))
 	}
-	atomic.AddInt64(&llrb.keymemory, int64(len(key)))
-	atomic.AddInt64(&llrb.valmemory, int64(len(value)))
+	llrb.keymemory += int64(len(key))
+	llrb.valmemory += int64(len(value))
 }
 
 func (llrb *LLRB) delcount(nd *Llrbnode) {
 	if nd != nil {
-		atomic.AddInt64(&llrb.keymemory, -int64(len(nd.key())))
-		atomic.AddInt64(&llrb.valmemory, -int64(len(nd.nodevalue().value())))
-		atomic.AddInt64(&llrb.count, -1)
+		llrb.keymemory -= int64(len(nd.key()))
+		llrb.valmemory -= int64(len(nd.nodevalue().value()))
+		llrb.count--
 	}
 }
 

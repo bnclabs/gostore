@@ -55,7 +55,7 @@ const (
 	cmdLlrbWriterLogTreeheight
 )
 
-func (writer *LLRBWriter) Upsert(key, value []byte, callb LLRBUpsertCallback) error {
+func (writer *LLRBWriter) Upsert(key, value []byte, callb UpsertCallback) error {
 	if key == nil {
 		return errors.New("upserting nil key")
 	}
@@ -65,21 +65,21 @@ func (writer *LLRBWriter) Upsert(key, value []byte, callb LLRBUpsertCallback) er
 	return err
 }
 
-func (writer *LLRBWriter) DeleteMin(callb LLRBDeleteCallback) error {
+func (writer *LLRBWriter) DeleteMin(callb DeleteCallback) error {
 	respch := make(chan []interface{}, 0)
 	cmd := []interface{}{cmdLlrbWriterDeleteMin, callb, respch}
 	_, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
 	return err
 }
 
-func (writer *LLRBWriter) DeleteMax(callb LLRBDeleteCallback) error {
+func (writer *LLRBWriter) DeleteMax(callb DeleteCallback) error {
 	respch := make(chan []interface{}, 0)
 	cmd := []interface{}{cmdLlrbWriterDeleteMax, callb, respch}
 	_, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
 	return err
 }
 
-func (writer *LLRBWriter) Delete(key []byte, callb LLRBDeleteCallback) error {
+func (writer *LLRBWriter) Delete(key []byte, callb DeleteCallback) error {
 	respch := make(chan []interface{}, 0)
 	cmd := []interface{}{cmdLlrbWriterDelete, key, callb, respch}
 	_, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
@@ -173,15 +173,14 @@ loop:
 		switch msg[0].(byte) {
 		case cmdLlrbWriterUpsert:
 			key, val := msg[1].([]byte), msg[2].([]byte)
-			callb := msg[3].(LLRBUpsertCallback)
+			callb := msg[3].(UpsertCallback)
 			respch := msg[4].(chan []interface{})
 
-			nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
 			depth := int64(1) /*upsertdepth*/
 			root, newnd, oldnd, reclaim =
-				writer.upsert(nd, depth, key, val, reclaim)
+				writer.upsert(llrb.root, depth, key, val, reclaim)
 			root.metadata().setblack()
-			atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
+			llrb.root = root
 
 			llrb.upsertcounts(key, val, oldnd)
 
@@ -198,15 +197,14 @@ loop:
 			close(respch)
 
 		case cmdLlrbWriterDeleteMin:
-			callb := msg[1].(LLRBDeleteCallback)
+			callb := msg[1].(DeleteCallback)
 			respch := msg[2].(chan []interface{})
 
-			nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-			root, deleted, reclaim := writer.deletemin(nd, reclaim)
+			root, deleted, reclaim := writer.deletemin(llrb.root, reclaim)
 			if root != nil {
 				root.metadata().setblack()
 			}
-			atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
+			llrb.root = root
 
 			llrb.delcount(deleted)
 
@@ -218,15 +216,14 @@ loop:
 			close(respch)
 
 		case cmdLlrbWriterDeleteMax:
-			callb := msg[1].(LLRBDeleteCallback)
+			callb := msg[1].(DeleteCallback)
 			respch := msg[2].(chan []interface{})
 
-			nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-			root, deleted, reclaim := writer.deletemax(nd, reclaim)
+			root, deleted, reclaim := writer.deletemax(llrb.root, reclaim)
 			if root != nil {
 				root.metadata().setblack()
 			}
-			atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
+			llrb.root = root
 
 			llrb.delcount(deleted)
 
@@ -238,15 +235,14 @@ loop:
 			close(respch)
 
 		case cmdLlrbWriterDelete:
-			key, callb := msg[1].([]byte), msg[2].(LLRBDeleteCallback)
+			key, callb := msg[1].([]byte), msg[2].(DeleteCallback)
 			respch := msg[3].(chan []interface{})
 
-			nd := (*Llrbnode)(atomic.LoadPointer(&llrb.root))
-			root, deleted, reclaim := writer.delete(nd, key, reclaim)
+			root, deleted, reclaim := writer.delete(llrb.root, key, reclaim)
 			if root != nil {
 				root.metadata().setblack()
 			}
-			atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
+			llrb.root = root
 
 			llrb.delcount(deleted)
 
@@ -262,7 +258,7 @@ loop:
 			snapshot := llrb.NewSnapshot(id)
 			for _, waiter := range writer.waiters {
 				waiter <- snapshot
-				atomic.AddInt32(&snapshot.refcount, 1)
+				snapshot.refcount++
 				close(waiter)
 			}
 			fmsg := "%v dispatched snapshot $%v to %v waiters\n"
@@ -629,7 +625,7 @@ func (writer *LLRBWriter) purgesnapshot(llrb *LLRB) string {
 	count := 0
 	for upsnapshot != nil {
 		snapshot := (*LLRBSnapshot)(upsnapshot)
-		if snapshot.ReclaimNodes() == false {
+		if snapshot.reclaimNodes() == false {
 			break
 		}
 		upsnapshot = atomic.LoadPointer(&snapshot.next)

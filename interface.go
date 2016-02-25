@@ -1,5 +1,19 @@
 package storage
 
+// NodeIterator callback from Range API.
+type NodeIterator func(nd Node) bool
+
+// UpsertCallback callback from Upsert API. Don't keep any reference
+// to newnd and oldnd:
+// * oldnd can only be read.
+// * newnd can be read or updated.
+type UpsertCallback func(index Index, newnd, oldnd Node)
+
+// DeleteCallback callback from Delete API. Don't keep any reference
+// to nd:
+// * deleted node can only be read.
+type DeleteCallback func(index Index, deleted Node)
+
 // Node interface methods to access node attributes.
 type Node interface {
 	NodeSetter
@@ -39,40 +53,81 @@ type NodeSetter interface {
 	SetBornseqno(seqno uint64) Node
 
 	// SetDeadseqno to set vbucket-seqno at which this entry was deleted.
-	SetDeadseqno(seqno uint64)
+	SetDeadseqno(seqno uint64) Node
 }
 
-// Writer interface methods for updating index data structure.
-type Writer interface {
-	// Upsert a key/value pair, if key is already present update its value
-	// and return the old value, else return nil.
-	Upsert(key, value []byte) []byte
+// Index interface for managing key,value pairs.
+// TBD: add interface for vector-clock.
+type Index interface {
+	// Count return the number of entries indexed
+	Count() int64
 
-	// Delete a key entry, if present return the old value.
-	Delete(key []byte) []byte
+	// Isalive return whether the index is active or not.
+	Isactive() bool
 
-	// Delete the first entry in the sorted index, and if index is non-empty
-	// return the corresponding key/value pair.
-	DeleteMax() (key, value []byte)
+	// RSnapshot return snapshot that shan't be disturbed by subsequent writes.
+	RSnapshot() (Snapshot, error)
 
-	// Delete the last entry in the sorted index, and if index is non-empty
-	// return the corresponding key/value pair.
-	DeleteMin() (key, value []byte)
+	// Destroy to delete an index and clean up its resources.
+	Destroy() error
+
+	Reader
+	Writer
+}
+
+// Snapshot for read-only operation into the index.
+// TBD: add interface for vector-clock.
+type Snapshot interface {
+	// unique id for snapshot
+	Id() string
+
+	// Count return the number of entries indexed
+	Count() int64
+
+	// Isalive return whether the index is active or not.
+	Isactive() bool
+
+	// Release snapshot after reading, don't hold on to it beyond few seconds.
+	Release()
+
+	Reader
 }
 
 // Reader interface for fetching one or more entries from index data
 // structure.
 type Reader interface {
-	// Count return the number entries in the sorted index.
-	Count() int64
-	Get(key []byte) []byte
+	// Has checks wether key is present in the index.
 	Has(key []byte) bool
-	Max() (key, value []byte)
-	Min() (key, value []byte)
-	Range(lowkey, highkey []byte, incl string, iter KVIterator)
+
+	// Get entry for key.
+	Get(key []byte) Node
+
+	// Min get entry that sort befor every other entries in the index.
+	Min() Node
+
+	// Max get entry that sort after every other entries in the index.
+	Max() Node
+
+	// Range iterate over entries between lowkey and highkey
+	// incl,
+	//	"none" - ignore lowkey and highkey while iterating
+	//	"low"  - include lowkey but ignore highkey
+	//	"high" - ignore lowkey but include highkey
+	//	"both" - include both lowkey and highkey
+	Range(lowkey, highkey []byte, incl string, iter NodeIterator)
 }
 
-type Index interface {
-	Count() int64
-	RSnapshot() Index
+// Writer interface methods for updating index data structure.
+type Writer interface {
+	// Upsert a key/value pair.
+	Upsert(key, value []byte, callb UpsertCallback)
+
+	// DeleteMin delete the last entry in the index.
+	DeleteMin(callb DeleteCallback)
+
+	// Delete the first entry in the index.
+	DeleteMax(callb DeleteCallback)
+
+	// Delete entry specified by key.
+	Delete(key []byte, callb DeleteCallback)
 }

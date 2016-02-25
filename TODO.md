@@ -1,5 +1,9 @@
 LLRB:
+* improve panic messages.
+* keymemory == 'sum of all Node.Key()'
+* valmemory == 'sum of all Node.Value()'
 * test mvcc.writer.DeleteMin() on a tree with single node.
+* update access field.
 * dotdump hightlight red/black edges.
 * add checker for memory leak to memarena.
 * mvcc.writer export it via method Writer()
@@ -11,6 +15,8 @@ LLRB:
   can be used for debugging.
 * add llrb tree validation rules, based on sedgewick paper.
 * add test cases for DeleteMin() and DeleteMax().
+* should we export vectorclock, also add vector clock method to Index{}
+  interface ?
 
 clock:
 * exhaust all possible combination of clock comparision TestVectorclockOrder.

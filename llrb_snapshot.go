@@ -7,9 +7,10 @@ import "unsafe"
 import "time"
 import "strings"
 import "io"
+import "fmt"
 import "strconv"
 
-//---- snapshot methods
+//---- snapshot ticker
 
 func (writer *LLRBWriter) snapshotticker(interval int, finch chan bool) {
 	tick := time.NewTicker(time.Duration(interval) * time.Millisecond)
@@ -36,18 +37,33 @@ loop:
 	}
 }
 
-// read-snapshots
-
+// LLRBSnapshot holds on to a read-only version of the LLRB tree.
 type LLRBSnapshot struct {
-	llrb     *LLRB
-	id       string
-	clock    *vectorclock
-	root     unsafe.Pointer
+	llrb  *LLRB
+	id    string
+	root  *Llrbnode
+	dead  bool
+	clock *vectorclock
+
+	// snapshot specific fields
 	reclaim  []*Llrbnode
 	next     unsafe.Pointer // *LLRBSnapshot
 	refcount int32
+
+	// config
+	fmask     metadataMask
+	logPrefix string
+
+	// statistics
+	count       int64
+	lookups     int64
+	ranges      int64
+	keymemory   int64
+	valmemory   int64
+	upsertdepth averageInt
 }
 
+// NewSnapshot mvcc version for LLRB tree.
 func (llrb *LLRB) NewSnapshot(id string) *LLRBSnapshot {
 	// track to the tail of read-snapshot list.
 	location := &llrb.mvcc.snapshot
@@ -56,12 +72,20 @@ func (llrb *LLRB) NewSnapshot(id string) *LLRBSnapshot {
 		location = &((*LLRBSnapshot)(upsnapshot).next)
 		upsnapshot = atomic.LoadPointer(location)
 	}
+
 	snapshot := &LLRBSnapshot{
-		llrb:  llrb,
-		id:    id,
-		root:  atomic.LoadPointer(&llrb.root),
-		clock: llrb.clock.clone(),
+		llrb:        llrb,
+		id:          id,
+		root:        llrb.root,
+		dead:        llrb.dead,
+		clock:       llrb.clock.clone(),
+		fmask:       llrb.fmask,
+		count:       llrb.count,
+		keymemory:   llrb.keymemory,
+		valmemory:   llrb.valmemory,
+		upsertdepth: *llrb.upsertdepth,
 	}
+	llrb.logPrefix = fmt.Sprintf("[LLRBSnapshot-%s/%s]", llrb.name, id)
 
 	snapshot.reclaim = make([]*Llrbnode, len(llrb.mvcc.reclaim))
 	copy(snapshot.reclaim, llrb.mvcc.reclaim)
@@ -74,33 +98,39 @@ func (llrb *LLRB) NewSnapshot(id string) *LLRBSnapshot {
 	return snapshot
 }
 
+//---- Snapshot{} interface.
+
+// Id implement Snapshot{} interface.
 func (snapshot *LLRBSnapshot) Id() string {
 	return snapshot.id
 }
 
+// Count implement Snapshot{} interface.
+func (snapshot *LLRBSnapshot) Count() int64 {
+	return snapshot.count
+}
+
+// Isactive implement Snapshot{} interface.
+func (snapshot *LLRBSnapshot) Isactive() bool {
+	return snapshot.dead == false
+}
+
+// Release implement Snapshot interface.
 func (snapshot *LLRBSnapshot) Release() {
 	atomic.AddInt32(&snapshot.refcount, -1)
-	log.Debugf("%v deref snapshot %v\n", snapshot.llrb.logPrefix, snapshot.id)
+	log.Debugf("%v deref snapshot\n", snapshot.logPrefix)
 }
 
-func (snapshot *LLRBSnapshot) ReclaimNodes() bool {
-	if atomic.LoadInt32(&snapshot.refcount) < 0 {
-		panic("snapshot refcount gone negative")
-	} else if atomic.LoadInt32(&snapshot.refcount) == 0 {
-		for _, nd := range snapshot.reclaim {
-			snapshot.llrb.freenode(nd)
-		}
-		return true
-	}
-	return false
-}
+//---- Reader{} interface.
 
+// Has implement Reader{} interface.
 func (snapshot *LLRBSnapshot) Has(key []byte) bool {
 	return snapshot.Get(key) != nil
 }
 
-func (snapshot *LLRBSnapshot) Get(key []byte) (nd *Llrbnode) {
-	nd = (*Llrbnode)(atomic.LoadPointer(&snapshot.root))
+// Get implement Reader{} interface.
+func (snapshot *LLRBSnapshot) Get(key []byte) Node {
+	nd := snapshot.root
 	for nd != nil {
 		if nd.gtkey(key) {
 			nd = nd.left
@@ -113,8 +143,11 @@ func (snapshot *LLRBSnapshot) Get(key []byte) (nd *Llrbnode) {
 	return nil // key is not present in the tree
 }
 
-func (snapshot *LLRBSnapshot) Min() (nd *Llrbnode) {
-	if nd = (*Llrbnode)(atomic.LoadPointer(&snapshot.root)); nd == nil {
+// Min implement Reader{} interface.
+func (snapshot *LLRBSnapshot) Min() Node {
+	var nd *Llrbnode
+
+	if nd = snapshot.root; nd == nil {
 		return nil
 	}
 
@@ -124,8 +157,11 @@ func (snapshot *LLRBSnapshot) Min() (nd *Llrbnode) {
 	return nd
 }
 
-func (snapshot *LLRBSnapshot) Max() (nd *Llrbnode) {
-	if nd = (*Llrbnode)(atomic.LoadPointer(&snapshot.root)); nd == nil {
+// Max implement Reader{} interface.
+func (snapshot *LLRBSnapshot) Max() Node {
+	var nd *Llrbnode
+
+	if nd = snapshot.root; nd == nil {
 		return nil
 	}
 
@@ -135,13 +171,9 @@ func (snapshot *LLRBSnapshot) Max() (nd *Llrbnode) {
 	return nd
 }
 
-// Range from lkey to hkey, incl can be "both", "low", "high", "none"
-func (snapshot *LLRBSnapshot) Range(lkey, hkey []byte, incl string, iter LLRBNodeIterator) {
-	if iter == nil {
-		panic("Range(): iter argument is nil")
-	}
-
-	nd := (*Llrbnode)(atomic.LoadPointer(&snapshot.root))
+// Range implement Reader{} interface.
+func (snapshot *LLRBSnapshot) Range(lkey, hkey []byte, incl string, iter NodeIterator) {
+	nd := snapshot.root
 	switch incl {
 	case "both":
 		snapshot.llrb.rangeFromFind(nd, lkey, hkey, iter)
@@ -154,8 +186,10 @@ func (snapshot *LLRBSnapshot) Range(lkey, hkey []byte, incl string, iter LLRBNod
 	}
 }
 
+//---- TODO: TBD APIs
+
 func (snapshot *LLRBSnapshot) ValidateReds() bool {
-	root := (*Llrbnode)(atomic.LoadPointer(&snapshot.root))
+	root := snapshot.root
 	if snapshot.llrb.validatereds(root, isred(root)) != true {
 		return false
 	}
@@ -163,12 +197,12 @@ func (snapshot *LLRBSnapshot) ValidateReds() bool {
 }
 
 func (snapshot *LLRBSnapshot) ValidateBlacks() int {
-	root := (*Llrbnode)(atomic.LoadPointer(&snapshot.root))
+	root := snapshot.root
 	return snapshot.llrb.validateblacks(root, 0)
 }
 
 func (snapshot *LLRBSnapshot) ValidateHeight() bool {
-	root := (*Llrbnode)(atomic.LoadPointer(&snapshot.root))
+	root := snapshot.root
 	heightav := &averageInt{}
 	return snapshot.llrb.validateheight(root, heightav)
 }
@@ -177,8 +211,8 @@ func (snapshot *LLRBSnapshot) ValidateDirty() (rv bool) {
 	rv = true
 	snapshot.Range(
 		nil, nil, "both",
-		func(nd *Llrbnode) bool {
-			if nd.metadata().isdirty() {
+		func(nd Node) bool {
+			if nd.(*Llrbnode).metadata().isdirty() {
 				rv = false
 				return false
 			}
@@ -194,7 +228,21 @@ func (snapshot *LLRBSnapshot) Dotdump(buffer io.Writer) {
 		"}",
 	}
 	buffer.Write([]byte(strings.Join(lines[:len(lines)-1], "\n")))
-	nd := (*Llrbnode)(atomic.LoadPointer(&snapshot.root))
+	nd := snapshot.root
 	nd.dotdump(buffer)
 	buffer.Write([]byte(lines[len(lines)-1]))
+}
+
+//---- local methods.
+
+func (snapshot *LLRBSnapshot) reclaimNodes() bool {
+	if atomic.LoadInt32(&snapshot.refcount) < 0 {
+		panic("snapshot refcount gone negative")
+	} else if atomic.LoadInt32(&snapshot.refcount) == 0 {
+		for _, nd := range snapshot.reclaim {
+			snapshot.llrb.freenode(nd)
+		}
+		return true
+	}
+	return false
 }
