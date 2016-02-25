@@ -1,6 +1,7 @@
 LLRB:
 * test mvcc.writer.DeleteMin() on a tree with single node.
 * dotdump hightlight red/black edges.
+* add checker for memory leak to memarena.
 * mvcc.writer export it via method Writer()
 * change config["mvcc.enabled"] to config["mvcc.enable"].
 * snapshot.Count(), don't use llrb.count
