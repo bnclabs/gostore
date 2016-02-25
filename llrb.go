@@ -392,6 +392,11 @@ func (llrb *LLRB) Upsert(key, value []byte, callb LLRBUpsertCallback) {
 	if callb != nil {
 		callb(llrb, newnd, oldnd)
 	}
+	if newnd.metadata().isdirty() == false {
+		panic("expected this to be dirty")
+	} else {
+		newnd.metadata().cleardirty()
+	}
 	llrb.freenode(oldnd)
 }
 
@@ -559,7 +564,8 @@ func (llrb *LLRB) delete(nd *Llrbnode, key []byte) (newnd, deleted *Llrbnode) {
 			newnd := llrb.clone(subdeleted)
 			newnd.left, newnd.right = nd.left, nd.right
 			if nd.metadata().isdirty() {
-				newnd.metadata().setdirty()
+				//newnd.metadata().setdirty()
+				panic("unexpected dirty node, call the programmer")
 			}
 			if nd.metadata().isblack() {
 				newnd.metadata().setblack()
@@ -904,6 +910,20 @@ func (llrb *LLRB) validateheight(nd *Llrbnode, av *averageInt) bool {
 	llrb.heightStats(nd, 0, av)
 	nf := float64(llrb.Count())
 	return float64(av.max()) < (3 * math.Log2(nf))
+}
+
+func (llrb *LLRB) ValidateDirty() (rv bool) {
+	rv = true
+	llrb.Range(
+		nil, nil, "both",
+		func(nd *Llrbnode) bool {
+			if nd.metadata().isdirty() {
+				rv = false
+				return false
+			}
+			return true
+		})
+	return rv
 }
 
 func (llrb *LLRB) PPrint() {

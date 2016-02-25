@@ -215,10 +215,9 @@ func TestLLRBBasicUpdates(t *testing.T) {
 		t.Errorf("expected %v, got %v", newvalue, nd.nodevalue().value())
 	}
 	// validate
-	if llrb.ValidateReds() == false {
-		t.Errorf("validate-reds failed")
+	if err := testllrbvalidate(llrb); err != nil {
+		t.Error(err)
 	}
-	llrb.ValidateBlacks()
 
 	// delete
 	countref, key, value := llrb.Count(), []byte(nil), []byte(nil)
@@ -241,10 +240,9 @@ func TestLLRBBasicUpdates(t *testing.T) {
 		t.Errorf("expeced node as nil")
 	}
 	// validate
-	if llrb.ValidateReds() == false {
-		t.Errorf("validate-reds failed")
+	if err := testllrbvalidate(llrb); err != nil {
+		t.Error(err)
 	}
-	llrb.ValidateBlacks()
 
 	// delete-max
 	countref, key, value = llrb.Count(), nil, nil
@@ -267,10 +265,9 @@ func TestLLRBBasicUpdates(t *testing.T) {
 		t.Errorf("expeced node as nil")
 	}
 	// validate
-	if llrb.ValidateReds() == false {
-		t.Errorf("validate-reds failed")
+	if err := testllrbvalidate(llrb); err != nil {
+		t.Error(err)
 	}
-	llrb.ValidateBlacks()
 
 	// delete-min
 	countref, key, value = llrb.Count(), nil, nil
@@ -292,10 +289,9 @@ func TestLLRBBasicUpdates(t *testing.T) {
 		t.Errorf("expeced node as nil")
 	}
 	// validate
-	if llrb.ValidateReds() == false {
-		t.Errorf("validate-reds failed")
+	if err := testllrbvalidate(llrb); err != nil {
+		t.Error(err)
 	}
-	llrb.ValidateBlacks()
 
 	llrb.Destroy()
 }
@@ -415,10 +411,9 @@ func TestLLRBBasicRange(t *testing.T) {
 		t.Errorf("expected %v, got %v", 0, ln)
 	}
 	// validate
-	if llrb.ValidateReds() == false {
-		t.Errorf("validate-reds failed")
+	if err := testllrbvalidate(llrb); err != nil {
+		t.Error(err)
 	}
-	llrb.ValidateBlacks()
 
 	llrb.Destroy()
 }
@@ -449,10 +444,10 @@ func TestLLRBInsert(t *testing.T) {
 		seqno++
 	}
 	// validate
-	if llrb.ValidateReds() == false {
-		t.Errorf("validate-reds failed")
+	if err := testllrbvalidate(llrb); err != nil {
+		t.Error(err)
 	}
-	llrb.ValidateBlacks()
+
 	// check memory accounting
 	mstats := llrb.StatsMem()
 	overhead, useful := int64(3814), int64(2096640)
@@ -532,10 +527,9 @@ func TestLLRBUpsert(t *testing.T) {
 		seqno++
 	}
 	// validate
-	if llrb.ValidateReds() == false {
-		t.Errorf("validate-reds failed")
+	if err := testllrbvalidate(llrb); err != nil {
+		t.Error(err)
 	}
-	llrb.ValidateBlacks()
 
 	// upsert same items
 	newvalues := make([][]byte, 0)
@@ -566,10 +560,9 @@ func TestLLRBUpsert(t *testing.T) {
 		seqno++
 	}
 	// validate
-	if llrb.ValidateReds() == false {
-		t.Errorf("validate-reds failed")
+	if err := testllrbvalidate(llrb); err != nil {
+		t.Error(err)
 	}
-	llrb.ValidateBlacks()
 
 	// check memory accounting
 	mstats := llrb.StatsMem()
@@ -629,10 +622,9 @@ func TestLLRBDelete(t *testing.T) {
 		seqno++
 	}
 	// validate
-	if llrb.ValidateReds() == false {
-		t.Errorf("validate-reds failed")
+	if err := testllrbvalidate(llrb); err != nil {
+		t.Error(err)
 	}
-	llrb.ValidateBlacks()
 
 	// Delete items
 	seqno = uint64(12345678)
@@ -657,10 +649,9 @@ func TestLLRBDelete(t *testing.T) {
 		seqno++
 	}
 	// validate
-	if llrb.ValidateReds() == false {
-		t.Errorf("validate-reds failed")
+	if err := testllrbvalidate(llrb); err != nil {
+		t.Error(err)
 	}
-	llrb.ValidateBlacks()
 
 	// delete minimums
 	for i := 0; i < len(keys[count/2:(3*count)/4]); i++ {
@@ -676,10 +667,9 @@ func TestLLRBDelete(t *testing.T) {
 			})
 	}
 	// validate
-	if llrb.ValidateReds() == false {
-		t.Errorf("validate-reds failed")
+	if err := testllrbvalidate(llrb); err != nil {
+		t.Error(err)
 	}
-	llrb.ValidateBlacks()
 
 	// delete maximums
 	for i := 0; i < len(keys[(3*count)/4:]); i++ {
@@ -695,10 +685,9 @@ func TestLLRBDelete(t *testing.T) {
 			})
 	}
 	// validate
-	if llrb.ValidateReds() == false {
-		t.Errorf("validate-reds failed")
+	if err := testllrbvalidate(llrb); err != nil {
+		t.Error(err)
 	}
-	llrb.ValidateBlacks()
 
 	// check memory accounting
 	mstats := llrb.StatsMem()
@@ -787,10 +776,9 @@ func TestLLRBRange(t *testing.T) {
 		}
 	}
 	// validate
-	if llrb.ValidateReds() == false {
-		t.Errorf("validate-reds failed")
+	if err := testllrbvalidate(llrb); err != nil {
+		t.Error(err)
 	}
-	llrb.ValidateBlacks()
 
 	llrb.Destroy()
 }
@@ -854,4 +842,13 @@ func makellrb(
 		seqno++
 	}
 	return llrb
+}
+
+func testllrbvalidate(llrb *LLRB) error {
+	if llrb.ValidateReds() == false {
+		return fmt.Errorf("validate-reds failed")
+	} else if llrb.ValidateDirty() == false {
+		return fmt.Errorf("validate-dirty failed")
+	}
+	llrb.ValidateBlacks()
 }

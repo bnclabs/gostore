@@ -188,6 +188,11 @@ loop:
 			if callb != nil {
 				callb(llrb, newnd, oldnd)
 			}
+			if newnd.metadata().isdirty() == false {
+				panic("expected this to be dirty")
+			} else {
+				newnd.metadata().cleardirty()
+			}
 
 			reclaimNodes("upsert", reclaim)
 			close(respch)
@@ -469,7 +474,8 @@ func (writer *LLRBWriter) delete(
 			newnd = writer.llrb.clone(subd)
 			newnd.left, newnd.right = ndmvcc.left, ndmvcc.right
 			if ndmvcc.metadata().isdirty() {
-				newnd.metadata().setdirty()
+				//newnd.metadata().setdirty()
+				panic("unexpected dirty node, call the programmer")
 			}
 			if ndmvcc.metadata().isblack() {
 				newnd.metadata().setblack()

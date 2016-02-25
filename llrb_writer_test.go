@@ -828,6 +828,8 @@ func validatesnapshot(sleep int, writer *LLRBWriter) (*LLRBSnapshot, error) {
 	// validate
 	if snapshot.ValidateReds() == false {
 		return nil, fmt.Errorf("validate-reds failed")
+	} else if snapshot.ValidateDirty() == false {
+		return nil, fmt.Errorf("validate-dirty failed")
 	}
 	snapshot.ValidateBlacks()
 	return snapshot, nil

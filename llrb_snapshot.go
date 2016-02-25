@@ -173,6 +173,20 @@ func (snapshot *LLRBSnapshot) ValidateHeight() bool {
 	return snapshot.llrb.validateheight(root, heightav)
 }
 
+func (snapshot *LLRBSnapshot) ValidateDirty() (rv bool) {
+	rv = true
+	snapshot.Range(
+		nil, nil, "both",
+		func(nd *Llrbnode) bool {
+			if nd.metadata().isdirty() {
+				rv = false
+				return false
+			}
+			return true
+		})
+	return rv
+}
+
 func (snapshot *LLRBSnapshot) Dotdump(buffer io.Writer) {
 	lines := []string{
 		"digraph llrb {",
