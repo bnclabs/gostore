@@ -8,6 +8,7 @@ import "fmt"
 import "io"
 
 const llrbnodesize = 24 // + metadatasize + keysize
+
 type Llrbnode struct {
 	left     *Llrbnode // TODO: unsafe.Pointer ???
 	right    *Llrbnode // TODO: unsafe.Pointer ???
@@ -17,6 +18,7 @@ type Llrbnode struct {
 
 //---- Exported methods on metadata.
 
+// Setvbno implements NodeSetter{}
 func (nd *Llrbnode) Setvbno(vbno uint16) *Llrbnode {
 	if nd != nil {
 		nd.metadata().setvbno(vbno)
@@ -24,6 +26,7 @@ func (nd *Llrbnode) Setvbno(vbno uint16) *Llrbnode {
 	return nd
 }
 
+// SetBornseqno implements NodeSetter{}
 func (nd *Llrbnode) SetBornseqno(seqno uint64) *Llrbnode {
 	if nd != nil {
 		nd.metadata().setbnseq(seqno)
@@ -31,6 +34,7 @@ func (nd *Llrbnode) SetBornseqno(seqno uint64) *Llrbnode {
 	return nd
 }
 
+// SetDeadseqno implements NodeSetter{}
 func (nd *Llrbnode) SetDeadseqno(seqno uint64) *Llrbnode {
 	if nd != nil {
 		nd.metadata().setddseq(seqno)
@@ -38,6 +42,7 @@ func (nd *Llrbnode) SetDeadseqno(seqno uint64) *Llrbnode {
 	return nd
 }
 
+// SetVbuuid implements NodeSetter{}
 func (nd *Llrbnode) SetVbuuid(vbuuid uint64) *Llrbnode {
 	if nd != nil {
 		nd.metadata().setvbuuid(vbuuid)
@@ -45,6 +50,7 @@ func (nd *Llrbnode) SetVbuuid(vbuuid uint64) *Llrbnode {
 	return nd
 }
 
+// Vbno implements NodeGetter{}
 func (nd *Llrbnode) Vbno() uint16 {
 	if nd != nil {
 		return nd.metadata().vbno()
@@ -52,6 +58,7 @@ func (nd *Llrbnode) Vbno() uint16 {
 	return 0
 }
 
+// Bornseqno implements NodeGetter{}
 func (nd *Llrbnode) Bornseqno() uint64 {
 	if nd != nil {
 		return nd.metadata().bnseq()
@@ -59,6 +66,7 @@ func (nd *Llrbnode) Bornseqno() uint64 {
 	return 0
 }
 
+// Deadseqno implements NodeGetter{}
 func (nd *Llrbnode) Deadseqno() uint64 {
 	if nd != nil {
 		return nd.metadata().ddseq()
@@ -66,6 +74,7 @@ func (nd *Llrbnode) Deadseqno() uint64 {
 	return 0
 }
 
+// Vbuuid implements NodeGetter{}
 func (nd *Llrbnode) Vbuuid() uint64 {
 	if nd != nil {
 		return nd.metadata().vbuuid()
@@ -73,6 +82,7 @@ func (nd *Llrbnode) Vbuuid() uint64 {
 	return 0
 }
 
+// Key implements NodeGetter{}
 func (nd *Llrbnode) Key() []byte {
 	if nd != nil {
 		return nd.key()
@@ -80,6 +90,7 @@ func (nd *Llrbnode) Key() []byte {
 	return nil
 }
 
+// Value implements NodeGetter{}
 func (nd *Llrbnode) Value() []byte {
 	if nd != nil {
 		return nd.nodevalue().value()

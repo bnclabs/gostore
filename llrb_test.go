@@ -851,4 +851,5 @@ func testllrbvalidate(llrb *LLRB) error {
 		return fmt.Errorf("validate-dirty failed")
 	}
 	llrb.ValidateBlacks()
+	return nil
 }
