@@ -816,7 +816,7 @@ func (llrb *LLRB) logconfig(config map[string]interface{}) {
 	max = humanize.Bytes(uint64(llrb.config["valarena.maxblock"].(int)))
 	cp = humanize.Bytes(uint64(llrb.config["valarena.capacity"].(int)))
 	pcp = humanize.Bytes(uint64(llrb.config["valarena.pool.capacity"].(int)))
-	fmsg = "%v value arena %v blocks over {%v %v} cap %v poolcap %v\n"
+	fmsg = "%v val arena %v blocks over {%v %v} cap %v poolcap %v\n"
 	log.Infof(fmsg, llrb.logPrefix, vblocks, min, max, cp, pcp)
 }
 

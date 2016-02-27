@@ -96,7 +96,7 @@ func (llrb *LLRB) log(involved int) {
 	}
 	sort.Ints(sizes)
 	outs := []string{}
-	fmsg = "  %4v blocks %3v pools of %v each, utilz: %2.2f%%\n"
+	fmsg = "  %4v blocks %3v pools of %v each, utilz: %2.2f%%"
 	for _, size := range sizes {
 		mpools := arenapools[int64(size)]
 		allocated, capct := int64(0), int64(0)
@@ -109,7 +109,8 @@ func (llrb *LLRB) log(involved int) {
 			outs = append(outs, fmt.Sprintf(fmsg, size, len(mpools), capct, z))
 		}
 	}
-	log.Infof("%v key utilization:\n%v\n", strings.Join(outs, "\n"))
+	out := strings.Join(outs, "\n")
+	log.Infof("%v key utilization:\n%v\n", llrb.logPrefix, out)
 
 	// value memory
 	overh = humanize.Bytes(uint64(stats["llrb.value.overhead"].(int64)))
@@ -141,7 +142,8 @@ func (llrb *LLRB) log(involved int) {
 			outs = append(outs, fmt.Sprintf(fmsg, size, len(mpools), capct, z))
 		}
 	}
-	log.Infof("%v value utilization:\n%v\n", strings.Join(outs, "\n"))
+	out = strings.Join(outs, "\n")
+	log.Infof("%v value utilization:\n%v\n", llrb.logPrefix, out)
 
 	// log upsert depth
 	samples := stats["llrb.upsertdepth.samples"].(int64)
