@@ -202,9 +202,13 @@ func (d *Dict) DeleteMax(callb DeleteCallback) error {
 func (d *Dict) Delete(key []byte, callb DeleteCallback) error {
 	if len(d.dict) > 0 {
 		hashv := crc64.Checksum(key, crcisotab)
-		deleted := d.dict[hashv]
+		deleted, ok := d.dict[hashv]
 		if callb != nil {
-			callb(d, deleted)
+			if ok == false {
+				callb(d, nil)
+			} else {
+				callb(d, deleted)
+			}
 		}
 		delete(d.dict, hashv)
 	}

@@ -45,24 +45,32 @@ func (dn *dictnode) Value() []byte {
 
 // SetVbno implement NodeSetter{} interface.
 func (dn *dictnode) Setvbno(vbno uint16) Node {
-	dn.vbno = vbno
+	if dn != nil {
+		dn.vbno = vbno
+	}
 	return dn
 }
 
 // SetVbuuid implement NodeSetter{} interface.
 func (dn *dictnode) SetVbuuid(vbuuid uint64) Node {
-	dn.vbuuid = vbuuid
+	if dn != nil {
+		dn.vbuuid = vbuuid
+	}
 	return dn
 }
 
 // SetBornseqno implement NodeSetter{} interface.
 func (dn *dictnode) SetBornseqno(seqno uint64) Node {
-	dn.bornsq = seqno
+	if dn != nil {
+		dn.bornsq = seqno
+	}
 	return dn
 }
 
 // SetDeadseqno implement NodeSetter{} interface.
 func (dn *dictnode) SetDeadseqno(seqno uint64) Node {
-	dn.deadsq = seqno
+	if dn != nil {
+		dn.deadsq = seqno
+	}
 	return dn
 }

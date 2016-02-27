@@ -276,3 +276,16 @@ func TestDictRsnapshot(t *testing.T) {
 		t.Errorf("expected %v, got %v", inserts[1][1], v)
 	}
 }
+
+func BenchmarkDictSnapshot(b *testing.B) {
+	d := NewDict()
+	for i := 0; i < 10000; i++ {
+		key, value := fmt.Sprintf("key%v", i), fmt.Sprintf("value%v", i)
+		d.Upsert([]byte(key), []byte(value), nil)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		d.RSnapshot()
+	}
+}
