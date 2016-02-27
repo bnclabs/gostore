@@ -1,7 +1,7 @@
 s : "[ " operations " ]".
 
-operations : (weigh 0.4) operation ", " operations
-           | operation.
+operations : (weigh 0.5 0.001) operation ", " operations
+           | (weigh 0.1 0.001) operation.
 
 operation  : (weigh 0.1 0.01) get
            | (weigh 0.4 0.009) upsert

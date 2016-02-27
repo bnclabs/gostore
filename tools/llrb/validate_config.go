@@ -15,6 +15,9 @@ func newllrbconfig() map[string]interface{} {
 		"valarena.capacity":       loadopts.valarena[2],
 		"valarena.pool.capacity":  loadopts.valarena[3],
 		"metadata.mvalue":         true,
+		"metadata.vbuuid":         true,
+		"metadata.bornseqno":      true,
+		"metadata.deadseqno":      true,
 	}
 	return config
 }

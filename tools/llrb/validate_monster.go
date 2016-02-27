@@ -31,6 +31,7 @@ func generate(repeat int, prodfile string, opch chan<- [][]interface{}) {
 		}
 		opch <- arr
 	}
+	close(opch)
 }
 
 func compile(s parsec.Scanner) parsec.ParsecNode {

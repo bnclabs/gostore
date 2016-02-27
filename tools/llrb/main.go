@@ -2,11 +2,17 @@ package main
 
 import "fmt"
 import "os"
+import "log"
+import "net/http"
 import "math/rand"
 import _ "net/http/pprof"
 import "runtime/pprof"
 
 func main() {
+	go func() {
+		log.Println(http.ListenAndServe("localhost:8080", nil))
+	}()
+
 	switch os.Args[1] {
 	case "load":
 		doLoad(os.Args[2:])

@@ -1,7 +1,6 @@
 package main
 
 import "time"
-import "bytes"
 import "os"
 import "fmt"
 import "runtime"
@@ -123,13 +122,16 @@ func doLoad(args []string) {
 		"valarena.capacity":       loadopts.valarena[2],
 		"valarena.pool.capacity":  loadopts.valarena[3],
 	}
+
 	llrb := storage.NewLLRB("load", config, nil)
 	now := time.Now()
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD123456), uint64(0)
 	insertItems(llrb, vbno, vbuuid, seqno, loadopts.n)
 	fmt.Printf("Took %v to insert %v items\n", time.Since(now), loadopts.n)
-	printutilization(llrb)
+	llrb.Log(9)
+
 	llrb.Destroy()
+
 	if takeMEMProfile(loadopts.mprof) {
 		fmt.Printf("dumped mem-profile to %v\n", loadopts.mprof)
 	}
@@ -151,15 +153,11 @@ func insertItems(
 	for i := 0; i < count; i++ {
 		key = makekey(key, loadopts.klen[0], loadopts.klen[1])
 		value = makeval(key, loadopts.vlen[0], loadopts.vlen[1])
-		llrb.Upsert(key, value, nil)
+		llrb.Upsert(
+			key, value,
+			func(index storage.Index, newnd, oldnd storage.Node) {
+				newnd.Setvbno(vbno).SetVbuuid(vbuuid).SetBornseqno(seqno)
+			})
 		seqno++
 	}
-}
-
-func printutilization(llrb *storage.LLRB) {
-	buffer := bytes.NewBuffer(nil)
-	llrb.Logmemory(buffer)
-	fmt.Printf("LLRB Memory:\n%v\n", string(buffer.Bytes()))
-	llrb.LogUpsertdepth()
-	llrb.LogTreeheight()
 }

@@ -6,7 +6,6 @@ import "strings"
 import "strconv"
 import "time"
 import "log"
-import "bytes"
 
 import "github.com/prataprc/storage.go"
 
@@ -77,12 +76,14 @@ func doValidate(args []string) {
 	if validateopts.mvcc {
 		//withLLRBMvcc(validateopts.repeat, opch)
 	} else {
-		withLLRB(validateopts.repeat, opch)
+		withLLRB(uint64(validateopts.repeat), opch)
 	}
 }
 
-func withLLRB(count int, opch chan [][]interface{}) {
+func withLLRB(count uint64, opch chan [][]interface{}) {
 	genstats := newgenstats()
+
+	vbno, vbuuid, seqno := uint16(10), uint64(1234), uint64(1)
 
 	// dict
 	dict := storage.NewDict()
@@ -91,30 +92,34 @@ func withLLRB(count int, opch chan [][]interface{}) {
 	config := newllrbconfig()
 	llrb := storage.NewLLRB("validate", config, nil)
 
-	for count > 0 {
-		count--
-		cmds := <-opch
+loop:
+	for seqno < count {
+		cmds, ok := <-opch
+		if !ok {
+			break loop
+		}
 		for _, cmd := range cmds {
+			lcmd := llrbcmd{cmd: cmd, vbno: vbno, vbuuid: vbuuid, seqno: seqno}
+			if validateopts.opdump {
+				fmt.Printf("cmd %v\n", lcmd.cmd)
+			}
 			switch cmd[0].(string) {
 			case "get":
-				genstats = llrb_opGet(dict, llrb, cmd, genstats)
+				genstats = llrb_opGet(dict, llrb, lcmd, genstats)
 			case "min":
-				genstats = llrb_opMin(dict, llrb, cmd, genstats)
+				genstats = llrb_opMin(dict, llrb, lcmd, genstats)
 			case "max":
-				genstats = llrb_opMax(dict, llrb, cmd, genstats)
+				genstats = llrb_opMax(dict, llrb, lcmd, genstats)
 			case "delmin":
-				genstats = llrb_opDelmin(dict, llrb, cmd, genstats)
+				genstats = llrb_opDelmin(dict, llrb, lcmd, genstats)
 			case "delmax":
-				genstats = llrb_opDelmax(dict, llrb, cmd, genstats)
+				genstats = llrb_opDelmax(dict, llrb, lcmd, genstats)
 			case "upsert":
-				genstats = llrb_opUpsert(dict, llrb, cmd, genstats)
+				genstats = llrb_opUpsert(dict, llrb, lcmd, genstats)
 			case "delete":
-				genstats = llrb_opDelete(dict, llrb, cmd, genstats)
+				genstats = llrb_opDelete(dict, llrb, lcmd, genstats)
 			case "validate":
 				llrb_opValidate(dict, llrb, genstats, false)
-				if validateopts.opdump {
-					fmt.Printf("%v\n", cmd)
-				}
 			case "snapshot":
 				continue
 			case "release":
@@ -125,13 +130,7 @@ func withLLRB(count int, opch chan [][]interface{}) {
 		}
 	}
 	llrb_opValidate(dict, llrb, genstats, true)
-
-	buffer := bytes.NewBuffer(nil)
-	llrb.Logmemory(buffer)
-	fmt.Printf("LLRB Memory:\n%v\n", string(buffer.Bytes()))
-
-	llrb.LogUpsertdepth()
-	llrb.LogTreeheight()
+	llrb.Log(9)
 }
 
 //--------
