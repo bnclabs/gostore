@@ -1,5 +1,7 @@
 LLRB:
 * improve panic messages.
+* should llrb.clone() copy value also ? can it be optimized for mvcc ?
+* if no snapshots are refering to a node, don't clone.
 * check the difference between upsertdepth and tree height statistics
   and try to reason with it.
 * keymemory == 'sum of all Node.Key()'
@@ -12,7 +14,6 @@ LLRB:
 * mvcc.writer export it via method Writer()
 * change config["mvcc.enabled"] to config["mvcc.enable"].
 * snapshot.Count(), don't use llrb.count
-* should llrb.clone() copy value also ? can it be optimized for mvcc ?
 * monster validation should randomly include value for upsert.
 * amend Get API to return the depth of the key inside the tree,
   can be used for debugging.
