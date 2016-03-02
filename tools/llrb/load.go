@@ -3,7 +3,6 @@ package main
 import "time"
 import "os"
 import "fmt"
-import "runtime"
 import "strconv"
 import "flag"
 import "strings"
@@ -83,14 +82,12 @@ func parseLoadopts(args []string) {
 			loadopts.vlen[i] = ln
 		}
 	}
+	setCPU(loadopts.ncpu)
 }
 
 func doLoad(args []string) {
 	parseLoadopts(args)
 
-	// set CPU
-	fmt.Printf("Setting number of cpus to %v\n", loadopts.ncpu)
-	runtime.GOMAXPROCS(loadopts.ncpu)
 	// start memory statistic logger
 	go MemstatLogger(int64(loadopts.memtick))
 	// start pprof

@@ -6,6 +6,7 @@ import "log"
 import "net/http"
 import "math/rand"
 import _ "net/http/pprof"
+import "runtime"
 import "runtime/pprof"
 
 func main() {
@@ -16,11 +17,19 @@ func main() {
 	switch os.Args[1] {
 	case "load":
 		doLoad(os.Args[2:])
+	case "monster":
+		doMonster(os.Args[2:])
 	case "validate":
 		doValidate(os.Args[2:])
 	default:
 		fmt.Println("please provide a valid command !!")
 	}
+}
+
+func setCPU(n int) {
+	// set CPU
+	fmt.Printf("Setting number of cpus to %v\n", n)
+	runtime.GOMAXPROCS(n)
 }
 
 func makekey(key []byte, min, max int) (k []byte) {
