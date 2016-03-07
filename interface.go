@@ -59,10 +59,13 @@ type NodeSetter interface {
 // Index interface for managing key,value pairs.
 // TBD: add interface for vector-clock.
 type Index interface {
+	// index id
+	Id() string
+
 	// Count return the number of entries indexed
 	Count() int64
 
-	// Isalive return whether the index is active or not.
+	// Isactive return whether the index is active or not.
 	Isactive() bool
 
 	// RSnapshot return snapshot that shan't be disturbed by subsequent writes.
@@ -95,7 +98,7 @@ type Snapshot interface {
 	// Count return the number of entries indexed
 	Count() int64
 
-	// Isalive return whether the index is active or not.
+	// Isactive return whether the index is active or not.
 	Isactive() bool
 
 	// Release snapshot after reading, don't hold on to it beyond few seconds.
