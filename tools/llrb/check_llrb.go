@@ -15,18 +15,20 @@ type llrbcmd struct {
 	seqno  uint64
 }
 
-//---------
-// validate llrb without mvcc
-//---------
-
 func llrb_opGet(
-	dict *storage.Dict, llrb *storage.LLRB,
+	dictrd storage.Reader, llrbrd storage.Reader,
 	lcmd llrbcmd, stats map[string]int) map[string]int {
+
+	if dictrd == nil {
+		panic("dictrd reader is nil")
+	} else if llrbrd == nil {
+		panic("llrbrd reader is nil")
+	}
 
 	key := []byte(strconv.Itoa(int(lcmd.cmd[1].(float64))))
 
-	nd := llrb.Get(key)
-	cmpllrbdict(dict.Get(key), nd, true)
+	nd := llrbrd.Get(key)
+	cmpllrbdict(llrbrd.(storage.Snapshot).Id(), dictrd.Get(key), nd, true)
 
 	stats["total"] += 1
 	if nd != nil {
@@ -38,14 +40,20 @@ func llrb_opGet(
 }
 
 func llrb_opMin(
-	dict *storage.Dict, llrb *storage.LLRB,
+	dictrd storage.Reader, llrbrd storage.Reader,
 	lcmd llrbcmd, stats map[string]int) map[string]int {
 
-	nd := llrb.Min()
-	cmpllrbdict(dict.Min(), nd, true)
+	if dictrd == nil {
+		panic("dictrd reader is nil")
+	} else if llrbrd == nil {
+		panic("llrbrd reader is nil")
+	}
+
+	nd := llrbrd.Min()
+	cmpllrbdict(llrbrd.(storage.Snapshot).Id(), dictrd.Min(), nd, true)
 
 	stats["total"] += 1
-	if nd.Key() != nil {
+	if nd != nil {
 		stats["min.ok"] += 1
 	} else {
 		stats["min.na"] += 1
@@ -54,11 +62,17 @@ func llrb_opMin(
 }
 
 func llrb_opMax(
-	dict *storage.Dict, llrb *storage.LLRB,
+	dictrd storage.Snapshot, llrbrd storage.Snapshot,
 	lcmd llrbcmd, stats map[string]int) map[string]int {
 
-	nd := llrb.Max()
-	cmpllrbdict(dict.Max(), nd, true)
+	if dictrd == nil {
+		panic("dictrd reader is nil")
+	} else if llrbrd == nil {
+		panic("llrbrd reader is nil")
+	}
+
+	nd := llrbrd.Max()
+	cmpllrbdict(llrbrd.(storage.Snapshot).Id(), dictrd.Max(), nd, true)
 
 	stats["total"] += 1
 	if nd != nil {
@@ -66,6 +80,40 @@ func llrb_opMax(
 	} else {
 		stats["max.na"] += 1
 	}
+	return stats
+}
+
+func llrb_opRange(
+	dictrd storage.Reader, llrbrd storage.Reader,
+	lcmd llrbcmd, stats map[string]int) map[string]int {
+
+	if dictrd == nil {
+		panic("dictrd reader is nil")
+	} else if llrbrd == nil {
+		panic("llrbrd reader is nil")
+	}
+
+	dnodes := make([]storage.Node, 0)
+	lnodes := make([]storage.Node, 0)
+	lowkey := []byte(strconv.Itoa(int(lcmd.cmd[1].(float64))))
+	highkey := []byte(strconv.Itoa(int(lcmd.cmd[2].(float64))))
+	incl := lcmd.cmd[3].(string)
+
+	dictrd.Range(lowkey, highkey, incl, func(nd storage.Node) bool {
+		dnodes = append(dnodes, nd)
+		return true
+	})
+	llrbrd.Range(lowkey, highkey, incl, func(nd storage.Node) bool {
+		lnodes = append(lnodes, nd)
+		return true
+	})
+
+	for i, dictnd := range dnodes {
+		cmpllrbdict(llrbrd.(storage.Snapshot).Id(), dictnd, lnodes[i], true)
+	}
+
+	stats["total"] += 1
+	stats["range.ok"] += 1
 	return stats
 }
 
@@ -79,7 +127,7 @@ func llrb_opDelmin(
 		llrb.DeleteMin(
 			func(_ storage.Index, nd storage.Node) {
 				refnd = nd
-				cmpllrbdict(dictnd, nd, true)
+				cmpllrbdict(llrb.Id(), dictnd, nd, true)
 				if nd != nil {
 					nd.SetDeadseqno(lcmd.seqno)
 				}
@@ -107,7 +155,7 @@ func llrb_opDelmax(
 	dict.DeleteMax(func(_ storage.Index, dictnd storage.Node) {
 		llrb.DeleteMax(
 			func(index storage.Index, nd storage.Node) {
-				cmpllrbdict(dictnd, nd, true)
+				cmpllrbdict(llrb.Id(), dictnd, nd, true)
 				refnd = nd
 				if nd != nil {
 					nd.SetDeadseqno(lcmd.seqno)
@@ -134,12 +182,10 @@ func llrb_opUpsert(
 	key := []byte(strconv.Itoa(int(lcmd.cmd[1].(float64))))
 	value := []byte(strconv.Itoa(int(time.Now().UnixNano())))
 
-	cmpllrbdict(dict.Get(key), llrb.Get(key), true)
-
 	dict.Upsert(key, value, func(_ storage.Index, dnew, dold storage.Node) {
 		llrb.Upsert(
 			key, value, func(_ storage.Index, lnew, lold storage.Node) {
-				cmpllrbdict(dold, lold, true)
+				cmpllrbdict(llrb.Id(), dold, lold, true)
 				if lold == nil {
 					stats["insert"] += 1
 				} else {
@@ -164,7 +210,7 @@ func llrb_opDelete(
 	var refnd storage.Node
 	dict.Delete(key, func(_ storage.Index, ddel storage.Node) {
 		llrb.Delete(key, func(_ storage.Index, ldel storage.Node) {
-			cmpllrbdict(ddel, ldel, true)
+			cmpllrbdict(llrb.Id(), ddel, ldel, true)
 			refnd = ldel
 			if ldel != nil {
 				ldel.SetDeadseqno(lcmd.seqno)
@@ -185,7 +231,7 @@ func llrb_opDelete(
 }
 
 func llrb_opValidate(
-	dict *storage.Dict, llrb *storage.LLRB, stats map[string]int, dolog bool) {
+	dict, llrb storage.Snapshot, stats map[string]int, dolog bool) {
 
 	llrb_validateEqual(dict, llrb, dolog)
 	llrb_validateStats(dict, llrb, stats, dolog)
@@ -194,10 +240,11 @@ func llrb_opValidate(
 	stats["validate"] += 1
 }
 
-func llrb_validateEqual(dict *storage.Dict, llrb *storage.LLRB, dolog bool) bool {
+func llrb_validateEqual(dict, llrb storage.Snapshot, dolog bool) bool {
 	dictn, llrbn := dict.Count(), llrb.Count()
 	if dictn != llrbn {
-		err := fmt.Errorf("count expected dict:%v, got llrb:%v", dictn, llrbn)
+		fmsg := "%v count expected dict:%v, got llrb:%v"
+		err := fmt.Errorf(fmsg, llrb.Id(), dictn, llrbn)
 		panic(err)
 	}
 
@@ -212,23 +259,25 @@ func llrb_validateEqual(dict *storage.Dict, llrb *storage.LLRB, dolog bool) bool
 		return true
 	})
 	if reflect.DeepEqual(refkeys, keys) == false {
-		panic(fmt.Errorf("final Dict keys and LLRB keys mismatch\n"))
+		fmsg := "%v final Dict keys and LLRB keys mismatch\n"
+		panic(fmt.Errorf(fmsg, llrb.Id()))
 	} else if reflect.DeepEqual(refvals, vals) == false {
-		panic(fmt.Errorf("final Dict values and LLRB values mismatch\n"))
+		fmsg := "final Dict values and LLRB values mismatch\n"
+		panic(fmt.Errorf(fmsg, llrb.Id()))
 	}
 	if dolog {
-		fmt.Printf("validateEqual: ok\n")
+		fmt.Printf("%v validateEqual: ok\n", llrb.Id())
 		fmt.Printf("  number of elements {dict: %v, llrb:%v}\n", dictn, llrbn)
 	}
 	return true
 }
 
 func llrb_validateStats(
-	dict *storage.Dict, llrb *storage.LLRB,
-	stats map[string]int, dolog bool) bool {
+	dict, llrb storage.Snapshot, stats map[string]int, dolog bool) bool {
 
 	insert, upsert := stats["insert"], stats["upsert"]
 	validates := stats["validate"]
+	ranges := stats["range.ok"]
 
 	dels := [2]int{stats["delete.ok"], stats["delete.na"]}
 	dmax := [2]int{stats["delmax.ok"], stats["delmax.na"]}
@@ -239,21 +288,23 @@ func llrb_validateStats(
 	total := insert + upsert + dels[0] + dels[1]
 	total += dmax[0] + dmax[1] + dmin[0] + dmin[1]
 	total += gets[0] + gets[1] + maxs[0] + maxs[1] + mins[0] + mins[1] +
-		validates
+		validates + ranges
 
 	if total != stats["total"] {
-		panic(fmt.Errorf("total expected %v, got %v", total, stats["total"]))
+		fmsg := "%v total expected %v, got %v"
+		panic(fmt.Errorf(fmsg, llrb.Id(), total, stats["total"]))
 	}
 	dictn, cnt := dict.Count(), int64(insert-(dels[0]+dmin[0]+dmax[0]))
 	if dictn != cnt {
-		panic(fmt.Errorf("expected counts: %v, stats: %v\n", dictn, cnt))
+		fmsg := "%v expected counts: %v, stats: %v\n"
+		panic(fmt.Errorf(fmsg, llrb.Id(), dictn, cnt))
 		return false
 	}
 
 	if dolog {
-		fmt.Printf("validateStats:  ok\n")
+		fmt.Printf("%v validateStats:  ok\n", llrb.Id())
 		fmt.Printf("  total operations : %v\n", total)
-		fmt.Printf("  inserts/upserts  : {%v,%v}\n", insert, upsert)
+		fmt.Printf("  inserts/upserts/range : {%v,%v,%v}\n", insert, upsert, ranges)
 		fmsg := "  ds/dn/dx {ok/na} : {%v,%v} {%v,%v} {%v,%v}\n"
 		fmt.Printf(fmsg, dels[0], dels[1], dmax[0], dmax[1], dmin[0], dmin[1])
 		fmsg = "  gt/mn/mx {ok/na} : {%v,%v} {%v,%v} {%v,%v}\n"
@@ -263,46 +314,47 @@ func llrb_validateStats(
 	return true
 }
 
-func cmpllrbdict(dictnd, llrbnd storage.Node, fail bool) {
+func cmpllrbdict(id string, dictnd, llrbnd storage.Node, fail bool) {
+	fmsg := "ERROR %v expected %v, got %v\n"
 	if llrbnd == nil && dictnd == nil {
 		return
 	} else if llrbnd != nil && dictnd == nil {
-		panic(fmt.Errorf("expected nil %v %v\n", llrbnd, llrbnd == nil))
+		panic(fmt.Errorf(fmsg, id, nil, llrbnd))
 	} else if llrbnd == nil && dictnd != nil {
-		panic(fmt.Errorf("unexpected nil %v\n", dictnd))
+		panic(fmt.Errorf("%v unexpected nil %v\n", id, dictnd))
 	}
 
 	if x, y := llrbnd.Key(), dictnd.Key(); bytes.Compare(x, y) != 0 {
 		if fail {
-			panic(fmt.Errorf("expected %v, got %v", string(x), string(y)))
+			panic(fmt.Errorf(fmsg, id, string(x), string(y)))
 		} else {
-			panic(fmt.Errorf("ERROR expected %v, got %v", string(x), string(y)))
+			panic(fmt.Errorf(fmsg, id, string(x), string(y)))
 		}
 	} else if x, y = llrbnd.Value(), dictnd.Value(); bytes.Compare(x, y) != 0 {
 		if fail {
-			panic(fmt.Errorf("expected %v, got %v", string(x), string(y)))
+			panic(fmt.Errorf(fmsg, id, string(x), string(y)))
 		} else {
-			panic(fmt.Errorf("ERROR expected %v, got %v", string(x), string(y)))
+			panic(fmt.Errorf(fmsg, id, string(x), string(y)))
 		}
 	} else if x, y := llrbnd.Vbno(), dictnd.Vbno(); x != y {
 		if fail {
-			panic(fmt.Errorf("expected %v, got %v", x, y))
+			panic(fmt.Errorf(fmsg, id, x, y))
 		} else {
-			panic(fmt.Errorf("ERROR expected %v, got %v", x, y))
+			panic(fmt.Errorf(fmsg, id, x, y))
 		}
 	} else if x, y := llrbnd.Vbuuid(), dictnd.Vbuuid(); x != y {
 		if fail {
-			panic(fmt.Errorf("expected %v, got %v", x, y))
+			panic(fmt.Errorf(fmsg, id, x, y))
 		} else {
-			panic(fmt.Errorf("ERROR expected %v, got %v", x, y))
+			panic(fmt.Errorf(fmsg, id, x, y))
 		}
 	} else if x, y := llrbnd.Bornseqno(), dictnd.Bornseqno(); x != y {
 		if fail {
-			panic(fmt.Errorf("expected %v, got %v", x, y))
+			panic(fmt.Errorf(fmsg, id, x, y))
 		} else {
-			panic(fmt.Errorf("ERROR expected %v, got %v", x, y))
+			panic(fmt.Errorf(fmsg, id, x, y))
 		}
 	} else if dsq := llrbnd.Deadseqno(); dsq != 0 && dsq != 0xFFFFFFFFFFFFFFFF {
-		panic(fmt.Errorf("unexpected deadseqno %v", dsq))
+		panic(fmt.Errorf("%v unexpected deadseqno %v", id, dsq))
 	}
 }

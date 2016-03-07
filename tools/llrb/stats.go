@@ -9,6 +9,7 @@ func newgenstats() map[string]int {
 		"min.na":    0,
 		"max.ok":    0,
 		"max.na":    0,
+		"range.ok":  0,
 		"delmin.ok": 0,
 		"delmin.na": 0,
 		"delmax.ok": 0,
@@ -22,4 +23,12 @@ func newgenstats() map[string]int {
 		"release":   0,
 	}
 	return stats
+}
+
+func clonestats(src map[string]int) map[string]int {
+	dst := newgenstats()
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
 }

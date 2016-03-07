@@ -1,10 +1,14 @@
 package main
 
 func newllrbconfig() map[string]interface{} {
+	mvcc := false
+	if checkopts.mvcc > 0 {
+		mvcc = true
+	}
 	config := map[string]interface{}{
 		"maxvb":                   1024,
-		"mvcc.enabled":            validateopts.mvcc,
-		"mvcc.snapshot.tick":      0,
+		"mvcc.enabled":            mvcc,
+		"mvcc.snapshot.tick":      5,
 		"mvcc.writer.chanbuffer":  1000,
 		"nodearena.minblock":      loadopts.nodearena[0],
 		"nodearena.maxblock":      loadopts.nodearena[1],
