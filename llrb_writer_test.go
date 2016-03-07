@@ -20,8 +20,6 @@ func TestNewLLRBMvcc(t *testing.T) {
 	nodavail := config["nodearena.capacity"].(int)
 	valavail := config["valarena.capacity"].(int)
 
-	llrb.MVCCWriter()
-
 	stats, err := llrb.Stats(9)
 	if err != nil {
 		t.Error(stats)
@@ -843,8 +841,6 @@ func makellrbmvcc(
 	if llrb.Count() != 0 {
 		t.Fatalf("expected an empty dict")
 	}
-	llrb.MVCCWriter()
-
 	// inserts
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(0x12345678)
 	for _, kv := range inserts {

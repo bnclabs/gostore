@@ -85,8 +85,8 @@ func (llrb *LLRB) log(involved int) {
 	alloc := humanize.Bytes(uint64(stats["llrb.node.allocated"].(int64)))
 	avail := humanize.Bytes(uint64(stats["llrb.node.available"].(int64)))
 	kmem := stats["llrb.keymemory"]
-	fmsg := "%v keymem(%v): %v useful, overhd %v allocated %v avail %v\n"
-	log.Infof(fmsg, llrb.logPrefix, kmem, use, overh, alloc, avail)
+	fmsg := "%v %v keymem(%v): %v useful, overhd %v allocated %v avail %v\n"
+	log.Infof(fmsg, llrb.logPrefix, llrb.name, kmem, use, overh, alloc, avail)
 
 	// node utilization
 	arenapools := llrb.nodearena.mpools
@@ -110,7 +110,7 @@ func (llrb *LLRB) log(involved int) {
 		}
 	}
 	out := strings.Join(outs, "\n")
-	log.Infof("%v key utilization:\n%v\n", llrb.logPrefix, out)
+	log.Infof("%v %v key utilization:\n%v\n", llrb.logPrefix, llrb.name, out)
 
 	// value memory
 	overh = humanize.Bytes(uint64(stats["llrb.value.overhead"].(int64)))
@@ -118,8 +118,8 @@ func (llrb *LLRB) log(involved int) {
 	alloc = humanize.Bytes(uint64(stats["llrb.value.allocated"].(int64)))
 	avail = humanize.Bytes(uint64(stats["llrb.value.available"].(int64)))
 	vmem := humanize.Bytes(uint64(stats["llrb.valmemory"].(int64)))
-	fmsg = "%v valmem(%v): %v useful, overhd %v allocated %v avail %v\n"
-	log.Infof(fmsg, llrb.logPrefix, vmem, use, overh, alloc, avail)
+	fmsg = "%v %v valmem(%v): %v useful, overhd %v allocated %v avail %v\n"
+	log.Infof(fmsg, llrb.logPrefix, llrb.name, vmem, use, overh, alloc, avail)
 
 	// value utilization
 	arenapools = llrb.valarena.mpools
@@ -143,7 +143,7 @@ func (llrb *LLRB) log(involved int) {
 		}
 	}
 	out = strings.Join(outs, "\n")
-	log.Infof("%v value utilization:\n%v\n", llrb.logPrefix, out)
+	log.Infof("%v %v value utilization:\n%v\n", llrb.logPrefix, llrb.name, out)
 
 	// log upsert depth
 	samples := stats["llrb.upsertdepth.samples"].(int64)
@@ -152,9 +152,9 @@ func (llrb *LLRB) log(involved int) {
 	mean := stats["llrb.upsertdepth.mean"]
 	varn := stats["llrb.upsertdepth.variance"]
 	sd := stats["llrb.upsertdepth.stddeviance"]
-	fmsg = "%v average upsertdepth\n" +
+	fmsg = "%v %v average upsertdepth\n" +
 		"  samples %v : <%v to %v> mean %v  varn %2.2f  sd %2.2f\n"
-	log.Infof(fmsg, llrb.logPrefix, samples, min, max, mean, varn, sd)
+	log.Infof(fmsg, llrb.logPrefix, llrb.name, samples, min, max, mean, varn, sd)
 
 	// log height
 	samples = stats["llrb.height.samples"].(int64)
@@ -163,7 +163,7 @@ func (llrb *LLRB) log(involved int) {
 	mean = stats["llrb.height.mean"]
 	varn = stats["llrb.height.variance"]
 	sd = stats["llrb.height.stddeviance"]
-	fmsg = "%v average heightstats\n" +
+	fmsg = "%v %v average heightstats\n" +
 		"  samples %v : <%v to %v> mean %v  varn %2.2f  sd %2.2f\n"
-	log.Infof(fmsg, llrb.logPrefix, samples, min, max, mean, varn, sd)
+	log.Infof(fmsg, llrb.logPrefix, llrb.name, samples, min, max, mean, varn, sd)
 }

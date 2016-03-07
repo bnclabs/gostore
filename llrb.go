@@ -209,6 +209,7 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 			"delmax": &averageInt{},
 			"delete": &averageInt{},
 		}
+		llrb.MVCCWriter()
 	}
 
 	log.Infof("%v started ...\n", llrb.logPrefix)
@@ -218,6 +219,11 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 
 // ---- Index{} interface
 
+// Id implement Index{} interface.
+func (llrb *LLRB) Id() string {
+	return llrb.name
+}
+
 // Count implement Index{} interface.
 func (llrb *LLRB) Count() int64 {
 	return llrb.count
@@ -226,6 +232,11 @@ func (llrb *LLRB) Count() int64 {
 // Isactive implement Index{} interface.
 func (llrb *LLRB) Isactive() bool {
 	return llrb.dead == false
+}
+
+// Release implement Snapshot{} interface.
+func (llrb *LLRB) Release() {
+	return // noop
 }
 
 // RSnapshot implement Index{} interface.
