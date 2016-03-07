@@ -2,7 +2,6 @@ package storage
 
 import "sort"
 import "bytes"
-import "strconv"
 import "fmt"
 import "hash/crc64"
 
@@ -43,14 +42,7 @@ func (d *Dict) Isactive() bool {
 
 // RSnapshot implement Index{} interface.
 func (d *Dict) RSnapshot() (Snapshot, error) {
-	d.snapn++
-	newd := NewDict()
-	for k, node := range d.dict {
-		newd.dict[k] = node
-	}
-	newd.dead = d.dead
-	newd.id = d.id + "-snap" + strconv.Itoa(d.snapn)
-	return newd, nil
+	return d.NewDictSnapshot(), nil
 }
 
 // Destroy implement Index{} interface.
@@ -111,8 +103,7 @@ func (d *Dict) Min() Node {
 		return nil
 	}
 	hashv := d.sorted()[0]
-	nd := d.dict[hashv]
-	return nd
+	return d.dict[hashv]
 }
 
 // Max implement Reader{} interface.
@@ -121,14 +112,14 @@ func (d *Dict) Max() Node {
 		return nil
 	}
 	hashks := d.sorted()
-	nd := d.dict[hashks[len(hashks)-1]]
-	return nd
+	return d.dict[hashks[len(hashks)-1]]
 }
 
 // Range implement Reader{} interface.
 func (d *Dict) Range(lowkey, highkey []byte, incl string, iter NodeIterator) {
 	var start int
-	keys := d.sorted()
+	var hashks []uint64
+	hashks = d.sorted()
 
 	if lowkey == nil {
 		start = 0
@@ -137,20 +128,20 @@ func (d *Dict) Range(lowkey, highkey []byte, incl string, iter NodeIterator) {
 		if incl == "low" || incl == "both" {
 			cmp = 0
 		}
-		for start = 0; start < len(keys); start++ {
-			nd := d.dict[keys[start]]
+		for start = 0; start < len(hashks); start++ {
+			nd := d.dict[hashks[start]]
 			if bytes.Compare(nd.key, lowkey) >= cmp {
 				break
 			}
 		}
 	}
-	if start < len(keys) {
+	if start < len(hashks) {
 		cmp := 0
 		if incl == "high" || incl == "both" {
 			cmp = 1
 		}
-		for i := start; i < len(keys); i++ {
-			nd := d.dict[keys[i]]
+		for i := start; i < len(hashks); i++ {
+			nd := d.dict[hashks[i]]
 			if highkey == nil || (bytes.Compare(nd.key, highkey) < cmp) {
 				if iter(nd) == false {
 					break
@@ -218,9 +209,11 @@ func (d *Dict) Delete(key []byte, callb DeleteCallback) error {
 func (d *Dict) sorted() []uint64 {
 	d.sortkeys, d.hashks = d.sortkeys[:0], d.hashks[:0]
 	for _, nd := range d.dict {
-		d.sortkeys = append(d.sortkeys, bytes2str(nd.key))
+		d.sortkeys = append(d.sortkeys, string(nd.key))
 	}
-	sort.Strings(d.sortkeys)
+	if len(d.sortkeys) > 0 {
+		sort.Strings(d.sortkeys)
+	}
 	for _, key := range d.sortkeys {
 		d.hashks = append(d.hashks, crc64.Checksum(str2bytes(key), crcisotab))
 	}
