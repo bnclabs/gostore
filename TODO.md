@@ -1,4 +1,9 @@
 LLRB:
+* upsert samples should match upsert+insert counts.
+* improve logging while purging snapshots
+    PURGE <snapshot>, remaining chain of snapshot.
+* should get snapshot by a sync call to writer or post call ?
+* check the maximum value for height stats.
 * improve panic messages.
 * should llrb.clone() copy value also ? can it be optimized for mvcc ?
 * if no snapshots are refering to a node, don't clone.
@@ -21,6 +26,7 @@ LLRB:
 * add test cases for DeleteMin() and DeleteMax().
 * should we export vectorclock, also add vector clock method to Index{}
   interface ?
+* YCSB test cases.
 
 clock:
 * exhaust all possible combination of clock comparision TestVectorclockOrder.
