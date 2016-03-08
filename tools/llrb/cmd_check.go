@@ -18,6 +18,7 @@ var checkopts struct {
 	opdump bool
 	bagdir string
 	mvcc   int
+	log    string
 	// LLRB specific structures
 	nodearena [4]int // min,max,cap,pcap
 	valarena  [4]int // min,max,cap,pcap
@@ -51,6 +52,7 @@ func parseCheckopts(args []string) {
 		"minblock,maxblock,arena-capacity,pool-capacity for nodes")
 	f.StringVar(&valarena, "valarena", "",
 		"minblock,maxblock,arena-capacity,pool-capacity for values")
+	f.StringVar(&checkopts.log, "log", "info", "log level")
 	f.Parse(args)
 
 	checkopts.args = f.Args()
@@ -84,7 +86,7 @@ func doCheck(args []string) {
 
 	fmt.Printf("Seed: %v\n", checkopts.seed)
 
-	opch := make(chan [][]interface{}, 1000)
+	opch := make(chan [][]interface{}, 10000)
 	go generate(checkopts.repeat, "./llrb.prod", opch)
 
 	if checkopts.mvcc > 0 {
@@ -93,9 +95,9 @@ func doCheck(args []string) {
 		go releaseTick(checkopts.rtick, opch)
 		readers := make([]chan llrbcmd, 0)
 		for i := 0; i < checkopts.mvcc; i++ {
-			ropch := make(chan llrbcmd, 1000)
+			ropch := make(chan llrbcmd, 10000)
 			readers = append(readers, ropch)
-			go mvccreader(ropch)
+			go mvccreader(i, ropch)
 		}
 		checkLLRBMvcc(uint64(checkopts.repeat), opch, readers)
 	} else {
@@ -114,6 +116,7 @@ func checkLLRB(count uint64, opch chan [][]interface{}) {
 
 	// llrb
 	config := newllrbconfig()
+	config["log.level"] = checkopts.log
 	llrb := storage.NewLLRB("check", config, nil)
 
 	for seqno < count {
@@ -159,7 +162,15 @@ func checkLLRB(count uint64, opch chan [][]interface{}) {
 func checkLLRBMvcc(
 	count uint64, opch chan [][]interface{}, readers []chan llrbcmd) {
 
+	// stats
 	genstats := newgenstats()
+	// dict
+	dict := storage.NewDict()
+
+	// llrb
+	config := newllrbconfig()
+	config["log.level"] = checkopts.log
+	llrb := storage.NewLLRB("check", config, nil)
 
 	commandreaders := func(cmd llrbcmd, rdrs []chan llrbcmd) {
 		for _, reader := range rdrs {
@@ -167,23 +178,20 @@ func checkLLRBMvcc(
 		}
 	}
 
+	makesnaps := func() (dsnap, lsnap storage.Snapshot) {
+		dictsnap, err := dict.RSnapshot()
+		if err != nil {
+			panic(err)
+		}
+		llrbsnap, err := llrb.RSnapshot()
+		if err != nil {
+			panic(err)
+		}
+		return dictsnap, llrbsnap
+	}
+
 	vbno, vbuuid, seqno := uint16(10), uint64(1234), uint64(0)
-
-	// dict
-	dict := storage.NewDict()
-
-	// llrb
-	config := newllrbconfig()
-	llrb := storage.NewLLRB("check", config, nil)
-
-	dictsnap, err := dict.RSnapshot()
-	if err != nil {
-		panic(err)
-	}
-	llrbsnap, err := llrb.RSnapshot()
-	if err != nil {
-		panic(err)
-	}
+	dictsnap, llrbsnap := makesnaps()
 	stats := clonestats(genstats)
 	lcmd := llrbcmd{cmd: []interface{}{"snapshot", dictsnap, llrbsnap, stats}}
 	commandreaders(lcmd, readers)
@@ -217,18 +225,14 @@ func checkLLRBMvcc(
 				lcmd.cmd = []interface{}{cmd[0], false}
 				commandreaders(lcmd, readers)
 			case "snapshot":
-				dictsnap, err = dict.RSnapshot()
-				if err != nil {
-					panic(err)
+				for _, reader := range readers {
+					dictsnap, llrbsnap := makesnaps()
+					stats := clonestats(genstats)
+					cmd := []interface{}{"snapshot", dictsnap, llrbsnap, stats}
+					lcmd := llrbcmd{cmd: cmd}
+					reader <- lcmd
 				}
-				llrbsnap, err = llrb.RSnapshot()
-				if err != nil {
-					panic(err)
-				}
-				stats := clonestats(genstats)
-				cmd := []interface{}{"snapshot", dictsnap, llrbsnap, stats}
-				lcmd = llrbcmd{cmd: cmd}
-				commandreaders(lcmd, readers)
+
 			case "release":
 				commandreaders(lcmd, readers)
 			default:
@@ -236,11 +240,13 @@ func checkLLRBMvcc(
 			}
 		}
 	}
-	//lcmd = llrbcmd{cmd: []interface{}{"validate", true}}
-	//for _, reader := range readers {
-	//	commandreaders(lcmd, []chan llrbcmd{reader})
-	//	time.Sleep(100 * time.Millisecond)
-	//}
+	lcmd = llrbcmd{cmd: []interface{}{"validate", true}}
+	for _, reader := range readers {
+		commandreaders(lcmd, []chan llrbcmd{reader})
+		time.Sleep(100 * time.Millisecond)
+	}
+	dictsnap, llrbsnap = makesnaps()
+	llrb_opValidate(dictsnap, llrbsnap, genstats, true)
 	llrb.Log(9)
 }
 

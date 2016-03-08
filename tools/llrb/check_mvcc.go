@@ -7,16 +7,31 @@ import "github.com/prataprc/storage.go"
 
 var _ = fmt.Sprintf("dummy")
 
-func mvccreader(ropch chan llrbcmd) {
+func mvccreader(readerid int, ropch chan llrbcmd) {
 	var dictsnap storage.Snapshot
 	var llrbsnap storage.Snapshot
 	var genstats map[string]int
 
+	releasesnaps := func() {
+		if dictsnap != nil {
+			dictsnap.Release()
+		}
+		if llrbsnap != nil {
+			llrbsnap.Release()
+		}
+		dictsnap, llrbsnap = nil, nil
+	}
+
 	for {
 		lcmd := <-ropch
 		cmdname := lcmd.cmd[0].(string)
+		// wait for snapshot
 		if cmdname != "snapshot" && (dictsnap == nil || llrbsnap == nil) {
 			continue
+		}
+		//fmt.Println(readerid, cmdname)
+		if checkopts.opdump {
+			fmt.Printf("reader %v cmd %v\n", readerid, lcmd.cmd)
 		}
 		switch cmdname {
 		case "get":
@@ -31,13 +46,12 @@ func mvccreader(ropch chan llrbcmd) {
 			dolog := lcmd.cmd[1].(bool)
 			llrb_opValidate(dictsnap, llrbsnap, genstats, dolog)
 		case "snapshot":
+			releasesnaps()
 			dictsnap = lcmd.cmd[1].(storage.Snapshot)
 			llrbsnap = lcmd.cmd[2].(storage.Snapshot)
 			genstats = clonestats(lcmd.cmd[3].(map[string]int))
 		case "release":
-			dictsnap.Release()
-			llrbsnap.Release()
-			dictsnap, llrbsnap = nil, nil
+			releasesnaps()
 		default:
 			log.Fatalf("unknown command %v\n", lcmd.cmd)
 		}

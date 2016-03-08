@@ -93,6 +93,18 @@ func llrb_opRange(
 		panic("llrbrd reader is nil")
 	}
 
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("dict")
+			fmt.Println(dictrd.(*storage.DictSnapshot).Keys())
+			buffer := bytes.NewBuffer(nil)
+			llrbrd.(*storage.LLRBSnapshot).Dotdump(buffer)
+			fmt.Println("llrb")
+			fmt.Println(string(buffer.Bytes()))
+			panic(r)
+		}
+	}()
+
 	dnodes := make([]storage.Node, 0)
 	lnodes := make([]storage.Node, 0)
 	lowkey := []byte(strconv.Itoa(int(lcmd.cmd[1].(float64))))
@@ -259,10 +271,12 @@ func llrb_validateEqual(dict, llrb storage.Snapshot, dolog bool) bool {
 		return true
 	})
 	if reflect.DeepEqual(refkeys, keys) == false {
+		fmt.Println(refkeys)
+		fmt.Println(keys)
 		fmsg := "%v final Dict keys and LLRB keys mismatch\n"
 		panic(fmt.Errorf(fmsg, llrb.Id()))
 	} else if reflect.DeepEqual(refvals, vals) == false {
-		fmsg := "final Dict values and LLRB values mismatch\n"
+		fmsg := "%v final Dict values and LLRB values mismatch\n"
 		panic(fmt.Errorf(fmsg, llrb.Id()))
 	}
 	if dolog {
@@ -326,33 +340,33 @@ func cmpllrbdict(id string, dictnd, llrbnd storage.Node, fail bool) {
 
 	if x, y := llrbnd.Key(), dictnd.Key(); bytes.Compare(x, y) != 0 {
 		if fail {
-			panic(fmt.Errorf(fmsg, id, string(x), string(y)))
+			panic(fmt.Errorf(fmsg, id, string(y), string(x)))
 		} else {
-			panic(fmt.Errorf(fmsg, id, string(x), string(y)))
+			panic(fmt.Errorf(fmsg, id, string(y), string(x)))
 		}
 	} else if x, y = llrbnd.Value(), dictnd.Value(); bytes.Compare(x, y) != 0 {
 		if fail {
-			panic(fmt.Errorf(fmsg, id, string(x), string(y)))
+			panic(fmt.Errorf(fmsg, id, string(y), string(x)))
 		} else {
-			panic(fmt.Errorf(fmsg, id, string(x), string(y)))
+			panic(fmt.Errorf(fmsg, id, string(y), string(x)))
 		}
 	} else if x, y := llrbnd.Vbno(), dictnd.Vbno(); x != y {
 		if fail {
-			panic(fmt.Errorf(fmsg, id, x, y))
+			panic(fmt.Errorf(fmsg, id, y, x))
 		} else {
-			panic(fmt.Errorf(fmsg, id, x, y))
+			panic(fmt.Errorf(fmsg, id, y, x))
 		}
 	} else if x, y := llrbnd.Vbuuid(), dictnd.Vbuuid(); x != y {
 		if fail {
-			panic(fmt.Errorf(fmsg, id, x, y))
+			panic(fmt.Errorf(fmsg, id, y, x))
 		} else {
-			panic(fmt.Errorf(fmsg, id, x, y))
+			panic(fmt.Errorf(fmsg, id, y, x))
 		}
 	} else if x, y := llrbnd.Bornseqno(), dictnd.Bornseqno(); x != y {
 		if fail {
-			panic(fmt.Errorf(fmsg, id, x, y))
+			panic(fmt.Errorf(fmsg, id, y, x))
 		} else {
-			panic(fmt.Errorf(fmsg, id, x, y))
+			panic(fmt.Errorf(fmsg, id, y, x))
 		}
 	} else if dsq := llrbnd.Deadseqno(); dsq != 0 && dsq != 0xFFFFFFFFFFFFFFFF {
 		panic(fmt.Errorf("%v unexpected deadseqno %v", id, dsq))
