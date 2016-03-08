@@ -165,7 +165,7 @@ type LLRB struct { // tree container
 		enabled  bool
 		reclaim  []*Llrbnode
 		writer   *LLRBWriter
-		snapshot unsafe.Pointer // *LLRBSnapshot
+		snapshot *LLRBSnapshot
 
 		// stats
 		reclaimstats map[string]*averageInt
@@ -232,6 +232,11 @@ func (llrb *LLRB) Count() int64 {
 // Isactive implement Index{} interface.
 func (llrb *LLRB) Isactive() bool {
 	return llrb.dead == false
+}
+
+// Refer implement Snapshot{} interface.
+func (llrb *LLRB) Refer() {
+	return // noop
 }
 
 // Release implement Snapshot{} interface.

@@ -74,6 +74,11 @@ func (d *Dict) Id() string {
 	return d.id
 }
 
+// Refer implement Snapshot{} interface.
+func (d *Dict) Refer() {
+	return
+}
+
 // Release implement Snapshot{} interface.
 func (d *Dict) Release() {
 	d.Destroy()

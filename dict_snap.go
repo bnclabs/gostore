@@ -27,6 +27,10 @@ func (d *Dict) NewDictSnapshot() Snapshot {
 	return snapshot
 }
 
+func (d *DictSnapshot) Keys() []string {
+	return d.sortkeys
+}
+
 //---- Snapshot{} interface.
 
 // Count implement Snapshot{} interface.
@@ -42,6 +46,11 @@ func (d *DictSnapshot) Id() string {
 // Isactive implement Snapshot{} interface.
 func (d *DictSnapshot) Isactive() bool {
 	return !d.dead
+}
+
+// Refer implement Snapshot{} interface.
+func (d *DictSnapshot) Refer() {
+	return
 }
 
 // Release implement Snapshot{} interface.

@@ -5,6 +5,7 @@ package storage
 
 import "fmt"
 import "math"
+import "bytes"
 
 // low <= (keys) <= high
 func (llrb *LLRB) rangeFromFind(
@@ -130,12 +131,22 @@ func (llrb *LLRB) validate(root *Llrbnode) {
 	heightav := &averageInt{}
 	llrb.validateheight(root, heightav)
 
+	var prev Node
+
 	llrb.rangeFromFind(
 		root, nil, nil,
 		func(nd Node) bool {
 			if nd.(*Llrbnode).metadata().isdirty() {
-				panic("unexpected dirty node on a full tree scan")
+				panic("llrb-validate: found dirty node, call the programmer")
+			} else if prev != nil {
+				cmp := bytes.Compare(prev.Key(), nd.Key())
+				if cmp == 0 {
+					panic("validate: found duplicate keys, call the programmer")
+				} else if cmp > 0 {
+					panic("validate: out of order keys, call the programmer")
+				}
 			}
+			prev = nd
 			return true
 		})
 }

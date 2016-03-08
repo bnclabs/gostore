@@ -2,7 +2,10 @@ package storage
 
 import "unsafe"
 import "reflect"
+import "fmt"
 import "errors"
+import "bytes"
+import "strings"
 
 func findfirstset8(b byte) int8 { // move this to ASM.
 	for i := uint8(0); i < 8; i++ {
@@ -64,11 +67,11 @@ func failsafeRequest(
 			case resp := <-respch:
 				return resp, nil
 			case <-finch:
-				return nil, errors.New("closed")
+				return nil, errors.New("server closed")
 			}
 		}
 	case <-finch:
-		return nil, errors.New("closed")
+		return nil, errors.New("server closed")
 	}
 	return nil, nil
 }
@@ -120,4 +123,13 @@ func llndornil(nd *Llrbnode) Node {
 		return nil
 	}
 	return nd
+}
+
+func getStackTrace(skip int, stack []byte) string {
+	var buf bytes.Buffer
+	lines := strings.Split(string(stack), "\n")
+	for _, call := range lines[skip*2:] {
+		buf.WriteString(fmt.Sprintf("%s\n", call))
+	}
+	return buf.String()
 }

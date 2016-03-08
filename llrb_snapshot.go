@@ -3,22 +3,27 @@
 package storage
 
 import "sync/atomic"
-import "unsafe"
 import "time"
 import "strings"
 import "io"
 import "fmt"
 import "strconv"
+import "runtime/debug"
 
 //---- snapshot ticker
 
 func (writer *LLRBWriter) snapshotticker(interval int, finch chan bool) {
+	llrb := writer.llrb
 	tick := time.NewTicker(time.Duration(interval) * time.Millisecond)
+
 	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("%v snapshotticker() crashed: %v\n", llrb.logPrefix, r)
+			log.Errorf("\n%s", getStackTrace(2, debug.Stack()))
+			llrb.Destroy()
+		}
 		tick.Stop()
 	}()
-
-	llrb := writer.llrb
 
 loop:
 	for {
@@ -33,7 +38,6 @@ loop:
 			log.Errorf("%v make snapshot $%v failed: %v\n", llrb.logPrefix, err)
 			break loop
 		}
-		log.Debugf("%v scheduled a new snapshot $%v\n", llrb.logPrefix, id)
 	}
 }
 
@@ -47,8 +51,8 @@ type LLRBSnapshot struct {
 
 	// snapshot specific fields
 	reclaim  []*Llrbnode
-	next     unsafe.Pointer // *LLRBSnapshot
-	refcount int32
+	next     *LLRBSnapshot
+	refcount int64
 
 	// config
 	fmask     metadataMask
@@ -65,14 +69,6 @@ type LLRBSnapshot struct {
 
 // NewSnapshot mvcc version for LLRB tree.
 func (llrb *LLRB) NewSnapshot(id string) *LLRBSnapshot {
-	// track to the tail of read-snapshot list.
-	location := &llrb.mvcc.snapshot
-	upsnapshot := atomic.LoadPointer(location)
-	for upsnapshot != nil {
-		location = &((*LLRBSnapshot)(upsnapshot).next)
-		upsnapshot = atomic.LoadPointer(location)
-	}
-
 	snapshot := &LLRBSnapshot{
 		llrb:        llrb,
 		id:          id,
@@ -85,16 +81,25 @@ func (llrb *LLRB) NewSnapshot(id string) *LLRBSnapshot {
 		valmemory:   llrb.valmemory,
 		upsertdepth: *llrb.upsertdepth,
 	}
-	llrb.logPrefix = fmt.Sprintf("[LLRBSnapshot-%s/%s]", llrb.name, id)
+	snapshot.logPrefix = fmt.Sprintf("[LLRBSnapshot-%s/%s]", llrb.name, id)
 
 	snapshot.reclaim = make([]*Llrbnode, len(llrb.mvcc.reclaim))
 	copy(snapshot.reclaim, llrb.mvcc.reclaim)
 	llrb.mvcc.reclaim = llrb.mvcc.reclaim[:0] // reset writer reclaims
 
-	atomic.StorePointer(location, unsafe.Pointer(snapshot))
+	// track to the tail of read-snapshot list.
+	if llrb.mvcc.snapshot == nil {
+		llrb.mvcc.snapshot = snapshot
+	} else {
+		parent := llrb.mvcc.snapshot
+		for parent.next != nil {
+			parent = parent.next
+		}
+		parent.next = snapshot
+	}
 
-	fmsg := "%v new snapshot $%v with %v nodes to reclaim...\n"
-	log.Debugf(fmsg, llrb.logPrefix, id, len(snapshot.reclaim))
+	fmsg := "%v snapshot BORN %v nodes to reclaim...\n"
+	log.Debugf(fmsg, snapshot.logPrefix, len(snapshot.reclaim))
 	return snapshot
 }
 
@@ -115,10 +120,16 @@ func (snapshot *LLRBSnapshot) Isactive() bool {
 	return snapshot.dead == false
 }
 
+// Refer implement Snapshot interface.
+func (snapshot *LLRBSnapshot) Refer() {
+	atomic.AddInt64(&snapshot.refcount, 1)
+	log.Debugf("%v snapshot REF\n", snapshot.logPrefix)
+}
+
 // Release implement Snapshot interface.
 func (snapshot *LLRBSnapshot) Release() {
-	atomic.AddInt32(&snapshot.refcount, -1)
-	log.Debugf("%v deref snapshot\n", snapshot.logPrefix)
+	atomic.AddInt64(&snapshot.refcount, -1)
+	log.Debugf("%v snapshot DEREF\n", snapshot.logPrefix)
 }
 
 // Validate implement Snapshot interface.
@@ -206,9 +217,10 @@ func (s *LLRBSnapshot) Range(lkey, hkey []byte, incl string, iter NodeIterator) 
 //---- local methods.
 
 func (snapshot *LLRBSnapshot) reclaimNodes() bool {
-	if atomic.LoadInt32(&snapshot.refcount) < 0 {
+	refcount := atomic.LoadInt64(&snapshot.refcount)
+	if refcount < 0 {
 		panic("snapshot refcount gone negative")
-	} else if atomic.LoadInt32(&snapshot.refcount) == 0 {
+	} else if refcount == 0 {
 		for _, nd := range snapshot.reclaim {
 			snapshot.llrb.freenode(nd)
 		}

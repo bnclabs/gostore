@@ -101,7 +101,10 @@ type Snapshot interface {
 	// Isactive return whether the index is active or not.
 	Isactive() bool
 
-	// Release snapshot after reading, don't hold on to it beyond few seconds.
+	// Refer() snapshot before reading, don't hold on to it beyond few seconds.
+	Refer()
+
+	// Release snapshot after reading.
 	Release()
 
 	// Validate check whether index is in sane state.

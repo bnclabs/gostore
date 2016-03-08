@@ -1,8 +1,9 @@
 package storage
 
-import "sync/atomic"
 import "unsafe"
 import "time"
+import "fmt"
+import "runtime/debug"
 
 type LLRBWriter struct {
 	llrb    *LLRB
@@ -13,9 +14,9 @@ type LLRBWriter struct {
 
 func (llrb *LLRB) MVCCWriter() *LLRBWriter {
 	if llrb.mvcc.enabled == false {
-		panic("cannot create MVCCWriter(), mvcc not enabled")
+		panic(fmt.Errorf("cannot create MVCCWriter(), mvcc not enabled"))
 	} else if llrb.mvcc.writer != nil {
-		panic("concurrent writers are not allowed on llrb")
+		panic(fmt.Errorf("concurrent writers are not allowed on llrb"))
 	}
 
 	chansize := llrb.config["mvcc.writer.chanbuffer"].(int)
@@ -84,8 +85,10 @@ func (writer *LLRBWriter) makeSnapshot(id string) error {
 }
 
 func (writer *LLRBWriter) getSnapshot(waiter chan *LLRBSnapshot) error {
-	cmd := []interface{}{cmdLlrbWriterGetSnapshot, waiter}
-	return failsafePost(writer.reqch, cmd, writer.finch)
+	respch := make(chan []interface{}, 0)
+	cmd := []interface{}{cmdLlrbWriterGetSnapshot, waiter, respch}
+	_, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
+	return err
 }
 
 func (writer *LLRBWriter) stats(involved int) (map[string]interface{}, error) {
@@ -120,7 +123,23 @@ func (writer *LLRBWriter) run() {
 	reclaim := make([]*Llrbnode, 0, 64)
 	llrb := writer.llrb
 
+	dodestroy := func(ch chan bool) {
+		for llrb.mvcc.snapshot != nil {
+			writer.purgesnapshot(llrb)
+			time.Sleep(100 * time.Millisecond) // TODO: no magic
+		}
+		close(ch)
+	}
+
 	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("%v writer() crashed: %v\n", llrb.logPrefix, r)
+			log.Errorf("\n%s", getStackTrace(2, debug.Stack()))
+			ch := make(chan bool)
+			dodestroy(ch)
+			<-ch
+		}
+
 		close(writer.finch)
 		time.Sleep(100 * time.Millisecond) // TODO: no magic
 		for _, waiter := range writer.waiters {
@@ -228,30 +247,29 @@ loop:
 
 		case cmdLlrbWriterMakeSnapshot:
 			id, ln := msg[1].(string), len(writer.waiters)
-			snapshot := llrb.NewSnapshot(id)
-			for _, waiter := range writer.waiters {
-				waiter <- snapshot
-				snapshot.refcount++
-				close(waiter)
-			}
-			fmsg := "%v dispatched snapshot $%v to %v waiters\n"
-			log.Debugf(fmsg, llrb.logPrefix, id, ln)
-			writer.waiters = writer.waiters[:0]
 			writer.purgesnapshot(llrb)
+			if ln > 0 {
+				snapshot := llrb.NewSnapshot(id)
+				for _, waiter := range writer.waiters {
+					snapshot.Refer()
+					waiter <- snapshot
+					close(waiter)
+				}
+				fmsg := "%v $%v snapshot ACCOUNTED to %v waiters\n"
+				log.Debugf(fmsg, llrb.logPrefix, id, ln)
+				writer.waiters = writer.waiters[:0]
+			}
 
 		case cmdLlrbWriterGetSnapshot:
 			waiter := msg[1].(chan *LLRBSnapshot)
+			respch := msg[2].(chan []interface{})
 			log.Debugf("%v adding waiter for next snapshot\n", llrb.logPrefix)
 			writer.waiters = append(writer.waiters, waiter)
+			respch <- nil
 
 		case cmdLlrbWriterDestroy:
 			ch := make(chan bool)
-			go func() {
-				for writer.purgesnapshot(llrb) != "all" {
-					time.Sleep(100 * time.Millisecond) // TODO: no magic
-				}
-				close(ch)
-			}()
+			dodestroy(ch)
 			<-ch
 			break loop
 
@@ -333,12 +351,12 @@ func (writer *LLRBWriter) deletemin(
 	}
 
 	reclaim = append(reclaim, nd)
-
-	if nd.left == nil {
-		return nil, nd, reclaim
-	}
-
 	ndmvcc := writer.llrb.clone(nd)
+
+	if ndmvcc.left == nil {
+		reclaim = append(reclaim, ndmvcc)
+		return nil, ndmvcc, reclaim
+	}
 
 	if !isred(ndmvcc.left) && !isred(ndmvcc.left.left) {
 		ndmvcc, reclaim = writer.moveredleft(ndmvcc, reclaim)
@@ -578,25 +596,18 @@ func (writer *LLRBWriter) fixup(
 	return nd, reclaim
 }
 
-func (writer *LLRBWriter) purgesnapshot(llrb *LLRB) string {
-	location := &llrb.mvcc.snapshot
-	upsnapshot := atomic.LoadPointer(location)
-	count := 0
-	for upsnapshot != nil {
-		snapshot := (*LLRBSnapshot)(upsnapshot)
+func (writer *LLRBWriter) purgesnapshot(llrb *LLRB) {
+	snapshot := llrb.mvcc.snapshot
+
+loop:
+	for snapshot != nil {
 		if snapshot.reclaimNodes() == false {
-			break
+			break loop
 		}
-		upsnapshot = atomic.LoadPointer(&snapshot.next)
-		fmsg := "%v purged snapshot $%v\n"
-		log.Debugf(fmsg, writer.llrb.logPrefix, snapshot.Id())
-		count++
+		log.Debugf("%v snapshot PURGED\n", snapshot.logPrefix)
+		snapshot = snapshot.next
 	}
-	atomic.StorePointer(location, upsnapshot)
-	if upsnapshot == nil {
-		return "all"
-	}
-	return "partial"
+	llrb.mvcc.snapshot = snapshot
 }
 
 func (writer *LLRBWriter) cloneifdirty(nd *Llrbnode) (*Llrbnode, bool) {

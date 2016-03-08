@@ -74,6 +74,7 @@ func TestLLRBMvccBasicSnapshot(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	snapshot.Refer()
 	if len(snapshot.(*LLRBSnapshot).reclaim) == 0 {
 		t.Errorf("expected reclaim nodes to be greater than zero")
 	}
@@ -109,6 +110,7 @@ func TestLLRBMvcclBasicLookup(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	snapshot.Refer()
 	if len(snapshot.(*LLRBSnapshot).reclaim) == 0 {
 		t.Errorf("expected reclaim nodes to be greater than zero")
 	}
@@ -193,6 +195,7 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	snapshot.Refer()
 
 	// check
 	if countref != llrb.Count() {
@@ -211,7 +214,7 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 		t.Error(err)
 	}
 
-	//-- delete
+	//-- delete-min
 	countref, key, value := llrb.Count(), []byte(nil), []byte(nil)
 	llrb.DeleteMin(
 		func(index Index, nd Node) {
@@ -284,7 +287,7 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 		t.Errorf("expected nil")
 	}
 
-	// delete-min
+	// delete
 	countref, key, value = llrb.Count(), []byte("key2"), nil
 	llrb.Delete(
 		key,
@@ -468,7 +471,7 @@ func TestLLRBMvccInsert(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	overhead, useful := int64(4906), int64(2096640)
+	overhead, useful := int64(21670), int64(14676480)
 	allocated, avail := int64(960000), int64(1072781824)
 	if x := stats["llrb.node.overhead"].(int64); x != overhead {
 		t.Errorf("expected %v, got %v", overhead, x)
@@ -589,16 +592,16 @@ func TestLLRBMvccUpsert(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if overhead := stats["llrb.node.overhead"].(int64); overhead != 4906 {
-		t.Errorf("expected %v, got %v", 4906, overhead)
-	} else if useful := stats["llrb.node.useful"].(int64); useful != 2096640 {
-		t.Errorf("expected %v, got %v", 2096640, useful)
+	if overhead := stats["llrb.node.overhead"].(int64); overhead != 21670 {
+		t.Errorf("expected %v, got %v", 21670, overhead)
+	} else if useful := stats["llrb.node.useful"].(int64); useful != 14676480 {
+		t.Errorf("expected %v, got %v", 14676480, useful)
 	}
 	overhead := stats["llrb.value.overhead"].(int64)
-	if overhead != 34422 {
-		t.Errorf("expected %v, got %v", 34422, overhead)
-	} else if useful := stats["llrb.value.useful"].(int64); useful != 41941504 {
-		t.Errorf("expected %v, got %v", 41941504, useful)
+	if overhead != 46188 {
+		t.Errorf("expected %v, got %v", 46188, overhead)
+	} else if useful := stats["llrb.value.useful"].(int64); useful != 62911488 {
+		t.Errorf("expected %v, got %v", 62911488, useful)
 	}
 	x, y := int64(960000), stats["llrb.node.allocated"].(int64)
 	if x != y {
@@ -729,10 +732,10 @@ func TestLLRBMvccDelete(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if overhead := stats["llrb.node.overhead"].(int64); overhead != 4906 {
-		t.Errorf("expected %v, got %v", 4906, overhead)
-	} else if useful := stats["llrb.node.useful"].(int64); useful != 2096640 {
-		t.Errorf("expected %v, got %v", 2096640, useful)
+	if overhead := stats["llrb.node.overhead"].(int64); overhead != 38434 {
+		t.Errorf("expected %v, got %v", 38434, overhead)
+	} else if useful := stats["llrb.node.useful"].(int64); useful != 27256320 {
+		t.Errorf("expected %v, got %v", 27256320, useful)
 	} else if x, y := int64(0), stats["llrb.node.allocated"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
@@ -741,10 +744,10 @@ func TestLLRBMvccDelete(t *testing.T) {
 		t.Errorf("expected %v, got %v", x, y)
 	}
 	overhead := stats["llrb.value.overhead"].(int64)
-	if overhead != 22656 {
-		t.Errorf("expected %v, got %v", 22656, overhead)
-	} else if useful := stats["llrb.value.useful"].(int64); useful != 20971520 {
-		t.Errorf("expected %v, got %v", 20971520, useful)
+	if overhead != 43200 {
+		t.Errorf("expected %v, got %v", 43200, overhead)
+	} else if useful := stats["llrb.value.useful"].(int64); useful != 41943040 {
+		t.Errorf("expected %v, got %v", 41943040, useful)
 	} else if x, y = int64(0), stats["llrb.value.allocated"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
@@ -866,9 +869,7 @@ func validatesnapshot(sleep int, writer *LLRBWriter) (Snapshot, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(snapshot.(*LLRBSnapshot).reclaim) != 0 {
-		panic("expected snapshot.reclaim to be ZERO")
-	}
+	snapshot.Refer()
 
 	// validate
 	snapshot.Validate()

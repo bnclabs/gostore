@@ -80,8 +80,8 @@ func TestFailsafeRequest(t *testing.T) {
 		resp, err := failsafeRequest(reqch, respch, []interface{}{"case2"}, finch)
 		if resp != nil {
 			t.Errorf("expected nil, got %v\n", resp)
-		} else if err.Error() != "closed" {
-			t.Errorf("expected closed, got %v\n", err.Error())
+		} else if err.Error() != "server closed" {
+			t.Errorf("expected server closed, got %v\n", err.Error())
 		}
 		donech <- true
 	}()
@@ -95,8 +95,8 @@ func TestFailsafeRequest(t *testing.T) {
 		resp, err := failsafeRequest(reqch, respch, []interface{}{"case3"}, finch)
 		if resp != nil {
 			t.Errorf("expected nil, got %v\n", resp)
-		} else if err.Error() != "closed" {
-			t.Errorf("expected closed, got %v\n", err.Error())
+		} else if err.Error() != "server closed" {
+			t.Errorf("expected server closed, got %v\n", err.Error())
 		}
 		donech <- true
 	}()
