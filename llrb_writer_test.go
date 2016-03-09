@@ -74,7 +74,6 @@ func TestLLRBMvccBasicSnapshot(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	snapshot.Refer()
 	if len(snapshot.(*LLRBSnapshot).reclaim) == 0 {
 		t.Errorf("expected reclaim nodes to be greater than zero")
 	}
@@ -110,7 +109,6 @@ func TestLLRBMvcclBasicLookup(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	snapshot.Refer()
 	if len(snapshot.(*LLRBSnapshot).reclaim) == 0 {
 		t.Errorf("expected reclaim nodes to be greater than zero")
 	}
@@ -195,7 +193,6 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	snapshot.Refer()
 
 	// check
 	if countref != llrb.Count() {
@@ -472,7 +469,7 @@ func TestLLRBMvccInsert(t *testing.T) {
 		t.Error(err)
 	}
 	overhead, useful := int64(21670), int64(14676480)
-	allocated, avail := int64(960000), int64(1072781824)
+	allocated, avail := int64(14376576), int64(1059365248)
 	if x := stats["llrb.node.overhead"].(int64); x != overhead {
 		t.Errorf("expected %v, got %v", overhead, x)
 	} else if x := stats["llrb.node.useful"].(int64); x != useful {
@@ -483,7 +480,7 @@ func TestLLRBMvccInsert(t *testing.T) {
 		t.Errorf("expected %v, got %v", avail, x)
 	}
 	overhead, useful = int64(22656), int64(20971520)
-	allocated, avail = int64(1280000), int64(10736138240)
+	allocated, avail = int64(19168768), int64(10718249472)
 	if x := stats["llrb.value.overhead"].(int64); x != overhead {
 		t.Errorf("expected %v, got %v", overhead, x)
 	} else if x := stats["llrb.value.useful"].(int64); x != useful {
@@ -603,19 +600,19 @@ func TestLLRBMvccUpsert(t *testing.T) {
 	} else if useful := stats["llrb.value.useful"].(int64); useful != 62911488 {
 		t.Errorf("expected %v, got %v", 62911488, useful)
 	}
-	x, y := int64(960000), stats["llrb.node.allocated"].(int64)
+	x, y := int64(13196736), stats["llrb.node.allocated"].(int64)
 	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
-	x, y = int64(2240000), stats["llrb.value.allocated"].(int64)
+	x, y = int64(28894368), stats["llrb.value.allocated"].(int64)
 	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
-	x, y = int64(1072781824), stats["llrb.node.available"].(int64)
+	x, y = int64(1060545088), stats["llrb.node.available"].(int64)
 	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
-	x, y = int64(10735178240), stats["llrb.value.available"].(int64)
+	x, y = int64(10708523872), stats["llrb.value.available"].(int64)
 	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	} else if x, y = int64(100000), stats["llrb.keymemory"].(int64); x != y {
@@ -869,7 +866,6 @@ func validatesnapshot(sleep int, writer *LLRBWriter) (Snapshot, error) {
 	if err != nil {
 		return nil, err
 	}
-	snapshot.Refer()
 
 	// validate
 	snapshot.Validate()
