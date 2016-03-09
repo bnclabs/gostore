@@ -3,6 +3,7 @@ package storage
 import "unsafe"
 import "time"
 import "fmt"
+import "sync/atomic"
 import "runtime/debug"
 
 type LLRBWriter struct {
@@ -84,11 +85,16 @@ func (writer *LLRBWriter) makeSnapshot(id string) error {
 	return failsafePost(writer.reqch, cmd, writer.finch)
 }
 
-func (writer *LLRBWriter) getSnapshot(waiter chan *LLRBSnapshot) error {
+func (writer *LLRBWriter) getSnapshot() (*LLRBSnapshot, error) {
+	waiter := make(chan *LLRBSnapshot, 1)
 	respch := make(chan []interface{}, 0)
 	cmd := []interface{}{cmdLlrbWriterGetSnapshot, waiter, respch}
 	_, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
-	return err
+	if err != nil {
+		return nil, err
+	}
+	snapshot := <-waiter
+	return snapshot, nil
 }
 
 func (writer *LLRBWriter) stats(involved int) (map[string]interface{}, error) {
@@ -271,6 +277,9 @@ loop:
 			ch := make(chan bool)
 			dodestroy(ch)
 			<-ch
+			if llrb.mvcc.snapshot != nil {
+				panic("snaphot held after destroy, call the programmer")
+			}
 			break loop
 
 		case cmdLlrbWriterStats:
@@ -601,9 +610,16 @@ func (writer *LLRBWriter) purgesnapshot(llrb *LLRB) {
 
 loop:
 	for snapshot != nil {
-		if snapshot.reclaimNodes() == false {
+		refcount := atomic.LoadInt64(&snapshot.refcount)
+		if refcount < 0 {
+			panic("snapshot refcount gone negative")
+		} else if refcount > 0 {
 			break loop
 		}
+		for _, nd := range snapshot.reclaim {
+			snapshot.llrb.freenode(nd)
+		}
+		atomic.AddInt64(&llrb.mvcc.n_purgedss, 1)
 		log.Debugf("%v snapshot PURGED\n", snapshot.logPrefix)
 		snapshot = snapshot.next
 	}

@@ -58,10 +58,18 @@ type LLRBSnapshot struct {
 	fmask     metadataMask
 	logPrefix string
 
-	// statistics
-	count       int64
-	lookups     int64
-	ranges      int64
+	// reader statistics
+	n_lookups int64
+	n_ranges  int64
+
+	// writer statistics
+	n_count     int64
+	n_inserts   int64
+	n_updates   int64
+	n_deletes   int64
+	n_allocs    int64
+	n_frees     int64
+	n_clones    int64
 	keymemory   int64
 	valmemory   int64
 	upsertdepth averageInt
@@ -70,16 +78,22 @@ type LLRBSnapshot struct {
 // NewSnapshot mvcc version for LLRB tree.
 func (llrb *LLRB) NewSnapshot(id string) *LLRBSnapshot {
 	snapshot := &LLRBSnapshot{
-		llrb:        llrb,
-		id:          id,
-		root:        llrb.root,
-		dead:        llrb.dead,
-		clock:       llrb.clock.clone(),
-		fmask:       llrb.fmask,
-		count:       llrb.count,
-		keymemory:   llrb.keymemory,
-		valmemory:   llrb.valmemory,
-		upsertdepth: *llrb.upsertdepth,
+		llrb:  llrb,
+		id:    id,
+		root:  llrb.root,
+		dead:  llrb.dead,
+		clock: llrb.clock.clone(),
+		fmask: llrb.fmask,
+		// writer statistics
+		n_count:   atomic.LoadInt64(&llrb.n_count),
+		n_inserts: atomic.LoadInt64(&llrb.n_inserts),
+		n_updates: atomic.LoadInt64(&llrb.n_updates),
+		n_deletes: atomic.LoadInt64(&llrb.n_deletes),
+		n_allocs:  atomic.LoadInt64(&llrb.n_allocs),
+		n_frees:   atomic.LoadInt64(&llrb.n_frees),
+		n_clones:  atomic.LoadInt64(&llrb.n_clones),
+		keymemory: atomic.LoadInt64(&llrb.keymemory),
+		valmemory: atomic.LoadInt64(&llrb.valmemory),
 	}
 	snapshot.logPrefix = fmt.Sprintf("[LLRBSnapshot-%s/%s]", llrb.name, id)
 
@@ -100,6 +114,7 @@ func (llrb *LLRB) NewSnapshot(id string) *LLRBSnapshot {
 
 	fmsg := "%v snapshot BORN %v nodes to reclaim...\n"
 	log.Debugf(fmsg, snapshot.logPrefix, len(snapshot.reclaim))
+	atomic.AddInt64(&llrb.mvcc.n_snapshots, 1)
 	return snapshot
 }
 
@@ -112,7 +127,7 @@ func (snapshot *LLRBSnapshot) Id() string {
 
 // Count implement Snapshot{} interface.
 func (snapshot *LLRBSnapshot) Count() int64 {
-	return snapshot.count
+	return snapshot.n_count
 }
 
 // Isactive implement Snapshot{} interface.
@@ -158,6 +173,8 @@ func (snapshot *LLRBSnapshot) Has(key []byte) bool {
 
 // Get implement Reader{} interface.
 func (snapshot *LLRBSnapshot) Get(key []byte) Node {
+	defer atomic.AddInt64(&snapshot.n_lookups, 1)
+
 	nd := snapshot.root
 	for nd != nil {
 		if nd.gtkey(key) {
@@ -173,12 +190,12 @@ func (snapshot *LLRBSnapshot) Get(key []byte) Node {
 
 // Min implement Reader{} interface.
 func (snapshot *LLRBSnapshot) Min() Node {
-	var nd *Llrbnode
+	defer atomic.AddInt64(&snapshot.n_lookups, 1)
 
+	var nd *Llrbnode
 	if nd = snapshot.root; nd == nil {
 		return nil
 	}
-
 	for nd.left != nil {
 		nd = nd.left
 	}
@@ -187,12 +204,12 @@ func (snapshot *LLRBSnapshot) Min() Node {
 
 // Max implement Reader{} interface.
 func (snapshot *LLRBSnapshot) Max() Node {
-	var nd *Llrbnode
+	defer atomic.AddInt64(&snapshot.n_lookups, 1)
 
+	var nd *Llrbnode
 	if nd = snapshot.root; nd == nil {
 		return nil
 	}
-
 	for nd.right != nil {
 		nd = nd.right
 	}
@@ -201,6 +218,8 @@ func (snapshot *LLRBSnapshot) Max() Node {
 
 // Range implement Reader{} interface.
 func (s *LLRBSnapshot) Range(lkey, hkey []byte, incl string, iter NodeIterator) {
+	defer atomic.AddInt64(&s.n_lookups, 1)
+
 	nd := s.root
 	switch incl {
 	case "both":
@@ -212,19 +231,4 @@ func (s *LLRBSnapshot) Range(lkey, hkey []byte, incl string, iter NodeIterator) 
 	default:
 		s.llrb.rangeAfterTill(nd, lkey, hkey, iter)
 	}
-}
-
-//---- local methods.
-
-func (snapshot *LLRBSnapshot) reclaimNodes() bool {
-	refcount := atomic.LoadInt64(&snapshot.refcount)
-	if refcount < 0 {
-		panic("snapshot refcount gone negative")
-	} else if refcount == 0 {
-		for _, nd := range snapshot.reclaim {
-			snapshot.llrb.freenode(nd)
-		}
-		return true
-	}
-	return false
 }
