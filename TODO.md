@@ -1,4 +1,6 @@
 LLRB:
+* add histogram module for stat accounting.
+* log(involved int, humaize bool)
 * upsert samples should match upsert+insert counts.
 * improve logging while purging snapshots
     PURGE <snapshot>, remaining chain of snapshot.

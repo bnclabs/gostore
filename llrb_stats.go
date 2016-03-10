@@ -40,8 +40,6 @@ func (llrb *LLRB) statsmem(stats map[string]interface{}) map[string]interface{} 
 func (llrb *LLRB) statsupsertdepth(
 	stats map[string]interface{}) map[string]interface{} {
 
-	// upsert statistics, while upserting the depth of each upserted
-	// node is computed as count, mean and variance.
 	stats["llrb.upsertdepth.samples"] = llrb.upsertdepth.samples()
 	stats["llrb.upsertdepth.min"] = llrb.upsertdepth.min()
 	stats["llrb.upsertdepth.max"] = llrb.upsertdepth.max()
