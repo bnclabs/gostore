@@ -95,7 +95,7 @@ func (llrb *LLRB) rangeAfterTill(
 	return llrb.rangeAfterTill(nd.right, lk, hk, iter)
 }
 
-func (llrb *LLRB) heightStats(nd *Llrbnode, d int64, av *averageInt) {
+func (llrb *LLRB) heightStats(nd *Llrbnode, d int64, av *averageInt64) {
 	if nd == nil {
 		return
 	}
@@ -128,7 +128,7 @@ func (llrb *LLRB) validate(root *Llrbnode) {
 	llrb.validatereds(root, isred(root))
 	llrb.countblacks(root, 0)
 
-	heightav := &averageInt{}
+	heightav := &averageInt64{}
 	llrb.validateheight(root, heightav)
 
 	var prev Node
@@ -161,7 +161,7 @@ func (llrb *LLRB) validatereds(nd *Llrbnode, fromred bool) {
 	}
 }
 
-func (llrb *LLRB) validateheight(nd *Llrbnode, av *averageInt) bool {
+func (llrb *LLRB) validateheight(nd *Llrbnode, av *averageInt64) bool {
 	llrb.heightStats(nd, 0, av)
 	nf := float64(llrb.Count())
 	return float64(av.max()) < (3 * math.Log2(nf))

@@ -72,7 +72,7 @@ type LLRBSnapshot struct {
 	n_clones    int64
 	keymemory   int64
 	valmemory   int64
-	upsertdepth averageInt
+	upsertdepth averageInt64
 }
 
 // NewSnapshot mvcc version for LLRB tree.

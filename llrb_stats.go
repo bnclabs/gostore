@@ -60,7 +60,7 @@ func (llrb *LLRB) statsheight(
 	stats["llrb.height.variance"] = -1
 	stats["llrb.height.stddeviance"] = -1
 	if involved >= 9 {
-		heightav := &averageInt{}
+		heightav := &averageInt64{}
 		llrb.heightStats(llrb.root, 0, heightav)
 		stats["llrb.height.samples"] = heightav.samples()
 		stats["llrb.height.min"] = heightav.min()

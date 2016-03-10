@@ -3,7 +3,7 @@ package storage
 import "testing"
 
 func TestAverageInt(t *testing.T) {
-	avg := &averageInt{}
+	avg := &averageInt64{}
 	for i := 1; i <= 100; i++ {
 		avg.add(int64(i))
 	}
@@ -25,14 +25,14 @@ func TestAverageInt(t *testing.T) {
 }
 
 func BenchmarkAvgintAdd(b *testing.B) {
-	avg := &averageInt{}
+	avg := &averageInt64{}
 	for i := 0; i <= b.N; i++ {
 		avg.add(int64(i))
 	}
 }
 
 func BenchmarkAvgintCount(b *testing.B) {
-	avg := &averageInt{}
+	avg := &averageInt64{}
 	for i := 0; i <= b.N; i++ {
 		avg.add(int64(i))
 	}
@@ -43,7 +43,7 @@ func BenchmarkAvgintCount(b *testing.B) {
 }
 
 func BenchmarkAvgintSum(b *testing.B) {
-	avg := &averageInt{}
+	avg := &averageInt64{}
 	for i := 0; i <= b.N; i++ {
 		avg.add(int64(i))
 	}
@@ -54,7 +54,7 @@ func BenchmarkAvgintSum(b *testing.B) {
 }
 
 func BenchmarkAvgintMean(b *testing.B) {
-	avg := &averageInt{}
+	avg := &averageInt64{}
 	for i := 0; i <= b.N; i++ {
 		avg.add(int64(i))
 	}
@@ -65,7 +65,7 @@ func BenchmarkAvgintMean(b *testing.B) {
 }
 
 func BenchmarkAvgintVar(b *testing.B) {
-	avg := &averageInt{}
+	avg := &averageInt64{}
 	for i := 0; i <= b.N; i++ {
 		avg.add(int64(i))
 	}
@@ -76,12 +76,23 @@ func BenchmarkAvgintVar(b *testing.B) {
 }
 
 func BenchmarkAvgintSd(b *testing.B) {
-	avg := &averageInt{}
+	avg := &averageInt64{}
 	for i := 0; i <= b.N; i++ {
 		avg.add(int64(i))
 	}
 	b.ResetTimer()
 	for i := 0; i <= b.N; i++ {
 		avg.sd()
+	}
+}
+
+func BenchmarkAvgclone(b *testing.B) {
+	avg := &averageInt64{}
+	for i := 0; i <= 1000; i++ {
+		avg.add(int64(i))
+	}
+	b.ResetTimer()
+	for i := 0; i <= b.N; i++ {
+		avg.clone()
 	}
 }

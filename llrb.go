@@ -160,7 +160,7 @@ type LLRB struct { // tree container
 	n_clones    int64
 	keymemory   int64 // memory used by all keys
 	valmemory   int64 // memory used by all values
-	upsertdepth *averageInt
+	upsertdepth *averageInt64
 
 	// scratch pad
 	strsl []string
@@ -173,7 +173,7 @@ type LLRB struct { // tree container
 		snapshot *LLRBSnapshot
 
 		// stats
-		reclaimstats map[string]*averageInt
+		reclaimstats map[string]*averageInt64
 		n_snapshots  int64
 		n_purgedss   int64
 	}
@@ -201,7 +201,7 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	llrb.config = config
 
 	// statistics
-	llrb.upsertdepth = &averageInt{}
+	llrb.upsertdepth = &averageInt64{}
 
 	// scratch pads
 	llrb.strsl = make([]string, 0)
@@ -210,11 +210,11 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	llrb.mvcc.enabled = config["mvcc.enabled"].(bool)
 	if llrb.mvcc.enabled {
 		llrb.mvcc.reclaim = make([]*Llrbnode, 0, 64)
-		llrb.mvcc.reclaimstats = map[string]*averageInt{
-			"upsert": &averageInt{},
-			"delmin": &averageInt{},
-			"delmax": &averageInt{},
-			"delete": &averageInt{},
+		llrb.mvcc.reclaimstats = map[string]*averageInt64{
+			"upsert": &averageInt64{},
+			"delmin": &averageInt64{},
+			"delmax": &averageInt64{},
+			"delete": &averageInt64{},
 		}
 		llrb.MVCCWriter()
 	}
