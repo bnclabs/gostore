@@ -1,48 +1,75 @@
 LLRB data structure stats:
 
-`llrb.node.useful`
-`llrb.value.useful`
+`node.useful`
+`value.useful`
     useful memory obtained from OS.
 
-`llrb.node.overhead`
-`llrb.value.overhead`
+`node.overhead`
+`value.overhead`
     book-keeping overhead to manage `useful` memory.
 
-`llrb.node.allocated`
-`llrb.value.allocated`
+`node.allocated`
+`value.allocated`
     account of memory allocated from the `useful` pool.
 
-`llrb.node.available`
-`llrb.value.available`
+`node.available`
+`value.available`
     memory available for allocation.
 
-`llrb.node.blocks`
-`llrb.value.blocks`
+`node.blocks`
+`value.blocks`
     list of allocatable block-sizes.
 
-`llrb.keymemory`
-`llrb.valmemory`
-    actual memory consumed by keys and values indexed in the tree.
+`keymemory`
+    exact memory occupied by entry-keys.
 
-`llrb.n_blacks`
+`valmemory`
+    exact memory occupied by entry-values.
+
+`n_count`
+    number of {key,value} entries in the tree.
+
+`n_blacks`
     number of blacks links from root node to any leaf node.
 
-`llrb.upsertdepth.samples`
-`llrb.upsertdepth.min`
-`llrb.upsertdepth.max`
-`llrb.upsertdepth.mean`
-`llrb.upsertdepth.variance`
-`llrb.upsertdepth.stddeviance`
-`llrb.upsertdepth.histogram:[]int64`
-    every upsert into the into the tree will count the depth of the node
-    inserted or updated, histogram starts from 1 to 128 incremented in
-    steps of 1.
+`n_lookups`
+    number of lookup queries handled by the tree.
 
-`llrb.height.samples`
-`llrb.height.min`
-`llrb.height.max`
-`llrb.height.mean`
-`llrb.height.variance`
-`llrb.height.stddeviance`
-`llrb.height.histogram:[]int64`
+`n_ranges`
+    number of range queries handled by the tree.
+
+`n_inserts`
+    number of entries inserted into the tree.
+
+`n_updates`
+    number of entries updated in the tree.
+
+`n_deletes`
+    number of entries deleted from the tree.
+
+`n_allocs`
+    number of nodes allocated.
+
+`n_frees`
+    number of nodes freed.
+
+`n_clones`
+    number of nodes cloned.
+
+`h_upsertdepth`
+    histogram of node depth while upserting into the tree.
+
+`h_height`
     walk entire tree to compute histogram over height of the tree.
+
+`mvcc.n_snapshots`
+    number of snapshots created.
+
+`mvcc.n_purgedss`
+    number of snapshots that are created and already purged.
+
+`mvcc.h_bulkfree`
+    histogram of nodes freed while purging a snapshot.
+
+`mvcc.h_reclaims`
+    histogram of nodes generated for reclaimation during upserts and deletes.

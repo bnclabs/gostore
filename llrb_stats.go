@@ -12,15 +12,15 @@ func (llrb *LLRB) stats(involved int) (map[string]interface{}, error) {
 	stats = llrb.stattree(stats)
 	stats = llrb.h_upsertdepth.fullstats(stats, "upsertdepth.")
 	if llrb.mvcc.enabled {
-		stats = llrb.mvcc.h_bulkfree.fullstats(stats, "mvcc.bulkfree.")
+		stats = llrb.mvcc.h_bulkfree.fullstats(stats, "mvcc.h_bulkfree.")
 		for k, h := range llrb.mvcc.h_reclaims {
-			stats = h.fullstats(stats, "mvcc.reclaims."+k+".")
+			stats = h.fullstats(stats, "mvcc.h_reclaims."+k+".")
 		}
 	}
 	if involved >= 9 {
 		h_heightav := newhistorgramInt64(1, 256, 1)
 		llrb.heightStats(llrb.root, 0, h_heightav)
-		stats = h_heightav.fullstats(stats, "height.")
+		stats = h_heightav.fullstats(stats, "h_height.")
 
 		stats["n_blacks"] = llrb.countblacks(llrb.root, 0)
 	}
