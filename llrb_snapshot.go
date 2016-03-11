@@ -63,16 +63,16 @@ type LLRBSnapshot struct {
 	n_ranges  int64
 
 	// writer statistics
-	n_count     int64
-	n_inserts   int64
-	n_updates   int64
-	n_deletes   int64
-	n_allocs    int64
-	n_frees     int64
-	n_clones    int64
-	keymemory   int64
-	valmemory   int64
-	upsertdepth averageInt64
+	n_count       int64
+	n_inserts     int64
+	n_updates     int64
+	n_deletes     int64
+	n_allocs      int64
+	n_frees       int64
+	n_clones      int64
+	keymemory     int64
+	valmemory     int64
+	h_upsertdepth histogramInt64
 }
 
 // NewSnapshot mvcc version for LLRB tree.
@@ -85,15 +85,16 @@ func (llrb *LLRB) NewSnapshot(id string) *LLRBSnapshot {
 		clock: llrb.clock.clone(),
 		fmask: llrb.fmask,
 		// writer statistics
-		n_count:   atomic.LoadInt64(&llrb.n_count),
-		n_inserts: atomic.LoadInt64(&llrb.n_inserts),
-		n_updates: atomic.LoadInt64(&llrb.n_updates),
-		n_deletes: atomic.LoadInt64(&llrb.n_deletes),
-		n_allocs:  atomic.LoadInt64(&llrb.n_allocs),
-		n_frees:   atomic.LoadInt64(&llrb.n_frees),
-		n_clones:  atomic.LoadInt64(&llrb.n_clones),
-		keymemory: atomic.LoadInt64(&llrb.keymemory),
-		valmemory: atomic.LoadInt64(&llrb.valmemory),
+		n_count:       llrb.n_count,
+		n_inserts:     llrb.n_inserts,
+		n_updates:     llrb.n_updates,
+		n_deletes:     llrb.n_deletes,
+		n_allocs:      llrb.n_allocs,
+		n_frees:       llrb.n_frees,
+		n_clones:      llrb.n_clones,
+		keymemory:     llrb.keymemory,
+		valmemory:     llrb.valmemory,
+		h_upsertdepth: *llrb.h_upsertdepth,
 	}
 	snapshot.logPrefix = fmt.Sprintf("[LLRBSnapshot-%s/%s]", llrb.name, id)
 

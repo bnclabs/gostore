@@ -19,12 +19,10 @@ type histogramInt64 struct {
 }
 
 func newhistorgramInt64(from, till, width int64) *histogramInt64 {
+	from = (from / width) * width
+	till = (till / width) * width
 	h := &histogramInt64{from: from, till: till, width: width}
-	if (till%width == 0) || (from%width) == 0 {
-		h.histogram = make([]int64, (1+(till-from)/width)+2)
-	} else {
-		h.histogram = make([]int64, (1+((till-1)-from)/width)+1)
-	}
+	h.histogram = make([]int64, 1+((till-from)/width)+1)
 	return h
 }
 
@@ -67,25 +65,62 @@ func (h *histogramInt64) total() int64 {
 }
 
 func (h *histogramInt64) mean() int64 {
+	if h.n == 0 {
+		return 0
+	}
 	return int64(float64(h.sum) / float64(h.n))
 }
 
 func (h *histogramInt64) variance() float64 {
+	if h.n == 0 {
+		return 0
+	}
 	n_f, mean_f := float64(h.n), float64(h.mean())
 	return (h.sumsq / n_f) - (mean_f * mean_f)
 }
 
 func (h *histogramInt64) sd() float64 {
+	if h.n == 0 {
+		return 0
+	}
 	return math.Sqrt(h.variance())
 }
 
 func (h *histogramInt64) stats() map[string]int64 {
 	m := make(map[string]int64)
-	for i, v := range h.histogram {
-		key := strconv.Itoa(int(h.from + (int64(i) * h.width)))
-		m[key] = v
+	cumm := int64(0)
+	for i := len(h.histogram) - 1; i >= 0; i-- {
+		if h.histogram[i] == 0 {
+			continue
+		}
+		for j := 0; j <= i; j++ {
+			v := h.histogram[j]
+			key := strconv.Itoa(int(h.from + (int64(j) * h.width)))
+			cumm += v
+			if j == i {
+				m[">"] = cumm
+			} else {
+				m[key] = cumm
+			}
+		}
+		break
 	}
 	return m
+}
+
+func (h *histogramInt64) fullstats(
+	stats map[string]interface{}, prefix string) map[string]interface{} {
+
+	stats[prefix+"samples"] = h.samples()
+	stats[prefix+"min"] = h.min()
+	stats[prefix+"max"] = h.max()
+	stats[prefix+"mean"] = h.mean()
+	stats[prefix+"variance"] = h.variance()
+	stats[prefix+"stddeviance"] = h.sd()
+	for k, v := range h.stats() {
+		stats[prefix+"h."+k] = v
+	}
+	return stats
 }
 
 func (h *histogramInt64) clone() *histogramInt64 {

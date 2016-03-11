@@ -42,15 +42,24 @@ func (av *averageInt64) total() int64 {
 }
 
 func (av *averageInt64) mean() int64 {
+	if av.n == 0 {
+		return 0
+	}
 	return int64(float64(av.sum) / float64(av.n))
 }
 
 func (av *averageInt64) variance() float64 {
+	if av.n == 0 {
+		return 0
+	}
 	n_f, mean_f := float64(av.n), float64(av.mean())
 	return (av.sumsq / n_f) - (mean_f * mean_f)
 }
 
 func (av *averageInt64) sd() float64 {
+	if av.n == 0 {
+		return 0
+	}
 	return math.Sqrt(av.variance())
 }
 

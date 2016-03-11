@@ -63,7 +63,7 @@ func (d *Dict) Validate() {
 }
 
 // Log implement Index{} interface.
-func (d *Dict) Log(involved int) {
+func (d *Dict) Log(involved int, humanize bool) {
 	panic("not implemented")
 }
 

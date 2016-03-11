@@ -80,7 +80,7 @@ type Index interface {
 	Stats(involved int) (map[string]interface{}, error)
 
 	// Log current state of index.
-	Log(involved int)
+	Log(involved int, humanize bool)
 
 	// Validate check whether index is in sane state.
 	Validate()

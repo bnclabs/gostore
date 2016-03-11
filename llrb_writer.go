@@ -111,9 +111,9 @@ func (writer *LLRBWriter) validate() error {
 	return err
 }
 
-func (writer *LLRBWriter) log(involved int) {
+func (writer *LLRBWriter) log(involved int, humanize bool) {
 	respch := make(chan []interface{}, 1)
-	cmd := []interface{}{cmdLlrbWriterLog, involved, respch}
+	cmd := []interface{}{cmdLlrbWriterLog, involved, humanize, respch}
 	failsafeRequest(writer.reqch, respch, cmd, writer.finch)
 }
 
@@ -161,7 +161,7 @@ func (writer *LLRBWriter) run() {
 
 	reclaimNodes := func(opname string, reclaim []*Llrbnode) {
 		llrb.mvcc.reclaim = append(llrb.mvcc.reclaim, reclaim...)
-		llrb.mvcc.reclaimstats[opname].add(int64(len(reclaim)))
+		llrb.mvcc.h_reclaims[opname].add(int64(len(reclaim)))
 	}
 
 loop:
@@ -295,8 +295,9 @@ loop:
 
 		case cmdLlrbWriterLog:
 			involved := msg[1].(int)
+			humanize := msg[1].(bool)
 			respch := msg[2].(chan []interface{})
-			llrb.log(involved)
+			llrb.log(involved, humanize)
 			respch <- []interface{}{}
 		}
 	}
@@ -314,7 +315,7 @@ func (writer *LLRBWriter) upsert(
 
 	if nd == nil {
 		newnd := llrb.newnode(key, value)
-		llrb.upsertdepth.add(depth)
+		llrb.h_upsertdepth.add(depth)
 		return newnd, newnd, nil, reclaim
 	}
 	reclaim = append(reclaim, nd)
@@ -342,7 +343,7 @@ func (writer *LLRBWriter) upsert(
 		}
 		ndmvcc.metadata().setdirty()
 		newnd = ndmvcc
-		llrb.upsertdepth.add(depth)
+		llrb.h_upsertdepth.add(depth)
 	}
 
 	ndmvcc, reclaim = writer.walkuprot23(ndmvcc, reclaim)
@@ -616,11 +617,14 @@ loop:
 		} else if refcount > 0 {
 			break loop
 		}
+		llrb.mvcc.h_bulkfree.add(int64(len(snapshot.reclaim)))
 		for _, nd := range snapshot.reclaim {
 			snapshot.llrb.freenode(nd)
 		}
 		atomic.AddInt64(&llrb.mvcc.n_purgedss, 1)
 		log.Debugf("%v snapshot PURGED\n", snapshot.logPrefix)
+		atomic.AddInt64(&llrb.n_lookups, snapshot.n_lookups)
+		atomic.AddInt64(&llrb.n_ranges, snapshot.n_ranges)
 		snapshot = snapshot.next
 	}
 	llrb.mvcc.snapshot = snapshot

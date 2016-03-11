@@ -95,17 +95,17 @@ func (llrb *LLRB) rangeAfterTill(
 	return llrb.rangeAfterTill(nd.right, lk, hk, iter)
 }
 
-func (llrb *LLRB) heightStats(nd *Llrbnode, d int64, av *averageInt64) {
+func (llrb *LLRB) heightStats(nd *Llrbnode, d int64, h *histogramInt64) {
 	if nd == nil {
 		return
 	}
 	d++
-	av.add(d)
+	h.add(d)
 	if nd.left != nil {
-		llrb.heightStats(nd.left, d, av)
+		llrb.heightStats(nd.left, d, h)
 	}
 	if nd.right != nil {
-		llrb.heightStats(nd.right, d, av)
+		llrb.heightStats(nd.right, d, h)
 	}
 }
 
@@ -128,8 +128,8 @@ func (llrb *LLRB) validate(root *Llrbnode) {
 	llrb.validatereds(root, isred(root))
 	llrb.countblacks(root, 0)
 
-	heightav := &averageInt64{}
-	llrb.validateheight(root, heightav)
+	h := newhistorgramInt64(1, 256, 1)
+	llrb.validateheight(root, h)
 
 	var prev Node
 
@@ -161,8 +161,8 @@ func (llrb *LLRB) validatereds(nd *Llrbnode, fromred bool) {
 	}
 }
 
-func (llrb *LLRB) validateheight(nd *Llrbnode, av *averageInt64) bool {
-	llrb.heightStats(nd, 0, av)
+func (llrb *LLRB) validateheight(nd *Llrbnode, h *histogramInt64) bool {
+	llrb.heightStats(nd, 0, h)
 	nf := float64(llrb.Count())
-	return float64(av.max()) < (3 * math.Log2(nf))
+	return float64(h.max()) < (3 * math.Log2(nf))
 }

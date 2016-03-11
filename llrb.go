@@ -151,16 +151,16 @@ type LLRB struct { // tree container
 	n_ranges  int64
 
 	// writer statistics
-	n_count     int64 // number of nodes in the tree
-	n_inserts   int64
-	n_updates   int64
-	n_deletes   int64
-	n_allocs    int64
-	n_frees     int64
-	n_clones    int64
-	keymemory   int64 // memory used by all keys
-	valmemory   int64 // memory used by all values
-	upsertdepth *averageInt64
+	n_count       int64 // number of nodes in the tree
+	n_inserts     int64
+	n_updates     int64
+	n_deletes     int64
+	n_allocs      int64
+	n_frees       int64
+	n_clones      int64
+	keymemory     int64 // memory used by all keys
+	valmemory     int64 // memory used by all values
+	h_upsertdepth *histogramInt64
 
 	// scratch pad
 	strsl []string
@@ -173,9 +173,10 @@ type LLRB struct { // tree container
 		snapshot *LLRBSnapshot
 
 		// stats
-		reclaimstats map[string]*averageInt64
-		n_snapshots  int64
-		n_purgedss   int64
+		n_snapshots int64
+		n_purgedss  int64
+		h_bulkfree  *histogramInt64
+		h_reclaims  map[string]*histogramInt64
 	}
 }
 
@@ -201,7 +202,7 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	llrb.config = config
 
 	// statistics
-	llrb.upsertdepth = &averageInt64{}
+	llrb.h_upsertdepth = newhistorgramInt64(1, 256, 1)
 
 	// scratch pads
 	llrb.strsl = make([]string, 0)
@@ -210,11 +211,12 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	llrb.mvcc.enabled = config["mvcc.enabled"].(bool)
 	if llrb.mvcc.enabled {
 		llrb.mvcc.reclaim = make([]*Llrbnode, 0, 64)
-		llrb.mvcc.reclaimstats = map[string]*averageInt64{
-			"upsert": &averageInt64{},
-			"delmin": &averageInt64{},
-			"delmax": &averageInt64{},
-			"delete": &averageInt64{},
+		llrb.mvcc.h_bulkfree = newhistorgramInt64(1024, 1024*1024, 4*1024)
+		llrb.mvcc.h_reclaims = map[string]*histogramInt64{
+			"upsert": newhistorgramInt64(4, 1024, 4),
+			"delmin": newhistorgramInt64(4, 1024, 4),
+			"delmax": newhistorgramInt64(4, 1024, 4),
+			"delete": newhistorgramInt64(4, 1024, 4),
 		}
 		llrb.MVCCWriter()
 	}
@@ -269,7 +271,7 @@ func (llrb *LLRB) Destroy() error {
 		if llrb.mvcc.enabled {
 			llrb.mvcc.writer.destroy()
 			llrb.mvcc.reclaim, llrb.mvcc.writer = nil, nil
-			llrb.mvcc.reclaimstats = nil
+			llrb.mvcc.h_reclaims = nil
 		}
 		llrb.nodearena.release()
 		llrb.valarena.release()
@@ -304,14 +306,14 @@ func (llrb *LLRB) Validate() {
 }
 
 // Log implement Indexer{} interface.
-func (llrb *LLRB) Log(involved int) {
+func (llrb *LLRB) Log(involved int, humanize bool) {
 	if llrb.mvcc.enabled {
-		llrb.mvcc.writer.log(involved)
+		llrb.mvcc.writer.log(involved, humanize)
 		return
 	}
 	llrb.rw.RLock()
 	defer llrb.rw.RUnlock()
-	llrb.log(involved)
+	llrb.log(involved, humanize)
 }
 
 //---- Reader{} interface.
@@ -454,7 +456,7 @@ func (llrb *LLRB) upsert(
 
 	if nd == nil {
 		newnd := llrb.newnode(key, value)
-		llrb.upsertdepth.add(depth)
+		llrb.h_upsertdepth.add(depth)
 		return newnd, newnd, nil
 	}
 
@@ -480,7 +482,7 @@ func (llrb *LLRB) upsert(
 		if dirty {
 			nd.metadata().setdirty()
 		}
-		llrb.upsertdepth.add(depth)
+		llrb.h_upsertdepth.add(depth)
 	}
 
 	nd = llrb.walkuprot23(nd)
@@ -868,7 +870,7 @@ func (llrb *LLRB) logconfig(config map[string]interface{}) {
 	if err != nil {
 		panic(err)
 	}
-	kblocks := len(stats["llrb.node.blocks"].([]int64))
+	kblocks := len(stats["node.blocks"].([]int64))
 	min := humanize.Bytes(uint64(llrb.config["nodearena.minblock"].(int)))
 	max := humanize.Bytes(uint64(llrb.config["nodearena.maxblock"].(int)))
 	cp := humanize.Bytes(uint64(llrb.config["nodearena.capacity"].(int)))
@@ -877,7 +879,7 @@ func (llrb *LLRB) logconfig(config map[string]interface{}) {
 	log.Infof(fmsg, llrb.logPrefix, kblocks, min, max, cp, pcp)
 
 	// value arena
-	vblocks := len(stats["llrb.value.blocks"].([]int64))
+	vblocks := len(stats["value.blocks"].([]int64))
 	min = humanize.Bytes(uint64(llrb.config["valarena.minblock"].(int)))
 	max = humanize.Bytes(uint64(llrb.config["valarena.maxblock"].(int)))
 	cp = humanize.Bytes(uint64(llrb.config["valarena.capacity"].(int)))
