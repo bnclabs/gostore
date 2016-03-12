@@ -19,6 +19,7 @@ var loadopts struct {
 	vlen      [2]int // min-vlen, max-vlen
 	n         int
 	ncpu      int
+	mvcc      int
 	memstats  int
 	mprof     string
 	pprof     string
@@ -43,6 +44,8 @@ func parseLoadopts(args []string) {
 		"number of items to generate and insert")
 	f.IntVar(&loadopts.ncpu, "ncpu", runtime.NumCPU(),
 		"set number cores to use.")
+	f.IntVar(&loadopts.mvcc, "mvcc", 0,
+		"enabled mvcc for load.")
 	f.IntVar(&loadopts.memstats, "stats", 1000,
 		"log llrb stats for every tick, in ms")
 	f.StringVar(&loadopts.mprof, "mprof", "",
@@ -104,8 +107,8 @@ func doLoad(args []string) {
 
 	config := map[string]interface{}{
 		"maxvb":                   1024,
-		"mvcc.enabled":            false,
-		"mvcc.snapshot.tick":      0,
+		"mvcc.enabled":            loadopts.mvcc > 0,
+		"mvcc.snapshot.tick":      5,
 		"mvcc.writer.chanbuffer":  1000,
 		"nodearena.minblock":      loadopts.nodearena[0],
 		"nodearena.maxblock":      loadopts.nodearena[1],
