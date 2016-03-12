@@ -295,8 +295,8 @@ loop:
 
 		case cmdLlrbWriterLog:
 			involved := msg[1].(int)
-			humanize := msg[1].(bool)
-			respch := msg[2].(chan []interface{})
+			humanize := msg[2].(bool)
+			respch := msg[3].(chan []interface{})
 			llrb.log(involved, humanize)
 			respch <- []interface{}{}
 		}
