@@ -98,7 +98,7 @@ func (h *histogramInt64) stats() map[string]int64 {
 			key := strconv.Itoa(int(h.from + (int64(j) * h.width)))
 			cumm += v
 			if j == i {
-				m[">"] = cumm
+				m["+"] = cumm
 			} else {
 				m[key] = cumm
 			}

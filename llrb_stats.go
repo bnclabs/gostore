@@ -149,5 +149,5 @@ func (llrb *LLRB) log(involved int, humanize bool) {
 	if err != nil {
 		panic(err)
 	}
-	log.Infof("%v stats %v\n", llrb.logPrefix, text)
+	log.Infof("%v stats %v\n", llrb.logPrefix, string(text))
 }
