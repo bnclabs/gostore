@@ -6,8 +6,9 @@ import "fmt"
 import "strconv"
 import "flag"
 import "strings"
-import "net/http"
+import "runtime"
 import "runtime/pprof"
+import "runtime/debug"
 
 import "github.com/prataprc/storage.go"
 
@@ -18,7 +19,7 @@ var loadopts struct {
 	vlen      [2]int // min-vlen, max-vlen
 	n         int
 	ncpu      int
-	memtick   int
+	memstats  int
 	mprof     string
 	pprof     string
 	dotfile   string
@@ -40,10 +41,10 @@ func parseLoadopts(args []string) {
 		"minvlen, maxvlen - generate values between [minklen,maxklen)")
 	f.IntVar(&loadopts.n, "n", 1000,
 		"number of items to generate and insert")
-	f.IntVar(&loadopts.ncpu, "ncpu", 1,
+	f.IntVar(&loadopts.ncpu, "ncpu", runtime.NumCPU(),
 		"set number cores to use.")
-	f.IntVar(&loadopts.memtick, "memtick", 1000,
-		"log memory stats for every tick, in ms")
+	f.IntVar(&loadopts.memstats, "stats", 1000,
+		"log llrb stats for every tick, in ms")
 	f.StringVar(&loadopts.mprof, "mprof", "",
 		"dump mem-profile to file")
 	f.StringVar(&loadopts.pprof, "pprof", "",
@@ -89,11 +90,7 @@ func doLoad(args []string) {
 	parseLoadopts(args)
 
 	// start memory statistic logger
-	go MemstatLogger(int64(loadopts.memtick))
-	// start pprof
-	go func() {
-		fmt.Println(http.ListenAndServe("localhost:6060", nil))
-	}()
+	go storage.MemstatLogger(int64(loadopts.memstats))
 	if loadopts.pprof != "" {
 		fd, err := os.Create(loadopts.pprof)
 		if err != nil {
@@ -118,6 +115,7 @@ func doLoad(args []string) {
 		"valarena.maxblock":       loadopts.valarena[1],
 		"valarena.capacity":       loadopts.valarena[2],
 		"valarena.pool.capacity":  loadopts.valarena[3],
+		"metadata.bornseqno":      true,
 	}
 
 	llrb := storage.NewLLRB("load", config, nil)
@@ -125,7 +123,7 @@ func doLoad(args []string) {
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD123456), uint64(0)
 	insertItems(llrb, vbno, vbuuid, seqno, loadopts.n)
 	fmt.Printf("Took %v to insert %v items\n", time.Since(now), loadopts.n)
-	llrb.Log(9)
+	llrb.Log(9, true)
 
 	llrb.Destroy()
 
@@ -141,6 +139,7 @@ func insertItems(
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Printf("panic: %v\n", r)
+			fmt.Printf("\n%s", getStackTrace(2, debug.Stack()))
 		}
 		fmt.Printf("Inserted %v items\n", seqno-startseqno)
 	}()

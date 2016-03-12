@@ -93,18 +93,6 @@ func llrb_opRange(
 		panic("llrbrd reader is nil")
 	}
 
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Println("dict")
-			fmt.Println(dictrd.(*storage.DictSnapshot).Keys())
-			buffer := bytes.NewBuffer(nil)
-			llrbrd.(*storage.LLRBSnapshot).Dotdump(buffer)
-			fmt.Println("llrb")
-			fmt.Println(string(buffer.Bytes()))
-			panic(r)
-		}
-	}()
-
 	dnodes := make([]storage.Node, 0)
 	lnodes := make([]storage.Node, 0)
 	lowkey := []byte(strconv.Itoa(int(lcmd.cmd[1].(float64))))

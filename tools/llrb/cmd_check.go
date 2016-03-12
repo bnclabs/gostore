@@ -156,7 +156,7 @@ func checkLLRB(count uint64, opch chan [][]interface{}) {
 		}
 	}
 	llrb_opValidate(dict, llrb, genstats, true)
-	llrb.Log(9)
+	llrb.Log(9, true)
 }
 
 func checkLLRBMvcc(
@@ -247,7 +247,7 @@ func checkLLRBMvcc(
 	}
 	dictsnap, llrbsnap = makesnaps()
 	llrb_opValidate(dictsnap, llrbsnap, genstats, true)
-	llrb.Log(9)
+	llrb.Log(9, true)
 }
 
 func validateTick(tick time.Duration, opch chan [][]interface{}) {

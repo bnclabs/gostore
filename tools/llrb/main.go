@@ -2,7 +2,9 @@ package main
 
 import "fmt"
 import "os"
+import "bytes"
 import "log"
+import "strings"
 import "net/http"
 import "math/rand"
 import _ "net/http/pprof"
@@ -11,7 +13,7 @@ import "runtime/pprof"
 
 func main() {
 	go func() {
-		log.Println(http.ListenAndServe("localhost:8080", nil))
+		log.Println(http.ListenAndServe(":6060", nil))
 	}()
 
 	switch os.Args[1] {
@@ -64,4 +66,13 @@ func takeMEMProfile(filename string) bool {
 	pprof.WriteHeapProfile(fd)
 	defer fd.Close()
 	return true
+}
+
+func getStackTrace(skip int, stack []byte) string {
+	var buf bytes.Buffer
+	lines := strings.Split(string(stack), "\n")
+	for _, call := range lines[skip*2:] {
+		buf.WriteString(fmt.Sprintf("%s\n", call))
+	}
+	return buf.String()
 }
