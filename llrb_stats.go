@@ -67,11 +67,11 @@ func (llrb *LLRB) stattree(stats map[string]interface{}) map[string]interface{} 
 }
 
 func (llrb *LLRB) log(involved int, humanize bool) {
-	// node memory
 	stats, err := llrb.stats(involved)
 	if err != nil {
 		panic(fmt.Errorf("log(): %v", err))
 	}
+
 	dohumanize := func(val interface{}) interface{} {
 		if humanize {
 			return gohumanize.Bytes(uint64(val.(int64)))
@@ -145,9 +145,21 @@ func (llrb *LLRB) log(involved int, humanize bool) {
 		log.Infof("%v value utilization:\n%v\n", llrb.logPrefix, out)
 	}
 
+	// log statistics
 	text, err := json.Marshal(stats)
 	if err != nil {
 		panic(fmt.Errorf("log(): %v", err))
 	}
 	log.Infof("%v stats %v\n", llrb.logPrefix, string(text))
+
+	// log snapshot chain
+	if llrb.mvcc.enabled {
+		chain := []string{"root"}
+		snapshot := llrb.mvcc.snapshot
+		if snapshot != nil {
+			chain = append(chain, snapshot.Id())
+			snapshot = snapshot.next
+		}
+		log.Infof("%v snapshot chain %v\n", strings.Join(chain, "->"))
+	}
 }
