@@ -1,6 +1,9 @@
 load:
 
 * add dot-file dump to load.
+* validate after load complete.
+* load llrb with mvcc, with tunable number of readers.
+* use production file to load key,value. include lookups and ranges.
 
 validate :
 

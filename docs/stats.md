@@ -61,6 +61,8 @@ LLRB data structure stats:
 
 `h_height`
     walk entire tree to compute histogram over height of the tree.
+    won't be same as `h_upsertdepth` because the nodes may get
+    rotated along the way up after the upsert..
 
 `mvcc.n_snapshots`
     number of snapshots created.
