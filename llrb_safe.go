@@ -95,18 +95,58 @@ func (llrb *LLRB) rangeAfterTill(
 	return llrb.rangeAfterTill(nd.right, lk, hk, iter)
 }
 
-func (llrb *LLRB) heightStats(nd *Llrbnode, d int64, h *histogramInt64) {
+func (llrb *LLRB) validate(root *Llrbnode) {
+	h := newhistorgramInt64(1, 256, 1)
+	llrb.validatetree(root, isred(root), 0 /*blacks*/, 1 /*depth*/, h)
+	if h.samples() > 0 {
+		nf := float64(llrb.Count())
+		if float64(h.max()) > (3 * math.Log2(nf)) {
+			fmsg := "%v llrb max height %v exceeds log2 of llrb.count %v"
+			panic(fmt.Errorf(fmsg, llrb.logPrefix, float64(h.max()), nf))
+		}
+	}
+
+	//llrb.validatestats()
+}
+
+func (llrb *LLRB) validatetree(
+	nd *Llrbnode, fromred bool, blacks, depth int64, h *histogramInt64) int64 {
+
+	if nd != nil {
+		h.add(depth)
+		if fromred && isred(nd) {
+			panic("consequetive red spotted")
+		}
+		if !isred(nd) {
+			blacks++
+		}
+		lblacks := llrb.validatetree(nd.left, isred(nd), blacks, depth+1, h)
+		rblacks := llrb.validatetree(nd.right, isred(nd), blacks, depth+1, h)
+		if lblacks != rblacks {
+			fmsg := "no. of blacks {left,right} : {%v,%v}\n"
+			panic(fmt.Errorf(fmsg, lblacks, rblacks))
+		}
+		key := nd.Key()
+		if nd.left != nil && bytes.Compare(nd.left.Key(), key) >= 0 {
+			fmsg := "%v left node %v is >= node %v"
+			panic(fmt.Errorf(fmsg, llrb.logPrefix, nd.left.Key(), key))
+		}
+		if nd.left != nil && bytes.Compare(nd.left.Key(), key) >= 0 {
+			fmsg := "%v node %v is >= right node %v"
+			panic(fmt.Errorf(fmsg, llrb.logPrefix, nd.right.Key(), key))
+		}
+		return lblacks
+	}
+	return blacks
+}
+
+func (llrb *LLRB) heightStats(nd *Llrbnode, depth int64, h *histogramInt64) {
 	if nd == nil {
 		return
 	}
-	d++
-	h.add(d)
-	if nd.left != nil {
-		llrb.heightStats(nd.left, d, h)
-	}
-	if nd.right != nil {
-		llrb.heightStats(nd.right, d, h)
-	}
+	h.add(depth)
+	llrb.heightStats(nd.left, depth+1, h)
+	llrb.heightStats(nd.right, depth+1, h)
 }
 
 func (llrb *LLRB) countblacks(nd *Llrbnode, count int) int {
@@ -122,47 +162,4 @@ func (llrb *LLRB) countblacks(nd *Llrbnode, count int) int {
 		return x
 	}
 	return count
-}
-
-func (llrb *LLRB) validate(root *Llrbnode) {
-	llrb.validatereds(root, isred(root))
-	llrb.countblacks(root, 0)
-
-	h := newhistorgramInt64(1, 256, 1)
-	llrb.validateheight(root, h)
-
-	var prev Node
-
-	llrb.rangeFromFind(
-		root, nil, nil,
-		func(nd Node) bool {
-			if nd.(*Llrbnode).metadata().isdirty() {
-				panic("llrb-validate: found dirty node, call the programmer")
-			} else if prev != nil {
-				cmp := bytes.Compare(prev.Key(), nd.Key())
-				if cmp == 0 {
-					panic("validate: found duplicate keys, call the programmer")
-				} else if cmp > 0 {
-					panic("validate: out of order keys, call the programmer")
-				}
-			}
-			prev = nd
-			return true
-		})
-}
-
-func (llrb *LLRB) validatereds(nd *Llrbnode, fromred bool) {
-	if nd != nil {
-		if fromred && isred(nd) {
-			panic("consequetive red spotted")
-		}
-		llrb.validatereds(nd.left, isred(nd))
-		llrb.validatereds(nd.right, isred(nd))
-	}
-}
-
-func (llrb *LLRB) validateheight(nd *Llrbnode, h *histogramInt64) bool {
-	llrb.heightStats(nd, 0, h)
-	nf := float64(llrb.Count())
-	return float64(h.max()) < (3 * math.Log2(nf))
 }

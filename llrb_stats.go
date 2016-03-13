@@ -19,7 +19,7 @@ func (llrb *LLRB) stats(involved int) (map[string]interface{}, error) {
 	}
 	if involved >= 9 {
 		h_heightav := newhistorgramInt64(1, 256, 1)
-		llrb.heightStats(llrb.root, 0, h_heightav)
+		llrb.heightStats(llrb.root, 1 /*depth*/, h_heightav)
 		stats = h_heightav.fullstats(stats, "h_height.")
 
 		stats["n_blacks"] = llrb.countblacks(llrb.root, 0)
