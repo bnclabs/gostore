@@ -60,7 +60,7 @@ func (d *DictSnapshot) Release() {
 
 // Validate implement Snapshot{} interface.
 func (d *DictSnapshot) Validate() {
-	panic("not implemented")
+	panic("Validate(): not implemented for DictSnapshot")
 }
 
 //---- Reader{} interface.

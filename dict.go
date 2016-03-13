@@ -54,17 +54,17 @@ func (d *Dict) Destroy() error {
 
 // Stats implement Index{} interface.
 func (d *Dict) Stats(involved int) (map[string]interface{}, error) {
-	panic("not implemented")
+	panic("Index.Stats() not implemented for Dict")
 }
 
 // Validate implement Index{} interface.
 func (d *Dict) Validate() {
-	panic("not implemented")
+	panic("Index.Stats() not implemented for Dict")
 }
 
 // Log implement Index{} interface.
 func (d *Dict) Log(involved int, humanize bool) {
-	panic("not implemented")
+	panic("Index.Stats() not implemented for Dict")
 }
 
 //---- Snapshot{} interface{}

@@ -245,12 +245,12 @@ func (llrb *LLRB) Isactive() bool {
 
 // Refer implement Snapshot{} interface.
 func (llrb *LLRB) Refer() {
-	panic("call Refer() on snapshot")
+	panic("Refer(): only allowed on snapshot")
 }
 
 // Release implement Snapshot{} interface.
 func (llrb *LLRB) Release() {
-	panic("call Release() on snapshot")
+	panic("Release(): only allowed on snapshot")
 }
 
 // RSnapshot implement Index{} interface.
@@ -280,7 +280,7 @@ func (llrb *LLRB) Destroy() error {
 		llrb.dead = true
 		return nil
 	}
-	panic("Destroy() on already dead tree")
+	panic("Destroy(): already dead tree")
 }
 
 // Stats implement Indexer{} interface.
@@ -297,7 +297,7 @@ func (llrb *LLRB) Stats(involved int) (map[string]interface{}, error) {
 func (llrb *LLRB) Validate() {
 	if llrb.mvcc.enabled {
 		if err := llrb.mvcc.writer.validate(); err != nil {
-			panic(err)
+			panic(fmt.Errorf("Validate(): %v", err))
 		}
 	}
 	llrb.rw.RLock()
@@ -321,7 +321,7 @@ func (llrb *LLRB) Log(involved int, humanize bool) {
 // Has implement Reader{} interface.
 func (llrb *LLRB) Has(key []byte) bool {
 	if llrb.mvcc.enabled {
-		panic("mvcc enabled, use snapshots for reading")
+		panic("Has(): mvcc enabled, use snapshots for reading")
 	}
 	return llrb.Get(key) != nil
 }
@@ -329,7 +329,7 @@ func (llrb *LLRB) Has(key []byte) bool {
 // Get implement Reader{} interface.
 func (llrb *LLRB) Get(key []byte) Node {
 	if llrb.mvcc.enabled {
-		panic("mvcc enabled, use snapshots for reading")
+		panic("Get(): mvcc enabled, use snapshots for reading")
 	}
 
 	llrb.rw.RLock()
@@ -352,7 +352,7 @@ func (llrb *LLRB) Get(key []byte) Node {
 // Min implement Reader{} interface.
 func (llrb *LLRB) Min() Node {
 	if llrb.mvcc.enabled {
-		panic("mvcc enabled, use snapshots for reading")
+		panic("Min(): mvcc enabled, use snapshots for reading")
 	}
 
 	llrb.rw.RLock()
@@ -373,7 +373,7 @@ func (llrb *LLRB) Min() Node {
 // Max implement Reader{} interface.
 func (llrb *LLRB) Max() Node {
 	if llrb.mvcc.enabled {
-		panic("mvcc enabled, use snapshots for reading")
+		panic("Max(): mvcc enabled, use snapshots for reading")
 	}
 
 	llrb.rw.RLock()
@@ -394,7 +394,7 @@ func (llrb *LLRB) Max() Node {
 // Range from lkey to hkey, incl can be "both", "low", "high", "none"
 func (llrb *LLRB) Range(lkey, hkey []byte, incl string, iter NodeIterator) {
 	if llrb.mvcc.enabled {
-		panic("mvcc enabled, use snapshots for reading")
+		panic("Range(): mvcc enabled, use snapshots for reading")
 	}
 
 	llrb.rw.RLock()
@@ -418,7 +418,7 @@ func (llrb *LLRB) Range(lkey, hkey []byte, incl string, iter NodeIterator) {
 // Upsert implement Writer{} interface.
 func (llrb *LLRB) Upsert(key, value []byte, callb UpsertCallback) error {
 	if key == nil {
-		panic("upserting nil key")
+		panic("Upsert(): upserting nil key")
 	}
 
 	if llrb.mvcc.enabled {
@@ -440,7 +440,7 @@ func (llrb *LLRB) Upsert(key, value []byte, callb UpsertCallback) error {
 	if newnd.metadata().isdirty() {
 		newnd.metadata().cleardirty()
 	} else {
-		panic("expected this to be dirty")
+		panic("Upsert(): expected this to be dirty")
 	}
 	llrb.freenode(oldnd)
 	return nil
@@ -624,13 +624,13 @@ func (llrb *LLRB) delete(nd *Llrbnode, key []byte) (newnd, deleted *Llrbnode) {
 			var subdeleted *Llrbnode
 			nd.right, subdeleted = llrb.deletemin(nd.right)
 			if subdeleted == nil {
-				panic("fatal logic, call the programmer")
+				panic("delete(): fatal logic, call the programmer")
 			}
 			newnd := llrb.clone(subdeleted)
 			newnd.left, newnd.right = nd.left, nd.right
 			if nd.metadata().isdirty() {
 				//newnd.metadata().setdirty()
-				panic("unexpected dirty node, call the programmer")
+				panic("delete(): unexpected dirty node, call the programmer")
 			}
 			if nd.metadata().isblack() {
 				newnd.metadata().setblack()
@@ -669,7 +669,7 @@ func (llrb *LLRB) walkuprot23(nd *Llrbnode) *Llrbnode {
 func (llrb *LLRB) rotateleft(nd *Llrbnode) *Llrbnode {
 	y := nd.right
 	if y.metadata().isblack() {
-		panic("rotating a black link ? call the programmer")
+		panic("rotateleft(): rotating a black link ? call the programmer")
 	}
 	nd.right = y.left
 	y.left = nd
@@ -685,7 +685,7 @@ func (llrb *LLRB) rotateleft(nd *Llrbnode) *Llrbnode {
 func (llrb *LLRB) rotateright(nd *Llrbnode) *Llrbnode {
 	x := nd.left
 	if x.metadata().isblack() {
-		panic("rotating a black link ? call the programmer")
+		panic("rotateright(): rotating a black link ? call the programmer")
 	}
 	nd.left = x.right
 	x.right = nd
@@ -769,7 +769,7 @@ func (llrb *LLRB) newnode(k, v []byte) *Llrbnode {
 		nvarg := (uintptr)(unsafe.Pointer(nv.setvalue(v)))
 		nd.metadata().setmvalue((uint64)(nvarg), 0)
 	} else if v != nil {
-		panic("llrb tree not configured for accepting value")
+		panic("newnode(): llrb tree not configured for accepting value")
 	}
 	return nd
 }
@@ -868,7 +868,7 @@ func (llrb *LLRB) logconfig(config map[string]interface{}) {
 	// key arena
 	stats, err := llrb.stats(1)
 	if err != nil {
-		panic(err)
+		panic(fmt.Errorf("logconfig(): %v", err))
 	}
 	kblocks := len(stats["node.blocks"].([]int64))
 	min := humanize.Bytes(uint64(llrb.config["nodearena.minblock"].(int)))

@@ -101,8 +101,8 @@ func (llrb *LLRB) validate(root *Llrbnode) {
 	if h.samples() > 0 {
 		nf := float64(llrb.Count())
 		if float64(h.max()) > (3 * math.Log2(nf)) {
-			fmsg := "%v llrb max height %v exceeds log2 of llrb.count %v"
-			panic(fmt.Errorf(fmsg, llrb.logPrefix, float64(h.max()), nf))
+			fmsg := "validate(): max height %v exceeds log2(llrb.count) %v"
+			panic(fmt.Errorf(fmsg, float64(h.max()), nf))
 		}
 	}
 
@@ -115,7 +115,8 @@ func (llrb *LLRB) validatetree(
 	if nd != nil {
 		h.add(depth)
 		if fromred && isred(nd) {
-			panic("consequetive red spotted")
+
+			panic("validate(): consequetive red spotted")
 		}
 		if !isred(nd) {
 			blacks++
@@ -123,17 +124,17 @@ func (llrb *LLRB) validatetree(
 		lblacks := llrb.validatetree(nd.left, isred(nd), blacks, depth+1, h)
 		rblacks := llrb.validatetree(nd.right, isred(nd), blacks, depth+1, h)
 		if lblacks != rblacks {
-			fmsg := "no. of blacks {left,right} : {%v,%v}\n"
+			fmsg := "validate(): no. of blacks {left,right} is {%v,%v}\n"
 			panic(fmt.Errorf(fmsg, lblacks, rblacks))
 		}
 		key := nd.Key()
 		if nd.left != nil && bytes.Compare(nd.left.Key(), key) >= 0 {
-			fmsg := "%v left node %v is >= node %v"
-			panic(fmt.Errorf(fmsg, llrb.logPrefix, nd.left.Key(), key))
+			fmsg := "validate(): sort order, left node %v is >= node %v"
+			panic(fmt.Errorf(fmsg, nd.left.Key(), key))
 		}
 		if nd.left != nil && bytes.Compare(nd.left.Key(), key) >= 0 {
-			fmsg := "%v node %v is >= right node %v"
-			panic(fmt.Errorf(fmsg, llrb.logPrefix, nd.right.Key(), key))
+			fmsg := "validate(): sort order, node %v is >= right node %v"
+			panic(fmt.Errorf(fmsg, nd.right.Key(), key))
 		}
 		return lblacks
 	}
@@ -157,7 +158,8 @@ func (llrb *LLRB) countblacks(nd *Llrbnode, count int) int {
 		x := llrb.countblacks(nd.left, count)
 		y := llrb.countblacks(nd.right, count)
 		if x != y {
-			panic(fmt.Errorf("no. of blacks {left,right} : {%v,%v}\n", x, y))
+			fmsg := "countblacks(): no. of blacks {left,right} : {%v,%v}"
+			panic(fmt.Errorf(fmsg, x, y))
 		}
 		return x
 	}

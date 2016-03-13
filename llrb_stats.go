@@ -70,7 +70,7 @@ func (llrb *LLRB) log(involved int, humanize bool) {
 	// node memory
 	stats, err := llrb.stats(involved)
 	if err != nil {
-		panic(err)
+		panic(fmt.Errorf("log(): %v", err))
 	}
 	dohumanize := func(val interface{}) interface{} {
 		if humanize {
@@ -147,7 +147,7 @@ func (llrb *LLRB) log(involved int, humanize bool) {
 
 	text, err := json.Marshal(stats)
 	if err != nil {
-		panic(err)
+		panic(fmt.Errorf("log(): %v", err))
 	}
 	log.Infof("%v stats %v\n", llrb.logPrefix, string(text))
 }

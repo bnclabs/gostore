@@ -15,9 +15,9 @@ type LLRBWriter struct {
 
 func (llrb *LLRB) MVCCWriter() *LLRBWriter {
 	if llrb.mvcc.enabled == false {
-		panic(fmt.Errorf("cannot create MVCCWriter(), mvcc not enabled"))
+		panic(fmt.Errorf("MVCCWriter(): mvcc not enabled"))
 	} else if llrb.mvcc.writer != nil {
-		panic(fmt.Errorf("concurrent writers are not allowed on llrb"))
+		panic(fmt.Errorf("MVCCWriter(): concurrent writers are not allowed"))
 	}
 
 	chansize := llrb.config["mvcc.writer.chanbuffer"].(int)
@@ -186,7 +186,7 @@ loop:
 				callb(llrb, llndornil(newnd), llndornil(oldnd))
 			}
 			if newnd.metadata().isdirty() == false {
-				panic("expected this to be dirty")
+				panic("writer(): expected this to be dirty")
 			} else {
 				newnd.metadata().cleardirty()
 			}
@@ -278,7 +278,7 @@ loop:
 			dodestroy(ch)
 			<-ch
 			if llrb.mvcc.snapshot != nil {
-				panic("snaphot held after destroy, call the programmer")
+				panic("writer(): snaphot after destroy? call the programmer")
 			}
 			break loop
 
@@ -452,13 +452,13 @@ func (writer *LLRBWriter) delete(
 			var subd *Llrbnode
 			ndmvcc.right, subd, reclaim = writer.deletemin(ndmvcc.right, reclaim)
 			if subd == nil {
-				panic("fatal logic, call the programmer")
+				panic("delete(): fatal logic, call the programmer")
 			}
 			newnd = writer.llrb.clone(subd)
 			newnd.left, newnd.right = ndmvcc.left, ndmvcc.right
 			if ndmvcc.metadata().isdirty() {
 				//newnd.metadata().setdirty()
-				panic("unexpected dirty node, call the programmer")
+				panic("delete(): unexpected dirty node, call the programmer")
 			}
 			if ndmvcc.metadata().isblack() {
 				newnd.metadata().setblack()
@@ -512,7 +512,7 @@ func (writer *LLRBWriter) rotateleft(
 	}
 
 	if y.metadata().isblack() {
-		panic("rotating a black link ? call the programmer")
+		panic("rotateleft(): rotating a black link ? call the programmer")
 	}
 	nd.right = y.left
 	y.left = nd
@@ -534,7 +534,7 @@ func (writer *LLRBWriter) rotateright(
 	}
 
 	if x.metadata().isblack() {
-		panic("rotating a black link ? call the programmer")
+		panic("rotateright(): rotating a black link ? call the programmer")
 	}
 	nd.left = x.right
 	x.right = nd
@@ -613,7 +613,7 @@ loop:
 	for snapshot != nil {
 		refcount := atomic.LoadInt64(&snapshot.refcount)
 		if refcount < 0 {
-			panic("snapshot refcount gone negative")
+			panic("purgesnapshot(): snapshot refcount gone negative")
 		} else if refcount > 0 {
 			break loop
 		}
