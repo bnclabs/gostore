@@ -71,7 +71,7 @@ type Index interface {
 	Isactive() bool
 
 	// RSnapshot return snapshot that shan't be disturbed by subsequent writes.
-	RSnapshot() (Snapshot, error)
+	RSnapshot(snapch chan Snapshot) error
 
 	// Stats return a map of index statistics, involved ranges from 1-9
 	// where 1 being quick set of statistics and 9 being very involved set

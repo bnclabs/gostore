@@ -92,7 +92,7 @@ func doCheck(args []string) {
 	if checkopts.mvcc > 0 {
 		go validateTick(checkopts.vtick, opch)
 		go snapshotTick(checkopts.stick, opch)
-		go releaseTick(checkopts.rtick, opch)
+		//go releaseTick(checkopts.rtick, opch)
 		readers := make([]chan llrbcmd, 0)
 		for i := 0; i < checkopts.mvcc; i++ {
 			ropch := make(chan llrbcmd, 10000)
@@ -172,29 +172,32 @@ func checkLLRBMvcc(
 	config["log.level"] = checkopts.log
 	llrb := storage.NewLLRB("check", config, nil)
 
-	commandreaders := func(cmd llrbcmd, rdrs []chan llrbcmd) {
-		for _, reader := range rdrs {
-			reader <- cmd
-		}
-	}
-
+	snapch := make(chan storage.Snapshot, 2)
 	makesnaps := func() (dsnap, lsnap storage.Snapshot) {
-		dictsnap, err := dict.RSnapshot()
+		err := dict.RSnapshot(snapch)
 		if err != nil {
 			panic(err)
 		}
-		llrbsnap, err := llrb.RSnapshot()
+		dictsnap := <-snapch
+		err = llrb.RSnapshot(snapch)
 		if err != nil {
 			panic(err)
 		}
+		llrbsnap := <-snapch
 		return dictsnap, llrbsnap
 	}
 
 	vbno, vbuuid, seqno := uint16(10), uint64(1234), uint64(0)
 	dictsnap, llrbsnap := makesnaps()
-	stats := clonestats(genstats)
-	lcmd := llrbcmd{cmd: []interface{}{"snapshot", dictsnap, llrbsnap, stats}}
-	commandreaders(lcmd, readers)
+	snaprespch := make(chan interface{}, 1)
+	for _, reader := range readers {
+		stats := clonestats(genstats)
+		lcmd := llrbcmd{
+			cmd: []interface{}{"snapshot", dictsnap, llrbsnap, stats, snaprespch},
+		}
+		reader <- lcmd
+		<-snaprespch
+	}
 
 	for seqno < count {
 		seqno++
@@ -206,13 +209,21 @@ func checkLLRBMvcc(
 			}
 			switch cmd[0].(string) {
 			case "get":
-				commandreaders(lcmd, readers)
+				for _, reader := range readers {
+					reader <- lcmd
+				}
 			case "min":
-				commandreaders(lcmd, readers)
+				for _, reader := range readers {
+					reader <- lcmd
+				}
 			case "max":
-				commandreaders(lcmd, readers)
+				for _, reader := range readers {
+					reader <- lcmd
+				}
 			case "range":
-				commandreaders(lcmd, readers)
+				for _, reader := range readers {
+					reader <- lcmd
+				}
 			case "delmin":
 				genstats = llrb_opDelmin(dict, llrb, lcmd, genstats)
 			case "delmax":
@@ -223,30 +234,49 @@ func checkLLRBMvcc(
 				genstats = llrb_opDelete(dict, llrb, lcmd, genstats)
 			case "validate":
 				lcmd.cmd = []interface{}{cmd[0], false}
-				commandreaders(lcmd, readers)
-			case "snapshot":
 				for _, reader := range readers {
-					dictsnap, llrbsnap := makesnaps()
-					stats := clonestats(genstats)
-					cmd := []interface{}{"snapshot", dictsnap, llrbsnap, stats}
-					lcmd := llrbcmd{cmd: cmd}
 					reader <- lcmd
 				}
 
+			case "snapshot":
+				dictsnap.Release()
+				llrbsnap.Release()
+				dictsnap, llrbsnap = makesnaps()
+
+				for _, reader := range readers {
+					stats := clonestats(genstats)
+					cmd := []interface{}{"snapshot", dictsnap, llrbsnap, stats, snaprespch}
+					reader <- llrbcmd{cmd: cmd}
+					<-snaprespch
+				}
+
 			case "release":
-				commandreaders(lcmd, readers)
+				continue
+
 			default:
 				log.Fatalf("unknown command %v\n", cmd)
 			}
 		}
 	}
-	lcmd = llrbcmd{cmd: []interface{}{"validate", true}}
+
+	lcmd := llrbcmd{cmd: []interface{}{"validate", true}}
 	for _, reader := range readers {
-		commandreaders(lcmd, []chan llrbcmd{reader})
+		reader <- lcmd
 		time.Sleep(100 * time.Millisecond)
 	}
+
+	lcmd = llrbcmd{cmd: []interface{}{"release", 8}}
+	for _, reader := range readers {
+		reader <- lcmd
+		time.Sleep(100 * time.Millisecond)
+	}
+	dictsnap.Release()
+	llrbsnap.Release()
+
 	dictsnap, llrbsnap = makesnaps()
 	llrb_opValidate(dictsnap, llrbsnap, genstats, true)
+	dictsnap.Release()
+	llrbsnap.Release()
 	llrb.Log(9, true)
 }
 

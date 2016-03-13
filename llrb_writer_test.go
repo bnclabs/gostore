@@ -70,10 +70,12 @@ func TestLLRBMvccBasicSnapshot(t *testing.T) {
 	llrb := makellrbmvcc(t, "bmvccsnapshot", inserts, config)
 	writer := llrb.mvcc.writer
 
-	snapshot, err := llrb.RSnapshot()
+	snapch := make(chan Snapshot, 1)
+	err := llrb.RSnapshot(snapch)
 	if err != nil {
 		t.Error(err)
 	}
+	snapshot := <-snapch
 	if len(snapshot.(*LLRBSnapshot).reclaim) == 0 {
 		t.Errorf("expected reclaim nodes to be greater than zero")
 	}
@@ -105,10 +107,13 @@ func TestLLRBMvcclBasicLookup(t *testing.T) {
 	llrb := makellrbmvcc(t, "bmvcclookup", inserts, config)
 	writer := llrb.mvcc.writer
 
-	snapshot, err := llrb.RSnapshot()
+	snapch := make(chan Snapshot, 1)
+	err := llrb.RSnapshot(snapch)
 	if err != nil {
 		t.Error(err)
 	}
+	snapshot := <-snapch
+
 	if len(snapshot.(*LLRBSnapshot).reclaim) == 0 {
 		t.Errorf("expected reclaim nodes to be greater than zero")
 	}
@@ -189,10 +194,12 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 			}
 		})
 
-	snapshot, err := llrb.RSnapshot()
+	snapch := make(chan Snapshot, 1)
+	err := llrb.RSnapshot(snapch)
 	if err != nil {
 		t.Error(err)
 	}
+	snapshot := <-snapch
 
 	// check
 	if countref != llrb.Count() {
@@ -862,10 +869,12 @@ func makellrbmvcc(
 func validatesnapshot(sleep int, writer *LLRBWriter) (Snapshot, error) {
 	time.Sleep(time.Duration(sleep) * time.Millisecond)
 
-	snapshot, err := writer.llrb.RSnapshot()
+	snapch := make(chan Snapshot, 1)
+	err := writer.llrb.RSnapshot(snapch)
 	if err != nil {
 		return nil, err
 	}
+	snapshot := <-snapch
 
 	// validate
 	snapshot.Validate()

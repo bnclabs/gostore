@@ -254,13 +254,13 @@ func (llrb *LLRB) Release() {
 }
 
 // RSnapshot implement Index{} interface.
-func (llrb *LLRB) RSnapshot() (Snapshot, error) {
+func (llrb *LLRB) RSnapshot(snapch chan Snapshot) error {
 	if llrb.mvcc.enabled {
-		snapshot, err := llrb.mvcc.writer.getSnapshot()
+		err := llrb.mvcc.writer.getSnapshot(snapch)
 		if err != nil {
 			atomic.AddInt64(&llrb.mvcc.n_snapshots, 1)
 		}
-		return snapshot, err
+		return err
 	}
 	panic("RSnapshot(): mvcc is not enabled")
 }

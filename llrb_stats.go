@@ -160,6 +160,7 @@ func (llrb *LLRB) log(involved int, humanize bool) {
 			chain = append(chain, snapshot.Id())
 			snapshot = snapshot.next
 		}
-		log.Infof("%v snapshot chain %v\n", strings.Join(chain, "->"))
+		fmsg := "%v snapshot chain %v\n"
+		log.Infof(fmsg, llrb.logPrefix, strings.Join(chain, "->"))
 	}
 }

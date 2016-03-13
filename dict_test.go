@@ -266,10 +266,13 @@ func TestDictRsnapshot(t *testing.T) {
 		})
 	}
 
-	rd, err := d.RSnapshot()
+	snapch := make(chan Snapshot, 1)
+	err := d.RSnapshot(snapch)
 	if err != nil {
 		t.Error(err)
 	}
+	rd := <-snapch
+
 	d.Upsert(inserts[1][0], []byte("newvalue"), nil)
 	nd := rd.Get(inserts[1][0])
 	if v := nd.Value(); bytes.Compare(v, inserts[1][1]) != 0 {
@@ -284,8 +287,10 @@ func BenchmarkDictSnapshot(b *testing.B) {
 		d.Upsert([]byte(key), []byte(value), nil)
 	}
 
+	snapch := make(chan Snapshot, 1)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		d.RSnapshot()
+		d.RSnapshot(snapch)
+		<-snapch
 	}
 }

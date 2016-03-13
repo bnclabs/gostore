@@ -128,6 +128,7 @@ func doLoad(args []string) {
 	fmt.Printf("Took %v to insert %v items\n", time.Since(now), loadopts.n)
 	llrb.Log(9, true)
 
+	llrb.Validate()
 	llrb.Destroy()
 
 	if takeMEMProfile(loadopts.mprof) {

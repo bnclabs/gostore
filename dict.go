@@ -41,8 +41,9 @@ func (d *Dict) Isactive() bool {
 }
 
 // RSnapshot implement Index{} interface.
-func (d *Dict) RSnapshot() (Snapshot, error) {
-	return d.NewDictSnapshot(), nil
+func (d *Dict) RSnapshot(snapch chan Snapshot) error {
+	snapch <- d.NewDictSnapshot()
+	return nil
 }
 
 // Destroy implement Index{} interface.

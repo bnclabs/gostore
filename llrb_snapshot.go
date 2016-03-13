@@ -34,6 +34,7 @@ loop:
 			break loop
 		default:
 		}
+		log.Tracef("%v snapshot tick for %v ...\n", llrb.logPrefix, id)
 		if err := writer.makeSnapshot(id); err != nil {
 			log.Errorf("%v make snapshot $%v failed: %v\n", llrb.logPrefix, err)
 			break loop
@@ -138,14 +139,17 @@ func (snapshot *LLRBSnapshot) Isactive() bool {
 
 // Refer implement Snapshot interface.
 func (snapshot *LLRBSnapshot) Refer() {
-	atomic.AddInt64(&snapshot.refcount, 1)
 	log.Debugf("%v snapshot REF\n", snapshot.logPrefix)
+	atomic.AddInt64(&snapshot.refcount, 1)
 }
 
 // Release implement Snapshot interface.
 func (snapshot *LLRBSnapshot) Release() {
-	atomic.AddInt64(&snapshot.refcount, -1)
 	log.Debugf("%v snapshot DEREF\n", snapshot.logPrefix)
+	refcount := atomic.AddInt64(&snapshot.refcount, -1)
+	if refcount < 0 {
+		panic("Release(): snapshot refcount gone negative")
+	}
 }
 
 // Validate implement Snapshot interface.

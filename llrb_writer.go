@@ -8,7 +8,7 @@ import "runtime/debug"
 
 type LLRBWriter struct {
 	llrb    *LLRB
-	waiters []chan *LLRBSnapshot
+	waiters []chan Snapshot
 	reqch   chan []interface{}
 	finch   chan bool
 }
@@ -23,7 +23,7 @@ func (llrb *LLRB) MVCCWriter() *LLRBWriter {
 	chansize := llrb.config["mvcc.writer.chanbuffer"].(int)
 	llrb.mvcc.writer = &LLRBWriter{
 		llrb:    llrb,
-		waiters: make([]chan *LLRBSnapshot, 0, 128),
+		waiters: make([]chan Snapshot, 0, 128),
 		reqch:   make(chan []interface{}, chansize),
 		finch:   make(chan bool),
 	}
@@ -85,16 +85,9 @@ func (writer *LLRBWriter) makeSnapshot(id string) error {
 	return failsafePost(writer.reqch, cmd, writer.finch)
 }
 
-func (writer *LLRBWriter) getSnapshot() (*LLRBSnapshot, error) {
-	waiter := make(chan *LLRBSnapshot, 1)
-	respch := make(chan []interface{}, 0)
-	cmd := []interface{}{cmdLlrbWriterGetSnapshot, waiter, respch}
-	_, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
-	if err != nil {
-		return nil, err
-	}
-	snapshot := <-waiter
-	return snapshot, nil
+func (writer *LLRBWriter) getSnapshot(snapch chan Snapshot) error {
+	cmd := []interface{}{cmdLlrbWriterGetSnapshot, snapch}
+	return failsafePost(writer.reqch, cmd, writer.finch)
 }
 
 func (writer *LLRBWriter) stats(involved int) (map[string]interface{}, error) {
@@ -259,7 +252,6 @@ loop:
 				for _, waiter := range writer.waiters {
 					snapshot.Refer()
 					waiter <- snapshot
-					close(waiter)
 				}
 				fmsg := "%v $%v snapshot ACCOUNTED to %v waiters\n"
 				log.Debugf(fmsg, llrb.logPrefix, id, ln)
@@ -267,11 +259,9 @@ loop:
 			}
 
 		case cmdLlrbWriterGetSnapshot:
-			waiter := msg[1].(chan *LLRBSnapshot)
-			respch := msg[2].(chan []interface{})
+			waiter := msg[1].(chan Snapshot)
 			log.Debugf("%v adding waiter for next snapshot\n", llrb.logPrefix)
 			writer.waiters = append(writer.waiters, waiter)
-			respch <- nil
 
 		case cmdLlrbWriterDestroy:
 			ch := make(chan bool)

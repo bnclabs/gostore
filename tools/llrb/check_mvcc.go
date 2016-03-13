@@ -49,7 +49,11 @@ func mvccreader(readerid int, ropch chan llrbcmd) {
 			releasesnaps()
 			dictsnap = lcmd.cmd[1].(storage.Snapshot)
 			llrbsnap = lcmd.cmd[2].(storage.Snapshot)
-			genstats = clonestats(lcmd.cmd[3].(map[string]int))
+			genstats = lcmd.cmd[3].(map[string]int)
+			snaprespch := lcmd.cmd[4].(chan interface{})
+			dictsnap.Refer()
+			llrbsnap.Refer()
+			snaprespch <- true
 		case "release":
 			releasesnaps()
 		default:
