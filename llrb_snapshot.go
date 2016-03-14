@@ -121,6 +121,7 @@ func (llrb *LLRB) NewSnapshot(id string) *LLRBSnapshot {
 	fmsg := "%v snapshot BORN %v nodes to reclaim...\n"
 	log.Debugf(fmsg, snapshot.logPrefix, len(snapshot.reclaim))
 	llrb.mvcc.n_snapshots += 1
+	llrb.mvcc.n_activess += 1
 	return snapshot
 }
 

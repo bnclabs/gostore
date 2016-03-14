@@ -153,6 +153,7 @@ type LLRB struct { // tree container
 		// 64-bit aligned statistics
 		n_snapshots int64
 		n_purgedss  int64
+		n_activess  int64
 		n_cclookups int64
 		n_ccranges  int64
 

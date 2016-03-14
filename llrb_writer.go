@@ -45,6 +45,7 @@ const (
 	cmdLlrbWriterDelete
 	cmdLlrbWriterMakeSnapshot
 	cmdLlrbWriterGetSnapshot
+	cmdLlrbWriterPurgeSnapshot
 	cmdLlrbWriterDestroy
 	// maintanence commands
 	cmdLlrbWriterStats
@@ -87,6 +88,11 @@ func (writer *LLRBWriter) makeSnapshot(id string) error {
 
 func (writer *LLRBWriter) getSnapshot(snapch chan Snapshot) error {
 	cmd := []interface{}{cmdLlrbWriterGetSnapshot, snapch}
+	return failsafePost(writer.reqch, cmd, writer.finch)
+}
+
+func (writer *LLRBWriter) purgeSnapshot() error {
+	cmd := []interface{}{cmdLlrbWriterPurgeSnapshot}
 	return failsafePost(writer.reqch, cmd, writer.finch)
 }
 
@@ -153,8 +159,15 @@ func (writer *LLRBWriter) run() {
 	}()
 
 	reclaimNodes := func(opname string, reclaim []*Llrbnode) {
-		llrb.mvcc.reclaim = append(llrb.mvcc.reclaim, reclaim...)
-		llrb.mvcc.h_reclaims[opname].add(int64(len(reclaim)))
+		if llrb.mvcc.n_activess == 0 {
+			// no snapshots are refering to these nodes, free them.
+			for _, nd := range reclaim {
+				llrb.freenode(nd)
+			}
+		} else {
+			llrb.mvcc.reclaim = append(llrb.mvcc.reclaim, reclaim...)
+			llrb.mvcc.h_reclaims[opname].add(int64(len(reclaim)))
+		}
 	}
 
 loop:
@@ -270,6 +283,9 @@ loop:
 			waiter := msg[1].(chan Snapshot)
 			log.Debugf("%v adding waiter for next snapshot\n", llrb.logPrefix)
 			writer.waiters = append(writer.waiters, waiter)
+
+		case cmdLlrbWriterPurgeSnapshot:
+			writer.purgesnapshot(llrb)
 
 		case cmdLlrbWriterDestroy:
 			ch := make(chan bool)
@@ -619,6 +635,7 @@ loop:
 		for _, nd := range snapshot.reclaim {
 			snapshot.llrb.freenode(nd)
 		}
+		llrb.mvcc.n_activess -= 1
 		atomic.AddInt64(&llrb.mvcc.n_purgedss, 1)
 		log.Debugf("%v snapshot PURGED\n", snapshot.logPrefix)
 		atomic.AddInt64(&llrb.n_lookups, snapshot.n_lookups)

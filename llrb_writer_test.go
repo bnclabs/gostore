@@ -76,8 +76,8 @@ func TestLLRBMvccBasicSnapshot(t *testing.T) {
 		t.Error(err)
 	}
 	snapshot := <-snapch
-	if len(snapshot.(*LLRBSnapshot).reclaim) == 0 {
-		t.Errorf("expected reclaim nodes to be greater than zero")
+	if len(snapshot.(*LLRBSnapshot).reclaim) > 0 {
+		t.Errorf("expected reclaim nodes to be zero")
 	}
 	snapshot.Release()
 
@@ -114,8 +114,8 @@ func TestLLRBMvcclBasicLookup(t *testing.T) {
 	}
 	snapshot := <-snapch
 
-	if len(snapshot.(*LLRBSnapshot).reclaim) == 0 {
-		t.Errorf("expected reclaim nodes to be greater than zero")
+	if len(snapshot.(*LLRBSnapshot).reclaim) > 0 {
+		t.Errorf("expected reclaim nodes to be zero")
 	}
 	snapshot.Release()
 
@@ -475,26 +475,32 @@ func TestLLRBMvccInsert(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	overhead, useful := int64(21670), int64(14676480)
-	allocated, avail := int64(14376576), int64(1059365248)
+	overhead, useful := int64(4906), int64(2096640)
+	allocated, avail := int64(960000), int64(1072781824)
 	if x := stats["node.overhead"].(int64); x != overhead {
 		t.Errorf("expected %v, got %v", overhead, x)
-	} else if x := stats["node.useful"].(int64); x != useful {
+	}
+	if x := stats["node.useful"].(int64); x != useful {
 		t.Errorf("expected %v, got %v", useful, x)
-	} else if x := stats["node.allocated"].(int64); x != allocated {
+	}
+	if x := stats["node.allocated"].(int64); x != allocated {
 		t.Errorf("expected %v, got %v", allocated, x)
-	} else if x := stats["node.available"].(int64); x != avail {
+	}
+	if x := stats["node.available"].(int64); x != avail {
 		t.Errorf("expected %v, got %v", avail, x)
 	}
 	overhead, useful = int64(22656), int64(20971520)
-	allocated, avail = int64(19168768), int64(10718249472)
+	allocated, avail = int64(1280000), int64(10736138240)
 	if x := stats["value.overhead"].(int64); x != overhead {
 		t.Errorf("expected %v, got %v", overhead, x)
-	} else if x := stats["value.useful"].(int64); x != useful {
+	}
+	if x := stats["value.useful"].(int64); x != useful {
 		t.Errorf("expected %v, got %v", useful, x)
-	} else if x := stats["value.allocated"].(int64); x != allocated {
+	}
+	if x := stats["value.allocated"].(int64); x != allocated {
 		t.Errorf("expected %v, got %v", allocated, x)
-	} else if x := stats["value.available"].(int64); x != avail {
+	}
+	if x := stats["value.available"].(int64); x != avail {
 		t.Errorf("expected %v, got %v", avail, x)
 	}
 	if x, y := int64(100000), stats["keymemory"].(int64); x != y {
@@ -596,35 +602,43 @@ func TestLLRBMvccUpsert(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if overhead := stats["node.overhead"].(int64); overhead != 21670 {
-		t.Errorf("expected %v, got %v", 21670, overhead)
-	} else if useful := stats["node.useful"].(int64); useful != 14676480 {
-		t.Errorf("expected %v, got %v", 14676480, useful)
+	if overhead := stats["node.overhead"].(int64); overhead != 4906 {
+		t.Errorf("expected %v, got %v", 4906, overhead)
+	}
+	if useful := stats["node.useful"].(int64); useful != 2096640 {
+		t.Errorf("expected %v, got %v", 2096640, useful)
 	}
 	overhead := stats["value.overhead"].(int64)
-	if overhead != 46188 {
-		t.Errorf("expected %v, got %v", 46188, overhead)
-	} else if useful := stats["value.useful"].(int64); useful != 62911488 {
-		t.Errorf("expected %v, got %v", 62911488, useful)
+	if overhead != 34422 {
+		t.Errorf("expected %v, got %v", 34422, overhead)
 	}
-	x, y := int64(13196736), stats["node.allocated"].(int64)
-	if x != y {
+	if useful := stats["value.useful"].(int64); useful != 41941504 {
+		t.Errorf("expected %v, got %v", 41941504, useful)
+	}
+
+	// TODO: these number keep changing for every run,
+	//       figure a way to validate them.
+	//x, y := int64(987936), stats["node.allocated"].(int64)
+	//if x != y {
+	//	t.Errorf("expected %v, got %v", x, y)
+	//}
+	//x, y = int64(2283968), stats["value.allocated"].(int64)
+	//if x != y {
+	//	t.Errorf("expected %v, got %v", x, y)
+	//}
+	//x, y = int64(1072753888), stats["node.available"].(int64)
+	//if x != y {
+	//	t.Errorf("expected %v, got %v", x, y)
+	//}
+	//x, y = int64(10735134272), stats["value.available"].(int64)
+	//if x != y {
+	//	t.Errorf("expected %v, got %v", x, y)
+	//}
+
+	if x, y := int64(100000), stats["keymemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
-	x, y = int64(28894368), stats["value.allocated"].(int64)
-	if x != y {
-		t.Errorf("expected %v, got %v", x, y)
-	}
-	x, y = int64(1060545088), stats["node.available"].(int64)
-	if x != y {
-		t.Errorf("expected %v, got %v", x, y)
-	}
-	x, y = int64(10708523872), stats["value.available"].(int64)
-	if x != y {
-		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(100000), stats["keymemory"].(int64); x != y {
-		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(2000000), stats["valmemory"].(int64); x != y {
+	if x, y := int64(2000000), stats["valmemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
 
@@ -736,10 +750,10 @@ func TestLLRBMvccDelete(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if overhead := stats["node.overhead"].(int64); overhead != 38434 {
-		t.Errorf("expected %v, got %v", 38434, overhead)
-	} else if useful := stats["node.useful"].(int64); useful != 27256320 {
-		t.Errorf("expected %v, got %v", 27256320, useful)
+	if overhead := stats["node.overhead"].(int64); overhead != 4906 {
+		t.Errorf("expected %v, got %v", 4906, overhead)
+	} else if useful := stats["node.useful"].(int64); useful != 2096640 {
+		t.Errorf("expected %v, got %v", 2096640, useful)
 	} else if x, y := int64(0), stats["node.allocated"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
@@ -748,10 +762,10 @@ func TestLLRBMvccDelete(t *testing.T) {
 		t.Errorf("expected %v, got %v", x, y)
 	}
 	overhead := stats["value.overhead"].(int64)
-	if overhead != 43200 {
-		t.Errorf("expected %v, got %v", 43200, overhead)
-	} else if useful := stats["value.useful"].(int64); useful != 41943040 {
-		t.Errorf("expected %v, got %v", 41943040, useful)
+	if overhead != 22656 {
+		t.Errorf("expected %v, got %v", 22656, overhead)
+	} else if useful := stats["value.useful"].(int64); useful != 20971520 {
+		t.Errorf("expected %v, got %v", 20971520, useful)
 	} else if x, y = int64(0), stats["value.allocated"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}

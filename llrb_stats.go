@@ -62,6 +62,8 @@ func (llrb *LLRB) stattree(stats map[string]interface{}) map[string]interface{} 
 	stats["valmemory"] = llrb.valmemory
 	stats["mvcc.n_snapshots"] = llrb.mvcc.n_snapshots
 	stats["mvcc.n_purgedss"] = llrb.mvcc.n_purgedss
+	stats["mvcc.n_activess"] = llrb.mvcc.n_activess
+	stats["mvcc.n_purgedss"] = llrb.mvcc.n_purgedss
 	stats["mvcc.n_cclookups"] = llrb.mvcc.n_cclookups
 	stats["mvcc.n_ccranges"] = llrb.mvcc.n_ccranges
 	return stats
