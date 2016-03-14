@@ -171,10 +171,13 @@ type LLRB struct { // tree container
 		reclaim  []*Llrbnode
 		writer   *LLRBWriter
 		snapshot *LLRBSnapshot
+		ismut    int64
 
 		// stats
 		n_snapshots int64
 		n_purgedss  int64
+		n_cclookups int64
+		n_ccranges  int64
 		h_bulkfree  *histogramInt64
 		h_reclaims  map[string]*histogramInt64
 	}

@@ -167,11 +167,13 @@ loop:
 			callb := msg[3].(UpsertCallback)
 			respch := msg[4].(chan []interface{})
 
+			atomic.AddInt64(&llrb.mvcc.ismut, 1)
 			depth := int64(1) /*upsertdepth*/
 			root, newnd, oldnd, reclaim =
 				writer.upsert(llrb.root, depth, key, val, reclaim)
 			root.metadata().setblack()
 			llrb.root = root
+			atomic.AddInt64(&llrb.mvcc.ismut, -1)
 
 			llrb.upsertcounts(key, val, oldnd)
 
@@ -191,11 +193,13 @@ loop:
 			callb := msg[1].(DeleteCallback)
 			respch := msg[2].(chan []interface{})
 
+			atomic.AddInt64(&llrb.mvcc.ismut, 1)
 			root, deleted, reclaim := writer.deletemin(llrb.root, reclaim)
 			if root != nil {
 				root.metadata().setblack()
 			}
 			llrb.root = root
+			atomic.AddInt64(&llrb.mvcc.ismut, -1)
 
 			llrb.delcount(deleted)
 
@@ -210,11 +214,13 @@ loop:
 			callb := msg[1].(DeleteCallback)
 			respch := msg[2].(chan []interface{})
 
+			atomic.AddInt64(&llrb.mvcc.ismut, 1)
 			root, deleted, reclaim := writer.deletemax(llrb.root, reclaim)
 			if root != nil {
 				root.metadata().setblack()
 			}
 			llrb.root = root
+			atomic.AddInt64(&llrb.mvcc.ismut, -1)
 
 			llrb.delcount(deleted)
 
@@ -229,11 +235,13 @@ loop:
 			key, callb := msg[1].([]byte), msg[2].(DeleteCallback)
 			respch := msg[3].(chan []interface{})
 
+			atomic.AddInt64(&llrb.mvcc.ismut, 1)
 			root, deleted, reclaim := writer.delete(llrb.root, key, reclaim)
 			if root != nil {
 				root.metadata().setblack()
 			}
 			llrb.root = root
+			atomic.AddInt64(&llrb.mvcc.ismut, -1)
 
 			llrb.delcount(deleted)
 
@@ -615,6 +623,8 @@ loop:
 		log.Debugf("%v snapshot PURGED\n", snapshot.logPrefix)
 		atomic.AddInt64(&llrb.n_lookups, snapshot.n_lookups)
 		atomic.AddInt64(&llrb.n_ranges, snapshot.n_ranges)
+		atomic.AddInt64(&llrb.mvcc.n_cclookups, snapshot.n_cclookups)
+		atomic.AddInt64(&llrb.mvcc.n_ccranges, snapshot.n_ccranges)
 		snapshot = snapshot.next
 	}
 	llrb.mvcc.snapshot = snapshot

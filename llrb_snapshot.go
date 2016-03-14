@@ -60,8 +60,10 @@ type LLRBSnapshot struct {
 	logPrefix string
 
 	// reader statistics
-	n_lookups int64
-	n_ranges  int64
+	n_lookups   int64
+	n_ranges    int64
+	n_cclookups int64
+	n_ccranges  int64
 
 	// writer statistics
 	n_count       int64
@@ -178,7 +180,13 @@ func (snapshot *LLRBSnapshot) Has(key []byte) bool {
 
 // Get implement Reader{} interface.
 func (snapshot *LLRBSnapshot) Get(key []byte) Node {
-	defer atomic.AddInt64(&snapshot.n_lookups, 1)
+	defer func() {
+		if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
+			snapshot.n_cclookups += 1
+		} else {
+			snapshot.n_lookups += 1
+		}
+	}()
 
 	nd := snapshot.root
 	for nd != nil {
@@ -195,7 +203,13 @@ func (snapshot *LLRBSnapshot) Get(key []byte) Node {
 
 // Min implement Reader{} interface.
 func (snapshot *LLRBSnapshot) Min() Node {
-	defer atomic.AddInt64(&snapshot.n_lookups, 1)
+	defer func() {
+		if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
+			snapshot.n_cclookups += 1
+		} else {
+			snapshot.n_lookups += 1
+		}
+	}()
 
 	var nd *Llrbnode
 	if nd = snapshot.root; nd == nil {
@@ -209,7 +223,13 @@ func (snapshot *LLRBSnapshot) Min() Node {
 
 // Max implement Reader{} interface.
 func (snapshot *LLRBSnapshot) Max() Node {
-	defer atomic.AddInt64(&snapshot.n_lookups, 1)
+	defer func() {
+		if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
+			snapshot.n_cclookups += 1
+		} else {
+			snapshot.n_lookups += 1
+		}
+	}()
 
 	var nd *Llrbnode
 	if nd = snapshot.root; nd == nil {
@@ -223,7 +243,13 @@ func (snapshot *LLRBSnapshot) Max() Node {
 
 // Range implement Reader{} interface.
 func (s *LLRBSnapshot) Range(lkey, hkey []byte, incl string, iter NodeIterator) {
-	defer atomic.AddInt64(&s.n_lookups, 1)
+	defer func() {
+		if atomic.LoadInt64(&s.llrb.mvcc.ismut) == 1 {
+			s.n_ccranges += 1
+		} else {
+			s.n_ranges += 1
+		}
+	}()
 
 	nd := s.root
 	switch incl {
