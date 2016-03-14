@@ -92,7 +92,7 @@ func (nd *Llrbnode) Key() []byte {
 
 // Value implement NodeGetter{}
 func (nd *Llrbnode) Value() []byte {
-	if nd != nil {
+	if nd != nil && nd.metadata().ismvalue() {
 		return nd.nodevalue().value()
 	}
 	return nil

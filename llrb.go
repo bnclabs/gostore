@@ -479,11 +479,13 @@ func (llrb *LLRB) upsert(
 		nd.right, newnd, oldnd = llrb.upsert(nd.right, depth+1, key, value)
 	} else {
 		oldnd, dirty = llrb.clone(nd), false
-		if nv := nd.nodevalue(); nv != nil { // free the value if present
-			nv.pool.free(unsafe.Pointer(nv))
-			nd, dirty = nd.setnodevalue(nil), true
+		if nd.metadata().ismvalue() {
+			if nv := nd.nodevalue(); nv != nil { // free the value if present
+				nv.pool.free(unsafe.Pointer(nv))
+				nd, dirty = nd.setnodevalue(nil), true
+			}
 		}
-		if value != nil { // add new value if need be
+		if nd.metadata().ismvalue() && value != nil { // add new value if req.
 			ptr, mpool := llrb.valarena.alloc(int64(nvaluesize + len(value)))
 			nv := (*nodevalue)(ptr)
 			nv.pool = mpool
@@ -648,7 +650,9 @@ func (llrb *LLRB) delete(nd *Llrbnode, key []byte) (newnd, deleted *Llrbnode) {
 			} else {
 				newnd.metadata().setred()
 			}
-			newnd.nodevalue().setvalue(subdeleted.nodevalue().value())
+			if newnd.metadata().ismvalue() {
+				newnd.nodevalue().setvalue(subdeleted.nodevalue().value())
+			}
 			deleted, nd = nd, newnd
 			llrb.freenode(subdeleted)
 		} else { // Else, @key is bigger than @nd
@@ -792,9 +796,11 @@ func (llrb *LLRB) freenode(nd *Llrbnode) {
 		defer func() {
 			llrb.n_frees += 1
 		}()
-		nv := nd.nodevalue()
-		if nv != nil {
-			nv.pool.free(unsafe.Pointer(nv))
+		if nd.metadata().ismvalue() {
+			nv := nd.nodevalue()
+			if nv != nil {
+				nv.pool.free(unsafe.Pointer(nv))
+			}
 		}
 		nd.pool.free(unsafe.Pointer(nd))
 	}
@@ -830,7 +836,9 @@ func (llrb *LLRB) upsertcounts(key, value []byte, oldnd *Llrbnode) {
 		llrb.n_inserts += 1
 	} else {
 		llrb.keymemory -= int64(len(oldnd.key()))
-		llrb.valmemory -= int64(len(oldnd.nodevalue().value()))
+		if oldnd.metadata().ismvalue() {
+			llrb.valmemory -= int64(len(oldnd.nodevalue().value()))
+		}
 		llrb.n_updates += 1
 	}
 	llrb.keymemory += int64(len(key))
@@ -840,7 +848,9 @@ func (llrb *LLRB) upsertcounts(key, value []byte, oldnd *Llrbnode) {
 func (llrb *LLRB) delcount(nd *Llrbnode) {
 	if nd != nil {
 		llrb.keymemory -= int64(len(nd.key()))
-		llrb.valmemory -= int64(len(nd.nodevalue().value()))
+		if nd.metadata().ismvalue() {
+			llrb.valmemory -= int64(len(nd.nodevalue().value()))
+		}
 		llrb.n_count -= 1
 		llrb.n_deletes += 1
 	}

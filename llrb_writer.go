@@ -159,6 +159,7 @@ func (writer *LLRBWriter) run() {
 	}()
 
 	reclaimNodes := func(opname string, reclaim []*Llrbnode) {
+		llrb.mvcc.h_reclaims[opname].add(int64(len(reclaim)))
 		if llrb.mvcc.n_activess == 0 {
 			// no snapshots are refering to these nodes, free them.
 			for _, nd := range reclaim {
@@ -166,7 +167,6 @@ func (writer *LLRBWriter) run() {
 			}
 		} else {
 			llrb.mvcc.reclaim = append(llrb.mvcc.reclaim, reclaim...)
-			llrb.mvcc.h_reclaims[opname].add(int64(len(reclaim)))
 		}
 	}
 
@@ -349,11 +349,13 @@ func (writer *LLRBWriter) upsert(
 			writer.upsert(ndmvcc.right, depth+1, key, value, reclaim)
 	} else {
 		oldnd = nd
-		if nv := ndmvcc.nodevalue(); nv != nil { // free the value if present
-			nv.pool.free(unsafe.Pointer(nv))
-			ndmvcc = ndmvcc.setnodevalue(nil)
+		if ndmvcc.metadata().ismvalue() {
+			if nv := ndmvcc.nodevalue(); nv != nil { // free the value if pres.
+				nv.pool.free(unsafe.Pointer(nv))
+				ndmvcc = ndmvcc.setnodevalue(nil)
+			}
 		}
-		if value != nil { // add new value if need be
+		if ndmvcc.metadata().ismvalue() && value != nil { // add new value.
 			ptr, mpool := llrb.valarena.alloc(int64(nvaluesize + len(value)))
 			nv := (*nodevalue)(ptr)
 			nv.pool = mpool
@@ -483,7 +485,9 @@ func (writer *LLRBWriter) delete(
 			} else {
 				newnd.metadata().setred()
 			}
-			newnd.nodevalue().setvalue(subd.nodevalue().value())
+			if newnd.metadata().ismvalue() {
+				newnd.nodevalue().setvalue(subd.nodevalue().value())
+			}
 			deleted, ndmvcc = ndmvcc, newnd
 			reclaim = append(reclaim, deleted)
 		} else { // Else, @key is bigger than @ndmvcc
