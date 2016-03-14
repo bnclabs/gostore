@@ -180,6 +180,7 @@ loop:
 			callb := msg[3].(UpsertCallback)
 			respch := msg[4].(chan []interface{})
 
+			llrb.mvcc.h_versions.add(llrb.mvcc.n_activess)
 			atomic.AddInt64(&llrb.mvcc.ismut, 1)
 			depth := int64(1) /*upsertdepth*/
 			root, newnd, oldnd, reclaim =
@@ -206,6 +207,7 @@ loop:
 			callb := msg[1].(DeleteCallback)
 			respch := msg[2].(chan []interface{})
 
+			llrb.mvcc.h_versions.add(llrb.mvcc.n_activess)
 			atomic.AddInt64(&llrb.mvcc.ismut, 1)
 			root, deleted, reclaim := writer.deletemin(llrb.root, reclaim)
 			if root != nil {
@@ -227,6 +229,7 @@ loop:
 			callb := msg[1].(DeleteCallback)
 			respch := msg[2].(chan []interface{})
 
+			llrb.mvcc.h_versions.add(llrb.mvcc.n_activess)
 			atomic.AddInt64(&llrb.mvcc.ismut, 1)
 			root, deleted, reclaim := writer.deletemax(llrb.root, reclaim)
 			if root != nil {
@@ -248,6 +251,7 @@ loop:
 			key, callb := msg[1].([]byte), msg[2].(DeleteCallback)
 			respch := msg[3].(chan []interface{})
 
+			llrb.mvcc.h_versions.add(llrb.mvcc.n_activess)
 			atomic.AddInt64(&llrb.mvcc.ismut, 1)
 			root, deleted, reclaim := writer.delete(llrb.root, key, reclaim)
 			if root != nil {

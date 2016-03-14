@@ -165,6 +165,7 @@ type LLRB struct { // tree container
 		snapshot   *LLRBSnapshot
 		h_bulkfree *histogramInt64
 		h_reclaims map[string]*histogramInt64
+		h_versions *histogramInt64
 	}
 
 	h_upsertdepth *histogramInt64
@@ -220,13 +221,14 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	llrb.mvcc.enabled = config["mvcc.enable"].(bool)
 	if llrb.mvcc.enabled {
 		llrb.mvcc.reclaim = make([]*Llrbnode, 0, 64)
-		llrb.mvcc.h_bulkfree = newhistorgramInt64(1024, 1024*1024, 4*1024)
+		llrb.mvcc.h_bulkfree = newhistorgramInt64(200000, 500000, 100000)
 		llrb.mvcc.h_reclaims = map[string]*histogramInt64{
 			"upsert": newhistorgramInt64(4, 1024, 4),
 			"delmin": newhistorgramInt64(4, 1024, 4),
 			"delmax": newhistorgramInt64(4, 1024, 4),
 			"delete": newhistorgramInt64(4, 1024, 4),
 		}
+		llrb.mvcc.h_versions = newhistorgramInt64(0, 32, 1)
 		llrb.MVCCWriter()
 	}
 
