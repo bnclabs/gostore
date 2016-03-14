@@ -108,19 +108,20 @@ func (h *histogramInt64) stats() map[string]int64 {
 	return m
 }
 
-func (h *histogramInt64) fullstats(
-	stats map[string]interface{}, prefix string) map[string]interface{} {
-
-	stats[prefix+"samples"] = h.samples()
-	stats[prefix+"min"] = h.min()
-	stats[prefix+"max"] = h.max()
-	stats[prefix+"mean"] = h.mean()
-	stats[prefix+"variance"] = h.variance()
-	stats[prefix+"stddeviance"] = h.sd()
+func (h *histogramInt64) fullstats() map[string]interface{} {
+	hmap := make(map[string]interface{})
 	for k, v := range h.stats() {
-		stats[prefix+"h."+k] = v
+		hmap[k] = v
 	}
-	return stats
+	return map[string]interface{}{
+		"samples":     h.samples(),
+		"min":         h.min(),
+		"max":         h.max(),
+		"mean":        h.mean(),
+		"variance":    h.variance(),
+		"stddeviance": h.sd(),
+		"histogram":   hmap,
+	}
 }
 
 func (h *histogramInt64) clone() *histogramInt64 {

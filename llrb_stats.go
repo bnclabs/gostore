@@ -10,18 +10,17 @@ import gohumanize "github.com/dustin/go-humanize"
 func (llrb *LLRB) stats(involved int) (map[string]interface{}, error) {
 	stats := llrb.statsmem(map[string]interface{}{})
 	stats = llrb.stattree(stats)
-	stats = llrb.h_upsertdepth.fullstats(stats, "upsertdepth.")
+	stats["h_upsertdepth"] = llrb.h_upsertdepth.fullstats()
 	if llrb.mvcc.enabled {
-		stats = llrb.mvcc.h_bulkfree.fullstats(stats, "mvcc.h_bulkfree.")
+		stats["mvcc.h_bulkfree"] = llrb.mvcc.h_bulkfree.fullstats()
 		for k, h := range llrb.mvcc.h_reclaims {
-			stats = h.fullstats(stats, "mvcc.h_reclaims."+k+".")
+			stats["mvcc.h_reclaims."+k] = h.fullstats()
 		}
 	}
 	if involved >= 9 {
 		h_heightav := newhistorgramInt64(1, 256, 1)
 		llrb.heightStats(llrb.root, 1 /*depth*/, h_heightav)
-		stats = h_heightav.fullstats(stats, "h_height.")
-
+		stats["h_height"] = h_heightav.fullstats()
 		stats["n_blacks"] = llrb.countblacks(llrb.root, 0)
 	}
 	return stats, nil
