@@ -44,6 +44,26 @@ loop:
 
 // LLRBSnapshot holds on to a read-only version of the LLRB tree.
 type LLRBSnapshot struct {
+	// 64-bit aligned reader statistics
+	n_lookups   int64
+	n_ranges    int64
+	n_cclookups int64
+	n_ccranges  int64
+
+	// 64-bit aligned writer statistics
+	n_count       int64
+	n_inserts     int64
+	n_updates     int64
+	n_deletes     int64
+	n_allocs      int64
+	n_frees       int64
+	n_clones      int64
+	keymemory     int64
+	valmemory     int64
+	h_upsertdepth histogramInt64
+
+	// can be unaligned fields
+
 	llrb  *LLRB
 	id    string
 	root  *Llrbnode
@@ -58,24 +78,6 @@ type LLRBSnapshot struct {
 	// config
 	fmask     metadataMask
 	logPrefix string
-
-	// reader statistics
-	n_lookups   int64
-	n_ranges    int64
-	n_cclookups int64
-	n_ccranges  int64
-
-	// writer statistics
-	n_count       int64
-	n_inserts     int64
-	n_updates     int64
-	n_deletes     int64
-	n_allocs      int64
-	n_frees       int64
-	n_clones      int64
-	keymemory     int64
-	valmemory     int64
-	h_upsertdepth histogramInt64
 }
 
 // NewSnapshot mvcc version for LLRB tree.

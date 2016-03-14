@@ -132,6 +132,44 @@ const MaxValmem = 10 * 1024 * 1024
 
 // LLRB to manage in-memory sorted index using left-leaning-red-black trees.
 type LLRB struct { // tree container
+	// 64-bit aligned reader statistics
+	n_lookups int64
+	n_ranges  int64
+
+	// 64-bit aligned writer statistics
+	n_count   int64 // number of nodes in the tree
+	n_inserts int64
+	n_updates int64
+	n_deletes int64
+	n_allocs  int64
+	n_frees   int64
+	n_clones  int64
+	keymemory int64 // memory used by all keys
+	valmemory int64 // memory used by all values
+
+	// mvcc
+	mvcc struct {
+		ismut int64
+		// 64-bit aligned statistics
+		n_snapshots int64
+		n_purgedss  int64
+		n_cclookups int64
+		n_ccranges  int64
+
+		// can be unaligned fields
+
+		enabled    bool
+		reclaim    []*Llrbnode
+		writer     *LLRBWriter
+		snapshot   *LLRBSnapshot
+		h_bulkfree *histogramInt64
+		h_reclaims map[string]*histogramInt64
+	}
+
+	h_upsertdepth *histogramInt64
+
+	// can be unaligned fields
+
 	name      string
 	nodearena *memarena
 	valarena  *memarena
@@ -146,41 +184,8 @@ type LLRB struct { // tree container
 	config    map[string]interface{}
 	logPrefix string
 
-	// reader statistics
-	n_lookups int64
-	n_ranges  int64
-
-	// writer statistics
-	n_count       int64 // number of nodes in the tree
-	n_inserts     int64
-	n_updates     int64
-	n_deletes     int64
-	n_allocs      int64
-	n_frees       int64
-	n_clones      int64
-	keymemory     int64 // memory used by all keys
-	valmemory     int64 // memory used by all values
-	h_upsertdepth *histogramInt64
-
 	// scratch pad
 	strsl []string
-
-	// mvcc
-	mvcc struct {
-		enabled  bool
-		reclaim  []*Llrbnode
-		writer   *LLRBWriter
-		snapshot *LLRBSnapshot
-		ismut    int64
-
-		// stats
-		n_snapshots int64
-		n_purgedss  int64
-		n_cclookups int64
-		n_ccranges  int64
-		h_bulkfree  *histogramInt64
-		h_reclaims  map[string]*histogramInt64
-	}
 }
 
 // NewLLRB a new instance of in-memory sorted index.

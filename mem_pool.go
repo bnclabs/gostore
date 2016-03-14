@@ -20,12 +20,14 @@ func init() {
 
 // mempool manages a memory block sliced up into equal sized chunks.
 type mempool struct {
-	capacity   int64          // memory managed by this pool
-	size       int64          // fixed size blocks in this pool
-	base       unsafe.Pointer // pool's base pointer
-	freelist   []uint8        // free block book-keeping
-	freeoff    int64
+	// 64-bit aligned stats
 	mallocated int64
+
+	capacity int64          // memory managed by this pool
+	size     int64          // fixed size blocks in this pool
+	base     unsafe.Pointer // pool's base pointer
+	freelist []uint8        // free block book-keeping
+	freeoff  int64
 }
 
 // size of each chunk in the block and no. of chunks in the block.
