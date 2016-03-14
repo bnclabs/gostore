@@ -261,9 +261,9 @@ func (llrb *LLRB) RSnapshot(snapch chan Snapshot) error {
 	if llrb.mvcc.enabled {
 		err := llrb.mvcc.writer.getSnapshot(snapch)
 		if err != nil {
-			atomic.AddInt64(&llrb.mvcc.n_snapshots, 1)
+			return err
 		}
-		return err
+		return nil
 	}
 	panic("RSnapshot(): mvcc is not enabled")
 }
@@ -756,7 +756,9 @@ func (llrb *LLRB) Dotdump(buffer io.Writer) {
 //---- local functions
 
 func (llrb *LLRB) newnode(k, v []byte) *Llrbnode {
-	defer atomic.AddInt64(&llrb.n_allocs, 1)
+	defer func() {
+		llrb.n_allocs += 1
+	}()
 
 	mdsize := (&metadata{}).initMetadata(0, llrb.fmask).sizeof()
 	ptr, mpool := llrb.nodearena.alloc(int64(llrbnodesize + mdsize + len(k)))
@@ -779,7 +781,9 @@ func (llrb *LLRB) newnode(k, v []byte) *Llrbnode {
 
 func (llrb *LLRB) freenode(nd *Llrbnode) {
 	if nd != nil {
-		defer atomic.AddInt64(&llrb.n_frees, 1)
+		defer func() {
+			llrb.n_frees += 1
+		}()
 		nv := nd.nodevalue()
 		if nv != nil {
 			nv.pool.free(unsafe.Pointer(nv))
@@ -789,7 +793,9 @@ func (llrb *LLRB) freenode(nd *Llrbnode) {
 }
 
 func (llrb *LLRB) clone(nd *Llrbnode) (newnd *Llrbnode) {
-	defer atomic.AddInt64(&llrb.n_clones, 1)
+	defer func() {
+		llrb.n_clones += 1
+	}()
 
 	// clone Llrbnode.
 	newndptr, mpool := llrb.nodearena.alloc(nd.pool.size)
@@ -812,23 +818,23 @@ func (llrb *LLRB) clone(nd *Llrbnode) (newnd *Llrbnode) {
 
 func (llrb *LLRB) upsertcounts(key, value []byte, oldnd *Llrbnode) {
 	if oldnd == nil {
-		atomic.AddInt64(&llrb.n_count, 1)
-		atomic.AddInt64(&llrb.n_inserts, 1)
+		llrb.n_count += 1
+		llrb.n_inserts += 1
 	} else {
-		atomic.AddInt64(&llrb.keymemory, -int64(len(oldnd.key())))
-		atomic.AddInt64(&llrb.valmemory, -int64(len(oldnd.nodevalue().value())))
-		atomic.AddInt64(&llrb.n_updates, 1)
+		llrb.keymemory -= int64(len(oldnd.key()))
+		llrb.valmemory -= int64(len(oldnd.nodevalue().value()))
+		llrb.n_updates += 1
 	}
-	atomic.AddInt64(&llrb.keymemory, int64(len(key)))
-	atomic.AddInt64(&llrb.valmemory, int64(len(value)))
+	llrb.keymemory += int64(len(key))
+	llrb.valmemory += int64(len(value))
 }
 
 func (llrb *LLRB) delcount(nd *Llrbnode) {
 	if nd != nil {
-		atomic.AddInt64(&llrb.keymemory, -int64(len(nd.key())))
-		atomic.AddInt64(&llrb.valmemory, -int64(len(nd.nodevalue().value())))
-		atomic.AddInt64(&llrb.n_count, -1)
-		atomic.AddInt64(&llrb.n_deletes, 1)
+		llrb.keymemory -= int64(len(nd.key()))
+		llrb.valmemory -= int64(len(nd.nodevalue().value()))
+		llrb.n_count -= 1
+		llrb.n_deletes += 1
 	}
 }
 

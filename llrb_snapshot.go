@@ -118,7 +118,7 @@ func (llrb *LLRB) NewSnapshot(id string) *LLRBSnapshot {
 
 	fmsg := "%v snapshot BORN %v nodes to reclaim...\n"
 	log.Debugf(fmsg, snapshot.logPrefix, len(snapshot.reclaim))
-	atomic.AddInt64(&llrb.mvcc.n_snapshots, 1)
+	llrb.mvcc.n_snapshots += 1
 	return snapshot
 }
 
@@ -182,9 +182,9 @@ func (snapshot *LLRBSnapshot) Has(key []byte) bool {
 func (snapshot *LLRBSnapshot) Get(key []byte) Node {
 	defer func() {
 		if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
-			snapshot.n_cclookups += 1
+			atomic.AddInt64(&snapshot.n_cclookups, 1)
 		} else {
-			snapshot.n_lookups += 1
+			atomic.AddInt64(&snapshot.n_lookups, 1)
 		}
 	}()
 
@@ -205,9 +205,9 @@ func (snapshot *LLRBSnapshot) Get(key []byte) Node {
 func (snapshot *LLRBSnapshot) Min() Node {
 	defer func() {
 		if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
-			snapshot.n_cclookups += 1
+			atomic.AddInt64(&snapshot.n_cclookups, 1)
 		} else {
-			snapshot.n_lookups += 1
+			atomic.AddInt64(&snapshot.n_lookups, 1)
 		}
 	}()
 
@@ -225,9 +225,9 @@ func (snapshot *LLRBSnapshot) Min() Node {
 func (snapshot *LLRBSnapshot) Max() Node {
 	defer func() {
 		if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
-			snapshot.n_cclookups += 1
+			atomic.AddInt64(&snapshot.n_cclookups, 1)
 		} else {
-			snapshot.n_lookups += 1
+			atomic.AddInt64(&snapshot.n_lookups, 1)
 		}
 	}()
 
@@ -245,9 +245,9 @@ func (snapshot *LLRBSnapshot) Max() Node {
 func (s *LLRBSnapshot) Range(lkey, hkey []byte, incl string, iter NodeIterator) {
 	defer func() {
 		if atomic.LoadInt64(&s.llrb.mvcc.ismut) == 1 {
-			s.n_ccranges += 1
+			atomic.AddInt64(&s.n_ccranges, 1)
 		} else {
-			s.n_ranges += 1
+			atomic.AddInt64(&s.n_ranges, 1)
 		}
 	}()
 
