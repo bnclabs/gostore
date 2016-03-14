@@ -39,7 +39,7 @@ func TestLLRBValidate(t *testing.T) {
 func makellrbconfig() map[string]interface{} {
 	config := map[string]interface{}{
 		"maxvb":                   1024,
-		"mvcc.enabled":            false,
+		"mvcc.enable":             false,
 		"mvcc.snapshot.tick":      5, // 5 millisecond
 		"mvcc.writer.chanbuffer":  1000,
 		"nodearena.minblock":      96,

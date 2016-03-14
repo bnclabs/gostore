@@ -98,7 +98,7 @@
 //   "metadata.vbuuid" - boolean
 //     if true, use metadata field to book-keep node's vbuuid.
 //
-//   "mvcc.enabled" - boolean
+//   "mvcc.enable" - boolean
 //     consume LLRB as Multi-Version-Concurrency-Control-led tree.
 //
 //   "mvcc.snapshot.tick" - int
@@ -216,7 +216,7 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	llrb.strsl = make([]string, 0)
 
 	// mvcc
-	llrb.mvcc.enabled = config["mvcc.enabled"].(bool)
+	llrb.mvcc.enabled = config["mvcc.enable"].(bool)
 	if llrb.mvcc.enabled {
 		llrb.mvcc.reclaim = make([]*Llrbnode, 0, 64)
 		llrb.mvcc.h_bulkfree = newhistorgramInt64(1024, 1024*1024, 4*1024)

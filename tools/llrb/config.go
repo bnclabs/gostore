@@ -7,7 +7,7 @@ func newllrbconfig() map[string]interface{} {
 	}
 	config := map[string]interface{}{
 		"maxvb":                   1024,
-		"mvcc.enabled":            mvcc,
+		"mvcc.enable":             mvcc,
 		"mvcc.snapshot.tick":      5,
 		"mvcc.writer.chanbuffer":  1000,
 		"nodearena.minblock":      loadopts.nodearena[0],

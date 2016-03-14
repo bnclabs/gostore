@@ -11,7 +11,7 @@ var _ = fmt.Sprintf("dummy")
 
 func TestNewLLRBMvcc(t *testing.T) {
 	config := makellrbconfig()
-	config["mvcc.enabled"] = true
+	config["mvcc.enable"] = true
 
 	llrb := NewLLRB("test", config, nil)
 	if llrb == nil {
@@ -63,7 +63,7 @@ func TestLLRBMvccBasicSnapshot(t *testing.T) {
 	}
 
 	config := makellrbconfig()
-	config["mvcc.enabled"] = true
+	config["mvcc.enable"] = true
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
@@ -100,7 +100,7 @@ func TestLLRBMvcclBasicLookup(t *testing.T) {
 	}
 
 	config := makellrbconfig()
-	config["mvcc.enabled"] = true
+	config["mvcc.enable"] = true
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
@@ -167,7 +167,7 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 	}
 
 	config := makellrbconfig()
-	config["mvcc.enabled"] = true
+	config["mvcc.enable"] = true
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
@@ -340,7 +340,7 @@ func TestLLRBMvccBasicRange(t *testing.T) {
 	}
 
 	config := makellrbconfig()
-	config["mvcc.enabled"] = true
+	config["mvcc.enable"] = true
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
@@ -447,7 +447,7 @@ func TestLLRBMvccBasicRange(t *testing.T) {
 
 func TestLLRBMvccInsert(t *testing.T) {
 	config := makellrbconfig()
-	config["mvcc.enabled"] = true
+	config["mvcc.enable"] = true
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
@@ -528,7 +528,7 @@ func TestLLRBMvccInsert(t *testing.T) {
 
 func TestLLRBMvccUpsert(t *testing.T) {
 	config := makellrbconfig()
-	config["mvcc.enabled"] = true
+	config["mvcc.enable"] = true
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
@@ -633,7 +633,7 @@ func TestLLRBMvccUpsert(t *testing.T) {
 
 func TestLLRBMvccDelete(t *testing.T) {
 	config := makellrbconfig()
-	config["mvcc.enabled"] = true
+	config["mvcc.enable"] = true
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
@@ -769,7 +769,7 @@ func TestLLRBMvccDelete(t *testing.T) {
 
 func TestLLRBMvccRange(t *testing.T) {
 	config := makellrbconfig()
-	config["mvcc.enabled"] = true
+	config["mvcc.enable"] = true
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true

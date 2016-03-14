@@ -1,18 +1,9 @@
 LLRB:
-* imporve panic messages.
-* upsert samples should match upsert+insert counts.
-* improve logging while purging snapshots
-    PURGE <snapshot>, remaining chain of snapshot.
-* should get snapshot by a sync call to writer or post call ?
-* check the maximum value for height stats.
-* improve panic messages.
+* count active snapshot for every write operations.
 * should llrb.clone() copy value also ? can it be optimized for mvcc ?
 * if no snapshots are refering to a node, don't clone.
-* check the difference between upsertdepth and tree height statistics
-  and try to reason with it.
 * keymemory == 'sum of all Node.Key()'
 * valmemory == 'sum of all Node.Value()'
-* count stats in LLRB{} and LLRBSnapshot{}
 * test mvcc.writer.DeleteMin() on a tree with single node.
 * update access field.
 * dotdump hightlight red/black edges.
@@ -28,6 +19,7 @@ LLRB:
 * should we export vectorclock, also add vector clock method to Index{}
   interface ?
 * YCSB test cases.
+* do we need atomic access to `mem_pool.go` ?
 
 clock:
 * exhaust all possible combination of clock comparision TestVectorclockOrder.

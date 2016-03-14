@@ -107,7 +107,7 @@ func doLoad(args []string) {
 
 	config := map[string]interface{}{
 		"maxvb":                   1024,
-		"mvcc.enabled":            loadopts.mvcc > 0,
+		"mvcc.enable":             loadopts.mvcc > 0,
 		"mvcc.snapshot.tick":      5,
 		"mvcc.writer.chanbuffer":  1000,
 		"nodearena.minblock":      loadopts.nodearena[0],
