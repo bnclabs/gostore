@@ -6,9 +6,10 @@ package storage
 import "C"
 
 import "unsafe"
+
+//import "fmt"
 import "reflect"
 import "sync/atomic"
-import "encoding/binary"
 
 var poolblkinit = make([]byte, 1024)
 
@@ -26,8 +27,7 @@ type mempool struct {
 	capacity int64          // memory managed by this pool
 	size     int64          // fixed size blocks in this pool
 	base     unsafe.Pointer // pool's base pointer
-	freelist []uint8        // free block book-keeping
-	freeoff  int64
+	fbits    *freebits
 }
 
 // size of each chunk in the block and no. of chunks in the block.
@@ -36,44 +36,27 @@ func newmempool(size, n int64) *mempool {
 		panic("number of blocks in a pool should be multiple of 8")
 	}
 	capacity := size * n
-	freelist := make([]uint8, n/8)
-	for i := range freelist {
-		freelist[i] = 0xff // every block is free to begin with.
-	}
 	pool := &mempool{
 		capacity: capacity,
 		size:     size,
 		base:     C.malloc(C.size_t(capacity)),
-		freelist: freelist,
-		freeoff:  0,
+		fbits:    newfreebits(cacheline /*TODO*/, n),
 	}
 	return pool
 }
 
 // allocate and amortize
 func (pool *mempool) alloc() (unsafe.Pointer, bool) {
-	var safeoff int64
-
-	if pool.freeoff < 0 {
+	if atomic.LoadInt64(&pool.mallocated) == pool.capacity {
 		return nil, false
 	}
-	byt := pool.freelist[pool.freeoff]
-	if byt == 0 {
-		panic("mempool.alloc(): invalid free-offset")
+	nthblock, _ := pool.fbits.alloc()
+	if nthblock < 0 {
+		return nil, false
 	}
-	sz, k := pool.size, int64(findfirstset8(byt))
-	ptr := uintptr(pool.base) + uintptr(((pool.freeoff*8)*sz)+(k*sz))
-	pool.freelist[pool.freeoff] = clearbit8(byt, uint8(k))
-	// recompute freeoff - cost of memmgnt is amortized here
-	safeoff, pool.freeoff = pool.freeoff, -1
-	for i := safeoff; i < int64(len(pool.freelist)); i++ {
-		if pool.freelist[i] != 0 {
-			pool.freeoff = i
-			break
-		}
-	}
-	atomic.AddInt64(&pool.mallocated, pool.size)
+	ptr := uintptr(pool.base) + uintptr(nthblock*pool.size)
 	pool.initblock(ptr)
+	atomic.AddInt64(&pool.mallocated, pool.size)
 	return unsafe.Pointer(ptr), true
 }
 
@@ -86,18 +69,13 @@ func (pool *mempool) free(ptr unsafe.Pointer) {
 	if (diffptr % uint64(pool.size)) != 0 {
 		panic("mempool.free(): unaligned pointer")
 	}
-	nthblock := diffptr / uint64(pool.size)
-	nthoff, k := int64(nthblock/8), uint8(nthblock%8)
-	pool.freelist[nthoff] = setbit8(pool.freelist[nthoff], k)
-	if pool.freeoff == -1 || nthoff < pool.freeoff {
-		pool.freeoff = nthoff
-	}
+	pool.fbits.free(int64(diffptr / uint64(pool.size)))
 	atomic.AddInt64(&pool.mallocated, -pool.size)
 }
 
 func (pool *mempool) release() {
 	C.free(pool.base)
-	pool.freelist, pool.freeoff = nil, -1
+	pool.fbits = nil
 	pool.capacity, pool.base = 0, nil
 	atomic.StoreInt64(&pool.mallocated, 0)
 }
@@ -111,7 +89,7 @@ func (pool *mempool) less(other *mempool) bool {
 
 func (pool *mempool) memory() (overhead, useful int64) {
 	self := int64(unsafe.Sizeof(*pool))
-	slicesz := int64(cap(pool.freelist))
+	slicesz := int64(pool.fbits.sizeof())
 	return slicesz + self, pool.capacity
 }
 
@@ -125,16 +103,7 @@ func (pool *mempool) available() int64 {
 
 // can be costly operation.
 func (pool *mempool) checkallocated() int64 {
-	blocks := int64(0)
-	q, r := int64(len(pool.freelist)/4), int64(len(pool.freelist)%4)
-	for i := int64(1); i <= q; i++ {
-		v := binary.BigEndian.Uint32(pool.freelist[(i-1)*4 : i*4])
-		blocks += int64(zerosin32(uint32(v & 0xffffffff)))
-	}
-	for i := q * 4; i < (q*4)+r; i++ {
-		blocks += int64(zerosin8(pool.freelist[i]))
-	}
-	return blocks * pool.size
+	return pool.capacity - (pool.fbits.freeblocks() * pool.size)
 }
 
 func (pool *mempool) initblock(block uintptr) {

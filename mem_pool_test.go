@@ -10,14 +10,12 @@ import "fmt"
 var _ = fmt.Sprintf("dummy")
 
 func TestNewmempool(t *testing.T) {
-	size, n := int64(96), int64(1024*1024)
+	size, n := int64(96), int64(512*512)
 	mpool := newmempool(size, n)
 	if mpool.capacity != size*n {
 		t.Errorf("expected %v, got %v", size*n, mpool.capacity)
-	} else if int64(len(mpool.freelist)) != (n / 8) {
-		t.Errorf("expected %v, got %v", n/8, len(mpool.freelist))
-	} else if mpool.freeoff != 0 {
-		t.Errorf("expected %v, got %v", 0, mpool.freeoff)
+	} else if x := int64(mpool.fbits.freeblocks()); x != n {
+		t.Errorf("expected %v, got %v", n, x)
 	} else if mpool.size != size {
 		t.Errorf("expected %v, got %v", size, mpool.size)
 	}
@@ -37,8 +35,8 @@ func TestMpoolAlloc(t *testing.T) {
 	ptrs := make([]unsafe.Pointer, 0, n)
 	mpool := newmempool(size, n)
 	flref := []byte{255, 255, 255, 255, 255, 255, 255}
-	if bytes.Compare(mpool.freelist, flref) != 0 {
-		t.Errorf("expected %v, got %v", flref, mpool.freelist)
+	if bytes.Compare(mpool.fbits.bitmap, flref) != 0 {
+		t.Errorf("expected %v, got %v", flref, mpool.fbits.bitmap)
 	}
 	// allocate
 	for i := int64(0); i < n; i++ {
@@ -66,12 +64,12 @@ func TestMpoolAlloc(t *testing.T) {
 		}
 	}
 	// done
-	if bytes.Compare(mpool.freelist, flref) != 0 {
-		t.Errorf("expected %v, got %v", flref, mpool.freelist)
+	if bytes.Compare(mpool.fbits.bitmap, flref) != 0 {
+		t.Errorf("expected %v, got %v", flref, mpool.fbits.bitmap)
 	}
 	mpool.release()
 
-	size, n = 96, 1024*1024
+	size, n = 96, 512*512
 	ptrs = make([]unsafe.Pointer, 0, n)
 	mpool = newmempool(size, n)
 	// allocate all of them
@@ -87,8 +85,8 @@ func TestMpoolAlloc(t *testing.T) {
 	for i := 0; i < int(float64(n)*0.99); i++ {
 		mpool.free(ptrs[rand.Intn(int(n))])
 	}
-	if mpool.freeoff == -1 {
-		t.Errorf("unexpected -1 %v", mpool.freeoff)
+	if _, ok := mpool.alloc(); !ok {
+		t.Errorf("unexpected false")
 	} else if x := mpool.available() + mpool.allocated(); x != mpool.capacity {
 		t.Errorf("expected %v, got %v", mpool.capacity, x)
 	}
@@ -116,12 +114,14 @@ func TestMpoolAlloc(t *testing.T) {
 }
 
 func TestPoolMemory(t *testing.T) {
-	size, n := int64(96), int64(1024*1024)
+	size, n := int64(96), int64(512*512)
 	mpool := newmempool(size, n)
-	if x, y := mpool.memory(); x != 131136 {
-		t.Errorf("expected %v, got %v", 131136, x)
-	} else if y != 100663296 {
-		t.Errorf("expected %v, got %v", 100663296, y)
+	x, y := mpool.memory()
+	if x != 32872 {
+		t.Errorf("expected %v, got %v", 32872, x)
+	}
+	if y != 25165824 {
+		t.Errorf("expected %v, got %v", 25165824, y)
 	}
 }
 
@@ -151,72 +151,23 @@ func TestCheckAllocated(t *testing.T) {
 }
 
 func BenchmarkNewmempool(b *testing.B) {
-	size, n := int64(96), int64(1024*1024)
+	size, n := int64(96), int64(512*512)
 	for i := 0; i < b.N; i++ {
 		newmempool(size, n)
 	}
 }
 
 func BenchmarkMpoolAllocX(b *testing.B) {
-	size, n := int64(96), int64(1024*1024)
+	size, n := int64(96), int64(512*512)
 	mpool := newmempool(size, n)
-	// set first byte in free list to 0x1 and last byte to 0x1,
-	// emulates the worst case performance.
-	for i := int64(0); i < n/8; i++ {
-		mpool.freelist[i] = 0
+	for i := 0; i < int(n-1); i++ {
+		mpool.alloc()
 	}
-	mpool.freelist[0] = 0x1
-	mpool.freelist[len(mpool.freelist)-1] = 0x1
-	mpool.freeoff = 0
 
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		if _, ok := mpool.alloc(); !ok {
-			b.Errorf("unexpected failure in alloc")
-		} else if x := int64(len(mpool.freelist) - 1); mpool.freeoff != x {
-			b.Errorf("expected %v, got %v", x, mpool.freeoff)
-		}
-		mpool.freelist[0] = 0x1
-		mpool.freelist[len(mpool.freelist)-1] = 0x1
-		mpool.freeoff = 0
-	}
-}
-
-func BenchmarkMpoolAllocO(b *testing.B) {
-	size, n := int64(96), int64(128)
-	mpool := newmempool(size, n)
-	// set first byte in free list to 0x1 and last byte to 0x1,
-	// emulates the worst case performance.
-	for i := int64(0); i < n/8; i++ {
-		mpool.freelist[i] = 0
-	}
-	mpool.freelist[0] = 0x1
-	mpool.freelist[len(mpool.freelist)-1] = 0x1
-	mpool.freeoff = 0
-
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		if _, ok := mpool.alloc(); !ok {
-			b.Errorf("unexpected failure in alloc")
-		} else if x := int64(len(mpool.freelist) - 1); mpool.freeoff != x {
-			b.Errorf("expected %v, got %v", x, mpool.freeoff)
-		}
-		mpool.freelist[0] = 0x1
-		mpool.freelist[len(mpool.freelist)-1] = 0x1
-		mpool.freeoff = 0
-	}
-}
-
-func BenchmarkMpoolFree(b *testing.B) {
-	size, n := int64(96), int64(128)
-	mpool := newmempool(size, n)
-	ptr, ok := mpool.alloc()
-	if !ok {
-		b.Errorf("unexpected failure in alloc")
-	}
-	for i := 0; i < b.N; i++ {
+		ptr, _ := mpool.alloc()
 		mpool.free(ptr)
 	}
 }
