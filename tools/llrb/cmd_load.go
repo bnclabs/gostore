@@ -2,6 +2,7 @@ package main
 
 import "time"
 import "os"
+import "sync"
 import "fmt"
 import "strconv"
 import "flag"
@@ -122,9 +123,17 @@ func doLoad(args []string) {
 	}
 
 	llrb := storage.NewLLRB("load", config, nil)
+
 	now := time.Now()
-	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD123456), uint64(0)
-	insertItems(llrb, vbno, vbuuid, seqno, loadopts.n)
+	gench := make(chan [2][]byte, 100000)
+	go loadgenerate(loadopts.n, gench)
+	var wg sync.WaitGroup
+	for i := 0; i < runtime.NumCPU()+loadopts.mvcc; i++ {
+		vbno, vbuuid, seqno := uint16(i), uint64(0xABCD123456), uint64(0)
+		wg.Add(1)
+		go insertItems(llrb, vbno, vbuuid, seqno, gench, &wg)
+	}
+	wg.Wait()
 	fmt.Printf("Took %v to insert %v items\n", time.Since(now), loadopts.n)
 	llrb.Log(9, true)
 
@@ -137,22 +146,19 @@ func doLoad(args []string) {
 }
 
 func insertItems(
-	llrb *storage.LLRB, vbno uint16, vbuuid, seqno uint64, count int) {
+	llrb *storage.LLRB, vbno uint16, vbuuid, seqno uint64,
+	gench chan [2][]byte, wg *sync.WaitGroup) {
 
-	startseqno := seqno
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Printf("panic: %v\n", r)
 			fmt.Printf("\n%s", getStackTrace(2, debug.Stack()))
 		}
-		fmt.Printf("Inserted %v items\n", seqno-startseqno)
+		wg.Done()
 	}()
 
-	maxkey, maxval := loadopts.klen[1], loadopts.vlen[1]
-	key, value := make([]byte, maxkey), make([]byte, maxval)
-	for i := 0; i < count; i++ {
-		key = makekey(key, loadopts.klen[0], loadopts.klen[1])
-		value = makeval(key, loadopts.vlen[0], loadopts.vlen[1])
+	for item := range gench {
+		key, value := item[0], item[1]
 		llrb.Upsert(
 			key, value,
 			func(index storage.Index, newnd, oldnd storage.Node) {
@@ -160,4 +166,15 @@ func insertItems(
 			})
 		seqno++
 	}
+}
+
+func loadgenerate(count int, gench chan [2][]byte) {
+	maxkey, maxval := loadopts.klen[1], loadopts.vlen[1]
+	for i := 0; i < count; i++ {
+		key, value := make([]byte, maxkey), make([]byte, maxval)
+		key = makekey(key, loadopts.klen[0], loadopts.klen[1])
+		value = makeval(key, loadopts.vlen[0], loadopts.vlen[1])
+		gench <- [2][]byte{key, value}
+	}
+	close(gench)
 }
