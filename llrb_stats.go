@@ -98,7 +98,7 @@ func (llrb *LLRB) log(involved int, humanize bool) {
 		}
 		sort.Ints(sizes)
 		outs := []string{}
-		fmsg = "  %4v blocks %3v pools of %v each, utilz: %2.2f%%"
+		fmsg = "  %4v blocks %3v pools of %v, utilz: %2.2f%%"
 		for _, size := range sizes {
 			mpools := arenapools[int64(size)]
 			allocated, capct := int64(0), int64(0)
