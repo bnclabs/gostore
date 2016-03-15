@@ -1,25 +1,19 @@
 LLRB:
-* count active snapshot for every write operations.
-* should llrb.clone() copy value also ? can it be optimized for mvcc ?
-* if no snapshots are refering to a node, don't clone.
 * keymemory == 'sum of all Node.Key()'
 * valmemory == 'sum of all Node.Value()'
 * test mvcc.writer.DeleteMin() on a tree with single node.
+* add test cases for DeleteMin() and DeleteMax().
 * update access field.
 * dotdump hightlight red/black edges.
 * add checker for memory leak to memarena.
-* mvcc.writer export it via method Writer()
-* change config["mvcc.enabled"] to config["mvcc.enable"].
-* snapshot.Count(), don't use llrb.count
 * monster validation should randomly include value for upsert.
-* amend Get API to return the depth of the key inside the tree,
-  can be used for debugging.
 * add llrb tree validation rules, based on sedgewick paper.
-* add test cases for DeleteMin() and DeleteMax().
-* should we export vectorclock, also add vector clock method to Index{}
-  interface ?
-* YCSB test cases.
+* should llrb.clone() copy value also ? can it be optimized for mvcc ?
+  use dirty flag to avoid copy ?
 * do we need atomic access to `mem_pool.go` ?
+* if there are no outstanding snapshots, may be we can do non-mvcc
+  upserts and deletes ?
+* YCSB test cases.
 
 clock:
 * exhaust all possible combination of clock comparision TestVectorclockOrder.
