@@ -807,10 +807,6 @@ func (llrb *LLRB) freenode(nd *Llrbnode) {
 }
 
 func (llrb *LLRB) clone(nd *Llrbnode) (newnd *Llrbnode) {
-	defer func() {
-		llrb.n_clones += 1
-	}()
-
 	// clone Llrbnode.
 	newndptr, mpool := llrb.nodearena.alloc(nd.pool.size)
 	newnd = (*Llrbnode)(newndptr)
@@ -827,6 +823,7 @@ func (llrb *LLRB) clone(nd *Llrbnode) (newnd *Llrbnode) {
 			newnd.setnodevalue(newnv)
 		}
 	}
+	llrb.n_clones += 1
 	return
 }
 

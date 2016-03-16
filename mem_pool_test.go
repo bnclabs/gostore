@@ -3,7 +3,7 @@ package storage
 import "testing"
 import "unsafe"
 import "math/rand"
-import "bytes"
+import "reflect"
 import "sort"
 import "fmt"
 
@@ -34,9 +34,9 @@ func TestMpoolAlloc(t *testing.T) {
 	size, n := int64(96), int64(56)
 	ptrs := make([]unsafe.Pointer, 0, n)
 	mpool := newmempool(size, n)
-	flref := []byte{255, 255, 255, 255, 255, 255, 255}
-	if bytes.Compare(mpool.fbits.bitmap, flref) != 0 {
-		t.Errorf("expected %v, got %v", flref, mpool.fbits.bitmap)
+	flref := [][]uint8{[]uint8{255, 255, 255, 255, 255, 255, 255}}
+	if reflect.DeepEqual(mpool.fbits.bitmaps, flref) == false {
+		t.Errorf("expected %v, got %v", flref, mpool.fbits.bitmaps)
 	}
 	// allocate
 	for i := int64(0); i < n; i++ {
@@ -64,8 +64,8 @@ func TestMpoolAlloc(t *testing.T) {
 		}
 	}
 	// done
-	if bytes.Compare(mpool.fbits.bitmap, flref) != 0 {
-		t.Errorf("expected %v, got %v", flref, mpool.fbits.bitmap)
+	if reflect.DeepEqual(mpool.fbits.bitmaps, flref) == false {
+		t.Errorf("expected %v, got %v", flref, mpool.fbits.bitmaps)
 	}
 	mpool.release()
 
@@ -116,12 +116,9 @@ func TestMpoolAlloc(t *testing.T) {
 func TestPoolMemory(t *testing.T) {
 	size, n := int64(96), int64(512*512)
 	mpool := newmempool(size, n)
-	x, y := mpool.memory()
-	if x != 32872 {
-		t.Errorf("expected %v, got %v", 32872, x)
-	}
-	if y != 25165824 {
-		t.Errorf("expected %v, got %v", 25165824, y)
+	_, useful := mpool.memory()
+	if useful != 25165824 {
+		t.Errorf("expected %v, got %v", 25165824, useful)
 	}
 }
 

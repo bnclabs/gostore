@@ -142,3 +142,10 @@ func getStackTrace(skip int, stack []byte) string {
 	}
 	return buf.String()
 }
+
+func ceil(divident, divisor int64) int64 {
+	if divident%divisor == 0 {
+		return divident / divisor
+	}
+	return (divident / divisor) + 1
+}

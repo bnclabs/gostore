@@ -475,11 +475,8 @@ func TestLLRBMvccInsert(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	overhead, useful := int64(4906), int64(2096640)
+	useful := int64(2096640)
 	allocated, avail := int64(960000), int64(1072781824)
-	if x := stats["node.overhead"].(int64); x != overhead {
-		t.Errorf("expected %v, got %v", overhead, x)
-	}
 	if x := stats["node.useful"].(int64); x != useful {
 		t.Errorf("expected %v, got %v", useful, x)
 	}
@@ -489,11 +486,8 @@ func TestLLRBMvccInsert(t *testing.T) {
 	if x := stats["node.available"].(int64); x != avail {
 		t.Errorf("expected %v, got %v", avail, x)
 	}
-	overhead, useful = int64(22656), int64(20971520)
+	useful = int64(20971520)
 	allocated, avail = int64(1280000), int64(10736138240)
-	if x := stats["value.overhead"].(int64); x != overhead {
-		t.Errorf("expected %v, got %v", overhead, x)
-	}
 	if x := stats["value.useful"].(int64); x != useful {
 		t.Errorf("expected %v, got %v", useful, x)
 	}
@@ -602,15 +596,8 @@ func TestLLRBMvccUpsert(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if overhead := stats["node.overhead"].(int64); overhead != 4906 {
-		t.Errorf("expected %v, got %v", 4906, overhead)
-	}
 	if useful := stats["node.useful"].(int64); useful != 2096640 {
 		t.Errorf("expected %v, got %v", 2096640, useful)
-	}
-	overhead := stats["value.overhead"].(int64)
-	if overhead != 34422 {
-		t.Errorf("expected %v, got %v", 34422, overhead)
 	}
 	if useful := stats["value.useful"].(int64); useful != 41941504 {
 		t.Errorf("expected %v, got %v", 41941504, useful)
@@ -750,9 +737,7 @@ func TestLLRBMvccDelete(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if overhead := stats["node.overhead"].(int64); overhead != 4906 {
-		t.Errorf("expected %v, got %v", 4906, overhead)
-	} else if useful := stats["node.useful"].(int64); useful != 2096640 {
+	if useful := stats["node.useful"].(int64); useful != 2096640 {
 		t.Errorf("expected %v, got %v", 2096640, useful)
 	} else if x, y := int64(0), stats["node.allocated"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
@@ -761,10 +746,7 @@ func TestLLRBMvccDelete(t *testing.T) {
 	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
-	overhead := stats["value.overhead"].(int64)
-	if overhead != 22656 {
-		t.Errorf("expected %v, got %v", 22656, overhead)
-	} else if useful := stats["value.useful"].(int64); useful != 20971520 {
+	if useful := stats["value.useful"].(int64); useful != 20971520 {
 		t.Errorf("expected %v, got %v", 20971520, useful)
 	} else if x, y = int64(0), stats["value.allocated"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
