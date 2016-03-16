@@ -59,7 +59,7 @@ func BenchmarkFbitsfreeblks(b *testing.B) {
 }
 
 func BenchmarkFbitsallocfree(b *testing.B) {
-	cacheline, nblocks := int64(8), int64(1024) // int64(1864368)
+	cacheline, nblocks := int64(64), int64(10000)
 	fbits := newfreebits(cacheline, nblocks)
 	for i := 0; i < int(nblocks-1); i++ {
 		fbits.alloc()

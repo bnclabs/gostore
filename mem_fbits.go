@@ -8,6 +8,7 @@ const cacheline = 64
 type freebits struct {
 	cacheline int64
 	nblocks   int64
+	freeoffs  []int64
 	bitmaps   [][]uint8
 }
 
@@ -18,6 +19,7 @@ func newfreebits(cacheline int64, nblocks int64) *freebits {
 
 	fbits := &freebits{cacheline: cacheline, nblocks: nblocks}
 	fbits.bitmaps = fbits.fillbits(nblocks, make([][]byte, 0))
+	fbits.freeoffs = make([]int64, len(fbits.bitmaps))
 	return fbits
 }
 
@@ -64,13 +66,15 @@ func (fbits *freebits) freeblocks() (n int64) {
 }
 
 func (fbits *freebits) alloc() (int64, bool) {
-	_, nthblock, fin := fbits.doalloc(0, fbits.bitmaps[0], fbits.bitmaps[1:])
+	nthblock, fin := fbits.doalloc(0, 0)
 	return nthblock, fin
 }
 
-func (fbits *freebits) doalloc(
-	off int64, bmap []byte, bmaps [][]byte) (int64, int64, bool) {
-
+func (fbits *freebits) doalloc(off, index int64) (int64, bool) {
+	bmap := fbits.bitmaps[index]
+	if x := fbits.freeoffs[index]; x >= 0 {
+		off += x
+	}
 	for i, byt := range bmap[off:] {
 		if byt == 0 {
 			continue
@@ -78,34 +82,50 @@ func (fbits *freebits) doalloc(
 		n := findfirstset8(byt)
 
 		bit := ((off + int64(i)) << 3) + int64(n)
-		if len(bmaps) == 0 { // terminating condition
+		if (index + 1) == int64(len(fbits.bitmaps)) { // terminating condition
 			bmap[off+int64(i)] = clearbit8(byt, uint8(n))
-			return bit, bit, bit == (fbits.nblocks - 1)
+			if bit == (fbits.nblocks - 1) {
+				fbits.freeoffs[index] = -1
+				return bit, true
+			}
+			return bit, false
 		}
-		nbit, nthblock, fin := fbits.doalloc(bit*fbits.cacheline, bmaps[0], bmaps[1:])
-		y := nbit - ((bit * fbits.cacheline) << 3)
-		if y == (fbits.cacheline<<3) || nthblock >= (fbits.nblocks-1) {
+
+		nthblock, fin := fbits.doalloc(bit*fbits.cacheline, index+1)
+		if fin {
 			bmap[off+int64(i)] = clearbit8(byt, uint8(n))
+			if (n == 7) && (int64(i) == (fbits.cacheline - 1)) {
+				fbits.freeoffs[index] = -1
+				return nthblock, true
+			}
+			return nthblock, false
 		}
-		return bit, nthblock, fin
+		return nthblock, false
 	}
-	return -1, -1, false
+	return -1, true
 }
 
 func (fbits *freebits) free(nthblock int64) {
-	fbits.dofree(nthblock, fbits.bitmaps[0], fbits.bitmaps[1:])
+	fbits.dofree(nthblock, 0)
 }
 
-func (fbits *freebits) dofree(nthblock int64, bmap []uint8, bmaps [][]uint8) int64 {
-	if len(bmaps) == 0 {
+func (fbits *freebits) dofree(nthblock, index int64) int64 {
+	bmap := fbits.bitmaps[index]
+	if (index + 1) == int64(len(fbits.bitmaps)) {
 		q, r := (nthblock >> 3), (nthblock % 8)
-		byt := bmap[q]
+		off, byt := q%fbits.cacheline, bmap[q]
 		bmap[q] = setbit8(byt, uint8(r))
+		if fbits.freeoffs[index] < 0 || off < fbits.freeoffs[index] {
+			fbits.freeoffs[index] = off
+		}
 		return nthblock / (fbits.cacheline << 3)
 	}
-	bit := fbits.dofree(nthblock, bmaps[0], bmaps[1:])
+	bit := fbits.dofree(nthblock, index+1)
 	q, r := (bit >> 3), (bit % 8)
-	byt := bmap[q]
+	off, byt := q%fbits.cacheline, bmap[q]
 	bmap[q] = setbit8(byt, uint8(r))
+	if fbits.freeoffs[index] < 0 || off < fbits.freeoffs[index] {
+		fbits.freeoffs[index] = off
+	}
 	return bit / (fbits.cacheline << 3)
 }

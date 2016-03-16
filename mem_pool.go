@@ -9,7 +9,6 @@ import "unsafe"
 
 //import "fmt"
 import "reflect"
-import "sync/atomic"
 
 var poolblkinit = make([]byte, 1024)
 
@@ -47,7 +46,7 @@ func newmempool(size, n int64) *mempool {
 
 // allocate and amortize
 func (pool *mempool) alloc() (unsafe.Pointer, bool) {
-	if atomic.LoadInt64(&pool.mallocated) == pool.capacity {
+	if pool.mallocated == pool.capacity {
 		return nil, false
 	}
 	nthblock, _ := pool.fbits.alloc()
@@ -56,7 +55,7 @@ func (pool *mempool) alloc() (unsafe.Pointer, bool) {
 	}
 	ptr := uintptr(pool.base) + uintptr(nthblock*pool.size)
 	pool.initblock(ptr)
-	atomic.AddInt64(&pool.mallocated, pool.size)
+	pool.mallocated += pool.size
 	return unsafe.Pointer(ptr), true
 }
 
@@ -70,14 +69,14 @@ func (pool *mempool) free(ptr unsafe.Pointer) {
 		panic("mempool.free(): unaligned pointer")
 	}
 	pool.fbits.free(int64(diffptr / uint64(pool.size)))
-	atomic.AddInt64(&pool.mallocated, -pool.size)
+	pool.mallocated -= pool.size
 }
 
 func (pool *mempool) release() {
 	C.free(pool.base)
 	pool.fbits = nil
 	pool.capacity, pool.base = 0, nil
-	atomic.StoreInt64(&pool.mallocated, 0)
+	pool.mallocated = 0
 }
 
 // compare whether pool's base ptr is less than other pool's base ptr.
@@ -94,7 +93,7 @@ func (pool *mempool) memory() (overhead, useful int64) {
 }
 
 func (pool *mempool) allocated() int64 {
-	return atomic.LoadInt64(&pool.mallocated)
+	return pool.mallocated
 }
 
 func (pool *mempool) available() int64 {
