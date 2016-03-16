@@ -275,7 +275,7 @@ func (writer *LLRBWriter) mvccupsert(
 	llrb.root = root
 	llrb.upsertcounts(key, val, oldnd)
 	if callb != nil {
-		callb(llrb, llndornil(newnd), llndornil(oldnd))
+		callb(llrb, 0, llndornil(newnd), llndornil(oldnd))
 	}
 	newnd.metadata().cleardirty()
 	return reclaim

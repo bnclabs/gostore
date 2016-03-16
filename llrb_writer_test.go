@@ -180,7 +180,7 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 	countref := llrb.Count()
 	llrb.Upsert(
 		inserts[0][0], newvalue,
-		func(index Index, newnd, oldnd Node) {
+		func(index Index, _ int64, newnd, oldnd Node) {
 			newnd.Setvbno(vbno).SetVbuuid(vbuuid).SetBornseqno(seqno)
 			vs := oldnd.Value()
 			if bytes.Compare(vs, inserts[0][1]) != 0 {
@@ -560,7 +560,7 @@ func TestLLRBMvccUpsert(t *testing.T) {
 		newvalues = append(newvalues, value)
 		llrb.Upsert(
 			key, value,
-			func(index Index, newnd, oldnd Node) {
+			func(index Index, _ int64, newnd, oldnd Node) {
 				if oldnd == nil {
 					t.Errorf("unexpected nil")
 				} else if x := oldnd.Vbno(); x != vbno {
@@ -784,7 +784,7 @@ func TestLLRBMvccRange(t *testing.T) {
 		key, value = makekeyvalue(key, value)
 		llrb.Upsert(
 			key, value,
-			func(index Index, newnd, oldnd Node) {
+			func(index Index, _ int64, newnd, oldnd Node) {
 				if oldnd != nil {
 					t.Errorf("expected nil")
 				} else if x := llrb.Count(); x != int64(i+1) {
@@ -849,7 +849,7 @@ func makellrbmvcc(
 	for _, kv := range inserts {
 		llrb.Upsert(
 			kv[0], kv[1],
-			func(index Index, newnd, oldnd Node) {
+			func(index Index, _ int64, newnd, oldnd Node) {
 				if oldnd != nil {
 					t.Errorf("expected old Llrbnode as nil")
 				}

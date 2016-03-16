@@ -168,9 +168,9 @@ func (d *Dict) Upsert(key, value []byte, callb UpsertCallback) error {
 	oldnd, ok := d.dict[hashv]
 	if callb != nil {
 		if ok == false {
-			callb(d, newnd, nil)
+			callb(d, 0, newnd, nil)
 		} else {
-			callb(d, newnd, oldnd)
+			callb(d, 0, newnd, oldnd)
 		}
 	}
 	d.dict[hashv] = newnd

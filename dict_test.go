@@ -22,7 +22,7 @@ func TestDict(t *testing.T) {
 	for _, kv := range inserts {
 		d.Upsert(
 			kv[0], kv[1],
-			func(_ Index, newnd, oldnd Node) {
+			func(_ Index, _ int64, newnd, oldnd Node) {
 				if oldnd != nil {
 					t.Errorf("expected nil")
 				}
@@ -52,7 +52,7 @@ func TestDict(t *testing.T) {
 	// upsert
 	d.Upsert(
 		inserts[0][0], []byte("value11"),
-		func(_ Index, newnd, oldnd Node) {
+		func(_ Index, _ int64, newnd, oldnd Node) {
 			if v := oldnd.Value(); bytes.Compare(v, inserts[0][1]) != 0 {
 				fmsg := "expected %v, got %v\n"
 				t.Errorf(fmsg, string(inserts[0][1]), string(v))
@@ -129,7 +129,7 @@ func TestDictRange(t *testing.T) {
 		[2][]byte{[]byte("key5"), []byte("value5")},
 	}
 	for _, kv := range inserts {
-		d.Upsert(kv[0], kv[1], func(_ Index, newnd, oldnd Node) {
+		d.Upsert(kv[0], kv[1], func(_ Index, _ int64, newnd, oldnd Node) {
 			if oldnd != nil {
 				t.Errorf("expected nil")
 			}
@@ -259,7 +259,7 @@ func TestDictRsnapshot(t *testing.T) {
 		[2][]byte{[]byte("key5"), []byte("value5")},
 	}
 	for _, kv := range inserts {
-		d.Upsert(kv[0], kv[1], func(_ Index, newnd, oldnd Node) {
+		d.Upsert(kv[0], kv[1], func(_ Index, _ int64, newnd, oldnd Node) {
 			if oldnd != nil {
 				t.Errorf("expected nil")
 			}

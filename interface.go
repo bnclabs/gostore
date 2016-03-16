@@ -7,7 +7,7 @@ type NodeIterator func(nd Node) bool
 // to newnd and oldnd:
 // * oldnd can only be read.
 // * newnd can be read or updated.
-type UpsertCallback func(index Index, newnd, oldnd Node)
+type UpsertCallback func(index Index, offset int64, newnd, oldnd Node)
 
 // DeleteCallback callback from Delete API. Don't keep any reference
 // to nd:

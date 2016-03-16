@@ -446,7 +446,7 @@ func (llrb *LLRB) Upsert(key, value []byte, callb UpsertCallback) error {
 	llrb.upsertcounts(key, value, oldnd)
 
 	if callb != nil {
-		callb(llrb, llndornil(newnd), llndornil(oldnd))
+		callb(llrb, 0, llndornil(newnd), llndornil(oldnd))
 	}
 	if newnd.metadata().isdirty() {
 		newnd.metadata().cleardirty()
