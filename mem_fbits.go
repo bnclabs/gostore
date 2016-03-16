@@ -3,21 +3,25 @@ package storage
 //import "fmt" // TODO: remove this fmt
 import "unsafe"
 
+// should always be power of 2.
 const cacheline = 64
 
 type freebits struct {
 	cacheline int64
+	cachemask int64
 	nblocks   int64
 	freeoffs  []int64
 	bitmaps   [][]uint8
 }
 
 func newfreebits(cacheline int64, nblocks int64) *freebits {
-	if (nblocks % 8) != 0 {
+	if (nblocks & 0x7) != 0 {
 		panic("should be multiples of 8")
 	}
 
-	fbits := &freebits{cacheline: cacheline, nblocks: nblocks}
+	fbits := &freebits{
+		cacheline: cacheline, cachemask: cacheline - 1, nblocks: nblocks,
+	}
 	fbits.bitmaps = fbits.fillbits(nblocks, make([][]byte, 0))
 	fbits.freeoffs = make([]int64, len(fbits.bitmaps))
 	return fbits
@@ -38,9 +42,9 @@ func (fbits *freebits) initbits(bits int64) ([]uint8, int64) {
 	for i := int64(0); i < (bits >> 3); i++ {
 		bitmap[i] = 0xff
 	}
-	if bits%8 > 0 {
+	if x := (bits & 0x7); x > 0 {
 		byt := uint8(0)
-		for i := int64(0); i < bits%8; i++ {
+		for i := int64(0); i < x; i++ {
 			byt = setbit8(byt, uint8(i))
 		}
 		bitmap[len(bitmap)-1] = byt
@@ -112,8 +116,8 @@ func (fbits *freebits) free(nthblock int64) {
 func (fbits *freebits) dofree(nthblock, index int64) int64 {
 	bmap := fbits.bitmaps[index]
 	if (index + 1) == int64(len(fbits.bitmaps)) {
-		q, r := (nthblock >> 3), (nthblock % 8)
-		off, byt := q%fbits.cacheline, bmap[q]
+		q, r := (nthblock >> 3), (nthblock & 0x7)
+		off, byt := q&fbits.cachemask, bmap[q]
 		bmap[q] = setbit8(byt, uint8(r))
 		if fbits.freeoffs[index] < 0 || off < fbits.freeoffs[index] {
 			fbits.freeoffs[index] = off
@@ -121,8 +125,8 @@ func (fbits *freebits) dofree(nthblock, index int64) int64 {
 		return nthblock / (fbits.cacheline << 3)
 	}
 	bit := fbits.dofree(nthblock, index+1)
-	q, r := (bit >> 3), (bit % 8)
-	off, byt := q%fbits.cacheline, bmap[q]
+	q, r := (bit >> 3), (bit & 0x7)
+	off, byt := q&fbits.cachemask, bmap[q]
 	bmap[q] = setbit8(byt, uint8(r))
 	if fbits.freeoffs[index] < 0 || off < fbits.freeoffs[index] {
 		fbits.freeoffs[index] = off
