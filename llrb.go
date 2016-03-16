@@ -182,6 +182,7 @@ type LLRB struct { // tree container
 
 	// config
 	fmask     metadataMask // only 12 bits
+	mdsize    int
 	maxvb     int
 	config    map[string]interface{}
 	logPrefix string
@@ -209,6 +210,7 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 
 	// set up metadata options
 	llrb.fmask = llrb.setupfmask(config)
+	llrb.mdsize = (&metadata{}).initMetadata(0, llrb.fmask).sizeof()
 	llrb.config = config
 
 	// statistics
@@ -793,15 +795,10 @@ func (llrb *LLRB) Dotdump(buffer io.Writer) {
 //---- local functions
 
 func (llrb *LLRB) newnode(k, v []byte) *Llrbnode {
-	defer func() {
-		llrb.n_allocs += 1
-	}()
-
-	mdsize := (&metadata{}).initMetadata(0, llrb.fmask).sizeof()
-	ptr, mpool := llrb.nodearena.alloc(int64(llrbnodesize + mdsize + len(k)))
+	ptr, mpool := llrb.nodearena.alloc(int64(llrbnodesize + llrb.mdsize + len(k)))
 	nd := (*Llrbnode)(ptr)
 	nd.metadata().initMetadata(0, llrb.fmask).setdirty().setred()
-	nd.setkey(k)
+	nd.setkey(llrb.mdsize, k)
 	nd.pool, nd.left, nd.right = mpool, nil, nil
 
 	if v != nil && nd.metadata().ismvalue() {
@@ -813,6 +810,8 @@ func (llrb *LLRB) newnode(k, v []byte) *Llrbnode {
 	} else if v != nil {
 		panic("newnode(): llrb tree not configured for accepting value")
 	}
+
+	llrb.n_allocs += 1
 	return nd
 }
 

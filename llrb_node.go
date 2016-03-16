@@ -104,13 +104,13 @@ func (nd *Llrbnode) metadata() *metadata {
 	return (*metadata)(unsafe.Pointer(&nd.mdmarker))
 }
 
-func (nd *Llrbnode) setkey(key []byte) *Llrbnode {
+func (nd *Llrbnode) setkey(mdsize int, key []byte) *Llrbnode {
 	var dst []byte
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&dst))
 	sl.Len = len(key)
 	sl.Cap = len(key)
 	baseptr := (uintptr)(unsafe.Pointer(&nd.mdmarker))
-	sl.Data = baseptr + uintptr(nd.metadata().sizeof())
+	sl.Data = baseptr + uintptr(mdsize)
 	return nd.setkeysize(copy(dst, key))
 }
 

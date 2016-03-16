@@ -57,7 +57,8 @@ func Testnode(t *testing.T) {
 		t.Errorf("expected %v, got %v", 1000, x)
 	}
 
-	if nd.setkey(key); bytes.Compare(nd.key(), key) != 0 {
+	mdsize := nd.metadata().sizeof()
+	if nd.setkey(mdsize, key); bytes.Compare(nd.key(), key) != 0 {
 		t.Errorf("expected %v, got %v", key, nd.key())
 	}
 
@@ -100,7 +101,7 @@ func TestNodeFields(t *testing.T) {
 
 	// key, value
 	key, value := []byte("hello world"), []byte("say cheese")
-	nd.setkeysize(len(key)).setkey(key)
+	nd.setkeysize(len(key)).setkey(nd.metadata().sizeof(), key)
 	nd.nodevalue().setvalsize(int64(len(value))).setvalue(value)
 	if x := nd.keysize(); x != len(key) {
 		t.Errorf("expected %v, got %v", len(key), x)
@@ -141,14 +142,14 @@ func TestLtkey(t *testing.T) {
 
 	// check with empty key
 	nd.metadata().initMetadata(0x1234, 0)
-	nd.setkey([]byte(""))
+	nd.setkey(nd.metadata().sizeof(), []byte(""))
 	if nd.ltkey([]byte("a")) != true {
 		t.Errorf("expected true")
 	} else if nd.ltkey([]byte("")) != false {
 		t.Errorf("expected false")
 	}
 	// check with valid key
-	nd.setkey(key)
+	nd.setkey(nd.metadata().sizeof(), key)
 	if nd.ltkey([]byte("a")) != false {
 		t.Errorf("expected false")
 	} else if nd.ltkey([]byte("")) != false {
@@ -174,14 +175,14 @@ func TestLekey(t *testing.T) {
 	// check with empty key
 	vbno, fmask := uint16(0x1234), metadataMask(0)
 	nd.metadata().initMetadata(vbno, fmask)
-	nd.setkey([]byte(""))
+	nd.setkey(nd.metadata().sizeof(), []byte(""))
 	if nd.lekey([]byte("a")) != true {
 		t.Errorf("expected true")
 	} else if nd.lekey([]byte("")) != true {
 		t.Errorf("expected true")
 	}
 	// check with valid key
-	nd.setkey(key)
+	nd.setkey(nd.metadata().sizeof(), key)
 	if nd.lekey([]byte("a")) != false {
 		t.Errorf("expected false")
 	} else if nd.lekey([]byte("")) != false {
@@ -208,14 +209,14 @@ func TestGtkey(t *testing.T) {
 	// check with empty key
 	vbno, fmask := uint16(0x1234), metadataMask(0)
 	nd.metadata().initMetadata(vbno, fmask)
-	nd.setkey([]byte(""))
+	nd.setkey(nd.metadata().sizeof(), []byte(""))
 	if nd.gtkey([]byte("a")) != false {
 		t.Errorf("expected false")
 	} else if nd.gtkey([]byte("")) != false {
 		t.Errorf("expected false")
 	}
 	// check with valid key
-	nd.setkey(key)
+	nd.setkey(nd.metadata().sizeof(), key)
 	if nd.gtkey([]byte("a")) != true {
 		t.Errorf("expected true")
 	} else if nd.gtkey([]byte("")) != true {
@@ -242,14 +243,14 @@ func TestGekey(t *testing.T) {
 	// check with empty key
 	vbno, fmask := uint16(0x1234), metadataMask(0)
 	nd.metadata().initMetadata(vbno, fmask)
-	nd.setkey([]byte(""))
+	nd.setkey(nd.metadata().sizeof(), []byte(""))
 	if nd.gekey([]byte("a")) != false {
 		t.Errorf("expected false")
 	} else if nd.gekey([]byte("")) != true {
 		t.Errorf("expected true")
 	}
 	// check with valid key
-	nd.setkey(key)
+	nd.setkey(nd.metadata().sizeof(), key)
 	if nd.gekey([]byte("a")) != true {
 		t.Errorf("expected true")
 	} else if nd.gekey([]byte("")) != true {
@@ -302,11 +303,12 @@ func BenchmarkNodeSetKey(b *testing.B) {
 	ptr, mpool := marena.alloc(blocksize)
 	nd := (*Llrbnode)(ptr)
 	nd.pool = mpool
+	mdsize := nd.metadata().sizeof()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		nd.metadata().initMetadata(0x1234, 0)
-		nd.setkey(key)
+		nd.setkey(mdsize, key)
 	}
 
 	mpool.free(ptr)
@@ -322,7 +324,7 @@ func BenchmarkNodeGetKey(b *testing.B) {
 	nd := (*Llrbnode)(ptr)
 	nd.pool = mpool
 	nd.metadata().initMetadata(0x1234, 0)
-	nd.setkey(key)
+	nd.setkey(nd.metadata().sizeof(), key)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -341,7 +343,7 @@ func BenchmarkCompareLtkey(b *testing.B) {
 	nd := (*Llrbnode)(ptr)
 	nd.pool = mpool
 	nd.metadata().initMetadata(0x1234, 0)
-	nd.setkey(key)
+	nd.setkey(nd.metadata().sizeof(), key)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -362,7 +364,7 @@ func BenchmarkCompareLekey(b *testing.B) {
 	nd := (*Llrbnode)(ptr)
 	nd.pool = mpool
 	nd.metadata().initMetadata(0x1234, 0)
-	nd.setkey(key)
+	nd.setkey(nd.metadata().sizeof(), key)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -383,7 +385,7 @@ func BenchmarkCompareGtkey(b *testing.B) {
 	nd := (*Llrbnode)(ptr)
 	nd.pool = mpool
 	nd.metadata().initMetadata(0x1234, 0)
-	nd.setkey(key)
+	nd.setkey(nd.metadata().sizeof(), key)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -404,7 +406,7 @@ func BenchmarkCompareGekey(b *testing.B) {
 	nd := (*Llrbnode)(ptr)
 	nd.pool = mpool
 	nd.metadata().initMetadata(0x1234, 0)
-	nd.setkey(key)
+	nd.setkey(nd.metadata().sizeof(), key)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

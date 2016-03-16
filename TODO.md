@@ -1,4 +1,5 @@
 LLRB:
+* stats `n_allocs` sounds like a misnomer, rename it.
 * keymemory == 'sum of all Node.Key()'
 * valmemory == 'sum of all Node.Value()'
 * test mvcc.writer.DeleteMin() on a tree with single node.
