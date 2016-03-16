@@ -182,20 +182,25 @@ func llrb_opUpsert(
 	key := []byte(strconv.Itoa(int(lcmd.cmd[1].(float64))))
 	value := []byte(strconv.Itoa(int(time.Now().UnixNano())))
 
-	dict.Upsert(key, value, func(_ storage.Index, dnew, dold storage.Node) {
-		llrb.Upsert(
-			key, value, func(_ storage.Index, lnew, lold storage.Node) {
-				cmpllrbdict(llrb.Id(), dold, lold, true)
-				if lold == nil {
-					stats["insert"] += 1
-				} else {
-					stats["upsert"] += 1
-				}
-				lnew.Setvbno(lcmd.vbno)
-				lnew.SetVbuuid(lcmd.vbuuid).SetBornseqno(lcmd.seqno)
-			})
-		dnew.Setvbno(lcmd.vbno).SetVbuuid(lcmd.vbuuid).SetBornseqno(lcmd.seqno)
-	})
+	dict.Upsert(
+		key, value,
+		func(_ storage.Index, i int64, dnew, dold storage.Node) {
+			llrb.Upsert(
+				key, value,
+				func(_ storage.Index, j int64, lnew, lold storage.Node) {
+					cmpllrbdict(llrb.Id(), dold, lold, true)
+					if lold == nil {
+						stats["insert"] += 1
+					} else {
+						stats["upsert"] += 1
+					}
+					lnew.Setvbno(lcmd.vbno)
+					lnew.SetVbuuid(lcmd.vbuuid)
+					lnew.SetBornseqno(lcmd.seqno + uint64(i))
+				})
+			dnew.Setvbno(lcmd.vbno).SetVbuuid(lcmd.vbuuid)
+			dnew.SetBornseqno(lcmd.seqno + uint64(i))
+		})
 
 	stats["total"] += 1
 	return stats

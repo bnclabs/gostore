@@ -791,19 +791,22 @@ func makellrb(
 	}
 	// inserts
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
+	keys, values := make([][]byte, 0), make([][]byte, 0)
 	for _, kv := range inserts {
-		llrb.Upsert(
-			kv[0], kv[1],
-			func(index Index, _ int64, newnd, oldnd Node) {
-				if oldnd != nil {
-					t.Errorf("expected old Llrbnode as nil")
-				}
-				llrb := index.(*LLRB)
-				newnd.Setvbno(vbno).SetVbuuid(vbuuid).SetBornseqno(seqno)
-				llrb.clock.updatevbuuids([]uint16{vbno}, []uint64{vbuuid})
-				llrb.clock.updateseqnos([]uint16{vbno}, []uint64{seqno})
-			})
-		seqno++
+		keys = append(keys, kv[0])
+		values = append(values, kv[1])
 	}
+	llrb.UpsertMany(
+		keys, values,
+		func(index Index, i int64, newnd, oldnd Node) {
+			if oldnd != nil {
+				t.Errorf("expected old Llrbnode as nil")
+			}
+			llrb := index.(*LLRB)
+			newnd.Setvbno(vbno).SetVbuuid(vbuuid)
+			newnd.SetBornseqno(seqno + uint64(i))
+			llrb.clock.updatevbuuids([]uint16{vbno}, []uint64{vbuuid})
+			llrb.clock.updateseqnos([]uint16{vbno}, []uint64{seqno + uint64(i)})
+		})
 	return llrb
 }

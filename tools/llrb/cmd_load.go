@@ -21,6 +21,7 @@ var loadopts struct {
 	n         int
 	ncpu      int
 	mvcc      int
+	par       int
 	memstats  int
 	mprof     string
 	pprof     string
@@ -47,6 +48,8 @@ func parseLoadopts(args []string) {
 		"set number cores to use.")
 	f.IntVar(&loadopts.mvcc, "mvcc", 0,
 		"enabled mvcc for load.")
+	f.IntVar(&loadopts.par, "par", 16,
+		"number of load generators")
 	f.IntVar(&loadopts.memstats, "stats", 1000,
 		"log llrb stats for every tick, in ms")
 	f.StringVar(&loadopts.mprof, "mprof", "",
@@ -119,22 +122,21 @@ func doLoad(args []string) {
 		"valarena.maxblock":       loadopts.valarena[1],
 		"valarena.capacity":       loadopts.valarena[2],
 		"valarena.pool.capacity":  loadopts.valarena[3],
+		"metadata.vbuuid":         true,
 		"metadata.bornseqno":      true,
 	}
 
 	llrb := storage.NewLLRB("load", config, nil)
 
 	now := time.Now()
-	gench := make(chan [2][]byte, 100000)
-	go loadgenerate(loadopts.n, gench)
 	var wg sync.WaitGroup
-	for i := 0; i < runtime.NumCPU()+loadopts.mvcc; i++ {
+	for i := 0; i < loadopts.par; i++ {
 		vbno, vbuuid, seqno := uint16(i), uint64(0xABCD123456), uint64(0)
 		wg.Add(1)
-		go insertItems(llrb, vbno, vbuuid, seqno, gench, &wg)
+		go insertItems(llrb, vbno, vbuuid, seqno, &wg)
 	}
 	wg.Wait()
-	fmt.Printf("Took %v to insert %v items\n", time.Since(now), loadopts.n)
+	fmt.Printf("Took %v to insert %v items\n", time.Since(now), llrb.Count())
 	llrb.Log(9, true)
 
 	llrb.Validate()
@@ -146,8 +148,7 @@ func doLoad(args []string) {
 }
 
 func insertItems(
-	llrb *storage.LLRB, vbno uint16, vbuuid, seqno uint64,
-	gench chan [2][]byte, wg *sync.WaitGroup) {
+	llrb *storage.LLRB, vbno uint16, vbuuid, seqno uint64, wg *sync.WaitGroup) {
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -157,24 +158,38 @@ func insertItems(
 		wg.Done()
 	}()
 
-	for item := range gench {
-		key, value := item[0], item[1]
-		llrb.Upsert(
-			key, value,
-			func(index storage.Index, newnd, oldnd storage.Node) {
-				newnd.Setvbno(vbno).SetVbuuid(vbuuid).SetBornseqno(seqno)
+	batchsize := 100
+	keys, values := make([][]byte, batchsize), make([][]byte, batchsize)
+	for i := range keys {
+		keys[i] = make([]byte, 256)
+		values[i] = make([]byte, 256)
+	}
+	for items := loadopts.n; items > 0; items -= batchsize {
+		keys, values = keys[:batchsize], values[:batchsize]
+		if items < 100 {
+			keys, values = keys[:items], values[:batchsize]
+		}
+		keys, values = loadgenerate(keys, values)
+		llrb.UpsertMany(
+			keys, values,
+			func(index storage.Index, i int64, newnd, oldnd storage.Node) {
+				newnd.Setvbno(vbno).SetVbuuid(vbuuid)
+				newnd.SetBornseqno(seqno + uint64(i))
 			})
-		seqno++
 	}
 }
 
-func loadgenerate(count int, gench chan [2][]byte) {
-	maxkey, maxval := loadopts.klen[1], loadopts.vlen[1]
-	for i := 0; i < count; i++ {
-		key, value := make([]byte, maxkey), make([]byte, maxval)
+func loadgenerate(keys, values [][]byte) ([][]byte, [][]byte) {
+	var scratch [256]byte
+	ns := time.Now().UnixNano()
+	for i := range keys {
+		suffix := strconv.AppendInt(scratch[:0], ns+int64(i), 10)
+		key, value := keys[i], values[i]
+		key, value = key[:cap(key)], value[:cap(values[i])]
 		key = makekey(key, loadopts.klen[0], loadopts.klen[1])
-		value = makeval(key, loadopts.vlen[0], loadopts.vlen[1])
-		gench <- [2][]byte{key, value}
+		n := copy(key[len(key):cap(key)], suffix)
+		keys[i] = key[:len(key)+n]
+		values[i] = makeval(value, loadopts.vlen[0], loadopts.vlen[1])
 	}
-	close(gench)
+	return keys, values
 }

@@ -35,23 +35,27 @@ func setCPU(n int) {
 }
 
 func makekey(key []byte, min, max int) (k []byte) {
+	var from byte
 	if max-min > 0 {
-		k = key[:rand.Intn(max-min)+min]
+		ln := rand.Intn(max-min) + min
+		k, from = key[:ln], byte(ln%26)
 		for i := range k {
-			k[i] = byte(97 + rand.Intn(26))
+			k[i] = 97 + ((from + byte(i)) % 26)
 		}
 	}
-	return
+	return k
 }
 
 func makeval(val []byte, min, max int) (v []byte) {
+	var from byte
 	if max-min > 0 {
-		v = val[:rand.Intn(max-min)+min]
+		ln := rand.Intn(max-min) + min
+		v, from = val[:ln], byte(ln%26)
 		for i := range v {
-			v[i] = byte(97 + rand.Intn(26))
+			v[i] = 97 + ((from + byte(i)) % 26)
 		}
 	}
-	return
+	return v
 }
 
 func takeMEMProfile(filename string) bool {

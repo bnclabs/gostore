@@ -177,6 +177,28 @@ func (d *Dict) Upsert(key, value []byte, callb UpsertCallback) error {
 	return nil
 }
 
+// UpsertMany implement Writer{} interface.
+func (d *Dict) UpsertMany(keys, values [][]byte, callb UpsertCallback) error {
+	for i, key := range keys {
+		var value []byte
+		if len(values) > 0 {
+			value = values[i]
+		}
+		newnd := newdictnode(key, value)
+		hashv := crc64.Checksum(key, crcisotab)
+		oldnd, ok := d.dict[hashv]
+		if callb != nil {
+			if ok == false {
+				callb(d, int64(i), newnd, nil)
+			} else {
+				callb(d, int64(i), newnd, oldnd)
+			}
+		}
+		d.dict[hashv] = newnd
+	}
+	return nil
+}
+
 // DeleteMin implement Writer{} interface.
 func (d *Dict) DeleteMin(callb DeleteCallback) error {
 	if len(d.dict) > 0 {

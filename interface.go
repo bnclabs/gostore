@@ -141,6 +141,9 @@ type Writer interface {
 	// Upsert a key/value pair.
 	Upsert(key, value []byte, callb UpsertCallback) error
 
+	// UpsertMany upsert one or more key/value pairs.
+	UpsertMany(keys, values [][]byte, callb UpsertCallback) error
+
 	// DeleteMin delete the last entry in the index.
 	DeleteMin(callb DeleteCallback) error
 

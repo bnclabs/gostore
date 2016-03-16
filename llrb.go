@@ -224,6 +224,7 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 		llrb.mvcc.h_bulkfree = newhistorgramInt64(200000, 500000, 100000)
 		llrb.mvcc.h_reclaims = map[string]*histogramInt64{
 			"upsert": newhistorgramInt64(4, 1024, 4),
+			"upmany": newhistorgramInt64(4, 1024, 4),
 			"delmin": newhistorgramInt64(4, 1024, 4),
 			"delmax": newhistorgramInt64(4, 1024, 4),
 			"delete": newhistorgramInt64(4, 1024, 4),
@@ -442,18 +443,42 @@ func (llrb *LLRB) Upsert(key, value []byte, callb UpsertCallback) error {
 	root, newnd, oldnd := llrb.upsert(llrb.root, 1 /*depth*/, key, value)
 	root.metadata().setblack()
 	llrb.root = root
-
 	llrb.upsertcounts(key, value, oldnd)
 
 	if callb != nil {
 		callb(llrb, 0, llndornil(newnd), llndornil(oldnd))
 	}
-	if newnd.metadata().isdirty() {
-		newnd.metadata().cleardirty()
-	} else {
-		panic("Upsert(): expected this to be dirty")
-	}
+	newnd.metadata().cleardirty()
 	llrb.freenode(oldnd)
+	return nil
+}
+
+// UpsertMany implement Writer{} interface.
+func (llrb *LLRB) UpsertMany(keys, values [][]byte, callb UpsertCallback) error {
+	if llrb.mvcc.enabled {
+		return llrb.mvcc.writer.wupsertmany(keys, values, callb)
+	}
+
+	llrb.rw.Lock()
+	defer llrb.rw.Unlock()
+
+	for i, key := range keys {
+		var value []byte
+		value = nil
+		if len(values) > 0 {
+			value = values[i]
+		}
+		root, newnd, oldnd := llrb.upsert(llrb.root, 1 /*depth*/, key, value)
+		root.metadata().setblack()
+		llrb.root = root
+		llrb.upsertcounts(key, value, oldnd)
+
+		if callb != nil {
+			callb(llrb, int64(i), llndornil(newnd), llndornil(oldnd))
+		}
+		newnd.metadata().cleardirty()
+		llrb.freenode(oldnd)
+	}
 	return nil
 }
 
