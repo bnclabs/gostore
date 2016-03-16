@@ -72,8 +72,8 @@ func TestNewLLRBNode(t *testing.T) {
 	nd.metadata().initMetadata(vbno, fmask).setvbuuid(vbuuid)
 	nd.metadata().setbnseq(bnseqno).setddseq(ddseqno)
 
-	if k := nd.key(); bytes.Compare(k, key) != 0 {
-		t.Errorf("expected %v, got %v", key, nd.key())
+	if k := nd.key(llrb.mdsize); bytes.Compare(k, key) != 0 {
+		t.Errorf("expected %v, got %v", key, nd.key(llrb.mdsize))
 	} else if v := nd.nodevalue().value(); bytes.Compare(v, value) != 0 {
 		t.Errorf("expected %v, got %v", value, v)
 	} else if x := nd.metadata().vbno(); x != vbno {

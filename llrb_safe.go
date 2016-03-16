@@ -14,10 +14,10 @@ func (llrb *LLRB) rangeFromFind(
 	if nd == nil {
 		return true
 	}
-	if hk != nil && nd.gtkey(hk) {
+	if hk != nil && nd.gtkey(llrb.mdsize, hk) {
 		return llrb.rangeFromFind(nd.left, lk, hk, iter)
 	}
-	if lk != nil && nd.ltkey(lk) {
+	if lk != nil && nd.ltkey(llrb.mdsize, lk) {
 		return llrb.rangeFromFind(nd.right, lk, hk, iter)
 	}
 	if !llrb.rangeFromFind(nd.left, lk, hk, iter) {
@@ -36,10 +36,10 @@ func (llrb *LLRB) rangeFromTill(
 	if nd == nil {
 		return true
 	}
-	if hk != nil && !nd.ltkey(hk) {
+	if hk != nil && !nd.ltkey(llrb.mdsize, hk) {
 		return llrb.rangeFromTill(nd.left, lk, hk, iter)
 	}
-	if lk != nil && nd.ltkey(lk) {
+	if lk != nil && nd.ltkey(llrb.mdsize, lk) {
 		return llrb.rangeFromTill(nd.right, lk, hk, iter)
 	}
 	if !llrb.rangeFromTill(nd.left, lk, hk, iter) {
@@ -58,10 +58,10 @@ func (llrb *LLRB) rangeAfterFind(
 	if nd == nil {
 		return true
 	}
-	if hk != nil && nd.gtkey(hk) {
+	if hk != nil && nd.gtkey(llrb.mdsize, hk) {
 		return llrb.rangeAfterFind(nd.left, lk, hk, iter)
 	}
-	if lk != nil && !nd.gtkey(lk) {
+	if lk != nil && !nd.gtkey(llrb.mdsize, lk) {
 		return llrb.rangeAfterFind(nd.right, lk, hk, iter)
 	}
 	if !llrb.rangeAfterFind(nd.left, lk, hk, iter) {
@@ -80,10 +80,10 @@ func (llrb *LLRB) rangeAfterTill(
 	if nd == nil {
 		return true
 	}
-	if hk != nil && !nd.ltkey(hk) {
+	if hk != nil && !nd.ltkey(llrb.mdsize, hk) {
 		return llrb.rangeAfterTill(nd.left, lk, hk, iter)
 	}
-	if lk != nil && !nd.gtkey(lk) {
+	if lk != nil && !nd.gtkey(llrb.mdsize, lk) {
 		return llrb.rangeAfterTill(nd.right, lk, hk, iter)
 	}
 	if !llrb.rangeAfterTill(nd.left, lk, hk, iter) {

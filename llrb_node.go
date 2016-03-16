@@ -85,7 +85,7 @@ func (nd *Llrbnode) Vbuuid() uint64 {
 // Key implement NodeGetter{}
 func (nd *Llrbnode) Key() []byte {
 	if nd != nil {
-		return nd.key()
+		return nd.key(nd.metadata().sizeof())
 	}
 	return nil
 }
@@ -125,12 +125,12 @@ func (nd *Llrbnode) setnodevalue(nv *nodevalue) *Llrbnode {
 	return nd
 }
 
-func (nd *Llrbnode) key() (k []byte) {
+func (nd *Llrbnode) key(mdsize int) (k []byte) {
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&k))
 	sl.Len = nd.keysize()
 	sl.Cap = sl.Len
 	baseptr := (uintptr)(unsafe.Pointer(&nd.mdmarker))
-	sl.Data = baseptr + uintptr(nd.metadata().sizeof())
+	sl.Data = baseptr + uintptr(mdsize)
 	return
 }
 
@@ -156,7 +156,7 @@ func (nd *Llrbnode) repr() string {
 	return fmt.Sprintf(
 		"%v %v {%v,%v} %v",
 		nd.metadata().isdirty(), nd.metadata().isblack(),
-		bnseqno, ddseqno, string(nd.key()))
+		bnseqno, ddseqno, string(nd.key(nd.metadata().sizeof())))
 }
 
 func (nd *Llrbnode) pprint(prefix string) {
@@ -173,17 +173,18 @@ func (nd *Llrbnode) pprint(prefix string) {
 }
 
 func (nd *Llrbnode) dotdump(buffer io.Writer) {
-	key := string(nd.key())
+	mdsize := nd.metadata().sizeof()
+	key := string(nd.key(mdsize))
 	mddot := nd.metadata().dotdump()
 	lines := []string{
 		fmt.Sprintf("  %v [label=\"{%v|%v}\"];\n", key, key, mddot),
 	}
 	if nd.left != nil {
-		line := fmt.Sprintf("  %v -> %v;\n", key, string(nd.left.key()))
+		line := fmt.Sprintf("  %v -> %v;\n", key, string(nd.left.key(mdsize)))
 		lines = append(lines, line)
 	}
 	if nd.right != nil {
-		line := fmt.Sprintf("  %v -> %v;\n", key, string(nd.right.key()))
+		line := fmt.Sprintf("  %v -> %v;\n", key, string(nd.right.key(mdsize)))
 		lines = append(lines, line)
 	}
 	buffer.Write([]byte(strings.Join(lines, "")))
@@ -197,46 +198,46 @@ func (nd *Llrbnode) dotdump(buffer io.Writer) {
 
 //---- indexer api
 
-func (nd *Llrbnode) ltkey(other []byte) bool {
+func (nd *Llrbnode) ltkey(mdsize int, other []byte) bool {
 	var key []byte
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&key))
 	sl.Len = nd.keysize()
 	sl.Cap = sl.Len
 	baseptr := (uintptr)(unsafe.Pointer(&nd.mdmarker))
-	sl.Data = baseptr + uintptr(nd.metadata().sizeof())
+	sl.Data = baseptr + uintptr(mdsize)
 	cmp := bytes.Compare(key, other)
 	return cmp == -1
 }
 
-func (nd *Llrbnode) lekey(other []byte) bool {
+func (nd *Llrbnode) lekey(mdsize int, other []byte) bool {
 	var key []byte
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&key))
 	sl.Len = nd.keysize()
 	sl.Cap = sl.Len
 	baseptr := (uintptr)(unsafe.Pointer(&nd.mdmarker))
-	sl.Data = baseptr + uintptr(nd.metadata().sizeof())
+	sl.Data = baseptr + uintptr(mdsize)
 	cmp := bytes.Compare(key, other)
 	return cmp == -1 || cmp == 0
 }
 
-func (nd *Llrbnode) gtkey(other []byte) bool {
+func (nd *Llrbnode) gtkey(mdsize int, other []byte) bool {
 	var key []byte
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&key))
 	sl.Len = nd.keysize()
 	sl.Cap = sl.Len
 	baseptr := (uintptr)(unsafe.Pointer(&nd.mdmarker))
-	sl.Data = baseptr + uintptr(nd.metadata().sizeof())
+	sl.Data = baseptr + uintptr(mdsize)
 	cmp := bytes.Compare(key, other)
 	return cmp == 1
 }
 
-func (nd *Llrbnode) gekey(other []byte) bool {
+func (nd *Llrbnode) gekey(mdsize int, other []byte) bool {
 	var key []byte
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&key))
 	sl.Len = nd.keysize()
 	sl.Cap = sl.Len
 	baseptr := (uintptr)(unsafe.Pointer(&nd.mdmarker))
-	sl.Data = baseptr + uintptr(nd.metadata().sizeof())
+	sl.Data = baseptr + uintptr(mdsize)
 	cmp := bytes.Compare(key, other)
 	return cmp == 0 || cmp == 1
 }

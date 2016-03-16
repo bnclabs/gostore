@@ -366,9 +366,9 @@ func (llrb *LLRB) Get(key []byte) Node {
 func (llrb *LLRB) get(key []byte) Node {
 	nd := llrb.root
 	for nd != nil {
-		if nd.gtkey(key) {
+		if nd.gtkey(llrb.mdsize, key) {
 			nd = nd.left
-		} else if nd.ltkey(key) {
+		} else if nd.ltkey(llrb.mdsize, key) {
 			nd = nd.right
 		} else {
 			return nd
@@ -527,9 +527,9 @@ func (llrb *LLRB) upsert(
 
 	nd = llrb.walkdownrot23(nd)
 
-	if nd.gtkey(key) {
+	if nd.gtkey(llrb.mdsize, key) {
 		nd.left, newnd, oldnd = llrb.upsert(nd.left, depth+1, key, value)
-	} else if nd.ltkey(key) {
+	} else if nd.ltkey(llrb.mdsize, key) {
 		nd.right, newnd, oldnd = llrb.upsert(nd.right, depth+1, key, value)
 	} else {
 		oldnd, dirty = llrb.clone(nd), false
@@ -668,7 +668,7 @@ func (llrb *LLRB) delete(nd *Llrbnode, key []byte) (newnd, deleted *Llrbnode) {
 		return nil, nil
 	}
 
-	if nd.gtkey(key) {
+	if nd.gtkey(llrb.mdsize, key) {
 		if nd.left == nil { // key not present. Nothing to delete
 			return nd, nil
 		}
@@ -682,14 +682,14 @@ func (llrb *LLRB) delete(nd *Llrbnode, key []byte) (newnd, deleted *Llrbnode) {
 			nd = llrb.rotateright(nd)
 		}
 		// If @key equals @h.Item and no right children at @h
-		if !nd.ltkey(key) && nd.right == nil {
+		if !nd.ltkey(llrb.mdsize, key) && nd.right == nil {
 			return nil, nd
 		}
 		if nd.right != nil && !isred(nd.right) && !isred(nd.right.left) {
 			nd = llrb.moveredright(nd)
 		}
 		// If @key equals @h.Item, and (from above) 'h.Right != nil'
-		if !nd.ltkey(key) {
+		if !nd.ltkey(llrb.mdsize, key) {
 			var subdeleted *Llrbnode
 			nd.right, subdeleted = llrb.deletemin(nd.right)
 			if subdeleted == nil {
@@ -883,7 +883,7 @@ func (llrb *LLRB) upsertcounts(key, value []byte, oldnd *Llrbnode) {
 		llrb.n_count += 1
 		llrb.n_inserts += 1
 	} else {
-		llrb.keymemory -= int64(len(oldnd.key()))
+		llrb.keymemory -= int64(len(oldnd.key(llrb.mdsize)))
 		if oldnd.metadata().ismvalue() {
 			llrb.valmemory -= int64(len(oldnd.nodevalue().value()))
 		}
@@ -895,7 +895,7 @@ func (llrb *LLRB) upsertcounts(key, value []byte, oldnd *Llrbnode) {
 
 func (llrb *LLRB) delcount(nd *Llrbnode) {
 	if nd != nil {
-		llrb.keymemory -= int64(len(nd.key()))
+		llrb.keymemory -= int64(len(nd.key(llrb.mdsize)))
 		if nd.metadata().ismvalue() {
 			llrb.valmemory -= int64(len(nd.nodevalue().value()))
 		}
@@ -927,7 +927,7 @@ func (llrb *LLRB) equivalent(n1, n2 *Llrbnode) bool {
 	} else if n1.left != n2.left || n1.right != n2.right {
 		//fmt.Println("left mismatch")
 		return false
-	} else if bytes.Compare(n1.key(), n2.key()) != 0 {
+	} else if bytes.Compare(n1.key(llrb.mdsize), n2.key(llrb.mdsize)) != 0 {
 		//fmt.Println("key mismatch")
 		return false
 	} else if md1.ismvalue() {

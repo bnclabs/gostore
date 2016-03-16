@@ -193,11 +193,11 @@ func (snapshot *LLRBSnapshot) Get(key []byte) Node {
 }
 
 func (snapshot *LLRBSnapshot) get(key []byte) Node {
-	nd := snapshot.root
+	mdsize, nd := snapshot.llrb.mdsize, snapshot.root
 	for nd != nil {
-		if nd.gtkey(key) {
+		if nd.gtkey(mdsize, key) {
 			nd = nd.left
-		} else if nd.ltkey(key) {
+		} else if nd.ltkey(mdsize, key) {
 			nd = nd.right
 		} else {
 			return nd

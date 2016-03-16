@@ -353,10 +353,10 @@ func (writer *LLRBWriter) upsert(
 
 	ndmvcc = writer.walkdownrot23(ndmvcc)
 
-	if ndmvcc.gtkey(key) {
+	if ndmvcc.gtkey(llrb.mdsize, key) {
 		ndmvcc.left, newnd, oldnd, reclaim =
 			writer.upsert(ndmvcc.left, depth+1, key, value, reclaim)
-	} else if ndmvcc.ltkey(key) {
+	} else if ndmvcc.ltkey(llrb.mdsize, key) {
 		ndmvcc.right, newnd, oldnd, reclaim =
 			writer.upsert(ndmvcc.right, depth+1, key, value, reclaim)
 	} else {
@@ -518,13 +518,14 @@ func (writer *LLRBWriter) delete(
 
 	var newnd, deleted *Llrbnode
 
+	llrb := writer.llrb
 	if nd == nil {
 		return nil, nil, reclaim
 	}
 	reclaim = append(reclaim, nd)
-	ndmvcc := writer.llrb.clone(nd)
+	ndmvcc := llrb.clone(nd)
 
-	if ndmvcc.gtkey(key) {
+	if ndmvcc.gtkey(llrb.mdsize, key) {
 		if ndmvcc.left == nil { // key not present. Nothing to delete
 			return ndmvcc, nil, reclaim
 		}
@@ -539,7 +540,7 @@ func (writer *LLRBWriter) delete(
 		}
 
 		// If @key equals @h.Item and no right children at @h
-		if !ndmvcc.ltkey(key) && ndmvcc.right == nil {
+		if !ndmvcc.ltkey(llrb.mdsize, key) && ndmvcc.right == nil {
 			reclaim = append(reclaim, ndmvcc)
 			return nil, ndmvcc, reclaim
 		}
@@ -551,13 +552,13 @@ func (writer *LLRBWriter) delete(
 		}
 
 		// If @key equals @h.Item, and (from above) 'h.Right != nil'
-		if !ndmvcc.ltkey(key) {
+		if !ndmvcc.ltkey(llrb.mdsize, key) {
 			var subd *Llrbnode
 			ndmvcc.right, subd, reclaim = writer.deletemin(ndmvcc.right, reclaim)
 			if subd == nil {
 				panic("delete(): fatal logic, call the programmer")
 			}
-			newnd = writer.llrb.clone(subd)
+			newnd = llrb.clone(subd)
 			newnd.left, newnd.right = ndmvcc.left, ndmvcc.right
 			if ndmvcc.metadata().isdirty() {
 				//newnd.metadata().setdirty()
