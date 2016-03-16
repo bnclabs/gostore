@@ -22,6 +22,7 @@ var loadopts struct {
 	ncpu      int
 	mvcc      int
 	par       int
+	batchsize int
 	memstats  int
 	mprof     string
 	pprof     string
@@ -52,6 +53,8 @@ func parseLoadopts(args []string) {
 		"number of load generators")
 	f.IntVar(&loadopts.memstats, "stats", 1000,
 		"log llrb stats for every tick, in ms")
+	f.IntVar(&loadopts.batchsize, "batchsize", 100,
+		"batchsize for loading bulk-upserts")
 	f.StringVar(&loadopts.mprof, "mprof", "",
 		"dump mem-profile to file")
 	f.StringVar(&loadopts.pprof, "pprof", "",
@@ -158,7 +161,7 @@ func insertItems(
 		wg.Done()
 	}()
 
-	batchsize := 100
+	batchsize := loadopts.batchsize
 	keys, values := make([][]byte, batchsize), make([][]byte, batchsize)
 	for i := range keys {
 		keys[i] = make([]byte, 256)
@@ -166,7 +169,7 @@ func insertItems(
 	}
 	for items := loadopts.n; items > 0; items -= batchsize {
 		keys, values = keys[:batchsize], values[:batchsize]
-		if items < 100 {
+		if items < batchsize {
 			keys, values = keys[:items], values[:batchsize]
 		}
 		keys, values = loadgenerate(keys, values)
