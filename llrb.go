@@ -302,9 +302,13 @@ func (llrb *LLRB) Stats(involved int) (map[string]interface{}, error) {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.stats(involved)
 	}
+
 	llrb.rw.RLock()
-	defer llrb.rw.RUnlock()
-	return llrb.stats(involved)
+
+	stats, err := llrb.stats(involved)
+
+	llrb.rw.RUnlock()
+	return stats, err
 }
 
 // Validate implement Indexer{} interface.
@@ -315,8 +319,10 @@ func (llrb *LLRB) Validate() {
 		}
 	}
 	llrb.rw.RLock()
-	defer llrb.rw.RUnlock()
+
 	llrb.validate(llrb.root)
+
+	llrb.rw.RUnlock()
 }
 
 // Log implement Indexer{} interface.
@@ -326,8 +332,10 @@ func (llrb *LLRB) Log(involved int, humanize bool) {
 		return
 	}
 	llrb.rw.RLock()
-	defer llrb.rw.RUnlock()
+
 	llrb.log(involved, humanize)
+
+	llrb.rw.RUnlock()
 }
 
 //---- Reader{} interface.
@@ -347,9 +355,15 @@ func (llrb *LLRB) Get(key []byte) Node {
 	}
 
 	llrb.rw.RLock()
-	defer llrb.rw.RUnlock()
-	defer atomic.AddInt64(&llrb.n_lookups, 1)
 
+	nd := llrb.get(key)
+
+	llrb.rw.RUnlock()
+	atomic.AddInt64(&llrb.n_lookups, 1)
+	return nd
+}
+
+func (llrb *LLRB) get(key []byte) Node {
 	nd := llrb.root
 	for nd != nil {
 		if nd.gtkey(key) {
@@ -370,14 +384,19 @@ func (llrb *LLRB) Min() Node {
 	}
 
 	llrb.rw.RLock()
-	defer llrb.rw.RUnlock()
-	defer atomic.AddInt64(&llrb.n_lookups, 1)
 
+	nd := llrb.min()
+
+	llrb.rw.RUnlock()
+	atomic.AddInt64(&llrb.n_lookups, 1)
+	return nd
+}
+
+func (llrb *LLRB) min() Node {
 	var nd *Llrbnode
 	if nd = llrb.root; nd == nil {
 		return nil
 	}
-
 	for nd.left != nil {
 		nd = nd.left
 	}
@@ -391,14 +410,19 @@ func (llrb *LLRB) Max() Node {
 	}
 
 	llrb.rw.RLock()
-	defer llrb.rw.RUnlock()
-	defer atomic.AddInt64(&llrb.n_lookups, 1)
 
+	nd := llrb.max()
+
+	llrb.rw.RUnlock()
+	atomic.AddInt64(&llrb.n_lookups, 1)
+	return nd
+}
+
+func (llrb *LLRB) max() Node {
 	var nd *Llrbnode
 	if nd = llrb.root; nd == nil {
 		return nil
 	}
-
 	for nd.right != nil {
 		nd = nd.right
 	}
@@ -412,8 +436,6 @@ func (llrb *LLRB) Range(lkey, hkey []byte, incl string, iter NodeIterator) {
 	}
 
 	llrb.rw.RLock()
-	defer llrb.rw.RUnlock()
-	defer atomic.AddInt64(&llrb.n_ranges, 1)
 
 	switch incl {
 	case "both":
@@ -425,6 +447,9 @@ func (llrb *LLRB) Range(lkey, hkey []byte, incl string, iter NodeIterator) {
 	default:
 		llrb.rangeAfterTill(llrb.root, lkey, hkey, iter)
 	}
+
+	llrb.rw.RUnlock()
+	atomic.AddInt64(&llrb.n_ranges, 1)
 }
 
 //---- Writer{} interface
@@ -440,7 +465,6 @@ func (llrb *LLRB) Upsert(key, value []byte, callb UpsertCallback) error {
 	}
 
 	llrb.rw.Lock()
-	defer llrb.rw.Unlock()
 
 	root, newnd, oldnd := llrb.upsert(llrb.root, 1 /*depth*/, key, value)
 	root.metadata().setblack()
@@ -452,6 +476,8 @@ func (llrb *LLRB) Upsert(key, value []byte, callb UpsertCallback) error {
 	}
 	newnd.metadata().cleardirty()
 	llrb.freenode(oldnd)
+
+	llrb.rw.Unlock()
 	return nil
 }
 
@@ -462,7 +488,6 @@ func (llrb *LLRB) UpsertMany(keys, values [][]byte, callb UpsertCallback) error 
 	}
 
 	llrb.rw.Lock()
-	defer llrb.rw.Unlock()
 
 	for i, key := range keys {
 		var value []byte
@@ -481,6 +506,8 @@ func (llrb *LLRB) UpsertMany(keys, values [][]byte, callb UpsertCallback) error 
 		newnd.metadata().cleardirty()
 		llrb.freenode(oldnd)
 	}
+
+	llrb.rw.Unlock()
 	return nil
 }
 
@@ -536,7 +563,6 @@ func (llrb *LLRB) DeleteMin(callb DeleteCallback) error {
 	}
 
 	llrb.rw.Lock()
-	defer llrb.rw.Unlock()
 
 	root, deleted := llrb.deletemin(llrb.root)
 	if root != nil {
@@ -550,6 +576,7 @@ func (llrb *LLRB) DeleteMin(callb DeleteCallback) error {
 		callb(llrb, llndornil(deleted))
 	}
 	llrb.freenode(deleted)
+	llrb.rw.Unlock()
 	return nil
 }
 
@@ -575,7 +602,6 @@ func (llrb *LLRB) DeleteMax(callb DeleteCallback) error {
 	}
 
 	llrb.rw.Lock()
-	defer llrb.rw.Unlock()
 
 	root, deleted := llrb.deletemax(llrb.root)
 	if root != nil {
@@ -589,6 +615,8 @@ func (llrb *LLRB) DeleteMax(callb DeleteCallback) error {
 		callb(llrb, llndornil(deleted))
 	}
 	llrb.freenode(deleted)
+
+	llrb.rw.Unlock()
 	return nil
 }
 
@@ -617,7 +645,6 @@ func (llrb *LLRB) Delete(key []byte, callb DeleteCallback) error {
 	}
 
 	llrb.rw.Lock()
-	defer llrb.rw.Unlock()
 
 	root, deleted := llrb.delete(llrb.root, key)
 	if root != nil {
@@ -631,6 +658,8 @@ func (llrb *LLRB) Delete(key []byte, callb DeleteCallback) error {
 		callb(llrb, llndornil(deleted))
 	}
 	llrb.freenode(deleted)
+
+	llrb.rw.Unlock()
 	return nil
 }
 
@@ -817,9 +846,6 @@ func (llrb *LLRB) newnode(k, v []byte) *Llrbnode {
 
 func (llrb *LLRB) freenode(nd *Llrbnode) {
 	if nd != nil {
-		defer func() {
-			llrb.n_frees += 1
-		}()
 		if nd.metadata().ismvalue() {
 			nv := nd.nodevalue()
 			if nv != nil {
@@ -827,6 +853,7 @@ func (llrb *LLRB) freenode(nd *Llrbnode) {
 			}
 		}
 		nd.pool.free(unsafe.Pointer(nd))
+		llrb.n_frees += 1
 	}
 }
 

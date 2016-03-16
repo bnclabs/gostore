@@ -289,7 +289,6 @@ func (writer *LLRBWriter) mvccupsert(
 	llrb.mvcc.h_versions.add(llrb.mvcc.n_activess)
 
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
-	defer atomic.AddInt64(&llrb.mvcc.ismut, -1)
 
 	root, newnd, oldnd, reclaim = writer.upsert(llrb.root, 1, key, value, reclaim)
 	root.metadata().setblack()
@@ -299,6 +298,8 @@ func (writer *LLRBWriter) mvccupsert(
 		callb(llrb, 0, llndornil(newnd), llndornil(oldnd))
 	}
 	newnd.metadata().cleardirty()
+
+	atomic.AddInt64(&llrb.mvcc.ismut, -1)
 	return reclaim
 }
 
@@ -312,7 +313,6 @@ func (writer *LLRBWriter) mvccupsertmany(
 	llrb.mvcc.h_versions.add(llrb.mvcc.n_activess)
 
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
-	defer atomic.AddInt64(&llrb.mvcc.ismut, -1)
 
 	for i, k := range keys {
 		var v []byte
@@ -328,6 +328,8 @@ func (writer *LLRBWriter) mvccupsertmany(
 		}
 		newnd.metadata().cleardirty()
 	}
+
+	atomic.AddInt64(&llrb.mvcc.ismut, -1)
 	return reclaim
 }
 
@@ -389,7 +391,6 @@ func (writer *LLRBWriter) mvccdelmin(
 	llrb.mvcc.h_versions.add(llrb.mvcc.n_activess)
 
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
-	defer atomic.AddInt64(&llrb.mvcc.ismut, -1)
 
 	root, deleted, reclaim = writer.deletemin(llrb.root, reclaim)
 	if root != nil {
@@ -400,6 +401,8 @@ func (writer *LLRBWriter) mvccdelmin(
 	if callb != nil {
 		callb(llrb, llndornil(deleted))
 	}
+
+	atomic.AddInt64(&llrb.mvcc.ismut, -1)
 	return reclaim
 }
 
@@ -440,7 +443,6 @@ func (writer *LLRBWriter) mvccdelmax(
 	llrb.mvcc.h_versions.add(llrb.mvcc.n_activess)
 
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
-	defer atomic.AddInt64(&llrb.mvcc.ismut, -1)
 
 	root, deleted, reclaim = writer.deletemax(llrb.root, reclaim)
 	if root != nil {
@@ -451,6 +453,8 @@ func (writer *LLRBWriter) mvccdelmax(
 	if callb != nil {
 		callb(llrb, llndornil(deleted))
 	}
+
+	atomic.AddInt64(&llrb.mvcc.ismut, -1)
 	return reclaim
 }
 

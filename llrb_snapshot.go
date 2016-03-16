@@ -183,14 +183,16 @@ func (snapshot *LLRBSnapshot) Has(key []byte) bool {
 
 // Get implement Reader{} interface.
 func (snapshot *LLRBSnapshot) Get(key []byte) Node {
-	defer func() {
-		if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
-			atomic.AddInt64(&snapshot.n_cclookups, 1)
-		} else {
-			atomic.AddInt64(&snapshot.n_lookups, 1)
-		}
-	}()
+	nd := snapshot.get(key)
+	if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
+		atomic.AddInt64(&snapshot.n_cclookups, 1)
+	} else {
+		atomic.AddInt64(&snapshot.n_lookups, 1)
+	}
+	return nd
+}
 
+func (snapshot *LLRBSnapshot) get(key []byte) Node {
 	nd := snapshot.root
 	for nd != nil {
 		if nd.gtkey(key) {
@@ -206,14 +208,16 @@ func (snapshot *LLRBSnapshot) Get(key []byte) Node {
 
 // Min implement Reader{} interface.
 func (snapshot *LLRBSnapshot) Min() Node {
-	defer func() {
-		if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
-			atomic.AddInt64(&snapshot.n_cclookups, 1)
-		} else {
-			atomic.AddInt64(&snapshot.n_lookups, 1)
-		}
-	}()
+	nd := snapshot.min()
+	if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
+		atomic.AddInt64(&snapshot.n_cclookups, 1)
+	} else {
+		atomic.AddInt64(&snapshot.n_lookups, 1)
+	}
+	return nd
+}
 
+func (snapshot *LLRBSnapshot) min() Node {
 	var nd *Llrbnode
 	if nd = snapshot.root; nd == nil {
 		return nil
@@ -226,14 +230,16 @@ func (snapshot *LLRBSnapshot) Min() Node {
 
 // Max implement Reader{} interface.
 func (snapshot *LLRBSnapshot) Max() Node {
-	defer func() {
-		if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
-			atomic.AddInt64(&snapshot.n_cclookups, 1)
-		} else {
-			atomic.AddInt64(&snapshot.n_lookups, 1)
-		}
-	}()
+	nd := snapshot.max()
+	if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
+		atomic.AddInt64(&snapshot.n_cclookups, 1)
+	} else {
+		atomic.AddInt64(&snapshot.n_lookups, 1)
+	}
+	return nd
+}
 
+func (snapshot *LLRBSnapshot) max() Node {
 	var nd *Llrbnode
 	if nd = snapshot.root; nd == nil {
 		return nil
@@ -246,14 +252,6 @@ func (snapshot *LLRBSnapshot) Max() Node {
 
 // Range implement Reader{} interface.
 func (s *LLRBSnapshot) Range(lkey, hkey []byte, incl string, iter NodeIterator) {
-	defer func() {
-		if atomic.LoadInt64(&s.llrb.mvcc.ismut) == 1 {
-			atomic.AddInt64(&s.n_ccranges, 1)
-		} else {
-			atomic.AddInt64(&s.n_ranges, 1)
-		}
-	}()
-
 	nd := s.root
 	switch incl {
 	case "both":
@@ -264,5 +262,10 @@ func (s *LLRBSnapshot) Range(lkey, hkey []byte, incl string, iter NodeIterator) 
 		s.llrb.rangeFromTill(nd, lkey, hkey, iter)
 	default:
 		s.llrb.rangeAfterTill(nd, lkey, hkey, iter)
+	}
+	if atomic.LoadInt64(&s.llrb.mvcc.ismut) == 1 {
+		atomic.AddInt64(&s.n_ccranges, 1)
+	} else {
+		atomic.AddInt64(&s.n_ranges, 1)
 	}
 }
