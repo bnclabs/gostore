@@ -7,6 +7,7 @@
 package storage
 
 import "unsafe"
+import "sort"
 import "fmt"
 
 const MEMUtilization = 0.95
@@ -87,11 +88,8 @@ func (arena *memarena) alloc(n int64) (ptr unsafe.Pointer, mpool *mempool) {
 	}
 	// go ahead, create a new pool.
 	mpool = newmempool(size, numblocks)
-	mpools := arena.mpools[size]
-	mpools = append(mpools, mpool) // make more space
-	mpools[0], mpools[len(mpools)-1] = mpools[len(mpools)-1], mpools[0]
-	arena.mpools[size] = mpools
-
+	arena.mpools[size] = append(arena.mpools[size], mpool)
+	sort.Sort(arena.mpools[size])
 	ptr, _ = mpool.alloc()
 	return ptr, mpool
 }
