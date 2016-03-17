@@ -361,7 +361,9 @@ func cmpllrbdict(id string, dictnd, llrbnd storage.Node, fail bool) {
 		} else {
 			panic(fmt.Errorf(fmsg, id, y, x))
 		}
-	} else if dsq := llrbnd.Deadseqno(); dsq != 0 && dsq != 0xFFFFFFFFFFFFFFFF {
-		panic(fmt.Errorf("%v unexpected deadseqno %v", id, dsq))
 	}
+	//TODO: enable this only if mem_pool.initnode() is enabled.
+	//if dsq := llrbnd.Deadseqno(); dsq != 0 && dsq != 0xFFFFFFFFFFFFFFFF {
+	//	panic(fmt.Errorf("%v unexpected deadseqno %v", id, dsq))
+	//}
 }
