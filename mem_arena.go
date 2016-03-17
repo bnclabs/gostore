@@ -69,6 +69,9 @@ func (arena *memarena) alloc(n int64) (ptr unsafe.Pointer, mpool *mempool) {
 	if int64(numblocks*size) > arena.pcapacity {
 		numblocks = arena.pcapacity / size
 	}
+	if numblocks > maxpoolblocks {
+		numblocks = maxpoolblocks
+	}
 	if (numblocks & 0x7) > 0 {
 		numblocks = (numblocks >> 3) << 3
 	}
@@ -173,6 +176,8 @@ func Blocksizes(minblock, maxblock int64) []int64 {
 		addby := int64(float64(from) * (1.0 - MEMUtilization))
 		if addby <= 32 {
 			addby = 32
+		} else if addby&0x1f != 0 {
+			addby = (addby >> 5) << 5
 		}
 		size := from + addby
 		for (float64(from+size)/2.0)/float64(size) > MEMUtilization {

@@ -1,20 +1,23 @@
-// +build !fbit
+// +build fbit
 
 package storage
 
 import "testing"
 import "unsafe"
 import "math/rand"
+import "reflect"
 import "sort"
 import "fmt"
 
 var _ = fmt.Sprintf("dummy")
 
 func TestNewmempool(t *testing.T) {
-	size, n := int64(96), int64(maxpoolblocks)
+	size, n := int64(96), int64(512*512)
 	mpool := newmempool(size, n)
 	if mpool.capacity != size*n {
 		t.Errorf("expected %v, got %v", size*n, mpool.capacity)
+	} else if x := int64(mpool.fbits.freeblocks()); x != n {
+		t.Errorf("expected %v, got %v", n, x)
 	} else if mpool.size != size {
 		t.Errorf("expected %v, got %v", size, mpool.size)
 	}
@@ -33,8 +36,9 @@ func TestMpoolAlloc(t *testing.T) {
 	size, n := int64(96), int64(56)
 	ptrs := make([]unsafe.Pointer, 0, n)
 	mpool := newmempool(size, n)
-	if len(mpool.freelist) != int(n) {
-		t.Errorf("expected %v, got %v", n, len(mpool.freelist))
+	flref := [][]uint8{[]uint8{255, 255, 255, 255, 255, 255, 255}}
+	if reflect.DeepEqual(mpool.fbits.bitmaps, flref) == false {
+		t.Errorf("expected %v, got %v", flref, mpool.fbits.bitmaps)
 	}
 	// allocate
 	for i := int64(0); i < n; i++ {
@@ -50,18 +54,10 @@ func TestMpoolAlloc(t *testing.T) {
 	}
 	if _, ok := mpool.alloc(); ok {
 		t.Errorf("expected pool to be exhausted")
-	} else if len(mpool.freelist) != 0 || mpool.freeoff != -1 {
-		t.Errorf("unexpected %v %v", len(mpool.freelist), mpool.freeoff)
 	}
-
-	mpool.free(ptrs[0])
-	if len(mpool.freelist) != 1 || mpool.freeoff != 0 {
-		t.Errorf("unexpected %v %v", len(mpool.freelist), mpool.freeoff)
-	}
-
 	// free
-	for i, ptr := range ptrs[1:] {
-		j := int64(i) + 1
+	for i, ptr := range ptrs {
+		j := int64(i)
 		mpool.free(ptr)
 		if x, y := mpool.allocated(), (n-j-1)*size; x != y {
 			t.Errorf("expected %v, got %v", y, x)
@@ -69,14 +65,13 @@ func TestMpoolAlloc(t *testing.T) {
 			t.Errorf("expected %v, got %v", y, x)
 		}
 	}
-	if len(mpool.freelist) != int(n) || mpool.freeoff != int(n-1) {
-		t.Errorf("unexpected %v, %v", len(mpool.freelist), mpool.freeoff)
-	}
-
 	// done
+	if reflect.DeepEqual(mpool.fbits.bitmaps, flref) == false {
+		t.Errorf("expected %v, got %v", flref, mpool.fbits.bitmaps)
+	}
 	mpool.release()
 
-	size, n = 96, maxpoolblocks
+	size, n = 96, 512*512
 	ptrs = make([]unsafe.Pointer, 0, n)
 	mpool = newmempool(size, n)
 	// allocate all of them
@@ -121,10 +116,10 @@ func TestMpoolAlloc(t *testing.T) {
 }
 
 func TestPoolMemory(t *testing.T) {
-	size, n := int64(96), int64(maxpoolblocks)
+	size, n := int64(96), int64(512*512)
 	mpool := newmempool(size, n)
 	_, useful := mpool.memory()
-	if useful != 6291456 {
+	if useful != 25165824 {
 		t.Errorf("expected %v, got %v", 25165824, useful)
 	}
 }
@@ -155,14 +150,14 @@ func TestCheckAllocated(t *testing.T) {
 }
 
 func BenchmarkNewmempool(b *testing.B) {
-	size, n := int64(96), int64(maxpoolblocks)
+	size, n := int64(96), int64(512*512)
 	for i := 0; i < b.N; i++ {
 		newmempool(size, n)
 	}
 }
 
 func BenchmarkMpoolAllocX(b *testing.B) {
-	size, n := int64(96), int64(maxpoolblocks)
+	size, n := int64(96), int64(512*512)
 	mpool := newmempool(size, n)
 	for i := 0; i < int(n-1); i++ {
 		mpool.alloc()
