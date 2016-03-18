@@ -1,5 +1,13 @@
 LLRB:
-* stats `n_allocs` sounds like a misnomer, rename it.
+* `n_count` should match (`n_inserts` - `n_deletes`)
+* `n_count` should match ((`n_nodes`+`n_clones`) - `n_frees`)
+* `n_frees` should match `n_deletes`
+* `n_nodes` should match `n_inserts`
+* `h_upsert`.max should not exceed certain limit
+* `h_height`.max should not exceed certain limit
+* `mvcc.n_snapshots` should match (`mvcc.n_activess` + `mvcc.n_purgedss`)
+* `mvcc.h_bulkfree`.sum should match `mvcc.h_reclaims`.sum
+* `mvcc.h_reclaims`.max should not exceed a limit, based on `n_count`.
 * keymemory == 'sum of all Node.Key()'
 * valmemory == 'sum of all Node.Value()'
 * test mvcc.writer.DeleteMin() on a tree with single node.

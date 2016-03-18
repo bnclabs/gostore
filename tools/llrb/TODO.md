@@ -1,5 +1,7 @@
 load:
 
+* use range in monster.
+* pass new snapshot versions to a subset of reader-routines.
 * add dot-file dump to load.
 * validate after load complete.
 * load llrb with mvcc, with tunable number of readers.
