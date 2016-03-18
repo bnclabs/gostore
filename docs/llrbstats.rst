@@ -100,7 +100,8 @@ MVCC statistics:
     to the writer version of the tree.
 
 following statistics are computed on the fly when Stat() API is called with
-`involved` leve 9.
+`involved` level 9, please note that level > 0 might invoke a full table
+scan the tree.
 
 `n_blacks`
     number of blacks links from root node to any leaf node.
@@ -113,24 +114,19 @@ following statistics are computed on the fly when Stat() API is called with
 Memory statistics:
 ------------------
 
-`node.useful`
-`value.useful`
+`node.useful` & `value.useful`
     useful memory obtained from OS.
 
-`node.overhead`
-`value.overhead`
+`node.overhead` & `value.overhead`
     book-keeping overhead to manage `useful` memory.
 
-`node.allocated`
-`value.allocated`
+`node.allocated` & `value.allocated`
     account of memory allocated from the `useful` pool.
 
-`node.available`
-`value.available`
+`node.available` & `value.available`
     memory available for allocation.
 
-`node.blocks`
-`value.blocks`
+`node.blocks` & `value.blocks`
     list of allocatable block-sizes.
 
 `keymemory`
