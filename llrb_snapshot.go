@@ -55,7 +55,7 @@ type LLRBSnapshot struct {
 	n_inserts     int64
 	n_updates     int64
 	n_deletes     int64
-	n_allocs      int64
+	n_nodes       int64
 	n_frees       int64
 	n_clones      int64
 	keymemory     int64
@@ -94,7 +94,7 @@ func (llrb *LLRB) NewSnapshot(id string) *LLRBSnapshot {
 		n_inserts:     llrb.n_inserts,
 		n_updates:     llrb.n_updates,
 		n_deletes:     llrb.n_deletes,
-		n_allocs:      llrb.n_allocs,
+		n_nodes:       llrb.n_nodes,
 		n_frees:       llrb.n_frees,
 		n_clones:      llrb.n_clones,
 		keymemory:     llrb.keymemory,

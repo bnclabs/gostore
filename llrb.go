@@ -141,7 +141,7 @@ type LLRB struct { // tree container
 	n_inserts int64
 	n_updates int64
 	n_deletes int64
-	n_allocs  int64
+	n_nodes   int64
 	n_frees   int64
 	n_clones  int64
 	keymemory int64 // memory used by all keys
@@ -840,7 +840,7 @@ func (llrb *LLRB) newnode(k, v []byte) *Llrbnode {
 		panic("newnode(): llrb tree not configured for accepting value")
 	}
 
-	llrb.n_allocs += 1
+	llrb.n_nodes += 1
 	return nd
 }
 

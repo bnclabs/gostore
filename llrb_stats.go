@@ -55,7 +55,7 @@ func (llrb *LLRB) stattree(stats map[string]interface{}) map[string]interface{} 
 	stats["n_inserts"] = llrb.n_inserts
 	stats["n_updates"] = llrb.n_updates
 	stats["n_deletes"] = llrb.n_deletes
-	stats["n_allocs"] = llrb.n_allocs
+	stats["n_nodes"] = llrb.n_nodes
 	stats["n_frees"] = llrb.n_frees
 	stats["n_clones"] = llrb.n_clones
 	stats["keymemory"] = llrb.keymemory
