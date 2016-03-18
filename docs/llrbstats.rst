@@ -1,9 +1,11 @@
 LLRB data structure stats:
+--------------------------
 
 all statistics belong to either LLRB{} or LLRBSnapshot{} instances.
 LLRBSnapshot{} is applicable only in MVCC variant of LLRB. 
 
 Snapshot statistics:
+--------------------
 
 `n_lookups`
     number of lookup operations performed on this snapshot, note that
@@ -29,6 +31,7 @@ when the snapshot is purged these counts are accumlated to the parent LLRB{}
 instance.
 
 LLRB statistics:
+----------------
 
 `n_lookups`
     number of lookup operations performed on this tree, in case of MVCC
@@ -65,6 +68,7 @@ LLRB statistics:
     histogram of node depth while upserting into the tree.
 
 MVCC statistics:
+----------------
 
 `mvcc.n_cclookups`
     the cummulative count of all lookup operations performed on all
@@ -107,6 +111,7 @@ following statistics are computed on the fly when Stat() API is called with
     rotated along the way up after the upsert..
 
 Memory statistics:
+------------------
 
 `node.useful`
 `value.useful`
