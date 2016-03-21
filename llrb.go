@@ -163,6 +163,7 @@ type LLRB struct { // tree container
 		reclaim    []*Llrbnode
 		writer     *LLRBWriter
 		snapshot   *LLRBSnapshot
+		n_reclaims int64
 		h_bulkfree *histogramInt64
 		h_reclaims map[string]*histogramInt64
 		h_versions *histogramInt64

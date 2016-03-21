@@ -245,7 +245,8 @@ func checkLLRBMvcc(
 
 				for _, reader := range readers {
 					stats := clonestats(genstats)
-					cmd := []interface{}{"snapshot", dictsnap, llrbsnap, stats, snaprespch}
+					cmd := []interface{}{
+						"snapshot", dictsnap, llrbsnap, stats, snaprespch}
 					reader <- llrbcmd{cmd: cmd}
 					<-snaprespch
 				}

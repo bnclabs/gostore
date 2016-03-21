@@ -171,6 +171,7 @@ func (writer *LLRBWriter) run() {
 
 	reclaimNodes := func(opname string, reclaim []*Llrbnode) {
 		llrb.mvcc.h_reclaims[opname].add(int64(len(reclaim)))
+		llrb.mvcc.n_reclaims += int64(len(reclaim))
 		if llrb.mvcc.n_activess == 0 {
 			// no snapshots are refering to these nodes, free them.
 			for _, nd := range reclaim {

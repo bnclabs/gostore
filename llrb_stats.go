@@ -1,6 +1,7 @@
 package storage
 
 import "sort"
+import "math"
 import "fmt"
 import "strings"
 import "encoding/json"
@@ -67,6 +68,47 @@ func (llrb *LLRB) stattree(stats map[string]interface{}) map[string]interface{} 
 	stats["mvcc.n_cclookups"] = llrb.mvcc.n_cclookups
 	stats["mvcc.n_ccranges"] = llrb.mvcc.n_ccranges
 	return stats
+}
+
+func (llrb *LLRB) validatestats() error {
+	// n_count should match (n_inserts - n_deletes)
+	n_count := llrb.n_count
+	n_inserts, n_deletes := llrb.n_inserts, llrb.n_deletes
+	if n_count != (n_inserts - n_deletes) {
+		fmsg := "stats(): n_count:%v != (n_inserts:%v - n_deletes:%v)"
+		panic(fmt.Errorf(fmsg, n_count, n_inserts, n_deletes))
+	}
+	// n_nodes should match n_inserts
+	n_nodes := llrb.n_nodes
+	if n_inserts != n_nodes {
+		fmsg := "stats(): n_inserts:%v != n_nodes:%v"
+		panic(fmt.Errorf(fmsg, n_inserts, n_nodes))
+	}
+	// n_deletes should match (n_frees - n_clones)
+	n_frees, n_clones := llrb.n_frees, llrb.n_clones
+	if n_deletes != (n_frees - n_clones) {
+		fmsg := "stats(): n_deletes:%v != (n_frees:%v + n_clones:%v)"
+		panic(fmt.Errorf(fmsg, n_deletes, n_frees, n_clones))
+	}
+	// mvcc.n_snapshots should match (mvcc.n_activess + mvcc.n_purgedss)
+	n_snapshots := llrb.mvcc.n_snapshots
+	n_purgedss, n_activess := llrb.mvcc.n_purgedss, llrb.mvcc.n_activess
+	if n_snapshots != (n_purgedss + n_activess) {
+		fmsg := "stats(): n_snapshots:%v != (n_activess:%v + n_purgedss:%v)"
+		panic(fmt.Errorf(fmsg, n_snapshots, n_activess, n_purgedss))
+	}
+
+	for k, h_reclaim := range llrb.mvcc.h_reclaims {
+		if max := h_reclaim.max(); max > 0 {
+			nf := float64(llrb.Count())
+			if float64(max) > (3 * math.Log2(nf)) {
+				fmsg := "stats(): max %v reclaim %v exceeds log2(%v)"
+				panic(fmt.Errorf(fmsg, k, float64(max), nf))
+			}
+		}
+	}
+
+	return nil
 }
 
 func (llrb *LLRB) log(involved int, humanize bool) {

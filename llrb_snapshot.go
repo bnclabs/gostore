@@ -5,6 +5,7 @@ package storage
 import "sync/atomic"
 import "time"
 import "strings"
+import "math"
 import "io"
 import "fmt"
 import "strconv"
@@ -58,6 +59,7 @@ type LLRBSnapshot struct {
 	n_nodes       int64
 	n_frees       int64
 	n_clones      int64
+	n_reclaims    int64
 	keymemory     int64
 	valmemory     int64
 	h_upsertdepth histogramInt64
@@ -97,6 +99,7 @@ func (llrb *LLRB) NewSnapshot(id string) *LLRBSnapshot {
 		n_nodes:       llrb.n_nodes,
 		n_frees:       llrb.n_frees,
 		n_clones:      llrb.n_clones,
+		n_reclaims:    llrb.mvcc.n_reclaims,
 		keymemory:     llrb.keymemory,
 		valmemory:     llrb.valmemory,
 		h_upsertdepth: *llrb.h_upsertdepth,
@@ -159,7 +162,7 @@ func (snapshot *LLRBSnapshot) Release() {
 
 // Validate implement Snapshot interface.
 func (snapshot *LLRBSnapshot) Validate() {
-	snapshot.llrb.validate(snapshot.root)
+	snapshot.validate(snapshot.root)
 }
 
 func (snapshot *LLRBSnapshot) Dotdump(buffer io.Writer) {
@@ -268,4 +271,61 @@ func (s *LLRBSnapshot) Range(lkey, hkey []byte, incl string, iter NodeIterator) 
 	} else {
 		atomic.AddInt64(&s.n_ranges, 1)
 	}
+}
+
+// don't use llrb.validate(), it will access stats that needs
+// to be serialized.
+func (snapshot *LLRBSnapshot) validate(root *Llrbnode) {
+	llrb := snapshot.llrb
+
+	h := newhistorgramInt64(1, 256, 1)
+	_, km, vm := llrb.validatetree(root, isred(root), 0 /*blck*/, 1 /*dep*/, h)
+	if km != snapshot.keymemory {
+		fmsg := "validate(): keymemory:%v != actual:%v"
+		panic(fmt.Errorf(fmsg, snapshot.keymemory, km))
+	} else if vm != snapshot.valmemory {
+		fmsg := "validate(): valmemory:%v != actual:%v"
+		panic(fmt.Errorf(fmsg, snapshot.valmemory, vm))
+	}
+
+	// `h_height`.max should not exceed certain limit
+	llrb.validatetree(root, isred(root), 0 /*blacks*/, 1 /*depth*/, h)
+	if h.samples() > 0 {
+		nf := float64(snapshot.Count())
+		if float64(h.max()) > (3 * math.Log2(nf)) {
+			fmsg := "validate(): max height %v exceeds log2(snapshot.count) %v"
+			panic(fmt.Errorf(fmsg, float64(h.max()), nf))
+		}
+	}
+
+	snapshot.validatestats()
+}
+
+func (snapshot *LLRBSnapshot) validatestats() {
+	// n_count should match (n_inserts - n_deletes)
+	n_count := snapshot.n_count
+	n_inserts, n_deletes := snapshot.n_inserts, snapshot.n_deletes
+	if n_count != (n_inserts - n_deletes) {
+		fmsg := "sstats(): n_count:%v != (n_inserts:%v - n_deletes:%v)"
+		panic(fmt.Errorf(fmsg, n_count, n_inserts, n_deletes))
+	}
+	// n_nodes should match n_inserts
+	n_nodes := snapshot.n_nodes
+	if n_inserts != n_nodes {
+		fmsg := "sstats(): n_inserts:%v != n_nodes:%v"
+		panic(fmt.Errorf(fmsg, n_inserts, n_nodes))
+	}
+	// n_count should match ((n_nodes + n_clones - n_reclaims)
+	n_clones, n_reclaims := snapshot.n_clones, snapshot.n_reclaims
+	if n_count != (n_nodes + n_clones - n_reclaims) {
+		fmsg := "sstats(): n_count:%v != (n_nodes:%v + n_clones:%v - reclaims:%v)"
+		panic(fmt.Errorf(fmsg, n_count, n_nodes, n_clones, n_reclaims))
+	}
+
+	// n_deletes should match (n_reclaims - n_clones)
+	if n_deletes != (n_reclaims - n_clones) {
+		fmsg := "sstats(): n_deletes:%v != (n_reclaims:%v - n_clones:%v)"
+		panic(fmt.Errorf(fmsg, n_deletes, n_reclaims, n_clones))
+	}
+	return
 }
