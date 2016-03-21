@@ -6,6 +6,7 @@ import "strings"
 import "strconv"
 import "time"
 import "log"
+import "math/rand"
 
 import "github.com/prataprc/storage.go"
 
@@ -244,11 +245,13 @@ func checkLLRBMvcc(
 				dictsnap, llrbsnap = makesnaps()
 
 				for _, reader := range readers {
-					stats := clonestats(genstats)
-					cmd := []interface{}{
-						"snapshot", dictsnap, llrbsnap, stats, snaprespch}
-					reader <- llrbcmd{cmd: cmd}
-					<-snaprespch
+					if rand.Intn(10) < 7 {
+						stats := clonestats(genstats)
+						cmd := []interface{}{
+							"snapshot", dictsnap, llrbsnap, stats, snaprespch}
+						reader <- llrbcmd{cmd: cmd}
+						<-snaprespch
+					}
 				}
 
 			case "release":
