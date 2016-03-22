@@ -54,8 +54,10 @@ func mvccreader(readerid int, ropch chan llrbcmd) {
 			dictsnap.Refer()
 			llrbsnap.Refer()
 			snaprespch <- true
+
 		case "release":
 			releasesnaps()
+
 		default:
 			log.Fatalf("unknown command %v\n", lcmd.cmd)
 		}
