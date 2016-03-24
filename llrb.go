@@ -16,7 +16,7 @@
 // metadata fields are part of index entry, and describes them as:
 //
 //   a. 16 bit vbucket-number virtual bucket for the key.
-//   b. 20 bit access time bits time.Now()[44:24].
+//   b. 20 bit access time bits time.Now()[50:30].
 //   i. and upto 12 optional fields that are configured.
 //   1. 64 bit unique vbucket id for the vbucket number a.
 //   2. 64 bit born-seqno vbucket seqno in which this entry was upserted.
@@ -37,7 +37,7 @@
 // llrb hard limits:
 //
 //   * maximum vbuckets   - 65535
-//   * maximum access     - 2^20 counted in steps of 16.7mS for 290 minutes
+//   * maximum access     - 2^20 counted in steps of 1.07S for 12 days
 //   * maximum key size   - 4096 bytes
 //   * maximum born seqno - (2^64 - 1)
 //   * maximum dead seqno - (2^64 - 1)
@@ -56,6 +56,11 @@
 //   "log.file" - string
 //
 //     log to file, if empty log to console
+//
+//   "defrag.period" - int
+//
+//	   time period in seconds, to start a defragmentation cycle on the LLRB
+//     tree.
 //
 //   "nodearena.minblock" - integer
 //
@@ -109,6 +114,7 @@
 package storage
 
 import "fmt"
+import "time"
 import "unsafe"
 import "io"
 import "strings"
@@ -177,6 +183,7 @@ type LLRB struct { // tree container
 	nodearena *memarena
 	valarena  *memarena
 	root      *Llrbnode
+	borntime  time.Time
 	dead      bool
 	clock     *vectorclock // current clock
 	rw        sync.RWMutex
@@ -194,7 +201,9 @@ type LLRB struct { // tree container
 
 // NewLLRB a new instance of in-memory sorted index.
 func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
-	llrb := &LLRB{name: name}
+	config = mixinconfig(llrbConfig(), config)
+
+	llrb := &LLRB{name: name, borntime: time.Now()}
 
 	llrb.validateConfig(config)
 
@@ -251,6 +260,11 @@ func (llrb *LLRB) Id() string {
 // Count implement Index{} interface.
 func (llrb *LLRB) Count() int64 {
 	return atomic.LoadInt64(&llrb.n_count)
+}
+
+// Setaccess implement Index{} interface.
+func (llrb *LLRB) Setaccess(nd Node) {
+	nd.Setaccess(uint64(time.Now().UnixNano() >> 30))
 }
 
 // Isactive implement Index{} interface.

@@ -91,7 +91,9 @@ func TestNewLLRBNode(t *testing.T) {
 }
 
 func TestNewLLRBNodePanic(t *testing.T) {
-	llrb := NewLLRB("test", makellrbconfig(), nil)
+	config := makellrbconfig()
+	config["metadata.mvalue"] = false
+	llrb := NewLLRB("test", config, nil)
 	key, value := makekeyvalue(make([]byte, 128), make([]byte, 1024))
 	func() {
 		defer func() {
@@ -408,6 +410,7 @@ func TestLLRBInsert(t *testing.T) {
 	config := makellrbconfig()
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
+	config["metadata.deadseqno"] = false
 	config["metadata.vbuuid"] = true
 	llrb := NewLLRB("test", config, nil)
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
@@ -494,6 +497,7 @@ func TestLLRBUpsert(t *testing.T) {
 	config := makellrbconfig()
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
+	config["metadata.deadseqno"] = false
 	config["metadata.vbuuid"] = true
 	llrb := NewLLRB("test", config, nil)
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)

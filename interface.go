@@ -46,6 +46,9 @@ type NodeSetter interface {
 	// Setvbno to set the vbucket-number for this entry.
 	Setvbno(vbno uint16) Node
 
+	// Setaccess to set access timestamp for this entry.
+	Setaccess(access uint64) Node
+
 	// SetVbuuid to set unique vbucket id for this entry
 	SetVbuuid(uuid uint64) Node
 

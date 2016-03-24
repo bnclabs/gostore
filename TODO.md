@@ -1,5 +1,4 @@
 LLRB:
-* update access field.
 * dotdump hightlight red/black edges.
 * add checker for memory leak to memarena.
 * monster validation should randomly include value for upsert.
@@ -9,6 +8,9 @@ LLRB:
 * do we need atomic access to `mem_pool.go` ?
 * if there are no outstanding snapshots, may be we can do non-mvcc
   upserts and deletes ?
+* create configuration md file.
+* add `defrag.period` to configuration.md
+* update access field from storage instance.
 * YCSB test cases.
 
 clock:

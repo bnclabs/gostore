@@ -49,12 +49,13 @@ func setLogger(logger Logger, config map[string]interface{}) Logger {
 		level = string2logLevel(val.(string))
 	}
 	logfd := os.Stdout
-	if val, ok := config["log.file"]; ok {
-		logfile := val.(string)
-		logfd, err = os.OpenFile(logfile, os.O_RDWR|os.O_APPEND, 0660)
-		if err != nil {
-			if logfd, err = os.Create(logfile); err != nil {
-				panic(err)
+	if val, ok := config["log.file"]; ok && val != nil {
+		if logfile, ok := val.(string); ok && len(logfile) > 0 {
+			logfd, err = os.OpenFile(logfile, os.O_RDWR|os.O_APPEND, 0660)
+			if err != nil {
+				if logfd, err = os.Create(logfile); err != nil {
+					panic(err)
+				}
 			}
 		}
 	}

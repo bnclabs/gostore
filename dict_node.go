@@ -51,6 +51,11 @@ func (dn *dictnode) Setvbno(vbno uint16) Node {
 	return dn
 }
 
+// Setaccess implement NodeSetter{} interface.
+func (dn *dictnode) Setaccess(access uint64) Node {
+	return dn
+}
+
 // SetVbuuid implement NodeSetter{} interface.
 func (dn *dictnode) SetVbuuid(vbuuid uint64) Node {
 	if dn != nil {

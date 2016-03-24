@@ -149,3 +149,13 @@ func ceil(divident, divisor int64) int64 {
 	}
 	return (divident / divisor) + 1
 }
+
+func mixinconfig(configs ...map[string]interface{}) map[string]interface{} {
+	dst := make(map[string]interface{})
+	for _, config := range configs {
+		for key, value := range config {
+			dst[key] = value
+		}
+	}
+	return dst
+}

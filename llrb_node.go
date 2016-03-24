@@ -16,12 +16,20 @@ type Llrbnode struct {
 	mdmarker unsafe.Pointer
 }
 
-//---- Exported methods on metadata.
+//---- Exported methods for metadata.
 
 // Setvbno implement NodeSetter{}
 func (nd *Llrbnode) Setvbno(vbno uint16) Node {
 	if nd != nil {
 		nd.metadata().setvbno(vbno)
+	}
+	return nd
+}
+
+// Setaccess implement NodeSetter{}
+func (nd *Llrbnode) Setaccess(access uint64) Node {
+	if nd != nil {
+		nd.metadata().setaccess(access)
 	}
 	return nd
 }
@@ -58,6 +66,14 @@ func (nd *Llrbnode) Vbno() uint16 {
 	return 0
 }
 
+// Key implement NodeGetter{}
+func (nd *Llrbnode) Key() []byte {
+	if nd != nil {
+		return nd.key(nd.metadata().sizeof())
+	}
+	return nil
+}
+
 // Bornseqno implement NodeGetter{}
 func (nd *Llrbnode) Bornseqno() uint64 {
 	if nd != nil {
@@ -80,14 +96,6 @@ func (nd *Llrbnode) Vbuuid() uint64 {
 		return nd.metadata().vbuuid()
 	}
 	return 0
-}
-
-// Key implement NodeGetter{}
-func (nd *Llrbnode) Key() []byte {
-	if nd != nil {
-		return nd.key(nd.metadata().sizeof())
-	}
-	return nil
 }
 
 // Value implement NodeGetter{}
