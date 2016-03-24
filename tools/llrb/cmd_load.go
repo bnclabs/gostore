@@ -4,6 +4,8 @@ import "time"
 import "os"
 import "sync"
 import "fmt"
+import "bytes"
+import "io/ioutil"
 import "strconv"
 import "flag"
 import "strings"
@@ -59,6 +61,8 @@ func parseLoadopts(args []string) {
 		"dump mem-profile to file")
 	f.StringVar(&loadopts.pprof, "pprof", "",
 		"dump cpu-profile to file")
+	f.StringVar(&loadopts.dotfile, "dotfile", "",
+		"dump dot file output of the LLRB tree")
 	f.Parse(args)
 
 	loadopts.nodearena = [4]int{
@@ -127,6 +131,8 @@ func doLoad(args []string) {
 		"valarena.pool.capacity":  loadopts.valarena[3],
 		"metadata.vbuuid":         true,
 		"metadata.bornseqno":      true,
+		"metadata.deadseqno":      false,
+		"metadata.mvalue":         false,
 	}
 
 	llrb := storage.NewLLRB("load", config, nil)
@@ -143,11 +149,17 @@ func doLoad(args []string) {
 	llrb.Log(9, true)
 
 	llrb.Validate()
-	llrb.Destroy()
 
 	if takeMEMProfile(loadopts.mprof) {
 		fmt.Printf("dumped mem-profile to %v\n", loadopts.mprof)
 	}
+	if len(loadopts.dotfile) > 0 {
+		buffer := bytes.NewBuffer(nil)
+		llrb.Dotdump(buffer)
+		ioutil.WriteFile(loadopts.dotfile, buffer.Bytes(), 0666)
+	}
+
+	llrb.Destroy()
 }
 
 func insertItems(

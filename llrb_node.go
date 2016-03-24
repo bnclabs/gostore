@@ -181,18 +181,34 @@ func (nd *Llrbnode) pprint(prefix string) {
 }
 
 func (nd *Llrbnode) dotdump(buffer io.Writer) {
+	if nd == nil {
+		return
+	}
+
+	whatcolor := func(childnd *Llrbnode) string {
+		if isred(childnd) {
+			return "red"
+		}
+		return "black"
+	}
+
 	mdsize := nd.metadata().sizeof()
 	key := string(nd.key(mdsize))
 	mddot := nd.metadata().dotdump()
 	lines := []string{
 		fmt.Sprintf("  %v [label=\"{%v|%v}\"];\n", key, key, mddot),
 	}
+	fmsg := "  %v -> %v [color=%v];\n"
 	if nd.left != nil {
-		line := fmt.Sprintf("  %v -> %v;\n", key, string(nd.left.key(mdsize)))
+		line := fmt.Sprintf(
+			fmsg, key, string(nd.left.key(mdsize)), whatcolor(nd.left),
+		)
 		lines = append(lines, line)
 	}
 	if nd.right != nil {
-		line := fmt.Sprintf("  %v -> %v;\n", key, string(nd.right.key(mdsize)))
+		line := fmt.Sprintf(
+			fmsg, key, string(nd.right.key(mdsize)), whatcolor(nd.right),
+		)
 		lines = append(lines, line)
 	}
 	buffer.Write([]byte(strings.Join(lines, "")))

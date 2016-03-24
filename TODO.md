@@ -1,17 +1,13 @@
 LLRB:
 * dotdump hightlight red/black edges.
-* add checker for memory leak to memarena.
 * monster validation should randomly include value for upsert.
-* add llrb tree validation rules, based on sedgewick paper.
-* should llrb.clone() copy value also ? can it be optimized for mvcc ?
-  use dirty flag to avoid copy ?
-* do we need atomic access to `mem_pool.go` ?
-* if there are no outstanding snapshots, may be we can do non-mvcc
-  upserts and deletes ?
 * create configuration md file.
 * add `defrag.period` to configuration.md
 * update access field from storage instance.
+* if there are no outstanding snapshots, may be we can do non-mvcc
+  upserts and deletes ?
 * YCSB test cases.
+* add llrb tree validation rules, based on sedgewick paper.
 
 clock:
 * exhaust all possible combination of clock comparision TestVectorclockOrder.
