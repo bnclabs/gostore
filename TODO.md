@@ -1,5 +1,4 @@
 LLRB:
-* test mvcc.writer.DeleteMin() on a tree with single node.
 * update access field.
 * dotdump hightlight red/black edges.
 * add checker for memory leak to memarena.

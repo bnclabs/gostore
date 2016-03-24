@@ -634,6 +634,52 @@ func TestLLRBMvccUpsert(t *testing.T) {
 	llrb.Destroy()
 }
 
+func TestLLRBMvccDeleteMin(t *testing.T) {
+	config := makellrbconfig()
+	config["mvcc.enable"] = true
+	config["metadata.mvalue"] = true
+	config["metadata.bornseqno"] = true
+	config["metadata.vbuuid"] = true
+
+	inserts := make([][2][]byte, 0)
+	keys, values := make([][]byte, 0), make([][]byte, 0)
+	// insert 1 item
+	count := 1
+	for i := 0; i < count; i++ {
+		key, value := makekeyvalue(make([]byte, 10), make([]byte, 100))
+		inserts = append(inserts, [2][]byte{key, value})
+		keys, values = append(keys, key), append(values, value)
+	}
+
+	llrb := makellrbmvcc(t, "mvccdelete", inserts, config)
+
+	// delete first item
+	vbno, vbuuid := uint16(10), uint64(0xABCD)
+	llrb.DeleteMin(
+		func(index Index, nd Node) {
+			if nd == nil {
+				t.Errorf("unexpected nil")
+			} else if x := nd.Vbno(); x != vbno {
+				t.Errorf("expected %v, got %v", vbno, x)
+			} else if x := nd.Vbuuid(); x != vbuuid {
+				t.Errorf("expected %v, got %v", vbuuid, x)
+			}
+		})
+
+	if x := llrb.Count(); x > 0 {
+		t.Errorf("expected 0, got %v", x)
+	}
+	// check memory accounting
+	stats, err := llrb.Stats(9)
+	if err != nil {
+		t.Error(err)
+	}
+	if x, y := int64(0), stats["node.allocated"].(int64); x != y {
+		t.Errorf("expected %v, got %v", x, y)
+	}
+	llrb.Destroy()
+}
+
 func TestLLRBMvccDelete(t *testing.T) {
 	config := makellrbconfig()
 	config["mvcc.enable"] = true
