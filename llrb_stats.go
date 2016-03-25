@@ -2,6 +2,7 @@ package storage
 
 import "sort"
 import "fmt"
+import "math"
 import "strings"
 import "encoding/json"
 
@@ -97,17 +98,15 @@ func (llrb *LLRB) validatestats() error {
 		panic(fmt.Errorf(fmsg, n_snapshots, n_activess, n_purgedss))
 	}
 
-	// TODO: fix upsert many to do granular reclaim instead of bulk reclaim.
-	// and then only the following stats are relevant.
-	//for k, h_reclaim := range llrb.mvcc.h_reclaims {
-	//	if max := h_reclaim.max(); max > 0 {
-	//		nf := float64(llrb.Count())
-	//		if float64(max) > (3 * math.Log2(nf)) {
-	//			fmsg := "stats(): max %v reclaim %v exceeds log2(%v)"
-	//			panic(fmt.Errorf(fmsg, k, float64(max), nf))
-	//		}
-	//	}
-	//}
+	for k, h_reclaim := range llrb.mvcc.h_reclaims {
+		if max := h_reclaim.max(); max > 0 {
+			nf := float64(llrb.Count())
+			if float64(max) > (3 * math.Log2(nf)) {
+				fmsg := "stats(): max %v reclaim %v exceeds log2(%v)"
+				panic(fmt.Errorf(fmsg, k, float64(max), nf))
+			}
+		}
+	}
 
 	return nil
 }

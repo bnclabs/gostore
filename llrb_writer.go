@@ -170,15 +170,17 @@ func (writer *LLRBWriter) run() {
 	}()
 
 	reclaimNodes := func(opname string, reclaim []*Llrbnode) {
-		llrb.mvcc.h_reclaims[opname].add(int64(len(reclaim)))
-		llrb.mvcc.n_reclaims += int64(len(reclaim))
-		if llrb.mvcc.n_activess == 0 {
-			// no snapshots are refering to these nodes, free them.
-			for _, nd := range reclaim {
-				llrb.freenode(nd)
+		if len(reclaim) > 0 {
+			llrb.mvcc.h_reclaims[opname].add(int64(len(reclaim)))
+			llrb.mvcc.n_reclaims += int64(len(reclaim))
+			if llrb.mvcc.n_activess == 0 {
+				// no snapshots are refering to these nodes, free them.
+				for _, nd := range reclaim {
+					llrb.freenode(nd)
+				}
+			} else {
+				llrb.mvcc.reclaim = append(llrb.mvcc.reclaim, reclaim...)
 			}
-		} else {
-			llrb.mvcc.reclaim = append(llrb.mvcc.reclaim, reclaim...)
 		}
 	}
 
@@ -201,7 +203,12 @@ loop:
 			callb := msg[3].(UpsertCallback)
 			respch := msg[4].(chan []interface{})
 
-			reclaim = writer.mvccupsertmany(keys, values, callb, reclaim)
+			reclaim = writer.mvccupsertmany(
+				keys, values, callb, reclaim,
+				func(reclaim []*Llrbnode) []*Llrbnode {
+					reclaimNodes("upmany", reclaim)
+					return reclaim[:0]
+				})
 			reclaimNodes("upmany", reclaim)
 			close(respch)
 
@@ -306,7 +313,7 @@ func (writer *LLRBWriter) mvccupsert(
 
 func (writer *LLRBWriter) mvccupsertmany(
 	keys, values [][]byte, callb UpsertCallback,
-	reclaim []*Llrbnode) []*Llrbnode {
+	reclaim []*Llrbnode, rfn func([]*Llrbnode) []*Llrbnode) []*Llrbnode {
 
 	var root, newnd, oldnd *Llrbnode
 
@@ -328,6 +335,7 @@ func (writer *LLRBWriter) mvccupsertmany(
 			callb(llrb, int64(i), llndornil(newnd), llndornil(oldnd))
 		}
 		newnd.metadata().cleardirty()
+		reclaim = rfn(reclaim)
 	}
 
 	atomic.AddInt64(&llrb.mvcc.ismut, -1)

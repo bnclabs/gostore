@@ -487,7 +487,7 @@ func TestLLRBMvccInsert(t *testing.T) {
 	if x := stats["node.available"].(int64); x != avail {
 		t.Errorf("expected %v, got %v", avail, x)
 	}
-	useful := int64(25165824)
+	useful := int64(8388608)
 	allocated, avail = int64(1280000), int64(10736138240)
 	if x := stats["value.useful"].(int64); x != useful {
 		t.Errorf("expected %v, got %v", useful, x)
@@ -601,8 +601,8 @@ func TestLLRBMvccUpsert(t *testing.T) {
 	//if useful := stats["node.useful"].(int64); useful != 2096640 {
 	//	t.Errorf("expected %v, got %v", 2096640, useful)
 	//}
-	if useful := stats["value.useful"].(int64); useful != 39845888 {
-		t.Errorf("expected %v, got %v", 39845888, useful)
+	if useful := stats["value.useful"].(int64); useful != 23068672 {
+		t.Errorf("expected %v, got %v", 23068672, useful)
 	}
 
 	// TODO: these number keep changing for every run,
@@ -796,8 +796,8 @@ func TestLLRBMvccDelete(t *testing.T) {
 	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
-	if useful := stats["value.useful"].(int64); useful != 25165824 {
-		t.Errorf("expected %v, got %v", 25165824, useful)
+	if useful := stats["value.useful"].(int64); useful != 8388608 {
+		t.Errorf("expected %v, got %v", 8388608, useful)
 	} else if x, y = int64(0), stats["value.allocated"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
