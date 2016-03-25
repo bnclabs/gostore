@@ -1,8 +1,8 @@
 LLRB:
-* dotdump hightlight red/black edges.
-* monster validation should randomly include value for upsert.
-* create configuration md file.
-* add `defrag.period` to configuration.md
+* make reclaimNodes granular for upsertmany.
+* implemention continuation based range.
+* tools/llrb: incremental load with adjustable reads/writes
+* tools/llrb: benchmark range and continuation.
 * update access field from storage instance.
 * if there are no outstanding snapshots, may be we can do non-mvcc
   upserts and deletes ?
@@ -21,10 +21,6 @@ clock:
 * fullset having a greater seqno for vbucket not present in subset.
 * fullset having a greater seqno for vbucket present in subset.
 * subset having a greater seqno.
-
-* CBOR in ; JSON out.
-* CBOR based json-pointer lookup is essential for all KV operation.
-* delta operation on KV is essential for reducing the log file size.
 
 Insert, Upsert, Delete:
 
