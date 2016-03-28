@@ -1,6 +1,4 @@
 LLRB:
-* make reclaimNodes granular for upsertmany.
-* cleanup stats.
 * implemention continuation based range.
 * tools/llrb: incremental load with adjustable reads/writes
 * tools/llrb: benchmark range and continuation.
