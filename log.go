@@ -10,7 +10,7 @@ import "strings"
 
 // Logger interface for gofast logging, applications can
 // supply a logger object implementing this interface or
-// gofast will fall back to the DefaultLogger{}.
+// gofast will fall back to the defaultLogger{}.
 type Logger interface {
 	SetLogLevel(string)
 	Fatalf(format string, v ...interface{})
@@ -60,59 +60,59 @@ func SetLogger(logger Logger, config map[string]interface{}) Logger {
 			}
 		}
 	}
-	log = &DefaultLogger{level: level, output: logfd}
+	log = &defaultLogger{level: level, output: logfd}
 	return log
 }
 
-// DefaultLogger with default log-file as os.Stdout and,
+// defaultLogger with default log-file as os.Stdout and,
 // default log-level as LogLevelInfo. Applications can
 // supply a Logger{} object when instantiating the
 // Transport.
-type DefaultLogger struct {
+type defaultLogger struct {
 	level  logLevel
 	output io.Writer
 }
 
-func (l *DefaultLogger) SetLogLevel(level string) {
+func (l *defaultLogger) SetLogLevel(level string) {
 	l.level = string2logLevel(level)
 }
 
-func (l *DefaultLogger) Fatalf(format string, v ...interface{}) {
+func (l *defaultLogger) Fatalf(format string, v ...interface{}) {
 	l.printf(logLevelFatal, format, v...)
 }
 
-func (l *DefaultLogger) Errorf(format string, v ...interface{}) {
+func (l *defaultLogger) Errorf(format string, v ...interface{}) {
 	l.printf(logLevelError, format, v...)
 }
 
-func (l *DefaultLogger) Warnf(format string, v ...interface{}) {
+func (l *defaultLogger) Warnf(format string, v ...interface{}) {
 	l.printf(logLevelWarn, format, v...)
 }
 
-func (l *DefaultLogger) Infof(format string, v ...interface{}) {
+func (l *defaultLogger) Infof(format string, v ...interface{}) {
 	l.printf(logLevelInfo, format, v...)
 }
 
-func (l *DefaultLogger) Verbosef(format string, v ...interface{}) {
+func (l *defaultLogger) Verbosef(format string, v ...interface{}) {
 	l.printf(logLevelVerbose, format, v...)
 }
 
-func (l *DefaultLogger) Debugf(format string, v ...interface{}) {
+func (l *defaultLogger) Debugf(format string, v ...interface{}) {
 	l.printf(logLevelDebug, format, v...)
 }
 
-func (l *DefaultLogger) Tracef(format string, v ...interface{}) {
+func (l *defaultLogger) Tracef(format string, v ...interface{}) {
 	l.printf(logLevelTrace, format, v...)
 }
 
-func (l *DefaultLogger) printf(level logLevel, format string, v ...interface{}) {
+func (l *defaultLogger) printf(level logLevel, format string, v ...interface{}) {
 	if l.canlog(level) {
 		ts := time.Now().Format("2006-01-02T15:04:05.999Z-07:00")
 		fmt.Fprintf(l.output, ts+" ["+level.String()+"] "+format, v...)
 	}
 }
 
-func (l *DefaultLogger) canlog(level logLevel) bool {
+func (l *defaultLogger) canlog(level logLevel) bool {
 	if level <= l.level {
 		return true
 	}

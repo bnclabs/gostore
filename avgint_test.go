@@ -13,8 +13,8 @@ func TestSetLogger(t *testing.T) {
 	logline := "hello world"
 	defer os.Remove(logfile)
 
-	ref := &DefaultLogger{level: logLevelIgnore, output: nil}
-	log := SetLogger(ref, nil).(*DefaultLogger)
+	ref := &defaultLogger{level: logLevelIgnore, output: nil}
+	log := SetLogger(ref, nil).(*defaultLogger)
 	if log.level != logLevelIgnore || log.output != nil {
 		t.Errorf("expected %v, got %v", ref, log)
 	}
