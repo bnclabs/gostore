@@ -1,4 +1,5 @@
 LLRB:
+* API to generate a new snapshot, serialize this in write path.
 * implemention continuation based range.
 * tools/llrb: incremental load with adjustable reads/writes
 * tools/llrb: benchmark range and continuation.

@@ -1,3 +1,5 @@
+// +build dict
+
 package storage
 
 import "strconv"

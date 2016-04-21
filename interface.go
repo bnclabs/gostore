@@ -9,9 +9,8 @@ type NodeIterator func(nd Node) bool
 // * newnd can be read or updated.
 type UpsertCallback func(index Index, offset int64, newnd, oldnd Node)
 
-// DeleteCallback callback from Delete API. Don't keep any reference
-// to nd:
-// * deleted node can only be read.
+// DeleteCallback callback from Delete API. Don't keep any reference to nd,
+// deleted node can only be read and valid until callback returns.
 type DeleteCallback func(index Index, deleted Node)
 
 // Node interface methods to access node attributes.
@@ -64,6 +63,7 @@ type NodeSetter interface {
 type Index interface {
 	Reader
 	Writer
+
 	// index id
 	Id() string
 
