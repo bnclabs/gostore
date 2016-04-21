@@ -1,2 +1,2 @@
 clean:
-	rm -rf tools/llrb/llrb
+	rm -rf coverage.out

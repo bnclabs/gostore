@@ -1,2 +1,3 @@
 *.swp
 .vimsession
+coverage.out
