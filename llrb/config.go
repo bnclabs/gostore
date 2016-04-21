@@ -2,7 +2,7 @@ package main
 
 func newllrbconfig() map[string]interface{} {
 	mvcc := false
-	if checkopts.mvcc > 0 {
+	if verifyopts.mvcc > 0 {
 		mvcc = true
 	}
 	config := map[string]interface{}{

@@ -21,8 +21,8 @@ func main() {
 		doLoad(os.Args[2:])
 	case "monster":
 		doMonster(os.Args[2:])
-	case "check":
-		doCheck(os.Args[2:])
+	case "verify":
+		doVerify(os.Args[2:])
 	default:
 		fmt.Println("please provide a valid command !!")
 	}

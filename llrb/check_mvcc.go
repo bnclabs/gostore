@@ -30,7 +30,7 @@ func mvccreader(readerid int, ropch chan llrbcmd) {
 			continue
 		}
 		//fmt.Println(readerid, cmdname)
-		if checkopts.opdump {
+		if verifyopts.opdump {
 			fmt.Printf("reader %v cmd %v\n", readerid, lcmd.cmd)
 		}
 		switch cmdname {

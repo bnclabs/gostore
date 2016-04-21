@@ -10,7 +10,7 @@ import "math/rand"
 
 import "github.com/prataprc/storage.go"
 
-var checkopts struct {
+var verifyopts struct {
 	repeat int
 	seed   int
 	vtick  time.Duration
@@ -26,16 +26,16 @@ var checkopts struct {
 	args      []string
 }
 
-func parseCheckopts(args []string) {
-	f := flag.NewFlagSet("check", flag.ExitOnError)
+func parseVerifyopts(args []string) {
+	f := flag.NewFlagSet("verify", flag.ExitOnError)
 
 	var nodearena, valarena string
 	var vtick, stick, rtick int
 
 	seed := time.Now().UTC().Second()
-	f.IntVar(&checkopts.repeat, "repeat", 1000,
+	f.IntVar(&verifyopts.repeat, "repeat", 1000,
 		"number of times to repeat the generator")
-	f.IntVar(&checkopts.seed, "seed", seed,
+	f.IntVar(&verifyopts.seed, "seed", seed,
 		"seed value for generating inputs")
 	f.IntVar(&vtick, "vtick", 1000,
 		"validate tick, in milliseconds")
@@ -43,20 +43,20 @@ func parseCheckopts(args []string) {
 		"periodically generate snapshot, period in milliseconds")
 	f.IntVar(&rtick, "rtick", 1000,
 		"periodically release snapshots, period in milliseconds")
-	f.StringVar(&checkopts.bagdir, "bagdir", "./",
+	f.StringVar(&verifyopts.bagdir, "bagdir", "./",
 		"bagdir for monster")
-	f.IntVar(&checkopts.mvcc, "mvcc", 0,
+	f.IntVar(&verifyopts.mvcc, "mvcc", 0,
 		"use as many as n mvcc readers on llrb")
-	f.BoolVar(&checkopts.opdump, "opdump", false,
+	f.BoolVar(&verifyopts.opdump, "opdump", false,
 		"dump monster generated ops")
 	f.StringVar(&nodearena, "nodearena", "",
 		"minblock,maxblock,arena-capacity,pool-capacity for nodes")
 	f.StringVar(&valarena, "valarena", "",
 		"minblock,maxblock,arena-capacity,pool-capacity for values")
-	f.StringVar(&checkopts.log, "log", "info", "log level")
+	f.StringVar(&verifyopts.log, "log", "info", "log level")
 	f.Parse(args)
 
-	checkopts.args = f.Args()
+	verifyopts.args = f.Args()
 
 	loadopts.nodearena = [4]int{
 		storage.MinKeymem, storage.MaxKeymem, 10 * 1024 * 1024, 1024 * 1024,
@@ -77,37 +77,37 @@ func parseCheckopts(args []string) {
 		}
 	}
 
-	checkopts.vtick = time.Duration(vtick) * time.Millisecond
-	checkopts.stick = time.Duration(stick) * time.Millisecond
-	checkopts.rtick = time.Duration(rtick) * time.Millisecond
+	verifyopts.vtick = time.Duration(vtick) * time.Millisecond
+	verifyopts.stick = time.Duration(stick) * time.Millisecond
+	verifyopts.rtick = time.Duration(rtick) * time.Millisecond
 }
 
-func doCheck(args []string) {
-	parseCheckopts(args)
+func doVerify(args []string) {
+	parseVerifyopts(args)
 
-	fmt.Printf("Seed: %v\n", checkopts.seed)
+	fmt.Printf("Seed: %v\n", verifyopts.seed)
 
 	opch := make(chan [][]interface{}, 10000)
-	go generate(checkopts.repeat, "./llrb.prod", opch)
+	go generate(verifyopts.repeat, "./llrb.prod", opch)
 
-	if checkopts.mvcc > 0 {
-		go validateTick(checkopts.vtick, opch)
-		go snapshotTick(checkopts.stick, opch)
-		//go releaseTick(checkopts.rtick, opch)
+	if verifyopts.mvcc > 0 {
+		go validateTick(verifyopts.vtick, opch)
+		go snapshotTick(verifyopts.stick, opch)
+		//go releaseTick(verifyopts.rtick, opch)
 		readers := make([]chan llrbcmd, 0)
-		for i := 0; i < checkopts.mvcc; i++ {
+		for i := 0; i < verifyopts.mvcc; i++ {
 			ropch := make(chan llrbcmd, 10000)
 			readers = append(readers, ropch)
 			go mvccreader(i, ropch)
 		}
-		checkLLRBMvcc(uint64(checkopts.repeat), opch, readers)
+		verifyLLRBMvcc(uint64(verifyopts.repeat), opch, readers)
 	} else {
-		go validateTick(checkopts.vtick, opch)
-		checkLLRB(uint64(checkopts.repeat), opch)
+		go validateTick(verifyopts.vtick, opch)
+		verifyLLRB(uint64(verifyopts.repeat), opch)
 	}
 }
 
-func checkLLRB(count uint64, opch chan [][]interface{}) {
+func verifyLLRB(count uint64, opch chan [][]interface{}) {
 	genstats := newgenstats()
 
 	vbno, vbuuid, seqno := uint16(10), uint64(1234), uint64(0)
@@ -117,15 +117,16 @@ func checkLLRB(count uint64, opch chan [][]interface{}) {
 
 	// llrb
 	config := newllrbconfig()
-	config["log.level"] = checkopts.log
-	llrb := storage.NewLLRB("check", config, nil)
+	config["log.level"] = verifyopts.log
+	storage.SetLogger(nil, config)
+	llrb := storage.NewLLRB("verify", config, nil)
 
 	for seqno < count {
 		seqno++
 		cmds := <-opch
 		for _, cmd := range cmds {
 			lcmd := llrbcmd{cmd: cmd, vbno: vbno, vbuuid: vbuuid, seqno: seqno}
-			if checkopts.opdump {
+			if verifyopts.opdump {
 				fmt.Printf("cmd %v\n", lcmd.cmd)
 			}
 			switch cmd[0].(string) {
@@ -160,7 +161,7 @@ func checkLLRB(count uint64, opch chan [][]interface{}) {
 	llrb.Log(9, true)
 }
 
-func checkLLRBMvcc(
+func verifyLLRBMvcc(
 	count uint64, opch chan [][]interface{}, readers []chan llrbcmd) {
 
 	// stats
@@ -170,8 +171,9 @@ func checkLLRBMvcc(
 
 	// llrb
 	config := newllrbconfig()
-	config["log.level"] = checkopts.log
-	llrb := storage.NewLLRB("check", config, nil)
+	config["log.level"] = verifyopts.log
+	storage.SetLogger(nil, config)
+	llrb := storage.NewLLRB("verify", config, nil)
 
 	snapch := make(chan storage.Snapshot, 2)
 	makesnaps := func() (dsnap, lsnap storage.Snapshot) {
@@ -205,7 +207,7 @@ func checkLLRBMvcc(
 		cmds := <-opch
 		for _, cmd := range cmds {
 			lcmd := llrbcmd{cmd: cmd, vbno: vbno, vbuuid: vbuuid, seqno: seqno}
-			if checkopts.opdump {
+			if verifyopts.opdump {
 				fmt.Printf("cmd %v\n", lcmd.cmd)
 			}
 			switch cmd[0].(string) {

@@ -135,6 +135,7 @@ func doLoad(args []string) {
 		"metadata.mvalue":         false,
 	}
 
+	storage.SetLogLevel(nil, config)
 	llrb := storage.NewLLRB("load", config, nil)
 
 	now := time.Now()
