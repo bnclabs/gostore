@@ -146,7 +146,6 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	llrb.valarena = llrb.newvaluearena(config)
 
 	// set up logger
-	setLogger(logg, config)
 	llrb.logPrefix = fmt.Sprintf("[LLRB-%s]", name)
 
 	// set up metadata options

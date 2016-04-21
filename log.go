@@ -37,7 +37,8 @@ const (
 
 var log Logger // object used by gofast component for logging.
 
-func setLogger(logger Logger, config map[string]interface{}) Logger {
+// SetLogger to integrate storage logging with application logging.
+func SetLogger(logger Logger, config map[string]interface{}) Logger {
 	if logger != nil {
 		log = logger
 		return log

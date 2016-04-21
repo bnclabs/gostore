@@ -1,6 +1,44 @@
 package storage
 
+import "os"
+import "strings"
+import "io/ioutil"
 import "testing"
+
+// TestSetLogger is moved to this file to make to prevent race situation due
+// to SetLogger() call.
+
+func TestSetLogger(t *testing.T) {
+	logfile := "setlogger_test.log.file"
+	logline := "hello world"
+	defer os.Remove(logfile)
+
+	ref := &DefaultLogger{level: logLevelIgnore, output: nil}
+	log := SetLogger(ref, nil).(*DefaultLogger)
+	if log.level != logLevelIgnore || log.output != nil {
+		t.Errorf("expected %v, got %v", ref, log)
+	}
+
+	// test a custom logger
+	config := map[string]interface{}{
+		"log.level": "info",
+		"log.file":  logfile,
+	}
+	clog := SetLogger(nil, config)
+	clog.Infof(logline)
+	clog.Verbosef(logline)
+	clog.Fatalf(logline)
+	clog.Errorf(logline)
+	clog.Warnf(logline)
+	clog.Tracef(logline)
+	if data, err := ioutil.ReadFile(logfile); err != nil {
+		t.Error(err)
+	} else if s := string(data); !strings.Contains(s, "hello world") {
+		t.Errorf("expected %v, got %v", logline, s)
+	} else if len(strings.Split(s, "\n")) != 1 {
+		t.Errorf("expected %v, got %v", logline, s)
+	}
+}
 
 func TestAverageInt(t *testing.T) {
 	avg := &averageInt64{}

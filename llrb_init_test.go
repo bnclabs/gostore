@@ -5,6 +5,13 @@ import "testing"
 
 var _ = fmt.Sprintf("dummy")
 
+func init() {
+	config := map[string]interface{}{
+		"log.level": "warn",
+	}
+	SetLogger(nil, config)
+}
+
 func TestLLRBValidate(t *testing.T) {
 	dotest := func(config map[string]interface{}) {
 		defer func() {
