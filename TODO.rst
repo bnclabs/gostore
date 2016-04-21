@@ -1,6 +1,5 @@
 LLRB:
-* prefix Snapshot{}, Reader{}, Writer{} interface as
-  IndexSnapshot{}, IndexReader{}, IndexWriter{}.
+
 * refactor memory allocator into separate package.
 * implemention continuation based range.
 * tools/llrb: incremental load with adjustable reads/writes
@@ -12,9 +11,12 @@ LLRB:
 * add llrb tree validation rules, based on sedgewick paper.
 
 clock:
+
 * exhaust all possible combination of clock comparision TestVectorclockOrder.
+
   * subset on LHS, fullset on RHS
   * subset on RHS, fullset on LHS
+
 * fullset having a lesser seqno for vbucket not present in subset.
 * fullset having a lesser seqno for vbucket present in subset.
 * subset having a lesser seqno.
