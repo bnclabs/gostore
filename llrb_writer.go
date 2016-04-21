@@ -8,7 +8,7 @@ import "runtime/debug"
 
 type LLRBWriter struct {
 	llrb    *LLRB
-	waiters []chan Snapshot
+	waiters []chan IndexSnapshot
 	reqch   chan []interface{}
 	finch   chan bool
 }
@@ -23,7 +23,7 @@ func (llrb *LLRB) MVCCWriter() *LLRBWriter {
 	chansize := llrb.config["mvcc.writer.chanbuffer"].(int)
 	llrb.mvcc.writer = &LLRBWriter{
 		llrb:    llrb,
-		waiters: make([]chan Snapshot, 0, 128),
+		waiters: make([]chan IndexSnapshot, 0, 128),
 		reqch:   make(chan []interface{}, chansize),
 		finch:   make(chan bool),
 	}
@@ -99,7 +99,7 @@ func (writer *LLRBWriter) makeSnapshot(id string) error {
 	return failsafePost(writer.reqch, cmd, writer.finch)
 }
 
-func (writer *LLRBWriter) getSnapshot(snapch chan Snapshot) error {
+func (writer *LLRBWriter) getSnapshot(snapch chan IndexSnapshot) error {
 	cmd := []interface{}{cmdLlrbWriterGetSnapshot, snapch}
 	return failsafePost(writer.reqch, cmd, writer.finch)
 }
@@ -259,7 +259,7 @@ loop:
 			}
 
 		case cmdLlrbWriterGetSnapshot:
-			waiter := msg[1].(chan Snapshot)
+			waiter := msg[1].(chan IndexSnapshot)
 			log.Debugf("%v adding waiter for next snapshot\n", llrb.logPrefix)
 			writer.waiters = append(writer.waiters, waiter)
 

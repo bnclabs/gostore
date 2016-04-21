@@ -32,18 +32,18 @@ func NewDict() *Dict {
 
 //---- Index{} interface.
 
-// Count implement Index{} / Snapshot{} interface.
+// Count implement Index{} / IndexSnapshot{} interface.
 func (d *Dict) Count() int64 {
 	return int64(len(d.dict))
 }
 
-// Isactive implement Index{} / Snapshot{} interface.
+// Isactive implement Index{} / IndexSnapshot{} interface.
 func (d *Dict) Isactive() bool {
 	return d.dead == false
 }
 
 // RSnapshot implement Index{} interface.
-func (d *Dict) RSnapshot(snapch chan Snapshot) error {
+func (d *Dict) RSnapshot(snapch chan IndexSnapshot) error {
 	snapch <- d.NewDictSnapshot()
 	return nil
 }
@@ -75,33 +75,33 @@ func (d *Dict) Log(involved int, humanize bool) {
 	panic("Index.Log() not implemented for Dict")
 }
 
-//---- Snapshot{} interface{}
+//---- IndexSnapshot{} interface{}
 
-// Id implement Snapshot{} interface.
+// Id implement IndexSnapshot{} interface.
 func (d *Dict) Id() string {
 	return d.id
 }
 
-// Refer implement Snapshot{} interface.
+// Refer implement IndexSnapshot{} interface.
 func (d *Dict) Refer() {
 	return
 }
 
-// Release implement Snapshot{} interface.
+// Release implement IndexSnapshot{} interface.
 func (d *Dict) Release() {
 	d.Destroy()
 }
 
-//---- Reader{} interface.
+//---- IndexReader{} interface.
 
-// Has implement Reader{} interface.
+// Has implement IndexReader{} interface.
 func (d *Dict) Has(key []byte) bool {
 	hashv := crc64.Checksum(key, crcisotab)
 	_, ok := d.dict[hashv]
 	return ok
 }
 
-// Get implement Reader{} interface.
+// Get implement IndexReader{} interface.
 func (d *Dict) Get(key []byte) Node {
 	hashv := crc64.Checksum(key, crcisotab)
 	if nd, ok := d.dict[hashv]; ok {
@@ -110,7 +110,7 @@ func (d *Dict) Get(key []byte) Node {
 	return nil
 }
 
-// Min implement Reader{} interface.
+// Min implement IndexReader{} interface.
 func (d *Dict) Min() Node {
 	if len(d.dict) == 0 {
 		return nil
@@ -119,7 +119,7 @@ func (d *Dict) Min() Node {
 	return d.dict[hashv]
 }
 
-// Max implement Reader{} interface.
+// Max implement IndexReader{} interface.
 func (d *Dict) Max() Node {
 	if len(d.dict) == 0 {
 		return nil
@@ -128,7 +128,7 @@ func (d *Dict) Max() Node {
 	return d.dict[hashks[len(hashks)-1]]
 }
 
-// Range implement Reader{} interface.
+// Range implement IndexReader{} interface.
 func (d *Dict) Range(lowkey, highkey []byte, incl string, iter NodeIterator) {
 	var start int
 	var hashks []uint64
@@ -166,9 +166,9 @@ func (d *Dict) Range(lowkey, highkey []byte, incl string, iter NodeIterator) {
 	}
 }
 
-//---- Writer{} interface.
+//---- IndexWriter{} interface.
 
-// Upsert implement Writer{} interface.
+// Upsert implement IndexWriter{} interface.
 func (d *Dict) Upsert(key, value []byte, callb UpsertCallback) error {
 	newnd := newdictnode(key, value)
 	hashv := crc64.Checksum(key, crcisotab)
@@ -184,7 +184,7 @@ func (d *Dict) Upsert(key, value []byte, callb UpsertCallback) error {
 	return nil
 }
 
-// UpsertMany implement Writer{} interface.
+// UpsertMany implement IndexWriter{} interface.
 func (d *Dict) UpsertMany(keys, values [][]byte, callb UpsertCallback) error {
 	for i, key := range keys {
 		var value []byte
@@ -206,7 +206,7 @@ func (d *Dict) UpsertMany(keys, values [][]byte, callb UpsertCallback) error {
 	return nil
 }
 
-// DeleteMin implement Writer{} interface.
+// DeleteMin implement IndexWriter{} interface.
 func (d *Dict) DeleteMin(callb DeleteCallback) error {
 	if len(d.dict) > 0 {
 		nd := d.Min()
@@ -215,7 +215,7 @@ func (d *Dict) DeleteMin(callb DeleteCallback) error {
 	return nil
 }
 
-// DeleteMax implement Writer{} interface.
+// DeleteMax implement IndexWriter{} interface.
 func (d *Dict) DeleteMax(callb DeleteCallback) error {
 	if len(d.dict) > 0 {
 		nd := d.Max()
@@ -224,7 +224,7 @@ func (d *Dict) DeleteMax(callb DeleteCallback) error {
 	return nil
 }
 
-// Delete implement Writer{} interface.
+// Delete implement IndexWriter{} interface.
 func (d *Dict) Delete(key []byte, callb DeleteCallback) error {
 	if len(d.dict) > 0 {
 		hashv := crc64.Checksum(key, crcisotab)

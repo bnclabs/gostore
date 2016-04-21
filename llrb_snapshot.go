@@ -128,30 +128,30 @@ func (llrb *LLRB) NewSnapshot(id string) *LLRBSnapshot {
 	return snapshot
 }
 
-//---- Snapshot{} interface.
+//---- IndexSnapshot{} interface.
 
-// Id implement Snapshot{} interface.
+// Id implement IndexSnapshot{} interface.
 func (snapshot *LLRBSnapshot) Id() string {
 	return snapshot.id
 }
 
-// Count implement Snapshot{} interface.
+// Count implement IndexSnapshot{} interface.
 func (snapshot *LLRBSnapshot) Count() int64 {
 	return snapshot.n_count
 }
 
-// Isactive implement Snapshot{} interface.
+// Isactive implement IndexSnapshot{} interface.
 func (snapshot *LLRBSnapshot) Isactive() bool {
 	return snapshot.dead == false
 }
 
-// Refer implement Snapshot interface.
+// Refer implement IndexSnapshot interface.
 func (snapshot *LLRBSnapshot) Refer() {
 	log.Debugf("%v snapshot REF\n", snapshot.logPrefix)
 	atomic.AddInt64(&snapshot.refcount, 1)
 }
 
-// Release implement Snapshot interface.
+// Release implement IndexSnapshot interface.
 func (snapshot *LLRBSnapshot) Release() {
 	log.Debugf("%v snapshot DEREF\n", snapshot.logPrefix)
 	refcount := atomic.AddInt64(&snapshot.refcount, -1)
@@ -160,7 +160,7 @@ func (snapshot *LLRBSnapshot) Release() {
 	}
 }
 
-// Validate implement Snapshot interface.
+// Validate implement IndexSnapshot interface.
 func (snapshot *LLRBSnapshot) Validate() {
 	snapshot.validate(snapshot.root)
 }
@@ -177,14 +177,14 @@ func (snapshot *LLRBSnapshot) Dotdump(buffer io.Writer) {
 	buffer.Write([]byte(lines[len(lines)-1]))
 }
 
-//---- Reader{} interface.
+//---- IndexReader{} interface.
 
-// Has implement Reader{} interface.
+// Has implement IndexReader{} interface.
 func (snapshot *LLRBSnapshot) Has(key []byte) bool {
 	return snapshot.Get(key) != nil
 }
 
-// Get implement Reader{} interface.
+// Get implement IndexReader{} interface.
 func (snapshot *LLRBSnapshot) Get(key []byte) Node {
 	nd := snapshot.get(key)
 	if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
@@ -209,7 +209,7 @@ func (snapshot *LLRBSnapshot) get(key []byte) Node {
 	return nil // key is not present in the tree
 }
 
-// Min implement Reader{} interface.
+// Min implement IndexReader{} interface.
 func (snapshot *LLRBSnapshot) Min() Node {
 	nd := snapshot.min()
 	if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
@@ -231,7 +231,7 @@ func (snapshot *LLRBSnapshot) min() Node {
 	return nd
 }
 
-// Max implement Reader{} interface.
+// Max implement IndexReader{} interface.
 func (snapshot *LLRBSnapshot) Max() Node {
 	nd := snapshot.max()
 	if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
@@ -253,7 +253,7 @@ func (snapshot *LLRBSnapshot) max() Node {
 	return nd
 }
 
-// Range implement Reader{} interface.
+// Range implement IndexReader{} interface.
 func (s *LLRBSnapshot) Range(lkey, hkey []byte, incl string, iter NodeIterator) {
 	nd := s.root
 	switch incl {

@@ -169,7 +169,7 @@ func (llrb *LLRB) Release() {
 }
 
 // RSnapshot implement Index{} interface.
-func (llrb *LLRB) RSnapshot(snapch chan Snapshot) error {
+func (llrb *LLRB) RSnapshot(snapch chan IndexSnapshot) error {
 	if llrb.mvcc.enabled {
 		err := llrb.mvcc.writer.getSnapshot(snapch)
 		if err != nil {
@@ -253,9 +253,9 @@ func (llrb *LLRB) Log(involved int, humanize bool) {
 	llrb.rw.RUnlock()
 }
 
-//---- Reader{} interface.
+//---- IndexReader{} interface.
 
-// Has implement Reader{} interface.
+// Has implement IndexReader{} interface.
 func (llrb *LLRB) Has(key []byte) bool {
 	if llrb.mvcc.enabled {
 		panic("Has(): mvcc enabled, use snapshots for reading")
@@ -263,7 +263,7 @@ func (llrb *LLRB) Has(key []byte) bool {
 	return llrb.Get(key) != nil
 }
 
-// Get implement Reader{} interface.
+// Get implement IndexReader{} interface.
 func (llrb *LLRB) Get(key []byte) Node {
 	if llrb.mvcc.enabled {
 		panic("Get(): mvcc enabled, use snapshots for reading")
@@ -292,7 +292,7 @@ func (llrb *LLRB) get(key []byte) Node {
 	return nil // key is not present in the tree
 }
 
-// Min implement Reader{} interface.
+// Min implement IndexReader{} interface.
 func (llrb *LLRB) Min() Node {
 	if llrb.mvcc.enabled {
 		panic("Min(): mvcc enabled, use snapshots for reading")
@@ -318,7 +318,7 @@ func (llrb *LLRB) min() Node {
 	return nd
 }
 
-// Max implement Reader{} interface.
+// Max implement IndexReader{} interface.
 func (llrb *LLRB) Max() Node {
 	if llrb.mvcc.enabled {
 		panic("Max(): mvcc enabled, use snapshots for reading")
@@ -367,9 +367,9 @@ func (llrb *LLRB) Range(lkey, hkey []byte, incl string, iter NodeIterator) {
 	atomic.AddInt64(&llrb.n_ranges, 1)
 }
 
-//---- Writer{} interface
+//---- IndexWriter{} interface
 
-// Upsert implement Writer{} interface.
+// Upsert implement IndexWriter{} interface.
 func (llrb *LLRB) Upsert(key, value []byte, callb UpsertCallback) error {
 	if key == nil {
 		panic("Upsert(): upserting nil key")
@@ -396,7 +396,7 @@ func (llrb *LLRB) Upsert(key, value []byte, callb UpsertCallback) error {
 	return nil
 }
 
-// UpsertMany implement Writer{} interface.
+// UpsertMany implement IndexWriter{} interface.
 func (llrb *LLRB) UpsertMany(keys, values [][]byte, callb UpsertCallback) error {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.wupsertmany(keys, values, callb)
@@ -471,7 +471,7 @@ func (llrb *LLRB) upsert(
 	return nd, newnd, oldnd
 }
 
-// DeleteMin implement Writer{} interface.
+// DeleteMin implement IndexWriter{} interface.
 func (llrb *LLRB) DeleteMin(callb DeleteCallback) error {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.wdeleteMin(callb)
@@ -510,7 +510,7 @@ func (llrb *LLRB) deletemin(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 	return llrb.fixup(nd), deleted
 }
 
-// DeleteMax implements Writer{} interface.
+// DeleteMax implements IndexWriter{} interface.
 func (llrb *LLRB) DeleteMax(callb DeleteCallback) error {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.wdeleteMax(callb)
@@ -553,7 +553,7 @@ func (llrb *LLRB) deletemax(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 	return llrb.fixup(nd), deleted
 }
 
-// Delete implement Writer{} interface.
+// Delete implement IndexWriter{} interface.
 func (llrb *LLRB) Delete(key []byte, callb DeleteCallback) error {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.wdelete(key, callb)

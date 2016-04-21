@@ -59,7 +59,7 @@ type NodeSetter interface {
 }
 
 // Index interface for managing key,value pairs.
-// TBD: add interface for vector-clock.
+// TODO: add interface for vector-clock.
 type Index interface {
 	// index id
 	Id() string
@@ -71,7 +71,7 @@ type Index interface {
 	Isactive() bool
 
 	// RSnapshot return snapshot that shan't be disturbed by subsequent writes.
-	RSnapshot(snapch chan Snapshot) error
+	RSnapshot(snapch chan IndexSnapshot) error
 
 	// Stats return a set of index statistics.
 	Stats() (map[string]interface{}, error)
@@ -89,14 +89,13 @@ type Index interface {
 	// Destroy to delete an index and clean up its resources.
 	Destroy() error
 
-	Reader
-	Writer
+	IndexReader
+	IndexWriter
 }
 
-// Snapshot for read-only operation into the index.
+// IndexSnapshot for read-only operation into the index.
 // TBD: add interface for vector-clock.
-type Snapshot interface {
-	Reader
+type IndexSnapshot interface {
 	// unique id for snapshot
 	Id() string
 
@@ -114,11 +113,13 @@ type Snapshot interface {
 
 	// Validate check whether index is in sane state.
 	Validate()
+
+	IndexReader
 }
 
-// Reader interface for fetching one or more entries from index data
+// IndexReader interface for fetching one or more entries from index data
 // structure.
-type Reader interface {
+type IndexReader interface {
 	// Has checks wether key is present in the index.
 	Has(key []byte) bool
 
@@ -140,8 +141,8 @@ type Reader interface {
 	Range(lowkey, highkey []byte, incl string, iter NodeIterator)
 }
 
-// Writer interface methods for updating index data structure.
-type Writer interface {
+// IndexWriter interface methods for updating index data structure.
+type IndexWriter interface {
 	// Upsert a key/value pair.
 	Upsert(key, value []byte, callb UpsertCallback) error
 

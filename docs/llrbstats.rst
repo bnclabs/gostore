@@ -4,8 +4,8 @@ LLRB data structure stats:
 all statistics belong to either LLRB{} or LLRBSnapshot{} instances.
 LLRBSnapshot{} is applicable only in MVCC variant of LLRB. 
 
-Snapshot statistics:
---------------------
+IndexSnapshot statistics:
+-------------------------
 
 `n_lookups`
     number of lookup operations performed on this snapshot, note that

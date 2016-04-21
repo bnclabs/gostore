@@ -70,7 +70,7 @@ func TestLLRBMvccBasicSnapshot(t *testing.T) {
 	llrb := makellrbmvcc(t, "bmvccsnapshot", inserts, config)
 	writer := llrb.mvcc.writer
 
-	snapch := make(chan Snapshot, 1)
+	snapch := make(chan IndexSnapshot, 1)
 	err := llrb.RSnapshot(snapch)
 	if err != nil {
 		t.Error(err)
@@ -107,7 +107,7 @@ func TestLLRBMvcclBasicLookup(t *testing.T) {
 	llrb := makellrbmvcc(t, "bmvcclookup", inserts, config)
 	writer := llrb.mvcc.writer
 
-	snapch := make(chan Snapshot, 1)
+	snapch := make(chan IndexSnapshot, 1)
 	err := llrb.RSnapshot(snapch)
 	if err != nil {
 		t.Error(err)
@@ -194,7 +194,7 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 			}
 		})
 
-	snapch := make(chan Snapshot, 1)
+	snapch := make(chan IndexSnapshot, 1)
 	err := llrb.RSnapshot(snapch)
 	if err != nil {
 		t.Error(err)
@@ -915,10 +915,10 @@ func makellrbmvcc(
 	return llrb
 }
 
-func validatesnapshot(sleep int, writer *LLRBWriter) (Snapshot, error) {
+func validatesnapshot(sleep int, writer *LLRBWriter) (IndexSnapshot, error) {
 	time.Sleep(time.Duration(sleep) * time.Millisecond)
 
-	snapch := make(chan Snapshot, 1)
+	snapch := make(chan IndexSnapshot, 1)
 	err := writer.llrb.RSnapshot(snapch)
 	if err != nil {
 		return nil, err

@@ -1,9 +1,7 @@
 LLRB:
-* remove involved param. in Stats() API and re-factor them into
-  Fullstats() API.
 * prefix Snapshot{}, Reader{}, Writer{} interface as
   IndexSnapshot{}, IndexReader{}, IndexWriter{}.
-* remove memory statistics from the storage package.
+* refactor memory allocator into separate package.
 * implemention continuation based range.
 * tools/llrb: incremental load with adjustable reads/writes
 * tools/llrb: benchmark range and continuation.

@@ -8,8 +8,8 @@ import "github.com/prataprc/storage.go"
 var _ = fmt.Sprintf("dummy")
 
 func mvccreader(readerid int, ropch chan llrbcmd) {
-	var dictsnap storage.Snapshot
-	var llrbsnap storage.Snapshot
+	var dictsnap storage.IndexSnapshot
+	var llrbsnap storage.IndexSnapshot
 	var genstats map[string]int
 
 	releasesnaps := func() {
@@ -47,8 +47,8 @@ func mvccreader(readerid int, ropch chan llrbcmd) {
 			llrb_opValidate(dictsnap, llrbsnap, genstats, dolog)
 		case "snapshot":
 			releasesnaps()
-			dictsnap = lcmd.cmd[1].(storage.Snapshot)
-			llrbsnap = lcmd.cmd[2].(storage.Snapshot)
+			dictsnap = lcmd.cmd[1].(storage.IndexSnapshot)
+			llrbsnap = lcmd.cmd[2].(storage.IndexSnapshot)
 			genstats = lcmd.cmd[3].(map[string]int)
 			snaprespch := lcmd.cmd[4].(chan interface{})
 			dictsnap.Refer()

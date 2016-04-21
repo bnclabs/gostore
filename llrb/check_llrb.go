@@ -16,7 +16,7 @@ type llrbcmd struct {
 }
 
 func llrb_opGet(
-	dictrd storage.Reader, llrbrd storage.Reader,
+	dictrd storage.IndexReader, llrbrd storage.IndexReader,
 	lcmd llrbcmd, stats map[string]int) map[string]int {
 
 	if dictrd == nil {
@@ -28,7 +28,7 @@ func llrb_opGet(
 	key := []byte(strconv.Itoa(int(lcmd.cmd[1].(float64))))
 
 	nd := llrbrd.Get(key)
-	cmpllrbdict(llrbrd.(storage.Snapshot).Id(), dictrd.Get(key), nd, true)
+	cmpllrbdict(llrbrd.(storage.IndexSnapshot).Id(), dictrd.Get(key), nd, true)
 
 	stats["total"] += 1
 	if nd != nil {
@@ -40,7 +40,7 @@ func llrb_opGet(
 }
 
 func llrb_opMin(
-	dictrd storage.Reader, llrbrd storage.Reader,
+	dictrd storage.IndexReader, llrbrd storage.IndexReader,
 	lcmd llrbcmd, stats map[string]int) map[string]int {
 
 	if dictrd == nil {
@@ -50,7 +50,7 @@ func llrb_opMin(
 	}
 
 	nd := llrbrd.Min()
-	cmpllrbdict(llrbrd.(storage.Snapshot).Id(), dictrd.Min(), nd, true)
+	cmpllrbdict(llrbrd.(storage.IndexSnapshot).Id(), dictrd.Min(), nd, true)
 
 	stats["total"] += 1
 	if nd != nil {
@@ -62,7 +62,7 @@ func llrb_opMin(
 }
 
 func llrb_opMax(
-	dictrd storage.Snapshot, llrbrd storage.Snapshot,
+	dictrd storage.IndexSnapshot, llrbrd storage.IndexSnapshot,
 	lcmd llrbcmd, stats map[string]int) map[string]int {
 
 	if dictrd == nil {
@@ -72,7 +72,7 @@ func llrb_opMax(
 	}
 
 	nd := llrbrd.Max()
-	cmpllrbdict(llrbrd.(storage.Snapshot).Id(), dictrd.Max(), nd, true)
+	cmpllrbdict(llrbrd.(storage.IndexSnapshot).Id(), dictrd.Max(), nd, true)
 
 	stats["total"] += 1
 	if nd != nil {
@@ -84,7 +84,7 @@ func llrb_opMax(
 }
 
 func llrb_opRange(
-	dictrd storage.Reader, llrbrd storage.Reader,
+	dictrd storage.IndexReader, llrbrd storage.IndexReader,
 	lcmd llrbcmd, stats map[string]int) map[string]int {
 
 	if dictrd == nil {
@@ -109,7 +109,7 @@ func llrb_opRange(
 	})
 
 	for i, dictnd := range dnodes {
-		cmpllrbdict(llrbrd.(storage.Snapshot).Id(), dictnd, lnodes[i], true)
+		cmpllrbdict(llrbrd.(storage.IndexSnapshot).Id(), dictnd, lnodes[i], true)
 	}
 
 	stats["total"] += 1
@@ -236,7 +236,7 @@ func llrb_opDelete(
 }
 
 func llrb_opValidate(
-	dict, llrb storage.Snapshot, stats map[string]int, dolog bool) {
+	dict, llrb storage.IndexSnapshot, stats map[string]int, dolog bool) {
 
 	llrb_validateEqual(dict, llrb, dolog)
 	llrb_validateStats(dict, llrb, stats, dolog)
@@ -245,7 +245,7 @@ func llrb_opValidate(
 	stats["validate"] += 1
 }
 
-func llrb_validateEqual(dict, llrb storage.Snapshot, dolog bool) bool {
+func llrb_validateEqual(dict, llrb storage.IndexSnapshot, dolog bool) bool {
 	dictn, llrbn := dict.Count(), llrb.Count()
 	if dictn != llrbn {
 		fmsg := "%v count expected dict:%v, got llrb:%v"
@@ -280,7 +280,7 @@ func llrb_validateEqual(dict, llrb storage.Snapshot, dolog bool) bool {
 }
 
 func llrb_validateStats(
-	dict, llrb storage.Snapshot, stats map[string]int, dolog bool) bool {
+	dict, llrb storage.IndexSnapshot, stats map[string]int, dolog bool) bool {
 
 	insert, upsert := stats["insert"], stats["upsert"]
 	validates := stats["validate"]

@@ -175,8 +175,8 @@ func verifyLLRBMvcc(
 	storage.SetLogger(nil, config)
 	llrb := storage.NewLLRB("verify", config, nil)
 
-	snapch := make(chan storage.Snapshot, 2)
-	makesnaps := func() (dsnap, lsnap storage.Snapshot) {
+	snapch := make(chan storage.IndexSnapshot, 2)
+	makesnaps := func() (dsnap, lsnap storage.IndexSnapshot) {
 		err := dict.RSnapshot(snapch)
 		if err != nil {
 			panic(err)

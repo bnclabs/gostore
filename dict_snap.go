@@ -16,7 +16,7 @@ type DictSnapshot struct {
 	snapn    int
 }
 
-func (d *Dict) NewDictSnapshot() Snapshot {
+func (d *Dict) NewDictSnapshot() IndexSnapshot {
 	d.snapn++
 	snapshot := &DictSnapshot{snapn: d.snapn, dead: d.dead}
 	snapshot.dict = make(map[uint64]*dictnode)
@@ -33,48 +33,48 @@ func (d *DictSnapshot) Keys() []string {
 	return d.sortkeys
 }
 
-//---- Snapshot{} interface.
+//---- IndexSnapshot{} interface.
 
-// Count implement Snapshot{} interface.
+// Count implement IndexSnapshot{} interface.
 func (d *DictSnapshot) Count() int64 {
 	return int64(len(d.dict))
 }
 
-// Id implement Snapshot{} interface.
+// Id implement IndexSnapshot{} interface.
 func (d *DictSnapshot) Id() string {
 	return d.id
 }
 
-// Isactive implement Snapshot{} interface.
+// Isactive implement IndexSnapshot{} interface.
 func (d *DictSnapshot) Isactive() bool {
 	return !d.dead
 }
 
-// Refer implement Snapshot{} interface.
+// Refer implement IndexSnapshot{} interface.
 func (d *DictSnapshot) Refer() {
 	return
 }
 
-// Release implement Snapshot{} interface.
+// Release implement IndexSnapshot{} interface.
 func (d *DictSnapshot) Release() {
 	d.dead = true
 }
 
-// Validate implement Snapshot{} interface.
+// Validate implement IndexSnapshot{} interface.
 func (d *DictSnapshot) Validate() {
 	panic("Validate(): not implemented for DictSnapshot")
 }
 
-//---- Reader{} interface.
+//---- IndexReader{} interface.
 
-// Has implement Reader{} interface.
+// Has implement IndexReader{} interface.
 func (d *DictSnapshot) Has(key []byte) bool {
 	hashv := crc64.Checksum(key, crcisotab)
 	_, ok := d.dict[hashv]
 	return ok
 }
 
-// Get implement Reader{} interface.
+// Get implement IndexReader{} interface.
 func (d *DictSnapshot) Get(key []byte) Node {
 	hashv := crc64.Checksum(key, crcisotab)
 	if nd, ok := d.dict[hashv]; ok {
@@ -83,7 +83,7 @@ func (d *DictSnapshot) Get(key []byte) Node {
 	return nil
 }
 
-// Min implement Reader{} interface.
+// Min implement IndexReader{} interface.
 func (d *DictSnapshot) Min() Node {
 	if len(d.dict) == 0 {
 		return nil
@@ -91,7 +91,7 @@ func (d *DictSnapshot) Min() Node {
 	return d.dict[d.hashks[0]]
 }
 
-// Max implement Reader{} interface.
+// Max implement IndexReader{} interface.
 func (d *DictSnapshot) Max() Node {
 	if len(d.dict) == 0 {
 		return nil
@@ -99,7 +99,7 @@ func (d *DictSnapshot) Max() Node {
 	return d.dict[d.hashks[len(d.hashks)-1]]
 }
 
-// Range implement Reader{} interface.
+// Range implement IndexReader{} interface.
 func (d *DictSnapshot) Range(lowkey, highkey []byte, incl string, iter NodeIterator) {
 	var start int
 	var hashks []uint64

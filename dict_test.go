@@ -266,7 +266,7 @@ func TestDictRsnapshot(t *testing.T) {
 		})
 	}
 
-	snapch := make(chan Snapshot, 1)
+	snapch := make(chan IndexSnapshot, 1)
 	err := d.RSnapshot(snapch)
 	if err != nil {
 		t.Error(err)
@@ -287,7 +287,7 @@ func BenchmarkDictSnapshot(b *testing.B) {
 		d.Upsert([]byte(key), []byte(value), nil)
 	}
 
-	snapch := make(chan Snapshot, 1)
+	snapch := make(chan IndexSnapshot, 1)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		d.RSnapshot(snapch)
