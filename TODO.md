@@ -1,5 +1,9 @@
 LLRB:
-* API to generate a new snapshot, serialize this in write path.
+* remove involved param. in Stats() API and re-factor them into
+  Fullstats() API.
+* prefix Snapshot{}, Reader{}, Writer{} interface as
+  IndexSnapshot{}, IndexReader{}, IndexWriter{}.
+* remove memory statistics from the storage package.
 * implemention continuation based range.
 * tools/llrb: incremental load with adjustable reads/writes
 * tools/llrb: benchmark range and continuation.

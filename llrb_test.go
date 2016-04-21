@@ -17,7 +17,7 @@ func TestNewLLRB(t *testing.T) {
 		t.Errorf("unexpected nil")
 	}
 
-	stats, err := llrb.Stats(9)
+	stats, err := llrb.Fullstats()
 	if err != nil {
 		t.Error(err)
 	}
@@ -436,7 +436,7 @@ func TestLLRBInsert(t *testing.T) {
 	llrb.Validate()
 
 	// check memory accounting
-	stats, err := llrb.Stats(9)
+	stats, err := llrb.Fullstats()
 	if err != nil {
 		t.Error(err)
 	}
@@ -554,7 +554,7 @@ func TestLLRBUpsert(t *testing.T) {
 	llrb.Validate()
 
 	// check memory accounting
-	stats, err := llrb.Stats(9)
+	stats, err := llrb.Fullstats()
 	if err != nil {
 		t.Error(err)
 	}
@@ -676,7 +676,7 @@ func TestLLRBDelete(t *testing.T) {
 	llrb.Validate()
 
 	// check memory accounting
-	stats, err := llrb.Stats(9)
+	stats, err := llrb.Fullstats()
 	if err != nil {
 		t.Error(err)
 	}

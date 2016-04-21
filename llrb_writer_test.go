@@ -20,7 +20,7 @@ func TestNewLLRBMvcc(t *testing.T) {
 	nodavail := config["nodearena.capacity"].(int)
 	valavail := config["valarena.capacity"].(int)
 
-	stats, err := llrb.Stats(9)
+	stats, err := llrb.Fullstats()
 	if err != nil {
 		t.Error(stats)
 	}
@@ -471,7 +471,7 @@ func TestLLRBMvccInsert(t *testing.T) {
 	}
 
 	// check memory accounting
-	stats, err := llrb.Stats(9)
+	stats, err := llrb.Fullstats()
 	if err != nil {
 		t.Error(err)
 	}
@@ -593,7 +593,7 @@ func TestLLRBMvccUpsert(t *testing.T) {
 	snapshot.Release()
 
 	// check memory accounting
-	stats, err := llrb.Stats(9)
+	stats, err := llrb.Fullstats()
 	if err != nil {
 		t.Error(err)
 	}
@@ -670,7 +670,7 @@ func TestLLRBMvccDeleteMin(t *testing.T) {
 		t.Errorf("expected 0, got %v", x)
 	}
 	// check memory accounting
-	stats, err := llrb.Stats(9)
+	stats, err := llrb.Fullstats()
 	if err != nil {
 		t.Error(err)
 	}
@@ -781,7 +781,7 @@ func TestLLRBMvccDelete(t *testing.T) {
 		t.Errorf("expected 0, got %v", x)
 	}
 	// check memory accounting
-	stats, err := llrb.Stats(9)
+	stats, err := llrb.Fullstats()
 	if err != nil {
 		t.Error(err)
 	}

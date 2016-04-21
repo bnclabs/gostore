@@ -199,14 +199,28 @@ func (llrb *LLRB) Destroy() error {
 }
 
 // Stats implement Indexer{} interface.
-func (llrb *LLRB) Stats(involved int) (map[string]interface{}, error) {
+func (llrb *LLRB) Stats() (map[string]interface{}, error) {
 	if llrb.mvcc.enabled {
-		return llrb.mvcc.writer.stats(involved)
+		return llrb.mvcc.writer.stats()
 	}
 
 	llrb.rw.RLock()
 
-	stats, err := llrb.stats(involved)
+	stats, err := llrb.stats()
+
+	llrb.rw.RUnlock()
+	return stats, err
+}
+
+// Fullstats implement Indexer{} interface.
+func (llrb *LLRB) Fullstats() (map[string]interface{}, error) {
+	if llrb.mvcc.enabled {
+		return llrb.mvcc.writer.fullstats()
+	}
+
+	llrb.rw.RLock()
+
+	stats, err := llrb.fullstats()
 
 	llrb.rw.RUnlock()
 	return stats, err
@@ -842,7 +856,7 @@ func (llrb *LLRB) equivalent(n1, n2 *Llrbnode) bool {
 
 func (llrb *LLRB) logconfig(config map[string]interface{}) {
 	// key arena
-	stats, err := llrb.stats(1)
+	stats, err := llrb.stats()
 	if err != nil {
 		panic(fmt.Errorf("logconfig(): %v", err))
 	}

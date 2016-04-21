@@ -61,9 +61,6 @@ type NodeSetter interface {
 // Index interface for managing key,value pairs.
 // TBD: add interface for vector-clock.
 type Index interface {
-	Reader
-	Writer
-
 	// index id
 	Id() string
 
@@ -76,10 +73,11 @@ type Index interface {
 	// RSnapshot return snapshot that shan't be disturbed by subsequent writes.
 	RSnapshot(snapch chan Snapshot) error
 
-	// Stats return a map of index statistics, involved ranges from 1-9
-	// where 1 being quick set of statistics and 9 being very involved set
-	// of statistics.
-	Stats(involved int) (map[string]interface{}, error)
+	// Stats return a set of index statistics.
+	Stats() (map[string]interface{}, error)
+
+	// Fullstats return an involved set of index statistics.
+	Fullstats() (map[string]interface{}, error)
 
 	// Log current statistics, if humanize is true log some or all of the
 	// stats in human readable format.
@@ -90,6 +88,9 @@ type Index interface {
 
 	// Destroy to delete an index and clean up its resources.
 	Destroy() error
+
+	Reader
+	Writer
 }
 
 // Snapshot for read-only operation into the index.

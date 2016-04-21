@@ -56,18 +56,23 @@ func (d *Dict) Destroy() error {
 }
 
 // Stats implement Index{} interface.
-func (d *Dict) Stats(involved int) (map[string]interface{}, error) {
+func (d *Dict) Stats() (map[string]interface{}, error) {
 	panic("Index.Stats() not implemented for Dict")
+}
+
+// Fullstats implement Index{} interface.
+func (d *Dict) Fullstats() (map[string]interface{}, error) {
+	panic("Index.Fullstats() not implemented for Dict")
 }
 
 // Validate implement Index{} interface.
 func (d *Dict) Validate() {
-	panic("Index.Stats() not implemented for Dict")
+	panic("Index.Validate() not implemented for Dict")
 }
 
 // Log implement Index{} interface.
 func (d *Dict) Log(involved int, humanize bool) {
-	panic("Index.Stats() not implemented for Dict")
+	panic("Index.Log() not implemented for Dict")
 }
 
 //---- Snapshot{} interface{}

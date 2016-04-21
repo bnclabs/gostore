@@ -50,6 +50,7 @@ const (
 	cmdLlrbWriterDestroy
 	// maintanence commands
 	cmdLlrbWriterStats
+	cmdLlrbWriterFullstats
 	cmdLlrbWriterValidate
 	cmdLlrbWriterLog
 )
@@ -108,9 +109,16 @@ func (writer *LLRBWriter) purgeSnapshot() error {
 	return failsafePost(writer.reqch, cmd, writer.finch)
 }
 
-func (writer *LLRBWriter) stats(involved int) (map[string]interface{}, error) {
+func (writer *LLRBWriter) stats() (map[string]interface{}, error) {
 	respch := make(chan []interface{}, 1)
-	cmd := []interface{}{cmdLlrbWriterStats, involved, respch}
+	cmd := []interface{}{cmdLlrbWriterStats, respch}
+	resp, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
+	return resp[0].(map[string]interface{}), responseError(err, resp, 1)
+}
+
+func (writer *LLRBWriter) fullstats() (map[string]interface{}, error) {
+	respch := make(chan []interface{}, 1)
+	cmd := []interface{}{cmdLlrbWriterFullstats, respch}
 	resp, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
 	return resp[0].(map[string]interface{}), responseError(err, resp, 1)
 }
@@ -268,9 +276,13 @@ loop:
 			break loop
 
 		case cmdLlrbWriterStats:
-			involved := msg[1].(int)
-			respch := msg[2].(chan []interface{})
-			stats, err := llrb.stats(involved)
+			respch := msg[1].(chan []interface{})
+			stats, err := llrb.stats()
+			respch <- []interface{}{stats, err}
+
+		case cmdLlrbWriterFullstats:
+			respch := msg[1].(chan []interface{})
+			stats, err := llrb.fullstats()
 			respch <- []interface{}{stats, err}
 
 		case cmdLlrbWriterValidate:
