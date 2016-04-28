@@ -1,10 +1,10 @@
 LLRB:
 
 * refactor memory allocator into separate package.
-* implemention continuation based range.
 * tools/llrb: incremental load with adjustable reads/writes
-* tools/llrb: benchmark range and continuation.
 * update access field from storage instance.
+* implemention continuation based range.
+* tools/llrb: benchmark range and continuation.
 * if there are no outstanding snapshots, may be we can do non-mvcc
   upserts and deletes ?
 * YCSB test cases.
