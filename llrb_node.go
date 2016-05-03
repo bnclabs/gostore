@@ -66,6 +66,14 @@ func (nd *Llrbnode) Vbno() uint16 {
 	return 0
 }
 
+// Access implement NodeGetter{}
+func (nd *Llrbnode) Access() uint64 {
+	if nd != nil {
+		return nd.metadata().access()
+	}
+	return 0
+}
+
 // Key implement NodeGetter{}
 func (nd *Llrbnode) Key() []byte {
 	if nd != nil {

@@ -24,6 +24,9 @@ type NodeGetter interface {
 	// Vbno return entry's vbucket number.
 	Vbno() (vbno uint16)
 
+	// Access return entry's access timestamp.
+	Access() (ts uint64)
+
 	// Vbuuid return entry's unique vbucket id.
 	Vbuuid() (uuid uint64)
 

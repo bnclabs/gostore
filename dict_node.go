@@ -18,6 +18,11 @@ func (dn *dictnode) Vbno() uint16 {
 	return dn.vbno
 }
 
+// Access implement NodeGetter{} interface.
+func (dn *dictnode) Access() uint64 {
+	panic("not implemented")
+}
+
 // Vbuuid implement NodeGetter{} interface.
 func (dn *dictnode) Vbuuid() uint64 {
 	return dn.vbuuid
