@@ -1,13 +1,9 @@
 package main
 
 func newllrbconfig() map[string]interface{} {
-	mvcc := false
-	if verifyopts.mvcc > 0 {
-		mvcc = true
-	}
 	config := map[string]interface{}{
 		"maxvb":                   1024,
-		"mvcc.enable":             mvcc,
+		"mvcc.enable":             false,
 		"mvcc.snapshot.tick":      5,
 		"mvcc.writer.chanbuffer":  1000,
 		"nodearena.minblock":      loadopts.nodearena[0],
@@ -22,6 +18,9 @@ func newllrbconfig() map[string]interface{} {
 		"metadata.vbuuid":         true,
 		"metadata.bornseqno":      true,
 		"metadata.deadseqno":      true,
+	}
+	if verifyopts.mvcc > 0 {
+		config["mvcc.enable"] = true
 	}
 	return config
 }

@@ -1,14 +1,15 @@
 LLRB:
 
-* refactor memory allocator into separate package.
-* tools/llrb: incremental load with adjustable reads/writes
 * update access field from storage instance.
 * implemention continuation based range.
-* tools/llrb: benchmark range and continuation.
+* llrb/: sub-command to benchmark range and continuation.
+* document the idea of vector clock (timestamp) and how it
+  can be used to implement RYOW.
 * if there are no outstanding snapshots, may be we can do non-mvcc
   upserts and deletes ?
 * YCSB test cases.
 * add llrb tree validation rules, based on sedgewick paper.
+* refactor memory allocator into separate package.
 
 clock:
 
@@ -33,6 +34,9 @@ Insert, Upsert, Delete:
 * Upsert will atomically over-write the old-value reference with new-value.
   * when to free the old value block ?
 * Every mutation to the tree will be counted as tseqno. (tree-seqno).
+
+BNC-Cabinet:
+
 
 De-fragmentation cycle:
 

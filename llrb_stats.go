@@ -107,7 +107,7 @@ func (llrb *LLRB) validatestats() error {
 	for k, h_reclaim := range llrb.mvcc.h_reclaims {
 		if max := h_reclaim.max(); max > 0 {
 			nf := float64(llrb.Count())
-			if float64(max) > (3 * math.Log2(nf)) {
+			if float64(max) > (4 * math.Log2(nf)) {
 				fmsg := "validatestats(): max %v reclaim %v exceeds log2(%v)"
 				panic(fmt.Errorf(fmsg, k, float64(max), nf))
 			}

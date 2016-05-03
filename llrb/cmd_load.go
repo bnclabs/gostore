@@ -53,7 +53,7 @@ func parseLoadopts(args []string) {
 		"enabled mvcc for load.")
 	f.IntVar(&loadopts.par, "par", 16,
 		"number of load generators")
-	f.IntVar(&loadopts.memstats, "stats", 1000,
+	f.IntVar(&loadopts.memstats, "stats", 0,
 		"log llrb stats for every tick, in ms")
 	f.IntVar(&loadopts.batchsize, "batchsize", 100,
 		"batchsize for loading bulk-upserts")

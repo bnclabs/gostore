@@ -108,7 +108,7 @@ func doVerify(args []string) {
 }
 
 func verifyLLRB(count uint64, opch chan [][]interface{}) {
-	genstats := newgenstats()
+	opstats := newopstats()
 
 	vbno, vbuuid, seqno := uint16(10), uint64(1234), uint64(0)
 
@@ -131,23 +131,23 @@ func verifyLLRB(count uint64, opch chan [][]interface{}) {
 			}
 			switch cmd[0].(string) {
 			case "get":
-				genstats = llrb_opGet(dict, llrb, lcmd, genstats)
+				opstats = llrb_opGet(dict, llrb, lcmd, opstats)
 			case "min":
-				genstats = llrb_opMin(dict, llrb, lcmd, genstats)
+				opstats = llrb_opMin(dict, llrb, lcmd, opstats)
 			case "max":
-				genstats = llrb_opMax(dict, llrb, lcmd, genstats)
+				opstats = llrb_opMax(dict, llrb, lcmd, opstats)
 			case "range":
-				genstats = llrb_opRange(dict, llrb, lcmd, genstats)
+				opstats = llrb_opRange(dict, llrb, lcmd, opstats)
 			case "delmin":
-				genstats = llrb_opDelmin(dict, llrb, lcmd, genstats)
+				opstats = llrb_opDelmin(dict, llrb, lcmd, opstats)
 			case "delmax":
-				genstats = llrb_opDelmax(dict, llrb, lcmd, genstats)
+				opstats = llrb_opDelmax(dict, llrb, lcmd, opstats)
 			case "upsert":
-				genstats = llrb_opUpsert(dict, llrb, lcmd, genstats)
+				opstats = llrb_opUpsert(dict, llrb, lcmd, opstats)
 			case "delete":
-				genstats = llrb_opDelete(dict, llrb, lcmd, genstats)
+				opstats = llrb_opDelete(dict, llrb, lcmd, opstats)
 			case "validate":
-				llrb_opValidate(dict, llrb, genstats, false)
+				llrb_opValidate(dict, llrb, opstats, false)
 			case "snapshot":
 				continue
 			case "release":
@@ -157,7 +157,7 @@ func verifyLLRB(count uint64, opch chan [][]interface{}) {
 			}
 		}
 	}
-	llrb_opValidate(dict, llrb, genstats, true)
+	llrb_opValidate(dict, llrb, opstats, true)
 	llrb.Log(9, true)
 }
 
@@ -165,7 +165,7 @@ func verifyLLRBMvcc(
 	count uint64, opch chan [][]interface{}, readers []chan llrbcmd) {
 
 	// stats
-	genstats := newgenstats()
+	opstats := newopstats()
 	// dict
 	dict := storage.NewDict()
 
@@ -194,7 +194,7 @@ func verifyLLRBMvcc(
 	dictsnap, llrbsnap := makesnaps()
 	snaprespch := make(chan interface{}, 1)
 	for _, reader := range readers {
-		stats := clonestats(genstats)
+		stats := cloneopstats(opstats)
 		lcmd := llrbcmd{
 			cmd: []interface{}{"snapshot", dictsnap, llrbsnap, stats, snaprespch},
 		}
@@ -228,13 +228,13 @@ func verifyLLRBMvcc(
 					reader <- lcmd
 				}
 			case "delmin":
-				genstats = llrb_opDelmin(dict, llrb, lcmd, genstats)
+				opstats = llrb_opDelmin(dict, llrb, lcmd, opstats)
 			case "delmax":
-				genstats = llrb_opDelmax(dict, llrb, lcmd, genstats)
+				opstats = llrb_opDelmax(dict, llrb, lcmd, opstats)
 			case "upsert":
-				genstats = llrb_opUpsert(dict, llrb, lcmd, genstats)
+				opstats = llrb_opUpsert(dict, llrb, lcmd, opstats)
 			case "delete":
-				genstats = llrb_opDelete(dict, llrb, lcmd, genstats)
+				opstats = llrb_opDelete(dict, llrb, lcmd, opstats)
 			case "validate":
 				lcmd.cmd = []interface{}{cmd[0], false}
 				for _, reader := range readers {
@@ -248,7 +248,7 @@ func verifyLLRBMvcc(
 
 				for _, reader := range readers {
 					if rand.Intn(10) < 7 {
-						stats := clonestats(genstats)
+						stats := cloneopstats(opstats)
 						cmd := []interface{}{
 							"snapshot", dictsnap, llrbsnap, stats, snaprespch}
 						reader <- llrbcmd{cmd: cmd}
@@ -280,7 +280,7 @@ func verifyLLRBMvcc(
 	llrbsnap.Release()
 
 	dictsnap, llrbsnap = makesnaps()
-	llrb_opValidate(dictsnap, llrbsnap, genstats, true)
+	llrb_opValidate(dictsnap, llrbsnap, opstats, true)
 	dictsnap.Release()
 	llrbsnap.Release()
 	llrb.Log(9, true)

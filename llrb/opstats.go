@@ -1,6 +1,6 @@
 package main
 
-func newgenstats() map[string]int {
+func newopstats() map[string]int {
 	stats := map[string]int{
 		"total":     0,
 		"get.ok":    0,
@@ -25,8 +25,8 @@ func newgenstats() map[string]int {
 	return stats
 }
 
-func clonestats(src map[string]int) map[string]int {
-	dst := newgenstats()
+func cloneopstats(src map[string]int) map[string]int {
+	dst := newopstats()
 	for k, v := range src {
 		dst[k] = v
 	}
