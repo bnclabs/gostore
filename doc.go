@@ -7,7 +7,7 @@
 //   * each key shall be unique within the index sample-set.
 //   * custom memory management
 //   * copy on GC to control memory fragmentation.
-//   * configurable metadata - like vbno, bornseqno, deadseqno, vbuuid etc..
+//   * configurable metadata - vbno, access-time, bornseqno, deadseqno, vbuuid.
 //   * in single-threaded configuration, reads and writes are serialized.
 //   * supports multi-version-concurrency-control, where writes are
 //     serialized, even if there are concurrent writers, and there can be
