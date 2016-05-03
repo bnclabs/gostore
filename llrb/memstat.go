@@ -1,4 +1,4 @@
-package storage
+package main
 
 import "time"
 import "runtime"

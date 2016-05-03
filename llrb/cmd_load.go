@@ -104,7 +104,7 @@ func doLoad(args []string) {
 	parseLoadopts(args)
 
 	// start memory statistic logger
-	go storage.MemstatLogger(int64(loadopts.memstats))
+	go MemstatLogger(int64(loadopts.memstats))
 	if loadopts.pprof != "" {
 		fd, err := os.Create(loadopts.pprof)
 		if err != nil {
