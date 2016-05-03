@@ -9,8 +9,8 @@ type NodeIterator func(nd Node) bool
 // * newnd can be read or updated.
 type UpsertCallback func(index Index, offset int64, newnd, oldnd Node)
 
-// DeleteCallback callback from Delete API. Don't keep any reference to nd,
-// deleted node can only be read and valid until callback returns.
+// DeleteCallback callback from Delete API. Don't keep any reference
+// deleted node, it is read-only and valid until callback returns.
 type DeleteCallback func(index Index, deleted Node)
 
 // Node interface methods to access node attributes.
@@ -70,7 +70,9 @@ type Index interface {
 	// Isactive return whether the index is active or not.
 	Isactive() bool
 
-	// RSnapshot return snapshot that shan't be disturbed by subsequent writes.
+	// RSnapshot return snapshot that shan't be disturbed by
+	// subsequent writes. Caller should make sure to call snapshot.Release()
+	// once it is done with the snapshot.
 	RSnapshot(snapch chan IndexSnapshot) error
 
 	// Stats return a set of index statistics.
@@ -105,7 +107,7 @@ type IndexSnapshot interface {
 	// Isactive return whether the index is active or not.
 	Isactive() bool
 
-	// Refer() snapshot before reading, don't hold on to it beyond few seconds.
+	// Refer() snapshot before reading, don't hold on to it for long time.
 	Refer()
 
 	// Release snapshot after reading.
@@ -117,8 +119,7 @@ type IndexSnapshot interface {
 	IndexReader
 }
 
-// IndexReader interface for fetching one or more entries from index data
-// structure.
+// IndexReader interface for fetching one or more entries from index.
 type IndexReader interface {
 	// Has checks wether key is present in the index.
 	Has(key []byte) bool
@@ -141,7 +142,7 @@ type IndexReader interface {
 	Range(lowkey, highkey []byte, incl string, iter NodeIterator)
 }
 
-// IndexWriter interface methods for updating index data structure.
+// IndexWriter interface methods for updating index.
 type IndexWriter interface {
 	// Upsert a key/value pair.
 	Upsert(key, value []byte, callb UpsertCallback) error
