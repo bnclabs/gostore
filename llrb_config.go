@@ -2,12 +2,9 @@ package storage
 
 func llrbConfig() map[string]interface{} {
 	config := map[string]interface{}{
-		"maxvb": 1024,
-		// TODO: tune `defrag.period` after measuring full table scan,
-		// continuation, and piecewise range.
+		"maxvb":                   1024,
 		"log.level":               "info",
 		"log.file":                "",
-		"defrag.period":           2 * 3600,
 		"metadata.bornseqno":      true,
 		"metadata.deadseqno":      true,
 		"metadata.mvalue":         true,

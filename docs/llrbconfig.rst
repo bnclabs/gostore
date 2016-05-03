@@ -13,10 +13,6 @@ configure LLRB based on system resources and requirements.
 `log.file`
     as string, log to file, if empty log to console.
 
-`defrag.period`
-    as int, time period in seconds, to start a defragmentation cycle on the
-    LLRB tree.
-
 `nodearena.minblock`
     as integer, minimum node-block size that shall be requested from the arena.
 
