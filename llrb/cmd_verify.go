@@ -114,7 +114,6 @@ func verifyLLRB(count uint64, opch chan [][]interface{}) {
 
 	// dict
 	dict := storage.NewDict()
-
 	// llrb
 	config := newllrbconfig()
 	config["log.level"] = verifyopts.log
@@ -268,13 +267,11 @@ func verifyLLRBMvcc(
 	lcmd := llrbcmd{cmd: []interface{}{"validate", true}}
 	for _, reader := range readers {
 		reader <- lcmd
-		time.Sleep(100 * time.Millisecond)
 	}
 
 	lcmd = llrbcmd{cmd: []interface{}{"release", 8}}
 	for _, reader := range readers {
 		reader <- lcmd
-		time.Sleep(100 * time.Millisecond)
 	}
 	dictsnap.Release()
 	llrbsnap.Release()
