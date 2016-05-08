@@ -15,7 +15,6 @@ var verifyopts struct {
 	seed   int
 	vtick  time.Duration
 	stick  time.Duration
-	rtick  time.Duration
 	opdump bool
 	bagdir string
 	mvcc   int
@@ -30,7 +29,7 @@ func parseVerifyopts(args []string) {
 	f := flag.NewFlagSet("verify", flag.ExitOnError)
 
 	var nodearena, valarena string
-	var vtick, stick, rtick int
+	var vtick, stick int
 
 	seed := time.Now().UTC().Second()
 	f.IntVar(&verifyopts.repeat, "repeat", 1000,
@@ -39,10 +38,8 @@ func parseVerifyopts(args []string) {
 		"seed value for generating inputs")
 	f.IntVar(&vtick, "vtick", 1000,
 		"validate tick, in milliseconds")
-	f.IntVar(&stick, "stick", 1000,
+	f.IntVar(&stick, "stick", 100,
 		"periodically generate snapshot, period in milliseconds")
-	f.IntVar(&rtick, "rtick", 1000,
-		"periodically release snapshots, period in milliseconds")
 	f.StringVar(&verifyopts.bagdir, "bagdir", "./",
 		"bagdir for monster")
 	f.IntVar(&verifyopts.mvcc, "mvcc", 0,
@@ -79,7 +76,6 @@ func parseVerifyopts(args []string) {
 
 	verifyopts.vtick = time.Duration(vtick) * time.Millisecond
 	verifyopts.stick = time.Duration(stick) * time.Millisecond
-	verifyopts.rtick = time.Duration(rtick) * time.Millisecond
 }
 
 func doVerify(args []string) {
@@ -93,7 +89,6 @@ func doVerify(args []string) {
 	if verifyopts.mvcc > 0 {
 		go validateTick(verifyopts.vtick, opch)
 		go snapshotTick(verifyopts.stick, opch)
-		//go releaseTick(verifyopts.rtick, opch)
 		readers := make([]chan llrbcmd, 0)
 		for i := 0; i < verifyopts.mvcc; i++ {
 			ropch := make(chan llrbcmd, 10000)
@@ -291,19 +286,13 @@ func validateTick(tick time.Duration, opch chan [][]interface{}) {
 	}
 }
 
+// when ever a new snapshot is generated, previous snapshot will
+// be released.
 func snapshotTick(tick time.Duration, opch chan [][]interface{}) {
 	tm := time.NewTicker(tick)
 	for {
 		<-tm.C
 		opch <- [][]interface{}{[]interface{}{"snapshot"}}
-	}
-}
-
-func releaseTick(tick time.Duration, opch chan [][]interface{}) {
-	tm := time.NewTicker(tick)
-	for {
-		<-tm.C
-		opch <- [][]interface{}{[]interface{}{"release"}}
 	}
 }
 
