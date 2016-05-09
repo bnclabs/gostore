@@ -44,7 +44,7 @@ func mvccreader(readerid int, ropch chan llrbcmd) {
 			genstats = llrb_opRange(dictsnap, llrbsnap, lcmd, genstats)
 		case "validate":
 			dolog := lcmd.cmd[1].(bool)
-			llrb_opValidate(dictsnap, llrbsnap, genstats, dolog)
+			llrb_opValidate(dictsnap, llrbsnap, genstats, dolog, true)
 		case "snapshot":
 			releasesnaps()
 			dictsnap = lcmd.cmd[1].(storage.IndexSnapshot)
@@ -61,5 +61,8 @@ func mvccreader(readerid int, ropch chan llrbcmd) {
 		default:
 			log.Fatalf("unknown command %v\n", lcmd.cmd)
 		}
+	}
+	if genstats["validate"] == 0 {
+		panic("no validate")
 	}
 }

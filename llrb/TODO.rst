@@ -6,8 +6,6 @@ load:
 
 verify :
 
-* verify number of ops and total ops and remaining items.
-* verify snapshot chain for mvcc.
 * verify upsertStats[samples] == avg.upsert.height.samples
 * verify heightstats[samples] == llrb.Count()
 * verify memory leak

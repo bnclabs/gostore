@@ -165,7 +165,7 @@ func verifyLLRB(count uint64, opch chan [][]interface{}, keys, values [][]byte) 
 			case "delete":
 				opstats = llrb_opDelete(dict, llrb, lcmd, opstats)
 			case "validate":
-				llrb_opValidate(dict, llrb, opstats, false)
+				llrb_opValidate(dict, llrb, opstats, false, false)
 			case "snapshot":
 				continue
 			case "release":
@@ -176,8 +176,11 @@ func verifyLLRB(count uint64, opch chan [][]interface{}, keys, values [][]byte) 
 		}
 	}
 
-	llrb_opValidate(dict, llrb, opstats, true)
+	llrb_opValidate(dict, llrb, opstats, true, false)
 	llrb.Log(9, true)
+	if opstats["validate"] == 0 {
+		panic("no validate")
+	}
 }
 
 func verifyLLRBMvcc(
@@ -302,10 +305,17 @@ func verifyLLRBMvcc(
 	llrbsnap.Release()
 
 	dictsnap, llrbsnap = makesnaps()
-	llrb_opValidate(dictsnap, llrbsnap, opstats, true)
+	llrb_opValidate(dictsnap, llrbsnap, opstats, true, false)
 	dictsnap.Release()
 	llrbsnap.Release()
+
+	// wait for all snapshots to be purged.
+	time.Sleep(1000 * time.Millisecond)
+
 	llrb.Log(9, true)
+	if opstats["validate"] == 0 {
+		panic("no validate")
+	}
 }
 
 func validateTick(tick time.Duration, opch chan [][]interface{}) {

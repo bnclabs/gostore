@@ -241,10 +241,11 @@ func llrb_opDelete(
 }
 
 func llrb_opValidate(
-	dict, llrb storage.IndexSnapshot, stats map[string]int, dolog bool) {
+	dict, llrb storage.IndexSnapshot, stats map[string]int,
+	dolog, mvcc bool) {
 
 	llrb_validateEqual(dict, llrb, dolog)
-	llrb_validateStats(dict, llrb, stats, dolog)
+	llrb_validateStats(dict, llrb, stats, dolog, mvcc)
 	llrb.Validate()
 	stats["total"] += 1
 	stats["validate"] += 1
@@ -285,7 +286,8 @@ func llrb_validateEqual(dict, llrb storage.IndexSnapshot, dolog bool) bool {
 }
 
 func llrb_validateStats(
-	dict, llrb storage.IndexSnapshot, stats map[string]int, dolog bool) bool {
+	dict, llrb storage.IndexSnapshot, stats map[string]int,
+	dolog, mvcc bool) bool {
 
 	insert, upsert := stats["insert"], stats["upsert"]
 	validates := stats["validate"]
@@ -301,6 +303,21 @@ func llrb_validateStats(
 	total += dmax[0] + dmax[1] + dmin[0] + dmin[1]
 	total += gets[0] + gets[1] + maxs[0] + maxs[1] + mins[0] + mins[1] +
 		validates + ranges
+
+	checknotzeros := func(notzeros []string) {
+		for _, key := range notzeros {
+			if stats[key] == 0 {
+				panic(fmt.Errorf("%v no %v", llrb.Id(), key))
+			}
+		}
+	}
+
+	if mvcc == false {
+		checknotzeros([]string{
+			"insert", "upsert", "delete.ok", "delmax.ok",
+			"delmin.ok",
+		})
+	}
 
 	if total != stats["total"] {
 		fmsg := "%v total expected %v, got %v"
