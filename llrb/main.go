@@ -38,9 +38,9 @@ func makekey(key []byte, min, max int) (k []byte) {
 	var from byte
 	if max-min > 0 {
 		ln := rand.Intn(max-min) + min
-		k, from = key[:ln], byte(ln%26)
-		for i := range k {
-			k[i] = 97 + ((from + byte(i)) % 26)
+		k, from = key[:0], byte(ln%26)
+		for i := 0; i < ln; i++ {
+			k = append(k, 97+((from+byte(i))%26))
 		}
 	}
 	return k
@@ -50,9 +50,9 @@ func makeval(val []byte, min, max int) (v []byte) {
 	var from byte
 	if max-min > 0 {
 		ln := rand.Intn(max-min) + min
-		v, from = val[:ln], byte(ln%26)
-		for i := range v {
-			v[i] = 97 + ((from + byte(i)) % 26)
+		v, from = val[:0], byte(ln%26)
+		for i := 0; i < ln; i++ {
+			v = append(v, 97+((from+byte(i))%26))
 		}
 	}
 	return v

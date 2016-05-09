@@ -1,10 +1,8 @@
 package main
 
-import "strconv"
 import "fmt"
 import "bytes"
 import "reflect"
-import "time"
 
 import "github.com/prataprc/storage.go"
 
@@ -13,6 +11,13 @@ type llrbcmd struct {
 	vbno   uint16
 	vbuuid uint64
 	seqno  uint64
+	keys   [][]byte
+	values [][]byte
+}
+
+func (lcmd *llrbcmd) String() string {
+	fmsg := "cmd:%v, vbno:%v, vbuuid:%v, seqno:%v"
+	return fmt.Sprintf(fmsg, lcmd.cmd, lcmd.vbno, lcmd.vbuuid, lcmd.seqno)
 }
 
 func llrb_opGet(
@@ -25,7 +30,7 @@ func llrb_opGet(
 		panic("llrbrd reader is nil")
 	}
 
-	key := []byte(strconv.Itoa(int(lcmd.cmd[1].(float64))))
+	key := lcmd.keys[int(lcmd.cmd[1].(float64))]
 
 	nd := llrbrd.Get(key)
 	cmpllrbdict(llrbrd.(storage.IndexSnapshot).Id(), dictrd.Get(key), nd, true)
@@ -95,8 +100,8 @@ func llrb_opRange(
 
 	dnodes := make([]storage.Node, 0)
 	lnodes := make([]storage.Node, 0)
-	lowkey := []byte(strconv.Itoa(int(lcmd.cmd[1].(float64))))
-	highkey := []byte(strconv.Itoa(int(lcmd.cmd[2].(float64))))
+	lowkey := lcmd.keys[int(lcmd.cmd[1].(float64))]
+	highkey := lcmd.keys[int(lcmd.cmd[2].(float64))]
 	incl := lcmd.cmd[3].(string)
 
 	dictrd.Range(lowkey, highkey, incl, func(nd storage.Node) bool {
@@ -179,8 +184,8 @@ func llrb_opUpsert(
 	dict *storage.Dict, llrb *storage.LLRB,
 	lcmd llrbcmd, stats map[string]int) map[string]int {
 
-	key := []byte(strconv.Itoa(int(lcmd.cmd[1].(float64))))
-	value := []byte(strconv.Itoa(int(time.Now().UnixNano())))
+	key := lcmd.keys[int(lcmd.cmd[1].(float64))]
+	value := lcmd.values[int(lcmd.cmd[2].(float64))]
 
 	dict.Upsert(
 		key, value,
@@ -210,7 +215,7 @@ func llrb_opDelete(
 	dict *storage.Dict, llrb *storage.LLRB,
 	lcmd llrbcmd, stats map[string]int) map[string]int {
 
-	key := []byte(strconv.Itoa(int(lcmd.cmd[1].(float64))))
+	key := lcmd.keys[int(lcmd.cmd[1].(float64))]
 
 	var refnd storage.Node
 	dict.Delete(key, func(_ storage.Index, ddel storage.Node) {

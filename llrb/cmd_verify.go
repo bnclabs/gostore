@@ -20,15 +20,13 @@ var verifyopts struct {
 	mvcc   int
 	log    string
 	// LLRB specific structures
-	nodearena [4]int // min,max,cap,pcap
-	valarena  [4]int // min,max,cap,pcap
-	args      []string
+	args []string
 }
 
 func parseVerifyopts(args []string) {
 	f := flag.NewFlagSet("verify", flag.ExitOnError)
 
-	var nodearena, valarena string
+	var nodearena, valarena, klen, vlen string
 	var vtick, stick int
 
 	seed := time.Now().UTC().Second()
@@ -50,6 +48,10 @@ func parseVerifyopts(args []string) {
 		"minblock,maxblock,arena-capacity,pool-capacity for nodes")
 	f.StringVar(&valarena, "valarena", "",
 		"minblock,maxblock,arena-capacity,pool-capacity for values")
+	f.StringVar(&klen, "klen", "0,256",
+		"minimum,maximum range for key")
+	f.StringVar(&vlen, "vlen", "0,2048",
+		"minimum,maximum range for value")
 	f.StringVar(&verifyopts.log, "log", "info", "log level")
 	f.Parse(args)
 
@@ -73,6 +75,20 @@ func parseVerifyopts(args []string) {
 			loadopts.valarena[i] = ln
 		}
 	}
+	loadopts.klen = [2]int{64, 128}
+	if klen != "" {
+		for i, s := range strings.Split(klen, ",") {
+			ln, _ := strconv.Atoi(s)
+			loadopts.klen[i] = ln
+		}
+	}
+	loadopts.vlen = [2]int{64, 128}
+	if vlen != "" {
+		for i, s := range strings.Split(vlen, ",") {
+			ln, _ := strconv.Atoi(s)
+			loadopts.vlen[i] = ln
+		}
+	}
 
 	verifyopts.vtick = time.Duration(vtick) * time.Millisecond
 	verifyopts.stick = time.Duration(stick) * time.Millisecond
@@ -80,13 +96,21 @@ func parseVerifyopts(args []string) {
 
 func doVerify(args []string) {
 	parseVerifyopts(args)
+	fmt.Println("generating keys ...")
+	keys := generateKeys(loadopts.klen[0], loadopts.klen[1], 10000)
+	fmt.Println("generating value ...")
+	values := generateValues(loadopts.vlen[0], loadopts.vlen[1], 50000)
 
 	fmt.Printf("Seed: %v\n", verifyopts.seed)
 
 	opch := make(chan [][]interface{}, 10000)
 	go generate(verifyopts.repeat, "./llrb.prod", opch)
 
-	if verifyopts.mvcc > 0 {
+	if verifyopts.mvcc <= 0 {
+		go validateTick(verifyopts.vtick, opch)
+		verifyLLRB(uint64(verifyopts.repeat), opch, keys, values)
+
+	} else {
 		go validateTick(verifyopts.vtick, opch)
 		go snapshotTick(verifyopts.stick, opch)
 		readers := make([]chan llrbcmd, 0)
@@ -95,14 +119,11 @@ func doVerify(args []string) {
 			readers = append(readers, ropch)
 			go mvccreader(i, ropch)
 		}
-		verifyLLRBMvcc(uint64(verifyopts.repeat), opch, readers)
-	} else {
-		go validateTick(verifyopts.vtick, opch)
-		verifyLLRB(uint64(verifyopts.repeat), opch)
+		verifyLLRBMvcc(uint64(verifyopts.repeat), opch, readers, keys, values)
 	}
 }
 
-func verifyLLRB(count uint64, opch chan [][]interface{}) {
+func verifyLLRB(count uint64, opch chan [][]interface{}, keys, values [][]byte) {
 	opstats := newopstats()
 
 	vbno, vbuuid, seqno := uint16(10), uint64(1234), uint64(0)
@@ -119,7 +140,10 @@ func verifyLLRB(count uint64, opch chan [][]interface{}) {
 		seqno++
 		cmds := <-opch
 		for _, cmd := range cmds {
-			lcmd := llrbcmd{cmd: cmd, vbno: vbno, vbuuid: vbuuid, seqno: seqno}
+			lcmd := llrbcmd{
+				cmd: cmd, vbno: vbno, vbuuid: vbuuid, seqno: seqno,
+				keys: keys, values: values,
+			}
 			if verifyopts.opdump {
 				fmt.Printf("cmd %v\n", lcmd.cmd)
 			}
@@ -151,12 +175,14 @@ func verifyLLRB(count uint64, opch chan [][]interface{}) {
 			}
 		}
 	}
+
 	llrb_opValidate(dict, llrb, opstats, true)
 	llrb.Log(9, true)
 }
 
 func verifyLLRBMvcc(
-	count uint64, opch chan [][]interface{}, readers []chan llrbcmd) {
+	count uint64, opch chan [][]interface{}, readers []chan llrbcmd,
+	keys, values [][]byte) {
 
 	// stats
 	opstats := newopstats()
@@ -200,7 +226,10 @@ func verifyLLRBMvcc(
 		seqno++
 		cmds := <-opch
 		for _, cmd := range cmds {
-			lcmd := llrbcmd{cmd: cmd, vbno: vbno, vbuuid: vbuuid, seqno: seqno}
+			lcmd := llrbcmd{
+				cmd: cmd, vbno: vbno, vbuuid: vbuuid, seqno: seqno,
+				keys: keys, values: values,
+			}
 			if verifyopts.opdump {
 				fmt.Printf("cmd %v\n", lcmd.cmd)
 			}
@@ -244,7 +273,8 @@ func verifyLLRBMvcc(
 					if rand.Intn(10) < 7 {
 						stats := cloneopstats(opstats)
 						cmd := []interface{}{
-							"snapshot", dictsnap, llrbsnap, stats, snaprespch}
+							"snapshot", dictsnap, llrbsnap, stats, snaprespch,
+						}
 						reader <- llrbcmd{cmd: cmd}
 						<-snaprespch
 					}
@@ -310,6 +340,22 @@ var writeOps = map[string]bool{
 
 func isReadOp(cmd []interface{}) bool {
 	return !writeOps[cmd[0].(string)]
+}
+
+func generateKeys(min, max, n int) (keys [][]byte) {
+	keys = make([][]byte, 0, n)
+	for i := 0; i < n; i++ {
+		keys = append(keys, makekey(make([]byte, 0, 128), min, max))
+	}
+	return keys
+}
+
+func generateValues(min, max, n int) (values [][]byte) {
+	values = make([][]byte, 0, n)
+	for i := 0; i < n; i++ {
+		values = append(values, makeval(make([]byte, 0, 128), min, max))
+	}
+	return values
 }
 
 func mf(err error) {
