@@ -12,13 +12,13 @@ import "sync/atomic"
 import humanize "github.com/dustin/go-humanize"
 
 // MinKeymem minimum key size.
-const MinKeymem = 96
+const MinKeymem = 8
 
 // MaxKeymem maximum key size.
 const MaxKeymem = 4096
 
 // MinValmem minimum value size.
-const MinValmem = 32
+const MinValmem = 8
 
 // MaxValmem maximum value size.
 const MaxValmem = 10 * 1024 * 1024
