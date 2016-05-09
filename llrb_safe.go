@@ -109,7 +109,7 @@ func (llrb *LLRB) validate(root *Llrbnode) {
 	// `h_height`.max should not exceed certain limit
 	if h.samples() > 0 {
 		nf := float64(llrb.Count())
-		if float64(h.max()) > (3 * math.Log2(nf)) {
+		if float64(h.max()) > (3 * (math.Log2(nf) + 1)) {
 			fmsg := "validate(): max height %v exceeds log2(%v)"
 			panic(fmt.Errorf(fmsg, float64(h.max()), nf))
 		}
