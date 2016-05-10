@@ -125,14 +125,14 @@ func (llrb *LLRB) validatemem() {
 	memory := float64(llrb.keymemory)
 	allocated := float64(stats["node.allocated"].(int64))
 	ratio := memory / allocated
-	if ratio < 0.5 {
+	if ratio < memratio {
 		fmsg := "validatemem(): ratio: %v {%v/%v}"
 		panic(fmt.Errorf(fmsg, ratio, memory, allocated))
 	}
 	memory = float64(llrb.valmemory)
 	allocated = float64(stats["value.allocated"].(int64))
 	ratio = memory / allocated
-	if ratio < 0.5 {
+	if ratio < memratio {
 		fmsg := "validatemem(): ratio: %v {%v/%v}"
 		panic(fmt.Errorf(fmsg, ratio, memory, allocated))
 	}

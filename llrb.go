@@ -12,16 +12,18 @@ import "sync/atomic"
 import humanize "github.com/dustin/go-humanize"
 
 // MinKeymem minimum key size.
-const MinKeymem = 8
+const MinKeymem = 1
 
 // MaxKeymem maximum key size.
 const MaxKeymem = 4096
 
 // MinValmem minimum value size.
-const MinValmem = 8
+const MinValmem = 0
 
 // MaxValmem maximum value size.
 const MaxValmem = 10 * 1024 * 1024
+
+var memratio = 0.5 // keymemory / allocated for each arena
 
 // LLRB to manage in-memory sorted index using left-leaning-red-black trees.
 type LLRB struct { // tree container

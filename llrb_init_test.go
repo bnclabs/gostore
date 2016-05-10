@@ -9,6 +9,7 @@ func init() {
 	config := map[string]interface{}{
 		"log.level": "warn",
 	}
+	memratio = 0.04
 	SetLogger(nil, config)
 }
 
