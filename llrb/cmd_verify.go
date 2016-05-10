@@ -273,6 +273,7 @@ func verifyLLRBMvcc(
 				dictsnap, llrbsnap = makesnaps()
 
 				for _, reader := range readers {
+					// pick only 70% of the readers to hold snapshot.
 					if rand.Intn(10) < 7 {
 						stats := cloneopstats(opstats)
 						cmd := []interface{}{
