@@ -30,6 +30,12 @@ func (llrb *LLRB) fullstats() (map[string]interface{}, error) {
 	llrb.heightStats(llrb.root, 1 /*depth*/, h_heightav)
 	stats["h_height"] = h_heightav.fullstats()
 	stats["n_blacks"] = llrb.countblacks(llrb.root, 0)
+
+	h_height := stats["h_height"].(map[string]interface{})
+	if x := h_height["samples"].(int64); x != llrb.Count() {
+		fmsg := "expected h_height.samples:%v to be same as llrb.Count():%v"
+		panic(fmt.Errorf(fmsg, x, llrb.Count()))
+	}
 	return stats, nil
 }
 
@@ -100,7 +106,8 @@ func (llrb *LLRB) validatestats() error {
 	n_snapshots := llrb.mvcc.n_snapshots
 	n_purgedss, n_activess := llrb.mvcc.n_purgedss, llrb.mvcc.n_activess
 	if n_snapshots != (n_purgedss + n_activess) {
-		fmsg := "validatestats(): n_snapshots:%v != (n_activess:%v + n_purgedss:%v)"
+		fmsg := "validatestats(): " +
+			"n_snapshots:%v != (n_activess:%v + n_purgedss:%v)"
 		panic(fmt.Errorf(fmsg, n_snapshots, n_activess, n_purgedss))
 	}
 

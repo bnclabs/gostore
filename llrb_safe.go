@@ -106,6 +106,7 @@ func (llrb *LLRB) validate(root *Llrbnode) {
 		fmsg := "validate(): valmemory:%v != actual:%v"
 		panic(fmt.Errorf(fmsg, llrb.valmemory, vm))
 	}
+
 	// `h_height`.max should not exceed certain limit
 	if h.samples() > 0 {
 		nf := float64(llrb.Count())
@@ -130,8 +131,10 @@ func (llrb *LLRB) validatetree(
 		if !isred(nd) {
 			blacks++
 		}
-		lblacks, lkm, lvm := llrb.validatetree(nd.left, isred(nd), blacks, depth+1, h)
-		rblacks, rkm, rvm := llrb.validatetree(nd.right, isred(nd), blacks, depth+1, h)
+		lblacks, lkm, lvm := llrb.validatetree(
+			nd.left, isred(nd), blacks, depth+1, h)
+		rblacks, rkm, rvm := llrb.validatetree(
+			nd.right, isred(nd), blacks, depth+1, h)
 		if lblacks != rblacks {
 			fmsg := "validate(): no. of blacks {left,right} is {%v,%v}\n"
 			panic(fmt.Errorf(fmsg, lblacks, rblacks))

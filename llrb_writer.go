@@ -187,6 +187,7 @@ func (writer *LLRBWriter) run() {
 					llrb.freenode(nd)
 				}
 			} else {
+				// snapshots do _refer_ to these nodes. remember to free later.
 				llrb.mvcc.reclaim = append(llrb.mvcc.reclaim, reclaim...)
 			}
 		}

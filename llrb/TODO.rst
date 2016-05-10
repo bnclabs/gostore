@@ -6,8 +6,6 @@ load:
 
 verify :
 
-* verify upsertStats[samples] == avg.upsert.height.samples
-* verify heightstats[samples] == llrb.Count()
 * verify memory leak
 * manage seqno accounting in the verify code.
 * set metadata vbno, access, vbuuid, bornseqno, deadseqno.

@@ -1,5 +1,6 @@
 LLRB:
 
+* set MinKeymem and MinValmem to 0
 * update access field from storage instance.
 * implemention continuation based range.
 * llrb/: sub-command to benchmark range and continuation.
