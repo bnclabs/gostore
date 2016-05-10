@@ -116,7 +116,26 @@ func (llrb *LLRB) validate(root *Llrbnode) {
 		}
 	}
 
+	llrb.validatemem()
 	llrb.validatestats()
+}
+
+func (llrb *LLRB) validatemem() {
+	stats := llrb.statsmem(make(map[string]interface{}))
+	memory := float64(llrb.keymemory)
+	allocated := float64(stats["node.allocated"].(int64))
+	ratio := memory / allocated
+	if ratio < 0.5 {
+		fmsg := "validatemem(): ratio: %v {%v/%v}"
+		panic(fmt.Errorf(fmsg, ratio, memory, allocated))
+	}
+	memory = float64(llrb.valmemory)
+	allocated = float64(stats["value.allocated"].(int64))
+	ratio = memory / allocated
+	if ratio < 0.5 {
+		fmsg := "validatemem(): ratio: %v {%v/%v}"
+		panic(fmt.Errorf(fmsg, ratio, memory, allocated))
+	}
 }
 
 func (llrb *LLRB) validatetree(
