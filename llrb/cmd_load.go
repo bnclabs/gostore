@@ -3,6 +3,7 @@ package main
 import "time"
 import "os"
 import "sync"
+import "log"
 import "fmt"
 import "bytes"
 import "io/ioutil"
@@ -29,7 +30,10 @@ var loadopts struct {
 	mprof     string
 	pprof     string
 	dotfile   string
-	args      []string
+	// additionals
+	benchrange bool
+	benchiter  bool
+	args       []string
 }
 
 func parseLoadopts(args []string) {
@@ -63,6 +67,10 @@ func parseLoadopts(args []string) {
 		"dump cpu-profile to file")
 	f.StringVar(&loadopts.dotfile, "dotfile", "",
 		"dump dot file output of the LLRB tree")
+	f.BoolVar(&loadopts.benchrange, "benchrange", false,
+		"after loading benchmark full table scan using range")
+	f.BoolVar(&loadopts.benchiter, "benchiter", false,
+		"after loading benchmark full table scan using iteration")
 	f.Parse(args)
 
 	loadopts.nodearena = [4]int{
@@ -146,19 +154,59 @@ func doLoad(args []string) {
 		go insertItems(llrb, vbno, vbuuid, seqno, &wg)
 	}
 	wg.Wait()
-	fmt.Printf("Took %v to insert %v items\n", time.Since(now), llrb.Count())
-	llrb.Log(9, true)
 
-	llrb.Validate()
+	fmt.Printf("Took %v to insert %v items\n", time.Since(now), llrb.Count())
 
 	if takeMEMProfile(loadopts.mprof) {
 		fmt.Printf("dumped mem-profile to %v\n", loadopts.mprof)
 	}
+
 	if len(loadopts.dotfile) > 0 {
 		buffer := bytes.NewBuffer(nil)
 		llrb.Dotdump(buffer)
 		ioutil.WriteFile(loadopts.dotfile, buffer.Bytes(), 0666)
+	} else if loadopts.benchrange {
+		start, count := time.Now(), int64(0)
+		if loadopts.mvcc > 0 { // acquire a snapshot
+			ch := make(chan storage.IndexSnapshot, 1)
+			if err := llrb.RSnapshot(ch); err != nil {
+				fmt.Printf("error acquiring snapshot for mvcc-llrb\n")
+				log.Fatal(err)
+			}
+			snapshot := <-ch
+			snapshot.Range(nil, nil, "both", func(nd storage.Node) bool {
+				count++
+				return true
+			})
+			snapshot.Release()
+		} else {
+			ch := make(chan storage.IndexSnapshot, 1)
+			if err := llrb.RSnapshot(ch); err != nil {
+				fmt.Printf("error acquiring snapshot for mvcc-llrb\n")
+				log.Fatal(err)
+			}
+			llrb.Range(nil, nil, "both", func(nd storage.Node) bool {
+				count++
+				return true
+			})
+		}
+
+		if x := llrb.Count(); x != count {
+			log.Fatalf("range count: expected %v, got %v\n", x, count)
+		} else if count != int64(loadopts.n) {
+			log.Fatalf("range count: inserted %v, got %v\n", x, count)
+		}
+
+		fmsg := "Full table scan using Range(): %v items in %v\n"
+		fmt.Printf(fmsg, count, time.Since(start))
+
+	} else if loadopts.benchiter {
+		// TODO: continuation based iterator.
+	} else {
+		llrb.Validate()
 	}
+
+	llrb.Log(9, true)
 
 	llrb.Destroy()
 }

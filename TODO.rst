@@ -1,10 +1,7 @@
 LLRB:
 
-* update access field from storage instance.
 * implemention continuation based range.
 * llrb/: sub-command to benchmark range and continuation.
-* document the idea of vector clock (timestamp) and how it
-  can be used to implement RYOW.
 * if there are no outstanding snapshots, may be we can do non-mvcc
   upserts and deletes ?
 * YCSB test cases.
@@ -26,6 +23,8 @@ clock:
 * fullset having a greater seqno for vbucket not present in subset.
 * fullset having a greater seqno for vbucket present in subset.
 * subset having a greater seqno.
+* document the idea of vector clock (timestamp) and how it
+  can be used to implement RYOW.
 
 Insert, Upsert, Delete:
 
@@ -36,7 +35,6 @@ Insert, Upsert, Delete:
 * Every mutation to the tree will be counted as tseqno. (tree-seqno).
 
 BNC-Cabinet:
-
 
 De-fragmentation cycle:
 
