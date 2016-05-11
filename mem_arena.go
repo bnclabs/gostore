@@ -167,7 +167,8 @@ func Blocksizes(minblock, maxblock int64) []int64 {
 	if maxblock < minblock { // validate and cure the input params
 		panic("minblock < maxblock")
 	} else if (minblock % sizeinterval) != 0 {
-		panic(fmt.Errorf("minblock is not multiple of %v", sizeinterval))
+		fmsg := "minblock %v is not multiple of %v"
+		panic(fmt.Errorf(fmsg, minblock, sizeinterval))
 	} else if (maxblock % sizeinterval) != 0 {
 		panic(fmt.Errorf("maxblock is not multiple of %v", sizeinterval))
 	}

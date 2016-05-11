@@ -12,7 +12,7 @@ import "sync/atomic"
 import humanize "github.com/dustin/go-humanize"
 
 // MinKeymem minimum key size.
-const MinKeymem = 1
+const MinKeymem = 32
 
 // MaxKeymem maximum key size.
 const MaxKeymem = 4096
