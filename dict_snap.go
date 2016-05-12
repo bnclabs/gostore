@@ -100,7 +100,7 @@ func (d *DictSnapshot) Max() Node {
 }
 
 // Range implement IndexReader{} interface.
-func (d *DictSnapshot) Range(lowkey, highkey []byte, incl string, iter NodeIterator) {
+func (d *DictSnapshot) Range(lowkey, highkey []byte, incl string, iter RangeCallb) {
 	var start int
 	var hashks []uint64
 

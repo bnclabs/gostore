@@ -254,7 +254,7 @@ func (snapshot *LLRBSnapshot) max() Node {
 }
 
 // Range implement IndexReader{} interface.
-func (s *LLRBSnapshot) Range(lkey, hkey []byte, incl string, iter NodeIterator) {
+func (s *LLRBSnapshot) Range(lkey, hkey []byte, incl string, iter RangeCallb) {
 	nd := s.root
 	switch incl {
 	case "both":

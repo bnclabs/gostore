@@ -9,7 +9,7 @@ import "bytes"
 
 // low <= (keys) <= high
 func (llrb *LLRB) rangeFromFind(
-	nd *Llrbnode, lk, hk []byte, iter NodeIterator) bool {
+	nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
 
 	if nd == nil {
 		return true
@@ -31,7 +31,7 @@ func (llrb *LLRB) rangeFromFind(
 
 // low <= (keys) < hk
 func (llrb *LLRB) rangeFromTill(
-	nd *Llrbnode, lk, hk []byte, iter NodeIterator) bool {
+	nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
 
 	if nd == nil {
 		return true
@@ -53,7 +53,7 @@ func (llrb *LLRB) rangeFromTill(
 
 // low < (keys) <= hk
 func (llrb *LLRB) rangeAfterFind(
-	nd *Llrbnode, lk, hk []byte, iter NodeIterator) bool {
+	nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
 
 	if nd == nil {
 		return true
@@ -75,7 +75,7 @@ func (llrb *LLRB) rangeAfterFind(
 
 // low < (keys) < hk
 func (llrb *LLRB) rangeAfterTill(
-	nd *Llrbnode, lk, hk []byte, iter NodeIterator) bool {
+	nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
 
 	if nd == nil {
 		return true

@@ -347,7 +347,7 @@ func (llrb *LLRB) max() Node {
 }
 
 // Range from lkey to hkey, incl can be "both", "low", "high", "none"
-func (llrb *LLRB) Range(lkey, hkey []byte, incl string, iter NodeIterator) {
+func (llrb *LLRB) Range(lkey, hkey []byte, incl string, iter RangeCallb) {
 	if llrb.mvcc.enabled {
 		panic("Range(): mvcc enabled, use snapshots for reading")
 	}

@@ -129,7 +129,7 @@ func (d *Dict) Max() Node {
 }
 
 // Range implement IndexReader{} interface.
-func (d *Dict) Range(lowkey, highkey []byte, incl string, iter NodeIterator) {
+func (d *Dict) Range(lowkey, highkey []byte, incl string, iter RangeCallb) {
 	var start int
 	var hashks []uint64
 	hashks = d.sorted()

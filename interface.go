@@ -1,7 +1,7 @@
 package storage
 
-// NodeIterator callback from Range API.
-type NodeIterator func(nd Node) bool
+// RangeCallb callback from Range API.
+type RangeCallb func(nd Node) bool
 
 // UpsertCallback callback from Upsert API. Don't keep any reference
 // to newnd and oldnd:
@@ -142,7 +142,7 @@ type IndexReader interface {
 	//	"low"  - include lowkey but ignore highkey
 	//	"high" - ignore lowkey but include highkey
 	//	"both" - include both lowkey and highkey
-	Range(lowkey, highkey []byte, incl string, iter NodeIterator)
+	Range(lowkey, highkey []byte, incl string, iter RangeCallb)
 }
 
 // IndexWriter interface methods for updating index.
