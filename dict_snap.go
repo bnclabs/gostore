@@ -3,17 +3,19 @@
 package storage
 
 import "strconv"
+import "sync/atomic"
 import "hash/crc64"
 import "bytes"
 import "sort"
 
 type DictSnapshot struct {
-	id       string
-	dict     map[uint64]*dictnode
-	sortkeys []string
-	hashks   []uint64
-	dead     bool
-	snapn    int
+	id         string
+	dict       map[uint64]*dictnode
+	sortkeys   []string
+	hashks     []uint64
+	dead       bool
+	snapn      int
+	activeiter int64
 }
 
 func (d *Dict) NewDictSnapshot() IndexSnapshot {
@@ -57,6 +59,9 @@ func (d *DictSnapshot) Refer() {
 
 // Release implement IndexSnapshot{} interface.
 func (d *DictSnapshot) Release() {
+	if atomic.LoadInt64(&d.activeiter) > 0 {
+		panic("cannot distroy DictSnapshot when active iterators are present")
+	}
 	d.dead = true
 }
 
@@ -136,6 +141,38 @@ func (d *DictSnapshot) Range(lowkey, highkey []byte, incl string, iter RangeCall
 			break
 		}
 	}
+}
+
+// Iterate implement IndexReader{} interface.
+func (d *DictSnapshot) Iterate(lkey, hkey []byte, incl string, r bool) IndexIterator {
+	iter := &dictIterator{
+		dict: d.dict, hashks: d.sorted(), activeiter: &d.activeiter,
+	}
+
+	startkey, startincl, endincl, cmp := lkey, "low", "high", 1
+	iter.endkey, iter.cmp, iter.index = hkey, 0, 0
+	if r {
+		startkey, startincl, endincl, cmp = hkey, "high", "low", 0
+		iter.endkey, iter.cmp, iter.index = lkey, 1, len(iter.hashks)-1
+	}
+
+	if startkey != nil {
+		if incl == startincl || incl == "both" {
+			cmp = 1 - cmp
+		}
+		for iter.index = 0; iter.index < len(iter.hashks); iter.index++ {
+			nd := d.dict[iter.hashks[iter.index]]
+			if bytes.Compare(nd.key, startkey) >= cmp {
+				break
+			}
+		}
+	}
+
+	if incl == endincl || incl == "both" {
+		iter.cmp = 1 - iter.cmp
+	}
+	atomic.AddInt64(&d.activeiter, 1)
+	return iter
 }
 
 func (d *DictSnapshot) sorted() []uint64 {

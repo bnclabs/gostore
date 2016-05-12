@@ -5,6 +5,7 @@ package storage
 import "sort"
 import "bytes"
 import "fmt"
+import "sync/atomic"
 import "hash/crc64"
 
 var _ = fmt.Sprintf("dummy")
@@ -13,12 +14,13 @@ var crcisotab = crc64.MakeTable(crc64.ISO)
 
 // Dict is a reference data structure, for validation purpose.
 type Dict struct {
-	id       string
-	dict     map[uint64]*dictnode
-	sortkeys []string
-	hashks   []uint64
-	dead     bool
-	snapn    int
+	id         string
+	dict       map[uint64]*dictnode
+	sortkeys   []string
+	hashks     []uint64
+	dead       bool
+	snapn      int
+	activeiter int64
 }
 
 // NewDict create a new golang map for indexing key,value.
@@ -50,6 +52,10 @@ func (d *Dict) RSnapshot(snapch chan IndexSnapshot) error {
 
 // Destroy implement Index{} interface.
 func (d *Dict) Destroy() error {
+	if atomic.LoadInt64(&d.activeiter) > 0 {
+		panic("cannot distroy Dict when active iterators are present")
+	}
+
 	d.dead = true
 	d.dict, d.sortkeys, d.hashks = nil, nil, nil
 	return nil
@@ -130,13 +136,11 @@ func (d *Dict) Max() Node {
 
 // Range implement IndexReader{} interface.
 func (d *Dict) Range(lowkey, highkey []byte, incl string, iter RangeCallb) {
-	var start int
 	var hashks []uint64
 	hashks = d.sorted()
 
-	if lowkey == nil {
-		start = 0
-	} else {
+	start := 0
+	if lowkey != nil {
 		cmp := 1
 		if incl == "low" || incl == "both" {
 			cmp = 0
@@ -148,6 +152,7 @@ func (d *Dict) Range(lowkey, highkey []byte, incl string, iter RangeCallb) {
 			}
 		}
 	}
+
 	if start < len(hashks) {
 		cmp := 0
 		if incl == "high" || incl == "both" {
@@ -164,6 +169,38 @@ func (d *Dict) Range(lowkey, highkey []byte, incl string, iter RangeCallb) {
 			break
 		}
 	}
+}
+
+// Iterate implement IndexReader{} interface.
+func (d *Dict) Iterate(lkey, hkey []byte, incl string, r bool) IndexIterator {
+	iter := &dictIterator{
+		dict: d.dict, hashks: d.sorted(), activeiter: &d.activeiter,
+	}
+
+	startkey, startincl, endincl, cmp := lkey, "low", "high", 1
+	iter.endkey, iter.cmp, iter.index = hkey, 0, 0
+	if r {
+		startkey, startincl, endincl, cmp = hkey, "high", "low", 0
+		iter.endkey, iter.cmp, iter.index = lkey, 1, len(iter.hashks)-1
+	}
+
+	if startkey != nil {
+		if incl == startincl || incl == "both" {
+			cmp = 1 - cmp
+		}
+		for iter.index = 0; iter.index < len(iter.hashks); iter.index++ {
+			nd := d.dict[iter.hashks[iter.index]]
+			if bytes.Compare(nd.key, startkey) >= cmp {
+				break
+			}
+		}
+	}
+
+	if incl == endincl || incl == "both" {
+		iter.cmp = 1 - iter.cmp
+	}
+	atomic.AddInt64(&d.activeiter, 1)
+	return iter
 }
 
 //---- IndexWriter{} interface.

@@ -61,6 +61,20 @@ type NodeSetter interface {
 	SetDeadseqno(seqno uint64) Node
 }
 
+// IndexIterator interface to pull entries from index over a range of
+// low key and high key.
+type IndexIterator interface {
+	// Next node if present, else nil.
+	Next() Node
+
+	// Prev node if present, else nil.
+	Prev() Node
+
+	// Close iterator. Itertors can be concurrently read, but cannot be
+	// used with a concurrent write.
+	Close()
+}
+
 // Index interface for managing key,value pairs.
 // TODO: add interface for vector-clock.
 type Index interface {
@@ -143,6 +157,14 @@ type IndexReader interface {
 	//	"high" - ignore lowkey but include highkey
 	//	"both" - include both lowkey and highkey
 	Range(lowkey, highkey []byte, incl string, iter RangeCallb)
+
+	// Iterate over entries between lowkey and highkey
+	// incl,
+	//  "none" - ignore lowkey and highkey while iterating
+	//  "low"  - include lowkey but ignore highkey
+	//  "high" - ignore lowkey but include highkey
+	//  "both" - include both lowkey and highkey
+	Iterate(lowkey, highkey []byte, incl string, reverse bool) IndexIterator
 }
 
 // IndexWriter interface methods for updating index.

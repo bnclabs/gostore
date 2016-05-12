@@ -273,6 +273,11 @@ func (s *LLRBSnapshot) Range(lkey, hkey []byte, incl string, iter RangeCallb) {
 	}
 }
 
+// Iterate implement IndexReader{} interface.
+func (s *LLRBSnapshot) Iterate(lkey, hkey []byte, incl string, r bool) IndexIterator {
+	panic("yet to be implemented")
+}
+
 // don't use llrb.validate(), it will access stats that needs
 // to be serialized.
 func (snapshot *LLRBSnapshot) validate(root *Llrbnode) {

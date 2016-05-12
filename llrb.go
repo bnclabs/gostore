@@ -369,6 +369,11 @@ func (llrb *LLRB) Range(lkey, hkey []byte, incl string, iter RangeCallb) {
 	atomic.AddInt64(&llrb.n_ranges, 1)
 }
 
+// Iterate implement IndexReader{} interface.
+func (llrb *LLRB) Iterate(lkey, hkey []byte, incl string, r bool) IndexIterator {
+	panic("yet to be implemented")
+}
+
 //---- IndexWriter{} interface
 
 // Upsert implement IndexWriter{} interface.
