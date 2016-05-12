@@ -769,6 +769,54 @@ func TestLLRBRange(t *testing.T) {
 	llrb.Destroy()
 }
 
+func BenchmarkLLRBCloneKey(b *testing.B) {
+	config := makellrbconfig()
+	config["metadata.mvalue"] = true
+	config["metadata.bornseqno"] = true
+	config["metadata.vbuuid"] = true
+	llrb := NewLLRB("test", config, nil)
+
+	b.ResetTimer()
+
+	key, value := makekeyvalue(make([]byte, 256), make([]byte, 0))
+	nd := llrb.newnode(key, value)
+	for i := 0; i < b.N; i++ {
+		llrb.clone(nd)
+	}
+}
+
+func BenchmarkLLRBCloneSmall(b *testing.B) {
+	config := makellrbconfig()
+	config["metadata.mvalue"] = true
+	config["metadata.bornseqno"] = true
+	config["metadata.vbuuid"] = true
+	llrb := NewLLRB("test", config, nil)
+
+	b.ResetTimer()
+
+	key, value := makekeyvalue(make([]byte, 64), make([]byte, 1024))
+	nd := llrb.newnode(key, value)
+	for i := 0; i < b.N; i++ {
+		llrb.clone(nd)
+	}
+}
+
+func BenchmarkLLRBCloneLarge(b *testing.B) {
+	config := makellrbconfig()
+	config["metadata.mvalue"] = true
+	config["metadata.bornseqno"] = true
+	config["metadata.vbuuid"] = true
+	llrb := NewLLRB("test", config, nil)
+
+	b.ResetTimer()
+
+	key, value := makekeyvalue(make([]byte, 512), make([]byte, 1024*1000))
+	nd := llrb.newnode(key, value)
+	for i := 0; i < b.N; i++ {
+		llrb.clone(nd)
+	}
+}
+
 func makekeyvalue(key, value []byte) ([]byte, []byte) {
 	if key != nil {
 		for i := 0; i < len(key); i++ {
