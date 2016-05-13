@@ -352,6 +352,14 @@ func (llrb *LLRB) Range(lkey, hkey []byte, incl string, iter RangeCallb) {
 		panic("Range(): mvcc enabled, use snapshots for reading")
 	}
 
+	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
+		if incl == "none" {
+			return
+		} else if incl == "low" || incl == "high" {
+			incl = "both"
+		}
+	}
+
 	llrb.rw.RLock()
 
 	switch incl {

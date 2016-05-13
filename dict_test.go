@@ -2,6 +2,7 @@ package storage
 
 import "testing"
 import "bytes"
+import "reflect"
 import "fmt"
 
 var _ = fmt.Sprintf("dummy")
@@ -135,118 +136,68 @@ func TestDictRange(t *testing.T) {
 			}
 		})
 	}
-	// both
-	i, ln := 0, 0
-	d.Range(
-		inserts[0][0], inserts[4][0], "both",
-		func(nd Node) bool {
-			k, v := nd.Key(), nd.Value()
-			if bytes.Compare(inserts[i][0], k) != 0 {
-				t.Errorf("expected key %v, got %v", inserts[i][0], string(k))
-			} else if bytes.Compare(inserts[i][1], v) != 0 {
-				t.Errorf("expected key %v, got %v", inserts[i][1], string(v))
-			}
-			i++
-			ln++
+	testcases := [][]interface{}{
+		[]interface{}{nil, nil, "none", inserts[:]},
+		[]interface{}{nil, nil, "low", inserts[:]},
+		[]interface{}{nil, nil, "high", inserts[:]},
+		[]interface{}{nil, nil, "both", inserts[:]},
+		[]interface{}{inserts[0][0], nil, "none", inserts[1:]},
+		[]interface{}{inserts[0][0], nil, "low", inserts[0:]},
+		[]interface{}{inserts[0][0], nil, "high", inserts[1:]},
+		[]interface{}{inserts[0][0], nil, "both", inserts[0:]},
+		[]interface{}{nil, inserts[4][0], "none", inserts[:4]},
+		[]interface{}{nil, inserts[4][0], "low", inserts[:4]},
+		[]interface{}{nil, inserts[4][0], "high", inserts[:5]},
+		[]interface{}{nil, inserts[4][0], "both", inserts[:5]},
+		[]interface{}{inserts[0][0], inserts[4][0], "none", inserts[1:4]},
+		[]interface{}{inserts[0][0], inserts[4][0], "low", inserts[0:4]},
+		[]interface{}{inserts[0][0], inserts[4][0], "high", inserts[1:5]},
+		[]interface{}{inserts[0][0], inserts[4][0], "both", inserts[0:5]},
+		[]interface{}{inserts[0][0], inserts[0][0], "none", inserts[:0]},
+		[]interface{}{inserts[0][0], inserts[0][0], "low", inserts[:1]},
+		[]interface{}{inserts[0][0], inserts[0][0], "high", inserts[:1]},
+		[]interface{}{inserts[0][0], inserts[0][0], "both", inserts[:1]},
+	}
+
+	var lowkey, highkey []byte
+	for casenum, tcase := range testcases {
+		lowkey, highkey = nil, nil
+		incl := tcase[2].(string)
+		if tcase[0] != nil {
+			lowkey = tcase[0].([]byte)
+		}
+		if tcase[1] != nil {
+			highkey = tcase[1].([]byte)
+		}
+
+		// with return true
+		outs := make([][2][]byte, 0)
+		d.Range(lowkey, highkey, incl, func(nd Node) bool {
+			outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
 			return true
 		})
-	if ln != len(inserts) {
-		t.Errorf("expected %v, got %v", len(inserts), ln)
-	}
-	// none
-	i, ln = 1, 0
-	d.Range(
-		inserts[0][0], inserts[4][0], "none",
-		func(nd Node) bool {
-			k, v := nd.Key(), nd.Value()
-			if bytes.Compare(inserts[i][0], k) != 0 {
-				t.Errorf("expected key %v, got %v", inserts[i][0], string(k))
-			} else if bytes.Compare(inserts[i][1], v) != 0 {
-				t.Errorf("expected key %v, got %v", inserts[i][1], string(v))
-			}
-			i++
-			ln++
-			return true
+		if reflect.DeepEqual(outs, tcase[3]) == false {
+			fmsg := "failed for %v (%v,%v)"
+			t.Errorf(fmsg, casenum, string(lowkey), string(highkey))
+		}
+		// with return false
+		outs = make([][2][]byte, 0)
+		d.Range(lowkey, highkey, incl, func(nd Node) bool {
+			outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
+			return false
 		})
-	if ln != (len(inserts) - 2) {
-		t.Errorf("expected %v, got %v", len(inserts)-2, ln)
+		ref := tcase[3].([][2][]byte)
+		if len(ref) > 0 {
+			ref = ref[:1]
+		}
+		if reflect.DeepEqual(outs, ref) == false {
+			fmsg := "failed for %v (%v,%v)"
+			t.Errorf(fmsg, casenum, string(lowkey), string(highkey))
+		}
 	}
-	// high
-	i, ln = 1, 0
-	d.Range(
-		inserts[0][0], inserts[4][0], "high",
-		func(nd Node) bool {
-			k, v := nd.Key(), nd.Value()
-			if bytes.Compare(inserts[i][0], k) != 0 {
-				t.Errorf("expected key %v, got %v", inserts[i][0], string(k))
-			} else if bytes.Compare(inserts[i][1], v) != 0 {
-				t.Errorf("expected key %v, got %v", inserts[i][1], string(v))
-			}
-			i++
-			ln++
-			return true
-		})
-	if ln != (len(inserts) - 1) {
-		t.Errorf("expected %v, got %v", len(inserts)-1, ln)
-	}
-	// low
-	i, ln = 0, 0
-	d.Range(
-		inserts[0][0], inserts[4][0], "low",
-		func(nd Node) bool {
-			k, v := nd.Key(), nd.Value()
-			if bytes.Compare(inserts[i][0], k) != 0 {
-				t.Errorf("expected key %v, got %v", inserts[i][0], string(k))
-			} else if bytes.Compare(inserts[i][1], v) != 0 {
-				t.Errorf("expected key %v, got %v", inserts[i][1], string(v))
-			}
-			i++
-			ln++
-			return true
-		})
-	if ln != (len(inserts) - 1) {
-		t.Errorf("expected %v, got %v", len(inserts)-1, ln)
-	}
-	// corner case with low as nil
-	ln = 0
-	d.Range(
-		nil, inserts[4][0], "high",
-		func(_ Node) bool { ln += 1; return true })
-	if ln != 5 {
-		t.Errorf("expected %v, got %v", 5, ln)
-	}
-	// corner case with high as nil
-	ln = 0
-	d.Range(
-		inserts[0][0], nil, "none",
-		func(_ Node) bool { ln += 1; return true })
-	if ln != 4 {
-		t.Errorf("expected %v, got %v", 4, ln)
-	}
-	// corner case with return as false
-	ln = 0
-	d.Range(
-		inserts[0][0], nil, "low",
-		func(_ Node) bool { ln += 1; return false })
-	if ln != 1 {
-		t.Errorf("expected %v, got %v", 1, ln)
-	}
-	// corner case on the high side.
-	ln = 0
-	d.Range(
-		inserts[0][0], inserts[0][0], "high",
-		func(_ Node) bool { ln += 1; return true })
-	if ln != 0 {
-		t.Errorf("expected %v, got %v", 0, ln)
-	}
-	// corner case on the low side.
-	ln = 0
-	d.Range(
-		inserts[4][0], inserts[4][0], "low",
-		func(_ Node) bool { ln += 1; return true })
-	if ln != 0 {
-		t.Errorf("expected %v, got %v", 0, ln)
-	}
+}
+
+func TestDictIterate(t *testing.T) {
 }
 
 func TestDictRsnapshot(t *testing.T) {

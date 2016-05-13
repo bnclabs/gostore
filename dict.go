@@ -137,37 +137,44 @@ func (d *Dict) Max() Node {
 // Range implement IndexReader{} interface.
 func (d *Dict) Range(lowkey, highkey []byte, incl string, iter RangeCallb) {
 	var hashks []uint64
+	var nd *dictnode
+
 	hashks = d.sorted()
 
-	start := 0
+	if lowkey != nil && highkey != nil && bytes.Compare(lowkey, highkey) == 0 {
+		if incl == "none" {
+			return
+		} else if incl == "low" || incl == "high" {
+			incl = "both"
+		}
+	}
+
+	start, cmp, nd := 0, 1, d.dict[hashks[0]]
 	if lowkey != nil {
-		cmp := 1
 		if incl == "low" || incl == "both" {
 			cmp = 0
 		}
 		for start = 0; start < len(hashks); start++ {
-			nd := d.dict[hashks[start]]
+			nd = d.dict[hashks[start]]
 			if bytes.Compare(nd.key, lowkey) >= cmp {
 				break
 			}
 		}
 	}
 
-	if start < len(hashks) {
-		cmp := 0
-		if incl == "high" || incl == "both" {
-			cmp = 1
-		}
-		for i := start; i < len(hashks); i++ {
-			nd := d.dict[hashks[i]]
-			if highkey == nil || (bytes.Compare(nd.key, highkey) < cmp) {
-				if iter(nd) == false {
-					break
-				}
-				continue
+	cmp = 0
+	if incl == "high" || incl == "both" {
+		cmp = 1
+	}
+	for ; start < len(hashks); start++ {
+		nd = d.dict[hashks[start]]
+		if highkey == nil || (bytes.Compare(nd.key, highkey) < cmp) {
+			if iter(nd) == false {
+				break
 			}
-			break
+			continue
 		}
+		break
 	}
 }
 

@@ -4,6 +4,7 @@ package storage
 
 import "sync/atomic"
 import "time"
+import "bytes"
 import "strings"
 import "math"
 import "io"
@@ -255,6 +256,14 @@ func (snapshot *LLRBSnapshot) max() Node {
 
 // Range implement IndexReader{} interface.
 func (s *LLRBSnapshot) Range(lkey, hkey []byte, incl string, iter RangeCallb) {
+	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
+		if incl == "none" {
+			return
+		} else if incl == "low" || incl == "high" {
+			incl = "both"
+		}
+	}
+
 	nd := s.root
 	switch incl {
 	case "both":
@@ -266,6 +275,7 @@ func (s *LLRBSnapshot) Range(lkey, hkey []byte, incl string, iter RangeCallb) {
 	default:
 		s.llrb.rangeAfterTill(nd, lkey, hkey, iter)
 	}
+
 	if atomic.LoadInt64(&s.llrb.mvcc.ismut) == 1 {
 		atomic.AddInt64(&s.n_ccranges, 1)
 	} else {
