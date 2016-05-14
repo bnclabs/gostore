@@ -189,6 +189,40 @@ func llrb_opDelmax(
 	return stats
 }
 
+func llrb_opDeleteall(
+	dict *storage.Dict, llrb *storage.LLRB,
+	lcmd llrbcmd, stats map[string]int) map[string]int {
+
+	var refnd storage.Node
+
+	for dict.Count() > 0 {
+		dict.DeleteMax(func(_ storage.Index, dictnd storage.Node) {
+			llrb.DeleteMax(
+				func(index storage.Index, nd storage.Node) {
+					cmpllrbdict(llrb.Id(), dictnd, nd, true)
+					refnd = nd
+					if nd != nil {
+						nd.SetDeadseqno(lcmd.seqno)
+					}
+				})
+			if dictnd != nil {
+				dictnd.SetDeadseqno(lcmd.seqno)
+			}
+		})
+	}
+	if llrb.Count() > 0 {
+		panic("llrb count expected to be ZERO after `deleteall`")
+	}
+
+	stats["total"] += 1
+	if refnd != nil {
+		stats["deleteall.ok"] += 1
+	} else {
+		stats["deleteall.na"] += 1
+	}
+	return stats
+}
+
 func llrb_opUpsert(
 	dict *storage.Dict, llrb *storage.LLRB,
 	lcmd llrbcmd, stats map[string]int) map[string]int {
@@ -314,11 +348,12 @@ func llrb_validateStats(
 	dels := [2]int{stats["delete.ok"], stats["delete.na"]}
 	dmax := [2]int{stats["delmax.ok"], stats["delmax.na"]}
 	dmin := [2]int{stats["delmin.ok"], stats["delmin.na"]}
+	dall := [2]int{stats["deleteall.ok"], stats["deleteall.na"]}
 	gets := [2]int{stats["get.ok"], stats["get.na"]}
 	maxs := [2]int{stats["max.ok"], stats["max.na"]}
 	mins := [2]int{stats["min.ok"], stats["min.na"]}
 	total := insert + upsert + dels[0] + dels[1]
-	total += dmax[0] + dmax[1] + dmin[0] + dmin[1]
+	total += dmax[0] + dmax[1] + dmin[0] + dmin[1] + dall[0] + dall[1]
 	total += gets[0] + gets[1] + maxs[0] + maxs[1] + mins[0] + mins[1] +
 		validates + ranges
 
@@ -332,8 +367,7 @@ func llrb_validateStats(
 
 	if mvcc == false {
 		checknotzeros([]string{
-			"insert", "upsert", "delete.ok", "delmax.ok",
-			"delmin.ok",
+			"insert", "upsert", "delete.ok", "delmax.ok", "delmin.ok",
 		})
 	}
 
@@ -341,19 +375,24 @@ func llrb_validateStats(
 		fmsg := "%v total expected %v, got %v"
 		panic(fmt.Errorf(fmsg, llrb.Id(), total, stats["total"]))
 	}
-	dictn, cnt := dict.Count(), int64(insert-(dels[0]+dmin[0]+dmax[0]))
-	if dictn != cnt {
-		fmsg := "%v expected counts: %v, stats: %v\n"
-		panic(fmt.Errorf(fmsg, llrb.Id(), dictn, cnt))
-		return false
+	if (dall[0] + dall[1]) == 0 {
+		dictn, cnt := dict.Count(), int64(insert-(dels[0]+dmin[0]+dmax[0]))
+		if dictn != cnt {
+			fmsg := "%v expected counts: %v, stats: %v\n"
+			panic(fmt.Errorf(fmsg, llrb.Id(), dictn, cnt))
+			return false
+		}
 	}
 
 	if dolog {
 		fmt.Printf("%v validateStats:  ok\n", llrb.Id())
 		fmt.Printf("  total operations : %v\n", total)
 		fmt.Printf("  inserts/upserts/range : {%v,%v,%v}\n", insert, upsert, ranges)
-		fmsg := "  ds/dn/dx {ok/na} : {%v,%v} {%v,%v} {%v,%v}\n"
-		fmt.Printf(fmsg, dels[0], dels[1], dmax[0], dmax[1], dmin[0], dmin[1])
+		fmsg := "  ds/dn/dx/da {ok/na} : {%v,%v} {%v,%v} {%v,%v} {%v,%v}\n"
+		fmt.Printf(
+			fmsg, dels[0], dels[1], dmax[0], dmax[1], dmin[0], dmin[1],
+			dall[0], dall[1],
+		)
 		fmsg = "  gt/mn/mx {ok/na} : {%v,%v} {%v,%v} {%v,%v}\n"
 		fmt.Printf(fmsg, gets[0], gets[1], mins[0], mins[1], maxs[0], maxs[1])
 		fmt.Printf("  validates        : %v\n", validates)

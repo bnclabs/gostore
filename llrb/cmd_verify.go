@@ -160,6 +160,8 @@ func verifyLLRB(count uint64, opch chan [][]interface{}, keys, values [][]byte) 
 				opstats = llrb_opDelmin(dict, llrb, lcmd, opstats)
 			case "delmax":
 				opstats = llrb_opDelmax(dict, llrb, lcmd, opstats)
+			case "deleteall":
+				opstats = llrb_opDeleteall(dict, llrb, lcmd, opstats)
 			case "upsert":
 				opstats = llrb_opUpsert(dict, llrb, lcmd, opstats)
 			case "delete":
@@ -257,6 +259,8 @@ func verifyLLRBMvcc(
 				opstats = llrb_opDelmin(dict, llrb, lcmd, opstats)
 			case "delmax":
 				opstats = llrb_opDelmax(dict, llrb, lcmd, opstats)
+			case "deleteall":
+				opstats = llrb_opDeleteall(dict, llrb, lcmd, opstats)
 			case "upsert":
 				opstats = llrb_opUpsert(dict, llrb, lcmd, opstats)
 			case "delete":
@@ -342,11 +346,12 @@ func snapshotTick(tick time.Duration, opch chan [][]interface{}) {
 //--------
 
 var writeOps = map[string]bool{
-	"delmin": true,
-	"delmax": true,
-	"upsert": true,
-	"insert": true,
-	"delete": true,
+	"delmin":    true,
+	"delmax":    true,
+	"deleteall": true,
+	"upsert":    true,
+	"insert":    true,
+	"delete":    true,
 }
 
 func isReadOp(cmd []interface{}) bool {
