@@ -106,47 +106,69 @@ func (d *DictSnapshot) Max() Node {
 
 // Range implement IndexReader{} interface.
 func (d *DictSnapshot) Range(lowkey, highkey []byte, incl string, iter RangeCallb) {
-	var start int
 	var hashks []uint64
 
 	hashks = d.hashks
 
-	if lowkey == nil {
-		start = 0
-	} else {
-		cmp := 1
+	// parameter rewrite for lookup
+	if lowkey != nil && highkey != nil && bytes.Compare(lowkey, highkey) == 0 {
+		if incl == "none" {
+			return
+		} else if incl == "low" || incl == "high" {
+			incl = "both"
+		}
+	}
+	if len(hashks) == 0 {
+		return
+	}
+
+	start, cmp, nd := 0, 1, d.dict[hashks[0]]
+	if lowkey != nil {
 		if incl == "low" || incl == "both" {
 			cmp = 0
 		}
 		for start = 0; start < len(hashks); start++ {
-			nd := d.dict[hashks[start]]
+			nd = d.dict[hashks[start]]
 			if bytes.Compare(nd.key, lowkey) >= cmp {
 				break
 			}
 		}
 	}
-	if start < len(hashks) {
-		cmp := 0
-		if incl == "high" || incl == "both" {
-			cmp = 1
-		}
-		for i := start; i < len(hashks); i++ {
-			nd := d.dict[hashks[i]]
-			if highkey == nil || (bytes.Compare(nd.key, highkey) < cmp) {
-				if iter(nd) == false {
-					break
-				}
-				continue
+
+	cmp = 0
+	if incl == "high" || incl == "both" {
+		cmp = 1
+	}
+	for ; start < len(hashks); start++ {
+		nd = d.dict[hashks[start]]
+		if highkey == nil || (bytes.Compare(nd.key, highkey) < cmp) {
+			if iter(nd) == false {
+				break
 			}
-			break
+			continue
 		}
+		break
 	}
 }
 
 // Iterate implement IndexReader{} interface.
 func (d *DictSnapshot) Iterate(lkey, hkey []byte, incl string, r bool) IndexIterator {
 	iter := &dictIterator{
-		dict: d.dict, hashks: d.sorted(), activeiter: &d.activeiter,
+		dict: d.dict, hashks: d.sorted(), activeiter: &d.activeiter, reverse: r,
+	}
+
+	// parameter rewrite for lookup
+	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
+		if incl == "none" {
+			iter.index = len(iter.hashks)
+			if r {
+				iter.index = -1
+			}
+			return iter
+
+		} else if incl == "low" || incl == "high" {
+			incl = "both"
+		}
 	}
 
 	startkey, startincl, endincl, cmp := lkey, "low", "high", 1
@@ -165,6 +187,9 @@ func (d *DictSnapshot) Iterate(lkey, hkey []byte, incl string, r bool) IndexIter
 			if bytes.Compare(nd.key, startkey) >= cmp {
 				break
 			}
+		}
+		if r {
+			iter.index--
 		}
 	}
 

@@ -9,6 +9,7 @@ type dictIterator struct {
 	index      int
 	endkey     []byte // can be highkey or lowkey
 	cmp        int
+	reverse    bool
 	closed     bool
 	activeiter *int64
 }
@@ -18,37 +19,33 @@ func (iter *dictIterator) Next() Node {
 	if iter.closed {
 		panic("cannot iterate over a closed iterator")
 	}
-	if iter.index < len(iter.hashks) {
-		nd := iter.dict[iter.hashks[iter.index]]
-		if iter.endkey != nil {
-			if bytes.Compare(nd.key, iter.endkey) <= iter.cmp {
-				iter.index++
-				return nd
-			}
-			return nil
-		}
-		iter.index++
-		return nd
-	}
-	return nil
-}
 
-// Prev implement IndexIterator{} interface.
-func (iter *dictIterator) Prev() Node {
-	if iter.closed {
-		panic("cannot iterate over a closed iterator")
-	}
-	if iter.index >= 0 {
-		nd := iter.dict[iter.hashks[iter.index]]
-		if iter.endkey != nil {
-			if bytes.Compare(nd.key, iter.endkey) >= iter.cmp {
-				iter.index--
-				return nd
+	if iter.reverse {
+		if iter.index >= 0 {
+			nd := iter.dict[iter.hashks[iter.index]]
+			if iter.endkey != nil {
+				if bytes.Compare(nd.key, iter.endkey) >= iter.cmp {
+					iter.index--
+					return nd
+				}
+				return nil
 			}
-			return nil
+			iter.index--
+			return nd
 		}
-		iter.index--
-		return nd
+	} else {
+		if iter.index < len(iter.hashks) {
+			nd := iter.dict[iter.hashks[iter.index]]
+			if iter.endkey != nil {
+				if bytes.Compare(nd.key, iter.endkey) < iter.cmp {
+					iter.index++
+					return nd
+				}
+				return nil
+			}
+			iter.index++
+			return nd
+		}
 	}
 	return nil
 }

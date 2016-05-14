@@ -198,6 +198,100 @@ func TestDictRange(t *testing.T) {
 }
 
 func TestDictIterate(t *testing.T) {
+	d := NewDict()
+	if d.Count() != 0 {
+		t.Fatalf("expected an empty dict")
+	}
+	// inserts
+	inserts := [][2][]byte{
+		[2][]byte{[]byte("key1"), []byte("value1")},
+		[2][]byte{[]byte("key2"), []byte("value2")},
+		[2][]byte{[]byte("key3"), []byte("value3")},
+		[2][]byte{[]byte("key4"), []byte("value4")},
+		[2][]byte{[]byte("key5"), []byte("value5")},
+	}
+	for _, kv := range inserts {
+		d.Upsert(kv[0], kv[1], func(_ Index, _ int64, newnd, oldnd Node) {
+			if oldnd != nil {
+				t.Errorf("expected nil")
+			}
+		})
+	}
+	testcases := [][]interface{}{
+		[]interface{}{nil, nil, "none", inserts[:]},
+		[]interface{}{nil, nil, "low", inserts[:]},
+		[]interface{}{nil, nil, "high", inserts[:]},
+		[]interface{}{nil, nil, "both", inserts[:]},
+		[]interface{}{inserts[0][0], nil, "none", inserts[1:]},
+		[]interface{}{inserts[0][0], nil, "low", inserts[0:]},
+		[]interface{}{inserts[0][0], nil, "high", inserts[1:]},
+		[]interface{}{inserts[0][0], nil, "both", inserts[0:]},
+		[]interface{}{nil, inserts[4][0], "none", inserts[:4]},
+		[]interface{}{nil, inserts[4][0], "low", inserts[:4]},
+		[]interface{}{nil, inserts[4][0], "high", inserts[:5]},
+		[]interface{}{nil, inserts[4][0], "both", inserts[:5]},
+		[]interface{}{inserts[0][0], inserts[4][0], "none", inserts[1:4]},
+		[]interface{}{inserts[0][0], inserts[4][0], "low", inserts[0:4]},
+		[]interface{}{inserts[0][0], inserts[4][0], "high", inserts[1:5]},
+		[]interface{}{inserts[0][0], inserts[4][0], "both", inserts[0:5]},
+		[]interface{}{inserts[0][0], inserts[0][0], "none", inserts[:0]},
+		[]interface{}{inserts[0][0], inserts[0][0], "low", inserts[:1]},
+		[]interface{}{inserts[0][0], inserts[0][0], "high", inserts[:1]},
+		[]interface{}{inserts[0][0], inserts[0][0], "both", inserts[:1]},
+	}
+
+	var lowkey, highkey []byte
+	for n, tcase := range testcases {
+		lowkey, highkey = nil, nil
+		incl := tcase[2].(string)
+		if tcase[0] != nil {
+			lowkey = tcase[0].([]byte)
+		}
+		if tcase[1] != nil {
+			highkey = tcase[1].([]byte)
+		}
+
+		refs := make([][2][]byte, 0)
+		d.Range(lowkey, highkey, incl, func(nd Node) bool {
+			refs = append(refs, [2][]byte{nd.Key(), nd.Value()})
+			return true
+		})
+		// forward iteration
+		iter := d.Iterate(lowkey, highkey, incl, false)
+		roff := 0
+		for nd := iter.Next(); nd != nil; nd = iter.Next() {
+			t.Logf("casenum %v, forward, roff %v", n, roff)
+			if bytes.Compare(nd.Key(), refs[roff][0]) != 0 {
+				t.Fatalf("%v expected %v, got %v", n, refs[roff][0], nd.Key())
+			} else if bytes.Compare(nd.Value(), refs[roff][1]) != 0 {
+				t.Fatalf("%v expected %v, got %v", n, refs[roff][1], nd.Value())
+			}
+			roff++
+		}
+		if roff != len(refs) {
+			fmsg := "casenum %v, forward, count expected %v, got %v"
+			t.Fatalf(fmsg, n, len(refs), roff)
+		}
+		iter.Close()
+		// backward iteration
+		iter = d.Iterate(lowkey, highkey, incl, true)
+		roff, count := len(refs)-1, 0
+		for nd := iter.Next(); nd != nil; nd = iter.Next() {
+			t.Logf("casenum %v, backward, roff %v", n, roff)
+			if bytes.Compare(nd.Key(), refs[roff][0]) != 0 {
+				t.Fatalf("%v expected %v, got %v", n, refs[roff][0], nd.Key())
+			} else if bytes.Compare(nd.Value(), refs[roff][1]) != 0 {
+				t.Fatalf("%v expected %v, got %v", n, refs[roff][1], nd.Value())
+			}
+			roff--
+			count++
+		}
+		if count != len(refs) {
+			fmsg := "casenum %v, backward, count expected %v, got %v"
+			t.Fatalf(fmsg, n, len(refs), count)
+		}
+		iter.Close()
+	}
 }
 
 func TestDictRsnapshot(t *testing.T) {

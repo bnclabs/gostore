@@ -137,16 +137,19 @@ func (d *Dict) Max() Node {
 // Range implement IndexReader{} interface.
 func (d *Dict) Range(lowkey, highkey []byte, incl string, iter RangeCallb) {
 	var hashks []uint64
-	var nd *dictnode
 
 	hashks = d.sorted()
 
+	// parameter rewrite for lookup
 	if lowkey != nil && highkey != nil && bytes.Compare(lowkey, highkey) == 0 {
 		if incl == "none" {
 			return
 		} else if incl == "low" || incl == "high" {
 			incl = "both"
 		}
+	}
+	if len(hashks) == 0 {
+		return
 	}
 
 	start, cmp, nd := 0, 1, d.dict[hashks[0]]
@@ -181,7 +184,21 @@ func (d *Dict) Range(lowkey, highkey []byte, incl string, iter RangeCallb) {
 // Iterate implement IndexReader{} interface.
 func (d *Dict) Iterate(lkey, hkey []byte, incl string, r bool) IndexIterator {
 	iter := &dictIterator{
-		dict: d.dict, hashks: d.sorted(), activeiter: &d.activeiter,
+		dict: d.dict, hashks: d.sorted(), activeiter: &d.activeiter, reverse: r,
+	}
+
+	// parameter rewrite for lookup
+	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
+		if incl == "none" {
+			iter.index = len(iter.hashks)
+			if r {
+				iter.index = -1
+			}
+			return iter
+
+		} else if incl == "low" || incl == "high" {
+			incl = "both"
+		}
 	}
 
 	startkey, startincl, endincl, cmp := lkey, "low", "high", 1
@@ -200,6 +217,9 @@ func (d *Dict) Iterate(lkey, hkey []byte, incl string, r bool) IndexIterator {
 			if bytes.Compare(nd.key, startkey) >= cmp {
 				break
 			}
+		}
+		if r {
+			iter.index--
 		}
 	}
 

@@ -67,9 +67,6 @@ type IndexIterator interface {
 	// Next node if present, else nil.
 	Next() Node
 
-	// Prev node if present, else nil.
-	Prev() Node
-
 	// Close iterator. Itertors can be concurrently read, but cannot be
 	// used with a concurrent write.
 	Close()
