@@ -3,31 +3,34 @@ s : "[ " operations " ]".
 operations : (weigh 0.5 0.001) operation ", " operations
            | (weigh 0.1 0.001) operation.
 
-operation  : (weigh 0.3 0.01) get
-           | (weigh 0.4 0.009) max
-           | (weigh 0.4 0.004) min
-           | (weigh 0.5 0.001) upsert
-           | (weigh 0.56 0.005) delete
-           | (weigh 0.6 0.05) delmin
-           | (weigh 0.7 0.01) delmax
-           | (weigh 0.8 0.004) rangeop.
+operation : (weigh 0.3 0.01) get
+          | (weigh 0.4 0.009) max
+          | (weigh 0.4 0.004) min
+          | (weigh 0.5 0.001) upsert
+          | (weigh 0.56 0.005) delete
+          | (weigh 0.6 0.05) delmin
+          | (weigh 0.6 0.01) deleteall
+          | (weigh 0.7 0.01) delmax
+          | (weigh 0.8 0.004) rangeop.
 
-get      : "[ " "\"get\", " key ", " value " ]".
-min      : "[ " "\"min\"" " ]".
-max      : "[ " "\"max\"" " ]".
-upsert   : "[ " "\"upsert\", " key ", " value " ]".
-delmin   : "[ " "\"delmin\"" " ]".
-delmax   : "[ " "\"delmax\"" " ]".
-delete   : "[ " "\"delete\", " key " ]".
-rangeop  : "[ " "\"range\"," key "," key "," incl " ]".
+get       : "[ " "\"get\", " key ", " value " ]".
+min       : "[ " "\"min\"" " ]".
+max       : "[ " "\"max\"" " ]".
+upsert    : "[ " "\"upsert\", " key ", " value " ]".
+delmin    : "[ " "\"delmin\"" " ]".
+delmax    : "[ " "\"delmax\"" " ]".
+deleteall : "[ " "\"deleteall\"" " ]".
+delete    : "[ " "\"delete\", " key " ]".
+rangeop   : "[ " "\"range\"," key "," key "," incl " ]".
 
-control  : (weigh 0.1 0.01) validate
-         | (weigh 0.4 0.01) snapshot
-         | (weigh 0.5 0.01) release.
-validate : "[ " "\"validate\", " "\"validate\"" " ]".
-snapshot : "[ " "\"snapshot\", " (range 1 10) " ]".
-release  : "[ " "\"release\", " (range 1 10) " ]".
+control   : (weigh 0.1 0.01) validate
+          | (weigh 0.4 0.01) snapshot
+          | (weigh 0.5 0.01) release.
+validate  : "[ " "\"validate\", " "\"validate\"" " ]".
+snapshot  : "[ " "\"snapshot\", " (range 1 10) " ]".
+release   : "[ " "\"release\", " (range 1 10) " ]".
 
-key    : (range 1000 3000).
-value  : (range 1000 50000).
-incl   : "\"none\"" | "\"low\"" | "\"high\"" | "\"both\"".
+key       : (weigh 0.1) (range 1000 3000)
+          | (weigh 0.5 0.01) "null".
+value     : (range 1000 50000).
+incl      : "\"none\"" | "\"low\"" | "\"high\"" | "\"both\"".

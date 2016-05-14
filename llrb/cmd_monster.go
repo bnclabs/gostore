@@ -108,7 +108,7 @@ func generate(repeat int, prodfile string, opch chan<- [][]interface{}) {
 		val := evaluate("root", scope, nterms["s"])
 		var arr [][]interface{}
 		if err := json.Unmarshal([]byte(val.(string)), &arr); err != nil {
-			log.Fatal(err)
+			log.Fatalf("json.Unmarshal(): %v\n", err)
 		}
 		opch <- arr
 	}

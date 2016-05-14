@@ -30,7 +30,10 @@ func llrb_opGet(
 		panic("llrbrd reader is nil")
 	}
 
-	key := lcmd.keys[int(lcmd.cmd[1].(float64))]
+	var key []byte
+	if lcmd.cmd[1] != nil {
+		key = lcmd.keys[int(lcmd.cmd[1].(float64))]
+	}
 
 	nd := llrbrd.Get(key)
 	cmpllrbdict(llrbrd.(storage.IndexSnapshot).Id(), dictrd.Get(key), nd, true)
@@ -100,8 +103,14 @@ func llrb_opRange(
 
 	dnodes := make([]storage.Node, 0)
 	lnodes := make([]storage.Node, 0)
-	lowkey := lcmd.keys[int(lcmd.cmd[1].(float64))]
-	highkey := lcmd.keys[int(lcmd.cmd[2].(float64))]
+
+	var lowkey, highkey []byte
+	if lcmd.cmd[1] != nil {
+		lowkey = lcmd.keys[int(lcmd.cmd[1].(float64))]
+	}
+	if lcmd.cmd[2] != nil {
+		highkey = lcmd.keys[int(lcmd.cmd[2].(float64))]
+	}
 	incl := lcmd.cmd[3].(string)
 
 	dictrd.Range(lowkey, highkey, incl, func(nd storage.Node) bool {
@@ -184,8 +193,14 @@ func llrb_opUpsert(
 	dict *storage.Dict, llrb *storage.LLRB,
 	lcmd llrbcmd, stats map[string]int) map[string]int {
 
-	key := lcmd.keys[int(lcmd.cmd[1].(float64))]
+	var key []byte
+	if lcmd.cmd[1] != nil {
+		key = lcmd.keys[int(lcmd.cmd[1].(float64))]
+	}
 	value := lcmd.values[int(lcmd.cmd[2].(float64))]
+	if key == nil {
+		return stats
+	}
 
 	dict.Upsert(
 		key, value,
@@ -215,7 +230,10 @@ func llrb_opDelete(
 	dict *storage.Dict, llrb *storage.LLRB,
 	lcmd llrbcmd, stats map[string]int) map[string]int {
 
-	key := lcmd.keys[int(lcmd.cmd[1].(float64))]
+	var key []byte
+	if lcmd.cmd[1] != nil {
+		key = lcmd.keys[int(lcmd.cmd[1].(float64))]
+	}
 
 	var refnd storage.Node
 	dict.Delete(key, func(_ storage.Index, ddel storage.Node) {
