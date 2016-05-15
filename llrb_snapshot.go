@@ -305,7 +305,7 @@ func (snapshot *LLRBSnapshot) validate(root *Llrbnode) {
 
 	// `h_height`.max should not exceed certain limit
 	llrb.validatetree(root, isred(root), 0 /*blacks*/, 1 /*depth*/, h)
-	if h.samples() > 0 {
+	if h.samples() > 8 {
 		nf := float64(snapshot.Count())
 		if float64(h.max()) > (3 * math.Log2(nf)) {
 			fmsg := "validate(): max height %v exceeds log2(snapshot.count) %v"
