@@ -380,6 +380,68 @@ func TestLLRBBasicRange(t *testing.T) {
 	llrb.Destroy()
 }
 
+func TestLLRBRange(t *testing.T) {
+	config := makellrbconfig()
+	config["metadata.mvalue"] = true
+	config["metadata.bornseqno"] = true
+	config["metadata.vbuuid"] = true
+	llrb := NewLLRB("test", config, nil)
+	d := NewDict()
+	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
+	keys, values := make([][]byte, 0), make([][]byte, 0)
+	// insert 10K items
+	count := 10 * 1000
+	for i := 0; i < count; i++ {
+		key, value := make([]byte, 100), make([]byte, 100)
+		key, value = makekeyvalue(key, value)
+		llrb.Upsert(
+			key, value,
+			func(index Index, _ int64, newnd, oldnd Node) {
+				if oldnd != nil {
+					t.Errorf("expected nil")
+				} else if x := index.Count(); x != int64(i+1) {
+					t.Errorf("expected %v, got %v", i, x)
+				}
+				newnd.Setvbno(vbno).SetVbuuid(vbuuid).SetBornseqno(seqno)
+			})
+		d.Upsert(key, value, nil)
+		keys, values = append(keys, key), append(values, value)
+		seqno++
+	}
+	// random ranges
+	repeat := 1000
+	incls := []string{"both", "low", "high", "none"}
+	for i := 0; i < repeat; i++ {
+		incl := incls[rand.Intn(len(incls))]
+		x := rand.Intn(len(keys))
+		y := rand.Intn(len(keys))
+		lowkey, highkey := keys[x], keys[y]
+		llrbks, llrbvs := make([][]byte, 0), make([][]byte, 0)
+		llrb.Range(lowkey, highkey, incl, func(nd Node) bool {
+			llrbks = append(llrbks, nd.Key())
+			llrbvs = append(llrbvs, nd.Value())
+			return true
+		})
+		dks, dvs := make([][]byte, 0), make([][]byte, 0)
+		d.Range(lowkey, highkey, incl, func(nd Node) bool {
+			dks, dvs = append(dks, nd.Key()), append(dvs, nd.Value())
+			return true
+		})
+		if len(llrbks) != len(dks) {
+			t.Errorf("expected %v, got %v", len(llrbks), len(dks))
+		} else {
+			for j, llrbk := range llrbks {
+				if bytes.Compare(llrbk, dks[j]) != 0 {
+					t.Errorf("expected %v, got %v", llrbk, dks[j])
+				}
+			}
+		}
+	}
+
+	llrb.Validate()
+	llrb.Destroy()
+}
+
 func TestLLRBInsert(t *testing.T) {
 	config := makellrbconfig()
 	config["metadata.mvalue"] = true
@@ -678,68 +740,6 @@ func TestLLRBDelete(t *testing.T) {
 		t.Errorf("expected %v, got %v", x, y)
 	}
 
-	llrb.Destroy()
-}
-
-func TestLLRBRange(t *testing.T) {
-	config := makellrbconfig()
-	config["metadata.mvalue"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
-	llrb := NewLLRB("test", config, nil)
-	d := NewDict()
-	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
-	keys, values := make([][]byte, 0), make([][]byte, 0)
-	// insert 10K items
-	count := 10 * 1000
-	for i := 0; i < count; i++ {
-		key, value := make([]byte, 100), make([]byte, 100)
-		key, value = makekeyvalue(key, value)
-		llrb.Upsert(
-			key, value,
-			func(index Index, _ int64, newnd, oldnd Node) {
-				if oldnd != nil {
-					t.Errorf("expected nil")
-				} else if x := index.Count(); x != int64(i+1) {
-					t.Errorf("expected %v, got %v", i, x)
-				}
-				newnd.Setvbno(vbno).SetVbuuid(vbuuid).SetBornseqno(seqno)
-			})
-		d.Upsert(key, value, nil)
-		keys, values = append(keys, key), append(values, value)
-		seqno++
-	}
-	// random ranges
-	repeat := 1000
-	incls := []string{"both", "low", "high", "none"}
-	for i := 0; i < repeat; i++ {
-		incl := incls[rand.Intn(len(incls))]
-		x := rand.Intn(len(keys))
-		y := rand.Intn(len(keys))
-		lowkey, highkey := keys[x], keys[y]
-		llrbks, llrbvs := make([][]byte, 0), make([][]byte, 0)
-		llrb.Range(lowkey, highkey, incl, func(nd Node) bool {
-			llrbks = append(llrbks, nd.Key())
-			llrbvs = append(llrbvs, nd.Value())
-			return true
-		})
-		dks, dvs := make([][]byte, 0), make([][]byte, 0)
-		d.Range(lowkey, highkey, incl, func(nd Node) bool {
-			dks, dvs = append(dks, nd.Key()), append(dvs, nd.Value())
-			return true
-		})
-		if len(llrbks) != len(dks) {
-			t.Errorf("expected %v, got %v", len(llrbks), len(dks))
-		} else {
-			for j, llrbk := range llrbks {
-				if bytes.Compare(llrbk, dks[j]) != 0 {
-					t.Errorf("expected %v, got %v", llrbk, dks[j])
-				}
-			}
-		}
-	}
-
-	llrb.Validate()
 	llrb.Destroy()
 }
 
