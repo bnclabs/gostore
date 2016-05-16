@@ -116,7 +116,7 @@ func TestDict(t *testing.T) {
 	})
 }
 
-func TestDictRange(t *testing.T) {
+func TestDictBasicRange(t *testing.T) {
 	d := NewDict()
 	if d.Count() != 0 {
 		t.Fatalf("expected an empty dict")
@@ -197,7 +197,92 @@ func TestDictRange(t *testing.T) {
 	}
 }
 
-func TestDictIterate(t *testing.T) {
+func TestDictRange(t *testing.T) {
+	d := NewDict()
+	if d.Count() != 0 {
+		t.Fatalf("expected an empty dict")
+	}
+
+	// inserts
+	inserts, n := make([][2][]byte, 0), 400
+	for i := 0; i < n; i += 2 {
+		key, value := fmt.Sprintf("key%v", i), fmt.Sprintf("value%v", i)
+		inserts = append(inserts, [2][]byte{[]byte(key), []byte(value)})
+	}
+	for _, kv := range inserts {
+		d.Upsert(kv[0], kv[1], func(_ Index, _ int64, newnd, oldnd Node) {
+			if oldnd != nil {
+				t.Errorf("expected nil")
+			}
+		})
+	}
+
+	inclusions := []string{"none", "low", "high", "both"}
+	tcases := make([][]interface{}, 0)
+	for i := 0; i < n; i++ {
+		for j := 0; j < n; j++ {
+			for _, incl := range inclusions {
+				lkey, hkey := fmt.Sprintf("key%v", i), fmt.Sprintf("key%v", j)
+				tcase := []interface{}{[]byte(lkey), []byte(hkey), incl}
+				tcases = append(tcases, tcase)
+			}
+		}
+	}
+
+	verify := func(lkey, hkey []byte, incl string, nd Node) {
+		lowcmp, highcmp := 0, 0
+		switch incl {
+		case "none":
+			lowcmp, highcmp = 1, -1
+		case "low":
+			highcmp = -1
+		case "high":
+			lowcmp = 1
+		}
+		if bytes.Compare(lkey, hkey) == 0 {
+			lowcmp, highcmp = 0, 0
+		}
+		if bytes.Compare(nd.Key(), lkey) < lowcmp {
+			fmsg := "failed for %v (%v,%v,%v)"
+			t.Fatalf(fmsg, string(nd.Key()), string(lkey), string(hkey), incl)
+		}
+		if bytes.Compare(nd.Key(), hkey) > highcmp {
+			fmsg := "failed for %v (%v,%v,%v)"
+			t.Fatalf(fmsg, string(nd.Key()), string(lkey), string(hkey), incl)
+		}
+	}
+
+	for _, tcase := range tcases {
+		lowkey, highkey := tcase[0].([]byte), tcase[1].([]byte)
+		incl := tcase[2].(string)
+
+		// with return true
+		count := 0
+		d.Range(lowkey, highkey, incl, func(nd Node) bool {
+			verify(lowkey, highkey, incl, nd)
+			count++
+			return true
+		})
+		if bytes.Compare(lowkey, highkey) == 0 && count > 1 {
+			fmsg := "failed count %v (%v,%v,%v)"
+			t.Fatalf(fmsg, count, string(lowkey), string(highkey), incl)
+		}
+
+		// with return false
+		count = 0
+		d.Range(lowkey, highkey, incl, func(nd Node) bool {
+			verify(lowkey, highkey, incl, nd)
+			count++
+			return false
+		})
+		if count > 1 {
+			fmsg := "failed count %v (%v,%v,%v)"
+			t.Fatalf(fmsg, count, string(lowkey), string(highkey), incl)
+		}
+	}
+}
+
+func TestDictBasicIterate(t *testing.T) {
 	d := NewDict()
 	if d.Count() != 0 {
 		t.Fatalf("expected an empty dict")
@@ -286,6 +371,88 @@ func TestDictIterate(t *testing.T) {
 			roff--
 			count++
 		}
+		if count != len(refs) {
+			fmsg := "casenum %v, backward, count expected %v, got %v"
+			t.Fatalf(fmsg, n, len(refs), count)
+		}
+		iter.Close()
+	}
+}
+
+func TestDictIterate(t *testing.T) {
+	d := NewDict()
+	if d.Count() != 0 {
+		t.Fatalf("expected an empty dict")
+	}
+
+	// inserts
+	inserts, n := make([][2][]byte, 0), 100
+	for i := 0; i < n; i += 2 {
+		key, value := fmt.Sprintf("key%v", i), fmt.Sprintf("value%v", i)
+		inserts = append(inserts, [2][]byte{[]byte(key), []byte(value)})
+	}
+	for _, kv := range inserts {
+		d.Upsert(kv[0], kv[1], func(_ Index, _ int64, newnd, oldnd Node) {
+			if oldnd != nil {
+				t.Errorf("expected nil")
+			}
+		})
+	}
+
+	inclusions := []string{"none", "low", "high", "both"}
+	tcases := make([][]interface{}, 0)
+	for i := 0; i < n; i++ {
+		for j := 0; j < n; j++ {
+			for _, incl := range inclusions {
+				lkey, hkey := fmt.Sprintf("key%v", i), fmt.Sprintf("key%v", j)
+				tcase := []interface{}{[]byte(lkey), []byte(hkey), incl}
+				tcases = append(tcases, tcase)
+			}
+		}
+	}
+
+	for _, tcase := range tcases {
+		lowkey, highkey := tcase[0].([]byte), tcase[1].([]byte)
+		incl := tcase[2].(string)
+
+		refs := make([][2][]byte, 0)
+		d.Range(lowkey, highkey, incl, func(nd Node) bool {
+			refs = append(refs, [2][]byte{nd.Key(), nd.Value()})
+			return true
+		})
+
+		// forward iteration
+		iter := d.Iterate(lowkey, highkey, incl, false)
+		roff := 0
+		for nd := iter.Next(); nd != nil; nd = iter.Next() {
+			t.Logf("casenum %v, forward, roff %v", n, roff)
+			if bytes.Compare(nd.Key(), refs[roff][0]) != 0 {
+				t.Fatalf("%v expected %v, got %v", n, refs[roff][0], nd.Key())
+			} else if bytes.Compare(nd.Value(), refs[roff][1]) != 0 {
+				t.Fatalf("%v expected %v, got %v", n, refs[roff][1], nd.Value())
+			}
+			roff++
+		}
+		if roff != len(refs) {
+			fmsg := "casenum %v, forward, count expected %v, got %v"
+			t.Fatalf(fmsg, n, len(refs), roff)
+		}
+		iter.Close()
+
+		// backward iteration
+		iter = d.Iterate(lowkey, highkey, incl, true)
+		roff, count := len(refs)-1, 0
+		for nd := iter.Next(); nd != nil; nd = iter.Next() {
+			t.Logf("casenum %v, backward, roff %v", n, roff)
+			if bytes.Compare(nd.Key(), refs[roff][0]) != 0 {
+				t.Fatalf("%v expected %v, got %v", n, refs[roff][0], nd.Key())
+			} else if bytes.Compare(nd.Value(), refs[roff][1]) != 0 {
+				t.Fatalf("%v expected %v, got %v", n, refs[roff][1], nd.Value())
+			}
+			roff--
+			count++
+		}
+
 		if count != len(refs) {
 			fmsg := "casenum %v, backward, count expected %v, got %v"
 			t.Fatalf(fmsg, n, len(refs), count)

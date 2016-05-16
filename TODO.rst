@@ -1,5 +1,9 @@
 LLRB:
 
+* test case for llrb Range and Iterate().
+  - use a large sample set.
+  - range from every key as low key to every key as highkey.
+  - repeat this in reverse order.
 * implemention continuation based range.
 * llrb/: sub-command to benchmark range and continuation.
 * if there are no outstanding snapshots, may be we can do non-mvcc
