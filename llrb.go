@@ -68,14 +68,15 @@ type LLRB struct { // tree container
 
 	// can be unaligned fields
 
-	name      string
-	nodearena *memarena
-	valarena  *memarena
-	root      *Llrbnode
-	borntime  time.Time
-	dead      bool
-	clock     *vectorclock // current clock
-	rw        sync.RWMutex
+	name       string
+	nodearena  *memarena
+	valarena   *memarena
+	root       *Llrbnode
+	borntime   time.Time
+	dead       bool
+	clock      *vectorclock // current clock
+	rw         sync.RWMutex
+	activeiter int64
 
 	// config
 	fmask     metadataMask // only 12 bits
@@ -184,6 +185,9 @@ func (llrb *LLRB) RSnapshot(snapch chan IndexSnapshot) error {
 
 // Destroy implement Index{} interface.
 func (llrb *LLRB) Destroy() error {
+	if atomic.LoadInt64(&llrb.activeiter) > 0 {
+		panic("cannot distroy LLRB when iterators are active")
+	}
 	if llrb.dead == false {
 		if llrb.mvcc.enabled {
 			llrb.mvcc.writer.destroy()
@@ -347,7 +351,7 @@ func (llrb *LLRB) max() Node {
 }
 
 // Range from lkey to hkey, incl can be "both", "low", "high", "none"
-func (llrb *LLRB) Range(lkey, hkey []byte, incl string, iter RangeCallb) {
+func (llrb *LLRB) Range(lkey, hkey []byte, incl string, reverse bool, iter RangeCallb) {
 	if llrb.mvcc.enabled {
 		panic("Range(): mvcc enabled, use snapshots for reading")
 	}
@@ -379,7 +383,24 @@ func (llrb *LLRB) Range(lkey, hkey []byte, incl string, iter RangeCallb) {
 
 // Iterate implement IndexReader{} interface.
 func (llrb *LLRB) Iterate(lkey, hkey []byte, incl string, r bool) IndexIterator {
-	panic("yet to be implemented")
+	var startkey []byte
+
+	iter := &llrbIterator{llrb: llrb, activeiter: &llrb.activeiter, reverse: r}
+
+	startkey, iter.endkey, iter.cmp = lkey, hkey, 1
+	if iter.reverse {
+		startkey, iter.endkey, iter.cmp = hkey, lkey, 0
+	}
+
+	if equal := iter.buildstack(startkey); equal {
+		if iter.reverse && (incl == "none" || incl == "low") {
+			iter.Next()
+		} else if incl == "none" || incl == "high" {
+			iter.Next()
+		}
+	}
+	atomic.AddInt64(&llrb.activeiter, 1)
+	return iter
 }
 
 //---- IndexWriter{} interface

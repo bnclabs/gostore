@@ -113,11 +113,11 @@ func llrb_opRange(
 	}
 	incl := lcmd.cmd[3].(string)
 
-	dictrd.Range(lowkey, highkey, incl, func(nd storage.Node) bool {
+	dictrd.Range(lowkey, highkey, incl, false, func(nd storage.Node) bool {
 		dnodes = append(dnodes, nd)
 		return true
 	})
-	llrbrd.Range(lowkey, highkey, incl, func(nd storage.Node) bool {
+	llrbrd.Range(lowkey, highkey, incl, false, func(nd storage.Node) bool {
 		lnodes = append(lnodes, nd)
 		return true
 	})
@@ -312,12 +312,12 @@ func llrb_validateEqual(dict, llrb storage.IndexSnapshot, dolog bool) bool {
 	}
 
 	refkeys, refvals := make([][]byte, 0), make([][]byte, 0)
-	dict.Range(nil, nil, "both", func(nd storage.Node) bool {
+	dict.Range(nil, nil, "both", false, func(nd storage.Node) bool {
 		refkeys, refvals = append(refkeys, nd.Key()), append(refvals, nd.Value())
 		return true
 	})
 	keys, vals := make([][]byte, 0), make([][]byte, 0)
-	llrb.Range(nil, nil, "both", func(nd storage.Node) bool {
+	llrb.Range(nil, nil, "both", false, func(nd storage.Node) bool {
 		keys, vals = append(keys, nd.Key()), append(vals, nd.Value())
 		return true
 	})

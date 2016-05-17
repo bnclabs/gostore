@@ -174,7 +174,7 @@ func doLoad(args []string) {
 				log.Fatal(err)
 			}
 			snapshot := <-ch
-			snapshot.Range(nil, nil, "both", func(nd storage.Node) bool {
+			snapshot.Range(nil, nil, "both", false, func(nd storage.Node) bool {
 				count++
 				return true
 			})
@@ -185,7 +185,7 @@ func doLoad(args []string) {
 				fmt.Printf("error acquiring snapshot for mvcc-llrb\n")
 				log.Fatal(err)
 			}
-			llrb.Range(nil, nil, "both", func(nd storage.Node) bool {
+			llrb.Range(nil, nil, "both", false, func(nd storage.Node) bool {
 				count++
 				return true
 			})

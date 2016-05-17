@@ -390,7 +390,7 @@ func TestLLRBMvccBasicRange(t *testing.T) {
 
 		// with return true
 		outs := make([][2][]byte, 0)
-		snapshot.Range(lowkey, highkey, incl, func(nd Node) bool {
+		snapshot.Range(lowkey, highkey, incl, false, func(nd Node) bool {
 			outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
 			return true
 		})
@@ -400,7 +400,7 @@ func TestLLRBMvccBasicRange(t *testing.T) {
 		}
 		// with return false
 		outs = make([][2][]byte, 0)
-		snapshot.Range(lowkey, highkey, incl, func(nd Node) bool {
+		snapshot.Range(lowkey, highkey, incl, false, func(nd Node) bool {
 			outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
 			return false
 		})
@@ -834,13 +834,13 @@ func TestLLRBMvccRange(t *testing.T) {
 		y := rand.Intn(len(keys))
 		lowkey, highkey := keys[x], keys[y]
 		llrbks, llrbvs := make([][]byte, 0), make([][]byte, 0)
-		snapshot.Range(lowkey, highkey, incl, func(nd Node) bool {
+		snapshot.Range(lowkey, highkey, incl, false, func(nd Node) bool {
 			llrbks = append(llrbks, nd.Key())
 			llrbvs = append(llrbvs, nd.Value())
 			return true
 		})
 		dks, dvs := make([][]byte, 0), make([][]byte, 0)
-		d.Range(lowkey, highkey, incl, func(nd Node) bool {
+		d.Range(lowkey, highkey, incl, false, func(nd Node) bool {
 			dks, dvs = append(dks, nd.Key()), append(dvs, nd.Value())
 			return true
 		})

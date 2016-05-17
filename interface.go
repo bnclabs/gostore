@@ -153,7 +153,7 @@ type IndexReader interface {
 	//	"low"  - include lowkey but ignore highkey
 	//	"high" - ignore lowkey but include highkey
 	//	"both" - include both lowkey and highkey
-	Range(lowkey, highkey []byte, incl string, iter RangeCallb)
+	Range(lowkey, highkey []byte, incl string, reverse bool, iter RangeCallb)
 
 	// Iterate over entries between lowkey and highkey
 	// incl,

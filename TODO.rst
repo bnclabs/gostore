@@ -1,9 +1,16 @@
 LLRB:
 
+* Implement reverse Range for dict.
+* Either embed Dict inside DictSnapshot or write test case for DictSnapshot.
+* rename llrb_safe.go:range*() APIs to HtLt, HeLe, HeLt, HtLe.
+* Implement reverse range for llrb.
+* test case for llrb reverse range.
+* llrb/llrb verify verifymvcc to use reverse range.
 * test case for llrb Range and Iterate().
   - use a large sample set.
   - range from every key as low key to every key as highkey.
   - repeat this in reverse order.
+  - llrb/llrb verify verifymvcc to use reverse iteration.
 * implemention continuation based range.
 * llrb/: sub-command to benchmark range and continuation.
 * if there are no outstanding snapshots, may be we can do non-mvcc

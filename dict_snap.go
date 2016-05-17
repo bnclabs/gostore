@@ -105,13 +105,18 @@ func (d *DictSnapshot) Max() Node {
 }
 
 // Range implement IndexReader{} interface.
-func (d *DictSnapshot) Range(lowkey, highkey []byte, incl string, iter RangeCallb) {
-	var hashks []uint64
+func (d *DictSnapshot) Range(lk, hk []byte, incl string, reverse bool, iter RangeCallb) {
+	if reverse {
+		d.rangebackward(lk, hk, incl, iter)
+	}
+	d.rangeforward(lk, hk, incl, iter)
+}
 
-	hashks = d.hashks
+func (d *DictSnapshot) rangeforward(lk, hk []byte, incl string, iter RangeCallb) {
+	hashks := d.hashks
 
 	// parameter rewrite for lookup
-	if lowkey != nil && highkey != nil && bytes.Compare(lowkey, highkey) == 0 {
+	if lk != nil && hk != nil && bytes.Compare(lk, hk) == 0 {
 		if incl == "none" {
 			return
 		} else if incl == "low" || incl == "high" {
@@ -123,13 +128,13 @@ func (d *DictSnapshot) Range(lowkey, highkey []byte, incl string, iter RangeCall
 	}
 
 	start, cmp, nd := 0, 1, d.dict[hashks[0]]
-	if lowkey != nil {
+	if lk != nil {
 		if incl == "low" || incl == "both" {
 			cmp = 0
 		}
 		for start = 0; start < len(hashks); start++ {
 			nd = d.dict[hashks[start]]
-			if bytes.Compare(nd.key, lowkey) >= cmp {
+			if bytes.Compare(nd.key, lk) >= cmp {
 				break
 			}
 		}
@@ -141,7 +146,51 @@ func (d *DictSnapshot) Range(lowkey, highkey []byte, incl string, iter RangeCall
 	}
 	for ; start < len(hashks); start++ {
 		nd = d.dict[hashks[start]]
-		if highkey == nil || (bytes.Compare(nd.key, highkey) < cmp) {
+		if hk == nil || (bytes.Compare(nd.key, hk) < cmp) {
+			if iter(nd) == false {
+				break
+			}
+			continue
+		}
+		break
+	}
+}
+
+func (d *DictSnapshot) rangebackward(lk, hk []byte, incl string, iter RangeCallb) {
+	hashks := d.sorted()
+
+	// parameter rewrite for lookup
+	if lk != nil && hk != nil && bytes.Compare(lk, hk) == 0 {
+		if incl == "none" {
+			return
+		} else if incl == "low" || incl == "high" {
+			incl = "both"
+		}
+	}
+	if len(hashks) == 0 {
+		return
+	}
+
+	start, cmp, nd := len(hashks)-1, -1, d.dict[hashks[0]]
+	if hk != nil {
+		if incl == "high" || incl == "both" {
+			cmp = 0
+		}
+		for start = len(hashks) - 1; start >= 0; start-- {
+			nd = d.dict[hashks[start]]
+			if bytes.Compare(nd.key, hk) <= cmp {
+				break
+			}
+		}
+	}
+
+	cmp = 0
+	if incl == "low" || incl == "both" {
+		cmp = -1
+	}
+	for ; start >= 0; start-- {
+		nd = d.dict[hashks[start]]
+		if lk == nil || (bytes.Compare(nd.key, lk) > cmp) {
 			if iter(nd) == false {
 				break
 			}
