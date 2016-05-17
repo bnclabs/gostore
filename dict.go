@@ -136,6 +136,7 @@ func (d *Dict) Max() Node {
 
 // Range implement IndexReader{} interface.
 func (d *Dict) Range(lk, hk []byte, incl string, reverse bool, iter RangeCallb) {
+	d.sorted()
 	if reverse {
 		d.rangebackward(lk, hk, incl, iter)
 		return
@@ -144,8 +145,7 @@ func (d *Dict) Range(lk, hk []byte, incl string, reverse bool, iter RangeCallb) 
 }
 
 func (d *Dict) rangeforward(lk, hk []byte, incl string, iter RangeCallb) {
-	hashks := d.sorted()
-
+	hashks := d.hashks
 	// parameter rewrite for lookup
 	if lk != nil && hk != nil && bytes.Compare(lk, hk) == 0 {
 		if incl == "none" {
@@ -188,7 +188,7 @@ func (d *Dict) rangeforward(lk, hk []byte, incl string, iter RangeCallb) {
 }
 
 func (d *Dict) rangebackward(lk, hk []byte, incl string, iter RangeCallb) {
-	hashks := d.sorted()
+	hashks := d.hashks
 
 	// parameter rewrite for lookup
 	if lk != nil && hk != nil && bytes.Compare(lk, hk) == 0 {
@@ -233,6 +233,11 @@ func (d *Dict) rangebackward(lk, hk []byte, incl string, iter RangeCallb) {
 
 // Iterate implement IndexReader{} interface.
 func (d *Dict) Iterate(lkey, hkey []byte, incl string, r bool) IndexIterator {
+	d.sorted()
+	return d.iterate(lkey, hkey, incl, r)
+}
+
+func (d *Dict) iterate(lkey, hkey []byte, incl string, r bool) IndexIterator {
 	iter := &dictIterator{
 		dict: d.dict, hashks: d.sorted(), activeiter: &d.activeiter, reverse: r,
 	}
