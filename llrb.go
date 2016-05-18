@@ -368,13 +368,13 @@ func (llrb *LLRB) Range(lkey, hkey []byte, incl string, reverse bool, iter Range
 
 	switch incl {
 	case "both":
-		llrb.rangeFromFind(llrb.root, lkey, hkey, iter)
+		llrb.rangehele(llrb.root, lkey, hkey, iter)
 	case "high":
-		llrb.rangeAfterFind(llrb.root, lkey, hkey, iter)
+		llrb.rangehtle(llrb.root, lkey, hkey, iter)
 	case "low":
-		llrb.rangeFromTill(llrb.root, lkey, hkey, iter)
+		llrb.rangehelt(llrb.root, lkey, hkey, iter)
 	default:
-		llrb.rangeAfterTill(llrb.root, lkey, hkey, iter)
+		llrb.rangehtlt(llrb.root, lkey, hkey, iter)
 	}
 
 	llrb.rw.RUnlock()

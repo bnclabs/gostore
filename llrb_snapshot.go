@@ -267,13 +267,13 @@ func (s *LLRBSnapshot) Range(lkey, hkey []byte, incl string, reverse bool, iter 
 	nd := s.root
 	switch incl {
 	case "both":
-		s.llrb.rangeFromFind(nd, lkey, hkey, iter)
+		s.llrb.rangehele(nd, lkey, hkey, iter)
 	case "high":
-		s.llrb.rangeAfterFind(nd, lkey, hkey, iter)
+		s.llrb.rangehtle(nd, lkey, hkey, iter)
 	case "low":
-		s.llrb.rangeFromTill(nd, lkey, hkey, iter)
+		s.llrb.rangehelt(nd, lkey, hkey, iter)
 	default:
-		s.llrb.rangeAfterTill(nd, lkey, hkey, iter)
+		s.llrb.rangehtlt(nd, lkey, hkey, iter)
 	}
 
 	if atomic.LoadInt64(&s.llrb.mvcc.ismut) == 1 {

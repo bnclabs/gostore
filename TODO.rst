@@ -1,6 +1,5 @@
 LLRB:
 
-* Rename llrb_safe.go:range*() APIs to HtLt, HeLe, HeLt, HtLe.
 * Implement reverse range for llrb.
 * test case for llrb reverse range.
 * llrb/llrb verify verifymvcc to use reverse range.

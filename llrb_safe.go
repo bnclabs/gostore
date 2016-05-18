@@ -8,91 +8,91 @@ import "math"
 import "bytes"
 
 // low <= (keys) <= high
-func (llrb *LLRB) rangeFromFind(
+func (llrb *LLRB) rangehele(
 	nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
 
 	if nd == nil {
 		return true
 	}
 	if hk != nil && nd.gtkey(llrb.mdsize, hk) {
-		return llrb.rangeFromFind(nd.left, lk, hk, iter)
+		return llrb.rangehele(nd.left, lk, hk, iter)
 	}
 	if lk != nil && nd.ltkey(llrb.mdsize, lk) {
-		return llrb.rangeFromFind(nd.right, lk, hk, iter)
+		return llrb.rangehele(nd.right, lk, hk, iter)
 	}
-	if !llrb.rangeFromFind(nd.left, lk, hk, iter) {
+	if !llrb.rangehele(nd.left, lk, hk, iter) {
 		return false
 	}
 	if iter != nil && !iter(nd) {
 		return false
 	}
-	return llrb.rangeFromFind(nd.right, lk, hk, iter)
+	return llrb.rangehele(nd.right, lk, hk, iter)
 }
 
 // low <= (keys) < hk
-func (llrb *LLRB) rangeFromTill(
+func (llrb *LLRB) rangehelt(
 	nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
 
 	if nd == nil {
 		return true
 	}
 	if hk != nil && !nd.ltkey(llrb.mdsize, hk) {
-		return llrb.rangeFromTill(nd.left, lk, hk, iter)
+		return llrb.rangehelt(nd.left, lk, hk, iter)
 	}
 	if lk != nil && nd.ltkey(llrb.mdsize, lk) {
-		return llrb.rangeFromTill(nd.right, lk, hk, iter)
+		return llrb.rangehelt(nd.right, lk, hk, iter)
 	}
-	if !llrb.rangeFromTill(nd.left, lk, hk, iter) {
+	if !llrb.rangehelt(nd.left, lk, hk, iter) {
 		return false
 	}
 	if iter != nil && !iter(nd) {
 		return false
 	}
-	return llrb.rangeFromTill(nd.right, lk, hk, iter)
+	return llrb.rangehelt(nd.right, lk, hk, iter)
 }
 
 // low < (keys) <= hk
-func (llrb *LLRB) rangeAfterFind(
+func (llrb *LLRB) rangehtle(
 	nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
 
 	if nd == nil {
 		return true
 	}
 	if hk != nil && nd.gtkey(llrb.mdsize, hk) {
-		return llrb.rangeAfterFind(nd.left, lk, hk, iter)
+		return llrb.rangehtle(nd.left, lk, hk, iter)
 	}
 	if lk != nil && !nd.gtkey(llrb.mdsize, lk) {
-		return llrb.rangeAfterFind(nd.right, lk, hk, iter)
+		return llrb.rangehtle(nd.right, lk, hk, iter)
 	}
-	if !llrb.rangeAfterFind(nd.left, lk, hk, iter) {
+	if !llrb.rangehtle(nd.left, lk, hk, iter) {
 		return false
 	}
 	if iter != nil && !iter(nd) {
 		return false
 	}
-	return llrb.rangeAfterFind(nd.right, lk, hk, iter)
+	return llrb.rangehtle(nd.right, lk, hk, iter)
 }
 
 // low < (keys) < hk
-func (llrb *LLRB) rangeAfterTill(
+func (llrb *LLRB) rangehtlt(
 	nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
 
 	if nd == nil {
 		return true
 	}
 	if hk != nil && !nd.ltkey(llrb.mdsize, hk) {
-		return llrb.rangeAfterTill(nd.left, lk, hk, iter)
+		return llrb.rangehtlt(nd.left, lk, hk, iter)
 	}
 	if lk != nil && !nd.gtkey(llrb.mdsize, lk) {
-		return llrb.rangeAfterTill(nd.right, lk, hk, iter)
+		return llrb.rangehtlt(nd.right, lk, hk, iter)
 	}
-	if !llrb.rangeAfterTill(nd.left, lk, hk, iter) {
+	if !llrb.rangehtlt(nd.left, lk, hk, iter) {
 		return false
 	}
 	if iter != nil && !iter(nd) {
 		return false
 	}
-	return llrb.rangeAfterTill(nd.right, lk, hk, iter)
+	return llrb.rangehtlt(nd.right, lk, hk, iter)
 }
 
 func (llrb *LLRB) validate(root *Llrbnode) {
