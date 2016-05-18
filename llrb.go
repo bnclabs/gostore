@@ -366,15 +366,29 @@ func (llrb *LLRB) Range(lkey, hkey []byte, incl string, reverse bool, iter Range
 
 	llrb.rw.RLock()
 
-	switch incl {
-	case "both":
-		llrb.rangehele(llrb.root, lkey, hkey, iter)
-	case "high":
-		llrb.rangehtle(llrb.root, lkey, hkey, iter)
-	case "low":
-		llrb.rangehelt(llrb.root, lkey, hkey, iter)
-	default:
-		llrb.rangehtlt(llrb.root, lkey, hkey, iter)
+	if reverse {
+		switch incl {
+		case "both":
+			llrb.rvrslehe(llrb.root, lkey, hkey, iter)
+		case "high":
+			llrb.rvrsleht(llrb.root, lkey, hkey, iter)
+		case "low":
+			llrb.rangelthe(llrb.root, lkey, hkey, iter)
+		default:
+			llrb.rangeltht(llrb.root, lkey, hkey, iter)
+		}
+
+	} else {
+		switch incl {
+		case "both":
+			llrb.rangehele(llrb.root, lkey, hkey, iter)
+		case "high":
+			llrb.rangehtle(llrb.root, lkey, hkey, iter)
+		case "low":
+			llrb.rangehelt(llrb.root, lkey, hkey, iter)
+		default:
+			llrb.rangehtlt(llrb.root, lkey, hkey, iter)
+		}
 	}
 
 	llrb.rw.RUnlock()

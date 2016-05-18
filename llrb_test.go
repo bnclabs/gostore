@@ -349,28 +349,61 @@ func TestLLRBBasicRange(t *testing.T) {
 		if tcase[1] != nil {
 			highkey = tcase[1].([]byte)
 		}
+		refs := tcase[3].([][2][]byte)
 
-		// with return true
+		// forward range, return true
 		outs := make([][2][]byte, 0)
 		llrb.Range(lowkey, highkey, incl, false, func(nd Node) bool {
 			outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
 			return true
 		})
-		if reflect.DeepEqual(outs, tcase[3]) == false {
+		if reflect.DeepEqual(outs, refs) == false {
 			fmsg := "failed for %v (%v,%v)"
 			t.Errorf(fmsg, casenum, string(lowkey), string(highkey))
 		}
-		// with return false
+		// forward range, return false
 		outs = make([][2][]byte, 0)
 		llrb.Range(lowkey, highkey, incl, false, func(nd Node) bool {
 			outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
 			return false
 		})
-		ref := tcase[3].([][2][]byte)
-		if len(ref) > 0 {
-			ref = ref[:1]
+		if len(refs) > 0 {
+			refs = refs[:1]
 		}
-		if reflect.DeepEqual(outs, ref) == false {
+		if reflect.DeepEqual(outs, refs) == false {
+			fmsg := "failed for %v (%v,%v)"
+			t.Errorf(fmsg, casenum, string(lowkey), string(highkey))
+		}
+
+		reverse := func(keys [][2][]byte) [][2][]byte {
+			revkeys := make([][2][]byte, 0)
+			for i := len(keys) - 1; i >= 0; i-- {
+				revkeys = append(revkeys, keys[i])
+			}
+			return revkeys
+		}
+
+		// backward range, return true
+		refs = reverse(tcase[3].([][2][]byte))
+		outs = make([][2][]byte, 0)
+		llrb.Range(lowkey, highkey, incl, true, func(nd Node) bool {
+			outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
+			return true
+		})
+		if reflect.DeepEqual(outs, refs) == false {
+			fmsg := "failed for %v (%v,%v)"
+			t.Errorf(fmsg, casenum, string(lowkey), string(highkey))
+		}
+		// backward range, return false
+		outs = make([][2][]byte, 0)
+		llrb.Range(lowkey, highkey, incl, true, func(nd Node) bool {
+			outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
+			return false
+		})
+		if len(refs) > 0 {
+			refs = refs[:1]
+		}
+		if reflect.DeepEqual(outs, refs) == false {
 			fmsg := "failed for %v (%v,%v)"
 			t.Errorf(fmsg, casenum, string(lowkey), string(highkey))
 		}
@@ -416,6 +449,8 @@ func TestLLRBRange(t *testing.T) {
 		x := rand.Intn(len(keys))
 		y := rand.Intn(len(keys))
 		lowkey, highkey := keys[x], keys[y]
+
+		// forward range
 		llrbks, llrbvs := make([][]byte, 0), make([][]byte, 0)
 		llrb.Range(lowkey, highkey, incl, false, func(nd Node) bool {
 			llrbks = append(llrbks, nd.Key())
@@ -427,13 +462,40 @@ func TestLLRBRange(t *testing.T) {
 			dks, dvs = append(dks, nd.Key()), append(dvs, nd.Value())
 			return true
 		})
-		if len(llrbks) != len(dks) {
-			t.Errorf("expected %v, got %v", len(llrbks), len(dks))
-		} else {
-			for j, llrbk := range llrbks {
-				if bytes.Compare(llrbk, dks[j]) != 0 {
-					t.Errorf("expected %v, got %v", llrbk, dks[j])
-				}
+
+		if len(dks) != len(llrbks) {
+			t.Fatalf("expected %v, got %v", len(dks), len(llrbks))
+		}
+		for i, dk := range dks {
+			if bytes.Compare(dk, llrbks[i]) != 0 {
+				t.Fatalf("expected %v, got %v", string(dk), string(llrbks[i]))
+			}
+			if bytes.Compare(dvs[i], llrbvs[i]) != 0 {
+				t.Fatalf("expected %v, got %v", string(dvs[i]), string(llrbvs[i]))
+			}
+		}
+
+		// backward range
+		llrbks, llrbvs = make([][]byte, 0), make([][]byte, 0)
+		llrb.Range(lowkey, highkey, incl, true, func(nd Node) bool {
+			llrbks = append(llrbks, nd.Key())
+			llrbvs = append(llrbvs, nd.Value())
+			return true
+		})
+		dks, dvs = make([][]byte, 0), make([][]byte, 0)
+		d.Range(lowkey, highkey, incl, true, func(nd Node) bool {
+			dks, dvs = append(dks, nd.Key()), append(dvs, nd.Value())
+			return true
+		})
+		if len(dks) != len(llrbks) {
+			t.Fatalf("expected %v, got %v", len(dks), len(llrbks))
+		}
+		for i, dk := range dks {
+			if bytes.Compare(dk, llrbks[i]) != 0 {
+				t.Fatalf("expected %v, got %v", string(dk), string(llrbks[i]))
+			}
+			if bytes.Compare(dvs[i], llrbvs[i]) != 0 {
+				t.Fatalf("expected %v, got %v", string(dvs[i]), string(llrbvs[i]))
 			}
 		}
 	}
