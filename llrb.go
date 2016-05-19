@@ -23,7 +23,7 @@ const MinValmem = 0
 // MaxValmem maximum value size.
 const MaxValmem = 10 * 1024 * 1024
 
-var memratio = 0.5 // keymemory / allocated for each arena
+var memratio = 0.41 // keymemory / allocated for each arena
 
 // LLRB to manage in-memory sorted index using left-leaning-red-black trees.
 type LLRB struct { // tree container
@@ -373,9 +373,9 @@ func (llrb *LLRB) Range(lkey, hkey []byte, incl string, reverse bool, iter Range
 		case "high":
 			llrb.rvrsleht(llrb.root, lkey, hkey, iter)
 		case "low":
-			llrb.rangelthe(llrb.root, lkey, hkey, iter)
+			llrb.rvrslthe(llrb.root, lkey, hkey, iter)
 		default:
-			llrb.rangeltht(llrb.root, lkey, hkey, iter)
+			llrb.rvrsltht(llrb.root, lkey, hkey, iter)
 		}
 
 	} else {

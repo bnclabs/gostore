@@ -21,7 +21,7 @@ delmin    : "[ " "\"delmin\"" " ]".
 delmax    : "[ " "\"delmax\"" " ]".
 deleteall : "[ " "\"deleteall\"" " ]".
 delete    : "[ " "\"delete\", " key " ]".
-rangeop   : "[ " "\"range\"," key "," key "," incl " ]".
+rangeop   : "[ " "\"range\"," key "," key "," incl "," rangervrs " ]".
 
 control   : (weigh 0.1 0.01) validate
           | (weigh 0.4 0.01) snapshot
@@ -33,4 +33,9 @@ release   : "[ " "\"release\", " (range 1 10) " ]".
 key       : (weigh 0.1) (range 1000 3000)
           | (weigh 0.5 0.01) "null".
 value     : (range 1000 50000).
-incl      : "\"none\"" | "\"low\"" | "\"high\"" | "\"both\"".
+incl      : (weigh 0.1) "\"none\""
+          | (weigh 0.2) "\"low\""
+          | (weigh 0.3) "\"high\""
+          | (weigh 0.4) "\"both\"".
+rangervrs : (weigh 0.1) "true"
+          | (weigh 0.2) "false".

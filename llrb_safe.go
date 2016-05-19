@@ -128,43 +128,43 @@ func (llrb *LLRB) rvrsleht(nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
 }
 
 // high > (keys) >= low
-func (llrb *LLRB) rangelthe(nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
+func (llrb *LLRB) rvrslthe(nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
 	if nd == nil {
 		return true
 	}
 	if hk != nil && nd.gekey(llrb.mdsize, hk) {
-		return llrb.rangelthe(nd.left, lk, hk, iter)
+		return llrb.rvrslthe(nd.left, lk, hk, iter)
 	}
 	if lk != nil && !nd.gekey(llrb.mdsize, lk) {
-		return llrb.rangelthe(nd.right, lk, hk, iter)
+		return llrb.rvrslthe(nd.right, lk, hk, iter)
 	}
-	if !llrb.rangelthe(nd.right, lk, hk, iter) {
+	if !llrb.rvrslthe(nd.right, lk, hk, iter) {
 		return false
 	}
 	if iter != nil && !iter(nd) {
 		return false
 	}
-	return llrb.rangelthe(nd.left, lk, hk, iter)
+	return llrb.rvrslthe(nd.left, lk, hk, iter)
 }
 
 // high > (keys) > low
-func (llrb *LLRB) rangeltht(nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
+func (llrb *LLRB) rvrsltht(nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
 	if nd == nil {
 		return true
 	}
 	if hk != nil && !nd.ltkey(llrb.mdsize, hk) {
-		return llrb.rangeltht(nd.left, lk, hk, iter)
+		return llrb.rvrsltht(nd.left, lk, hk, iter)
 	}
 	if lk != nil && !nd.gtkey(llrb.mdsize, lk) {
-		return llrb.rangeltht(nd.right, lk, hk, iter)
+		return llrb.rvrsltht(nd.right, lk, hk, iter)
 	}
-	if !llrb.rangeltht(nd.right, lk, hk, iter) {
+	if !llrb.rvrsltht(nd.right, lk, hk, iter) {
 		return false
 	}
 	if iter != nil && !iter(nd) {
 		return false
 	}
-	return llrb.rangeltht(nd.left, lk, hk, iter)
+	return llrb.rvrsltht(nd.left, lk, hk, iter)
 }
 
 func (llrb *LLRB) validate(root *Llrbnode) {

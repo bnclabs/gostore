@@ -101,9 +101,6 @@ func llrb_opRange(
 		panic("llrbrd reader is nil")
 	}
 
-	dnodes := make([]storage.Node, 0)
-	lnodes := make([]storage.Node, 0)
-
 	var lowkey, highkey []byte
 	if lcmd.cmd[1] != nil {
 		lowkey = lcmd.keys[int(lcmd.cmd[1].(float64))]
@@ -112,12 +109,15 @@ func llrb_opRange(
 		highkey = lcmd.keys[int(lcmd.cmd[2].(float64))]
 	}
 	incl := lcmd.cmd[3].(string)
+	reverse := lcmd.cmd[4].(bool)
 
-	dictrd.Range(lowkey, highkey, incl, false, func(nd storage.Node) bool {
+	dnodes := make([]storage.Node, 0)
+	dictrd.Range(lowkey, highkey, incl, reverse, func(nd storage.Node) bool {
 		dnodes = append(dnodes, nd)
 		return true
 	})
-	llrbrd.Range(lowkey, highkey, incl, false, func(nd storage.Node) bool {
+	lnodes := make([]storage.Node, 0)
+	llrbrd.Range(lowkey, highkey, incl, reverse, func(nd storage.Node) bool {
 		lnodes = append(lnodes, nd)
 		return true
 	})

@@ -264,16 +264,29 @@ func (s *LLRBSnapshot) Range(lkey, hkey []byte, incl string, reverse bool, iter 
 		}
 	}
 
-	nd := s.root
-	switch incl {
-	case "both":
-		s.llrb.rangehele(nd, lkey, hkey, iter)
-	case "high":
-		s.llrb.rangehtle(nd, lkey, hkey, iter)
-	case "low":
-		s.llrb.rangehelt(nd, lkey, hkey, iter)
-	default:
-		s.llrb.rangehtlt(nd, lkey, hkey, iter)
+	if reverse {
+		switch incl {
+		case "both":
+			s.llrb.rvrslehe(s.root, lkey, hkey, iter)
+		case "high":
+			s.llrb.rvrsleht(s.root, lkey, hkey, iter)
+		case "low":
+			s.llrb.rvrslthe(s.root, lkey, hkey, iter)
+		default:
+			s.llrb.rvrsltht(s.root, lkey, hkey, iter)
+		}
+
+	} else {
+		switch incl {
+		case "both":
+			s.llrb.rangehele(s.root, lkey, hkey, iter)
+		case "high":
+			s.llrb.rangehtle(s.root, lkey, hkey, iter)
+		case "low":
+			s.llrb.rangehelt(s.root, lkey, hkey, iter)
+		default:
+			s.llrb.rangehtlt(s.root, lkey, hkey, iter)
+		}
 	}
 
 	if atomic.LoadInt64(&s.llrb.mvcc.ismut) == 1 {

@@ -1,18 +1,12 @@
 LLRB:
 
-* llrb/llrb verify verifymvcc to use reverse range.
-* test case for llrb Range and Iterate().
-  - use a large sample set.
-  - range from every key as low key to every key as highkey.
-  - repeat this in reverse order.
-  - llrb/llrb verify verifymvcc to use reverse iteration.
-* llrb/: sub-command to benchmark range and continuation.
 * if there are no outstanding snapshots, may be we can do non-mvcc
   upserts and deletes ?
 * YCSB test cases.
 * add llrb tree validation rules, based on sedgewick paper.
 * refactor memory allocator into separate package.
 * implement LLRB iterator. is it really required ?
+* llrb/: sub-command to benchmark range and continuation.
 
 clock:
 
