@@ -397,24 +397,7 @@ func (llrb *LLRB) Range(lkey, hkey []byte, incl string, reverse bool, iter Range
 
 // Iterate implement IndexReader{} interface.
 func (llrb *LLRB) Iterate(lkey, hkey []byte, incl string, r bool) IndexIterator {
-	var startkey []byte
-
-	iter := &llrbIterator{llrb: llrb, activeiter: &llrb.activeiter, reverse: r}
-
-	startkey, iter.endkey, iter.cmp = lkey, hkey, 1
-	if iter.reverse {
-		startkey, iter.endkey, iter.cmp = hkey, lkey, 0
-	}
-
-	if equal := iter.buildstack(startkey); equal {
-		if iter.reverse && (incl == "none" || incl == "low") {
-			iter.Next()
-		} else if incl == "none" || incl == "high" {
-			iter.Next()
-		}
-	}
-	atomic.AddInt64(&llrb.activeiter, 1)
-	return iter
+	panic("not implemented")
 }
 
 //---- IndexWriter{} interface
