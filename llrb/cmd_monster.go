@@ -71,6 +71,7 @@ func doMonster(args []string) {
 				count = 0
 			}
 			stats[name] = count + 1
+			fmt.Println(cmd)
 		}
 		count++
 		if count >= (monsteropts.par * monsteropts.n) {
