@@ -6,7 +6,6 @@
 //   * index key, value (value is optional).
 //   * each key shall be unique within the index sample-set.
 //   * custom memory management
-//   * copy on GC to control memory fragmentation.
 //   * configurable metadata - vbno, access-time, bornseqno, deadseqno, vbuuid.
 //   * in single-threaded configuration, reads and writes are serialized.
 //   * supports multi-version-concurrency-control, where writes are
@@ -18,9 +17,9 @@
 //   a. 16 bit vbucket-number virtual bucket for the key.
 //   b. 20 bit access time bits time.Now()[50:30].
 //
-//   and upto 12 optional fields that are configured.
+//   and upto 12 optional fields that are configurable.
 //
-//   1. 64 bit unique vbucket id for the vbucket number a.
+//   1. 64 bit unique vbucket id for the vbucket number.
 //   2. 64 bit born-seqno vbucket seqno in which this entry was upserted.
 //   3. 64 bit dead-seqno vbucket seqno in which this entry was deleted.
 //   4. 64 bit mvalue either pointer to memory or fpos to disk to pick value.
@@ -41,6 +40,7 @@
 //   * maximum vbuckets   - 65535
 //   * maximum access     - 2^20 counted in steps of 1.07S for 12 days
 //   * maximum key size   - 4096 bytes
+//   * maximum value size - 1 Terabyte.
 //   * maximum born seqno - (2^64 - 1)
 //   * maximum dead seqno - (2^64 - 1)
 package storage

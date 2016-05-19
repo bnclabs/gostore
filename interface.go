@@ -67,8 +67,7 @@ type IndexIterator interface {
 	// Next node if present, else nil.
 	Next() Node
 
-	// Close iterator. Itertors can be concurrently read, but cannot be
-	// used with a concurrent write.
+	// Close iterator, to release resources.
 	Close()
 }
 
@@ -81,22 +80,23 @@ type Index interface {
 	// Count return the number of entries indexed
 	Count() int64
 
-	// Isactive return whether the index is active or not.
+	// Isactive return whether index is active or not.
 	Isactive() bool
 
 	// RSnapshot return snapshot that shan't be disturbed by
-	// subsequent writes. Caller should make sure to call snapshot.Release()
-	// once it is done with the snapshot.
+	// subsequent writes. Caller should make sure to call
+	// snapshot.Release() once it is done with the snapshot.
 	RSnapshot(snapch chan IndexSnapshot) error
 
 	// Stats return a set of index statistics.
 	Stats() (map[string]interface{}, error)
 
-	// Fullstats return an involved set of index statistics.
+	// Fullstats return an involved set of index statistics,
+	// calling this function may lead to a full table scan.
 	Fullstats() (map[string]interface{}, error)
 
-	// Log current statistics, if humanize is true log some or all of the
-	// stats in human readable format.
+	// Log current statistics, if humanize is true log some or
+	// all of the stats in human readable format.
 	Log(involved int, humanize bool)
 
 	// Validate check whether index is in sane state.
