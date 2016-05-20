@@ -6,8 +6,6 @@
 
 LLRB:
 
-* add iteration in llrb/verification.
-* llrb/: sub-command to benchmark range and continuation.
 * if there are no outstanding snapshots, may be we can do non-mvcc
   upserts and deletes ?
 * YCSB test cases.

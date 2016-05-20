@@ -166,38 +166,14 @@ func doLoad(args []string) {
 		llrb.Dotdump(buffer)
 		ioutil.WriteFile(loadopts.dotfile, buffer.Bytes(), 0666)
 	} else if loadopts.benchrange {
-		start, count := time.Now(), int64(0)
-		if loadopts.mvcc > 0 { // acquire a snapshot
-			ch := make(chan storage.IndexSnapshot, 1)
-			if err := llrb.RSnapshot(ch); err != nil {
-				fmt.Printf("error acquiring snapshot for mvcc-llrb\n")
-				log.Fatal(err)
-			}
-			snapshot := <-ch
-			snapshot.Range(nil, nil, "both", false, func(nd storage.Node) bool {
-				count++
-				return true
-			})
-			snapshot.Release()
-		} else {
-			ch := make(chan storage.IndexSnapshot, 1)
-			if err := llrb.RSnapshot(ch); err != nil {
-				fmt.Printf("error acquiring snapshot for mvcc-llrb\n")
-				log.Fatal(err)
-			}
-			llrb.Range(nil, nil, "both", false, func(nd storage.Node) bool {
-				count++
-				return true
-			})
-		}
-
-		if x := llrb.Count(); x != count {
-			log.Fatalf("range count: expected %v, got %v\n", x, count)
-		} else if count != int64(loadopts.n) {
-			log.Fatalf("range count: inserted %v, got %v\n", x, count)
-		}
-
+		start := time.Now()
+		count := ftrange(llrb)
 		fmsg := "Full table scan using Range(): %v items in %v\n"
+		fmt.Printf(fmsg, count, time.Since(start))
+
+		start = time.Now()
+		count = ftiterate(llrb)
+		fmsg = "Full table scan using Iterate(): %v items in %v\n"
 		fmt.Printf(fmsg, count, time.Since(start))
 
 	} else if loadopts.benchiter {
@@ -209,6 +185,76 @@ func doLoad(args []string) {
 	llrb.Log(9, true)
 
 	llrb.Destroy()
+}
+
+func ftrange(llrb *storage.LLRB) int64 {
+	count := int64(0)
+	if loadopts.mvcc > 0 { // acquire a snapshot
+		ch := make(chan storage.IndexSnapshot, 1)
+		if err := llrb.RSnapshot(ch); err != nil {
+			fmt.Printf("error acquiring snapshot for mvcc-llrb\n")
+			log.Fatal(err)
+		}
+		snapshot := <-ch
+		snapshot.Range(nil, nil, "both", false, func(nd storage.Node) bool {
+			count++
+			return true
+		})
+		snapshot.Release()
+
+	} else {
+		llrb.Range(nil, nil, "both", false, func(nd storage.Node) bool {
+			count++
+			return true
+		})
+	}
+
+	if x := llrb.Count(); x != count {
+		log.Fatalf("range count: expected %v, got %v\n", x, count)
+	} else if count != int64(loadopts.n) {
+		log.Fatalf("range count: inserted %v, got %v\n", x, count)
+	}
+	return count
+}
+
+func ftiterate(llrb *storage.LLRB) int64 {
+	count := int64(0)
+	if loadopts.mvcc > 0 { // acquire a snapshot
+		ch := make(chan storage.IndexSnapshot, 1)
+		if err := llrb.RSnapshot(ch); err != nil {
+			fmt.Printf("error acquiring snapshot for mvcc-llrb\n")
+			log.Fatal(err)
+		}
+		snapshot := <-ch
+		iter := snapshot.Iterate(nil, nil, "both", false)
+		if iter != nil {
+			nd := iter.Next()
+			for nd != nil {
+				count++
+				nd = iter.Next()
+			}
+			iter.Close()
+		}
+		snapshot.Release()
+
+	} else {
+		iter := llrb.Iterate(nil, nil, "both", false)
+		if iter != nil {
+			nd := iter.Next()
+			for nd != nil {
+				count++
+				nd = iter.Next()
+			}
+			iter.Close()
+		}
+	}
+
+	if x := llrb.Count(); x != count {
+		log.Fatalf("iterate count: expected %v, got %v\n", x, count)
+	} else if count != int64(loadopts.n) {
+		log.Fatalf("iterate count: inserted %v, got %v\n", x, count)
+	}
+	return count
 }
 
 func insertItems(
