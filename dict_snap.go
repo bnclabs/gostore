@@ -3,7 +3,6 @@
 package storage
 
 import "strconv"
-import "sync/atomic"
 
 // NOTE: sorted() cannot be called on DictSnapshot !!
 
@@ -50,9 +49,6 @@ func (d *DictSnapshot) Refer() {
 
 // Release implement IndexSnapshot{} interface.
 func (d *DictSnapshot) Release() {
-	if atomic.LoadInt64(&d.activeiter) > 0 {
-		panic("cannot distroy DictSnapshot when active iterators are present")
-	}
 	d.dead = true
 }
 

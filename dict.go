@@ -239,7 +239,7 @@ func (d *Dict) Iterate(lkey, hkey []byte, incl string, r bool) IndexIterator {
 
 func (d *Dict) iterate(lkey, hkey []byte, incl string, r bool) IndexIterator {
 	iter := &dictIterator{
-		dict: d.dict, hashks: d.sorted(), activeiter: &d.activeiter, reverse: r,
+		dict: d.dict, hashks: d.hashks, activeiter: &d.activeiter, reverse: r,
 	}
 
 	// parameter rewrite for lookup
