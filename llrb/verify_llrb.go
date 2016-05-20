@@ -131,6 +131,57 @@ func llrb_opRange(
 	return stats
 }
 
+func llrb_opIterate(
+	dictrd storage.IndexReader, llrbrd storage.IndexReader,
+	lcmd llrbcmd, stats map[string]int) map[string]int {
+
+	if dictrd == nil {
+		panic("dictrd reader is nil")
+	} else if llrbrd == nil {
+		panic("llrbrd reader is nil")
+	}
+
+	var lowkey, highkey []byte
+	if lcmd.cmd[1] != nil {
+		lowkey = lcmd.keys[int(lcmd.cmd[1].(float64))]
+	}
+	if lcmd.cmd[2] != nil {
+		highkey = lcmd.keys[int(lcmd.cmd[2].(float64))]
+	}
+	incl := lcmd.cmd[3].(string)
+	reverse := lcmd.cmd[4].(bool)
+
+	dnodes := make([]storage.Node, 0)
+	iter := dictrd.Iterate(lowkey, highkey, incl, reverse)
+	if iter != nil {
+		nd := iter.Next()
+		for nd != nil {
+			nd = iter.Next()
+			dnodes = append(dnodes, nd)
+		}
+		iter.Close()
+	}
+
+	lnodes := make([]storage.Node, 0)
+	iter = llrbrd.Iterate(lowkey, highkey, incl, reverse)
+	if iter != nil {
+		nd := iter.Next()
+		for nd != nil {
+			nd = iter.Next()
+			lnodes = append(lnodes, nd)
+		}
+		iter.Close()
+	}
+
+	for i, dictnd := range dnodes {
+		cmpllrbdict(llrbrd.(storage.IndexSnapshot).Id(), dictnd, lnodes[i], true)
+	}
+
+	stats["total"] += 1
+	stats["range.ok"] += 1
+	return stats
+}
+
 func llrb_opDelmin(
 	dict *storage.Dict, llrb *storage.LLRB,
 	lcmd llrbcmd, stats map[string]int) map[string]int {

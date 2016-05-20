@@ -42,6 +42,8 @@ func mvccreader(readerid int, ropch chan llrbcmd) {
 			genstats = llrb_opMax(dictsnap, llrbsnap, lcmd, genstats)
 		case "range":
 			genstats = llrb_opRange(dictsnap, llrbsnap, lcmd, genstats)
+		case "iterate":
+			genstats = llrb_opIterate(dictsnap, llrbsnap, lcmd, genstats)
 		case "validate":
 			dolog := lcmd.cmd[1].(bool)
 			llrb_opValidate(dictsnap, llrbsnap, genstats, dolog, true)

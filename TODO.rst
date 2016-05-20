@@ -7,13 +7,12 @@
 LLRB:
 
 * add iteration in llrb/verification.
-* make llrb iteration pool as generic as possible.
+* llrb/: sub-command to benchmark range and continuation.
 * if there are no outstanding snapshots, may be we can do non-mvcc
   upserts and deletes ?
 * YCSB test cases.
 * add llrb tree validation rules, based on sedgewick paper.
 * refactor memory allocator into separate package.
-* llrb/: sub-command to benchmark range and continuation.
 
 clock:
 

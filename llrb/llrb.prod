@@ -21,7 +21,8 @@ delmin    : "[ " "\"delmin\"" " ]".
 delmax    : "[ " "\"delmax\"" " ]".
 deleteall : "[ " "\"deleteall\"" " ]".
 delete    : "[ " "\"delete\", " key " ]".
-rangeop   : "[ " "\"range\"," key "," key "," incl "," rangervrs " ]".
+rangeop   : (weigh 0.1) "[ " "\"range\"," key "," key "," incl "," reverse " ]"
+          | (weigh 0.2) "[ " "\"iterate\"," key "," key "," incl "," reverse " ]".
 
 control   : (weigh 0.1 0.01) validate
           | (weigh 0.4 0.01) snapshot
@@ -37,5 +38,5 @@ incl      : (weigh 0.1) "\"none\""
           | (weigh 0.2) "\"low\""
           | (weigh 0.3) "\"high\""
           | (weigh 0.4) "\"both\"".
-rangervrs : (weigh 0.1) "true"
+reverse   : (weigh 0.1) "true"
           | (weigh 0.2) "false".

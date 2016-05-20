@@ -156,6 +156,8 @@ func verifyLLRB(count uint64, opch chan [][]interface{}, keys, values [][]byte) 
 				opstats = llrb_opMax(dict, llrb, lcmd, opstats)
 			case "range":
 				opstats = llrb_opRange(dict, llrb, lcmd, opstats)
+			case "iterate":
+				opstats = llrb_opIterate(dict, llrb, lcmd, opstats)
 			case "delmin":
 				opstats = llrb_opDelmin(dict, llrb, lcmd, opstats)
 			case "delmax":
@@ -252,6 +254,10 @@ func verifyLLRBMvcc(
 					reader <- lcmd
 				}
 			case "range":
+				for _, reader := range readers {
+					reader <- lcmd
+				}
+			case "iterate":
 				for _, reader := range readers {
 					reader <- lcmd
 				}
