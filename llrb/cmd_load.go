@@ -32,7 +32,7 @@ var loadopts struct {
 	dotfile   string
 	// additionals
 	benchrange bool
-	benchiter  bool
+	benchget   bool
 	args       []string
 }
 
@@ -69,8 +69,8 @@ func parseLoadopts(args []string) {
 		"dump dot file output of the LLRB tree")
 	f.BoolVar(&loadopts.benchrange, "benchrange", false,
 		"after loading benchmark full table scan using range")
-	f.BoolVar(&loadopts.benchiter, "benchiter", false,
-		"after loading benchmark full table scan using iteration")
+	f.BoolVar(&loadopts.benchget, "benchget", false,
+		"after loading benchmark get operations")
 	f.Parse(args)
 
 	loadopts.nodearena = [4]int{
@@ -146,12 +146,17 @@ func doLoad(args []string) {
 	storage.SetLogger(nil, config)
 	llrb := storage.NewLLRB("load", config, nil)
 
+	var readch chan [2][]byte
+	if loadopts.benchget {
+		readch = make(chan [2][]byte, 1000)
+	}
+
 	now := time.Now()
 	var wg sync.WaitGroup
 	for i := 0; i < loadopts.par; i++ {
 		vbno, vbuuid, seqno := uint16(i), uint64(0xABCD123456), uint64(0)
 		wg.Add(1)
-		go insertItems(llrb, vbno, vbuuid, seqno, &wg)
+		go insertItems(llrb, vbno, vbuuid, seqno, readch, &wg)
 	}
 	wg.Wait()
 
@@ -165,6 +170,7 @@ func doLoad(args []string) {
 		buffer := bytes.NewBuffer(nil)
 		llrb.Dotdump(buffer)
 		ioutil.WriteFile(loadopts.dotfile, buffer.Bytes(), 0666)
+
 	} else if loadopts.benchrange {
 		start := time.Now()
 		count := ftrange(llrb)
@@ -176,8 +182,11 @@ func doLoad(args []string) {
 		fmsg = "Full table scan using Iterate(): %v items in %v\n"
 		fmt.Printf(fmsg, count, time.Since(start))
 
-	} else if loadopts.benchiter {
-		// TODO: continuation based iterator.
+	} else if loadopts.benchget {
+		start := time.Now()
+		count := benchget(llrb, readch)
+		fmt.Printf("Get(): %v operations in %v\n", count, time.Since(start))
+
 	} else {
 		llrb.Validate()
 	}
@@ -185,6 +194,39 @@ func doLoad(args []string) {
 	llrb.Log(9, true)
 
 	llrb.Destroy()
+}
+
+func benchget(llrb *storage.LLRB, readch chan [2][]byte) int64 {
+	keys, values := make([][]byte, 0), make([][]byte, 0)
+	for len(readch) > 0 {
+		item := <-readch
+		keys, values = append(keys, item[0]), append(values, item[1])
+	}
+	var reader storage.IndexReader
+	if loadopts.mvcc > 0 {
+		ch := make(chan storage.IndexSnapshot, 1)
+		if err := llrb.RSnapshot(ch); err != nil {
+			fmt.Printf("error acquiring snapshot for mvcc-llrb\n")
+			log.Fatal(err)
+		}
+		reader = <-ch
+	} else {
+		reader = llrb
+	}
+
+	count := int64(0)
+	for i := 0; i < 1000; i++ {
+		for j := 0; j < len(keys); j++ {
+			nd := reader.Get(keys[j])
+			if bytes.Compare(values[j], nd.Value()) != 0 {
+				fmsg := "expected %v, got %v\n"
+				fmt.Printf(fmsg, string(values[j]), string(nd.Value()))
+				log.Fatal("mismatch in get")
+			}
+			count++
+		}
+	}
+	return count
 }
 
 func ftrange(llrb *storage.LLRB) int64 {
@@ -258,7 +300,8 @@ func ftiterate(llrb *storage.LLRB) int64 {
 }
 
 func insertItems(
-	llrb *storage.LLRB, vbno uint16, vbuuid, seqno uint64, wg *sync.WaitGroup) {
+	llrb *storage.LLRB, vbno uint16, vbuuid, seqno uint64,
+	readch chan [2][]byte, wg *sync.WaitGroup) {
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -286,6 +329,18 @@ func insertItems(
 				newnd.Setvbno(vbno).SetVbuuid(vbuuid)
 				newnd.SetBornseqno(seqno + uint64(i))
 			})
+		if readch != nil {
+			for i, key := range keys {
+				if int64(time.Now().UnixNano())%10 == 0 {
+					k, v := make([]byte, 256), make([]byte, 256)
+					m, n := copy(k, key), copy(v, values[i])
+					select {
+					case readch <- [2][]byte{k[:m], v[:n]}:
+					default:
+					}
+				}
+			}
+		}
 	}
 }
 
