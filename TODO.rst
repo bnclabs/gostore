@@ -6,6 +6,7 @@
 
 LLRB:
 
+* export metadata `mvalue` along with {pointer, level}
 * if there are no outstanding snapshots, may be we can do non-mvcc
   upserts and deletes ?
 * YCSB test cases.
