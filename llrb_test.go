@@ -442,7 +442,7 @@ func TestLLRBRange(t *testing.T) {
 		seqno++
 	}
 	// random ranges
-	repeat := 1000
+	repeat := 100
 	incls := []string{"both", "low", "high", "none"}
 	for i := 0; i < repeat; i++ {
 		incl := incls[rand.Intn(len(incls))]
@@ -492,10 +492,259 @@ func TestLLRBRange(t *testing.T) {
 		}
 		for i, dk := range dks {
 			if bytes.Compare(dk, llrbks[i]) != 0 {
-				t.Fatalf("expected %v, got %v", string(dk), string(llrbks[i]))
+				fmsg := "expected %v, got %v"
+				t.Fatalf(fmsg, string(dk), string(llrbks[i]))
 			}
 			if bytes.Compare(dvs[i], llrbvs[i]) != 0 {
-				t.Fatalf("expected %v, got %v", string(dvs[i]), string(llrbvs[i]))
+				fmsg := "expected %v, got %v"
+				t.Fatalf(fmsg, string(dvs[i]), string(llrbvs[i]))
+			}
+		}
+	}
+
+	llrb.Validate()
+	llrb.Destroy()
+}
+
+func TestLLRBIteratePool(t *testing.T) {
+	config := makellrbconfig()
+	config["metadata.mvalue"] = true
+	config["metadata.bornseqno"] = true
+	config["metadata.vbuuid"] = true
+	config["iterpool.size"] = 1
+	llrb := NewLLRB("test", config, nil)
+
+	// seed the pool
+	iter1 := llrb.Iterate(nil, nil, "both", false)
+	iter2 := llrb.Iterate(nil, nil, "both", false)
+	if len(llrb.iterpool) != 0 {
+		t.Fatalf("unexpected iterpool size %v", len(llrb.iterpool))
+	}
+
+	iter1.Close()
+	iter2.Close()
+	if len(llrb.iterpool) != 1 {
+		t.Fatalf("unexpected iterpool size %v", len(llrb.iterpool))
+	}
+
+	llrb.Destroy()
+}
+
+func TestLLRBBasicIterate(t *testing.T) {
+	config := makellrbconfig()
+	config["metadata.mvalue"] = true
+	config["metadata.bornseqno"] = true
+	config["metadata.vbuuid"] = true
+	llrb := NewLLRB("test", config, nil)
+
+	// inserts
+	inserts := [][2][]byte{
+		[2][]byte{[]byte("key1"), []byte("value1")},
+		[2][]byte{[]byte("key2"), []byte("value2")},
+		[2][]byte{[]byte("key3"), []byte("value3")},
+		[2][]byte{[]byte("key4"), []byte("value4")},
+		[2][]byte{[]byte("key5"), []byte("value5")},
+	}
+	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
+	for _, kv := range inserts {
+		llrb.Upsert(
+			kv[0], kv[1],
+			func(index Index, _ int64, newnd, oldnd Node) {
+				if oldnd != nil {
+					t.Errorf("expected old Llrbnode as nil")
+				}
+				newnd.Setvbno(vbno).SetVbuuid(vbuuid).SetBornseqno(seqno)
+			})
+		seqno++
+	}
+
+	testcases := [][]interface{}{
+		[]interface{}{nil, nil, "none", inserts[:]},
+		[]interface{}{nil, nil, "low", inserts[:]},
+		[]interface{}{nil, nil, "high", inserts[:]},
+		[]interface{}{nil, nil, "both", inserts[:]},
+		[]interface{}{inserts[0][0], nil, "none", inserts[1:]},
+		[]interface{}{inserts[0][0], nil, "low", inserts[0:]},
+		[]interface{}{inserts[0][0], nil, "high", inserts[1:]},
+		[]interface{}{inserts[0][0], nil, "both", inserts[0:]},
+		[]interface{}{nil, inserts[4][0], "none", inserts[:4]},
+		[]interface{}{nil, inserts[4][0], "low", inserts[:4]},
+		[]interface{}{nil, inserts[4][0], "high", inserts[:5]},
+		[]interface{}{nil, inserts[4][0], "both", inserts[:5]},
+		[]interface{}{inserts[0][0], inserts[4][0], "none", inserts[1:4]},
+		[]interface{}{inserts[0][0], inserts[4][0], "low", inserts[0:4]},
+		[]interface{}{inserts[0][0], inserts[4][0], "high", inserts[1:5]},
+		[]interface{}{inserts[0][0], inserts[4][0], "both", inserts[0:5]},
+		[]interface{}{inserts[0][0], inserts[0][0], "none", inserts[:0]},
+		[]interface{}{inserts[0][0], inserts[0][0], "low", inserts[:1]},
+		[]interface{}{inserts[0][0], inserts[0][0], "high", inserts[:1]},
+		[]interface{}{inserts[0][0], inserts[0][0], "both", inserts[:1]},
+	}
+
+	var lowkey, highkey []byte
+	for casenum, tcase := range testcases {
+		lowkey, highkey = nil, nil
+		incl := tcase[2].(string)
+		if tcase[0] != nil {
+			lowkey = tcase[0].([]byte)
+		}
+		if tcase[1] != nil {
+			highkey = tcase[1].([]byte)
+		}
+		refs := tcase[3].([][2][]byte)
+
+		// forward range, return true
+		outs := make([][2][]byte, 0)
+		iter := llrb.Iterate(lowkey, highkey, incl, false)
+		if iter != nil {
+			nd := iter.Next()
+			for nd != nil {
+				outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
+				nd = iter.Next()
+			}
+			iter.Close()
+		}
+		if reflect.DeepEqual(outs, refs) == false {
+			fmsg := "failed for %v (%v,%v)"
+			t.Fatalf(fmsg, casenum, string(lowkey), string(highkey))
+		}
+
+		// backward range, return true
+		reverse := func(keys [][2][]byte) [][2][]byte {
+			revkeys := make([][2][]byte, 0)
+			for i := len(keys) - 1; i >= 0; i-- {
+				revkeys = append(revkeys, keys[i])
+			}
+			return revkeys
+		}
+
+		refs = reverse(tcase[3].([][2][]byte))
+		outs = make([][2][]byte, 0)
+		iter = llrb.Iterate(lowkey, highkey, incl, true)
+		if iter != nil {
+			nd := iter.Next()
+			for nd != nil {
+				outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
+				nd = iter.Next()
+			}
+			iter.Close()
+		}
+		if reflect.DeepEqual(outs, refs) == false {
+			fmsg := "failed for %v (%v,%v)"
+			t.Fatalf(fmsg, casenum, string(lowkey), string(highkey))
+		}
+	}
+
+	llrb.Validate()
+	llrb.Destroy()
+}
+
+func TestLLRBIterate(t *testing.T) {
+	config := makellrbconfig()
+	config["metadata.mvalue"] = true
+	config["metadata.bornseqno"] = true
+	config["metadata.vbuuid"] = true
+	llrb := NewLLRB("test", config, nil)
+	d := NewDict()
+	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
+	keys, values := make([][]byte, 0), make([][]byte, 0)
+	// insert 10K items
+	count := 10 * 1000
+	for i := 0; i < count; i++ {
+		key, value := make([]byte, 100), make([]byte, 100)
+		key, value = makekeyvalue(key, value)
+		llrb.Upsert(
+			key, value,
+			func(index Index, _ int64, newnd, oldnd Node) {
+				if oldnd != nil {
+					t.Errorf("expected nil")
+				} else if x := index.Count(); x != int64(i+1) {
+					t.Errorf("expected %v, got %v", i, x)
+				}
+				newnd.Setvbno(vbno).SetVbuuid(vbuuid).SetBornseqno(seqno)
+			})
+		d.Upsert(key, value, nil)
+		keys, values = append(keys, key), append(values, value)
+		seqno++
+	}
+	// random ranges
+	repeat := 100
+	incls := []string{"both", "low", "high", "none"}
+	for i := 0; i < repeat; i++ {
+		incl := incls[rand.Intn(len(incls))]
+		x := rand.Intn(len(keys))
+		y := rand.Intn(len(keys))
+		lowkey, highkey := keys[x], keys[y]
+
+		// forward range
+		llrbks, llrbvs := make([][]byte, 0), make([][]byte, 0)
+		iter := llrb.Iterate(lowkey, highkey, incl, false)
+		if iter != nil {
+			nd := iter.Next()
+			for nd != nil {
+				llrbks = append(llrbks, nd.Key())
+				llrbvs = append(llrbvs, nd.Value())
+				nd = iter.Next()
+			}
+			iter.Close()
+		}
+		dks, dvs := make([][]byte, 0), make([][]byte, 0)
+		iter = d.Iterate(lowkey, highkey, incl, false)
+		if iter != nil {
+			nd := iter.Next()
+			for nd != nil {
+				dks, dvs = append(dks, nd.Key()), append(dvs, nd.Value())
+				nd = iter.Next()
+			}
+			iter.Close()
+		}
+		if len(dks) != len(llrbks) {
+			t.Fatalf("expected %v, got %v", len(dks), len(llrbks))
+		}
+		for i, dk := range dks {
+			if bytes.Compare(dk, llrbks[i]) != 0 {
+				fmsg := "expected %v, got %v"
+				t.Fatalf(fmsg, string(dk), string(llrbks[i]))
+			}
+			if bytes.Compare(dvs[i], llrbvs[i]) != 0 {
+				fmsg := "expected %v, got %v"
+				t.Fatalf(fmsg, string(dvs[i]), string(llrbvs[i]))
+			}
+		}
+
+		// backward range
+		llrbks, llrbvs = make([][]byte, 0), make([][]byte, 0)
+		iter = llrb.Iterate(lowkey, highkey, incl, true)
+		if iter != nil {
+			nd := iter.Next()
+			for nd != nil {
+				llrbks = append(llrbks, nd.Key())
+				llrbvs = append(llrbvs, nd.Value())
+				nd = iter.Next()
+			}
+			iter.Close()
+		}
+		dks, dvs = make([][]byte, 0), make([][]byte, 0)
+		iter = llrb.Iterate(lowkey, highkey, incl, true)
+		if iter != nil {
+			nd := iter.Next()
+			for nd != nil {
+				dks, dvs = append(dks, nd.Key()), append(dvs, nd.Value())
+				nd = iter.Next()
+			}
+			iter.Close()
+		}
+		if len(dks) != len(llrbks) {
+			t.Fatalf("expected %v, got %v", len(dks), len(llrbks))
+		}
+		for i, dk := range dks {
+			if bytes.Compare(dk, llrbks[i]) != 0 {
+				fmsg := "expected %v, got %v"
+				t.Fatalf(fmsg, string(dk), string(llrbks[i]))
+			}
+			if bytes.Compare(dvs[i], llrbvs[i]) != 0 {
+				fmsg := "expected %v, got %v"
+				t.Fatalf(fmsg, string(dvs[i]), string(llrbvs[i]))
 			}
 		}
 	}

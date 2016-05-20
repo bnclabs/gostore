@@ -5,6 +5,7 @@ func llrbConfig() map[string]interface{} {
 		"maxvb":                   1024,
 		"log.level":               "info",
 		"log.file":                "",
+		"iterpool.size":           100,
 		"metadata.bornseqno":      true,
 		"metadata.deadseqno":      true,
 		"metadata.mvalue":         true,

@@ -55,6 +55,9 @@ configure LLRB based on system resources and requirements.
 `metadata.vbuuid`
     as boolean, if true, use metadata field to book-keep node's vbuuid.
 
+`iterpool.size`
+    number concurrent iterations that are supported.
+
 `mvcc.enable`
     as boolean, consume LLRB as Multi-Version-Concurrency-Control-led tree.
 

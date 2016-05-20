@@ -76,6 +76,7 @@ type LLRB struct { // tree container
 	dead       bool
 	clock      *vectorclock // current clock
 	rw         sync.RWMutex
+	iterpool   chan *llrbIterator
 	activeiter int64
 
 	// config
@@ -94,6 +95,7 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	config = mixinconfig(llrbConfig(), config)
 
 	llrb := &LLRB{name: name, borntime: time.Now()}
+	llrb.iterpool = make(chan *llrbIterator, config["iterpool.size"].(int))
 
 	llrb.validateConfig(config)
 
@@ -209,13 +211,9 @@ func (llrb *LLRB) Stats() (map[string]interface{}, error) {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.stats()
 	}
-
 	llrb.rw.RLock()
-
-	stats, err := llrb.stats()
-
-	llrb.rw.RUnlock()
-	return stats, err
+	defer llrb.rw.RUnlock()
+	return llrb.stats()
 }
 
 // Fullstats implement Indexer{} interface.
@@ -225,11 +223,8 @@ func (llrb *LLRB) Fullstats() (map[string]interface{}, error) {
 	}
 
 	llrb.rw.RLock()
-
-	stats, err := llrb.fullstats()
-
-	llrb.rw.RUnlock()
-	return stats, err
+	defer llrb.rw.RUnlock()
+	return llrb.fullstats()
 }
 
 // Validate implement Indexer{} interface.
@@ -238,11 +233,10 @@ func (llrb *LLRB) Validate() {
 		if err := llrb.mvcc.writer.validate(); err != nil {
 			panic(fmt.Errorf("Validate(): %v", err))
 		}
+		return
 	}
 	llrb.rw.RLock()
-
 	llrb.validate(llrb.root)
-
 	llrb.rw.RUnlock()
 }
 
@@ -253,10 +247,8 @@ func (llrb *LLRB) Log(involved int, humanize bool) {
 		return
 	}
 	llrb.rw.RLock()
-
+	defer llrb.rw.RUnlock()
 	llrb.log(involved, humanize)
-
-	llrb.rw.RUnlock()
 }
 
 //---- IndexReader{} interface.
@@ -352,6 +344,7 @@ func (llrb *LLRB) max() Node {
 
 // Range from lkey to hkey, incl can be "both", "low", "high", "none"
 func (llrb *LLRB) Range(lkey, hkey []byte, incl string, reverse bool, iter RangeCallb) {
+
 	if llrb.mvcc.enabled {
 		panic("Range(): mvcc enabled, use snapshots for reading")
 	}
@@ -397,7 +390,59 @@ func (llrb *LLRB) Range(lkey, hkey []byte, incl string, reverse bool, iter Range
 
 // Iterate implement IndexReader{} interface.
 func (llrb *LLRB) Iterate(lkey, hkey []byte, incl string, r bool) IndexIterator {
-	panic("not implemented")
+
+	if llrb.mvcc.enabled {
+		panic("Iterate(): mvcc enabled, use snapshots for reading")
+	}
+
+	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
+		if incl == "none" {
+			return nil
+		} else if incl == "low" || incl == "high" {
+			incl = "both"
+		}
+	}
+
+	llrb.rw.RLock()
+
+	var iter *llrbIterator
+	select {
+	case iter = <-llrb.iterpool:
+	default:
+		iter = &llrbIterator{}
+	}
+
+	// NOTE: always re-initialize, because we are getting it back from pool.
+	iter.tree, iter.llrb = llrb, llrb
+	iter.nodes, iter.index, iter.limit = iter.nodes[:0], 0, 5
+	iter.continuate = false
+	iter.startkey, iter.endkey, iter.incl, iter.reverse = lkey, hkey, incl, r
+	iter.closed, iter.activeiter = false, &llrb.activeiter
+
+	if iter.nodes == nil {
+		iter.nodes = make([]Node, 0)
+	}
+
+	iter.rangefill()
+	if r {
+		switch iter.incl {
+		case "none":
+			iter.incl = "high"
+		case "low":
+			iter.incl = "both"
+		}
+	} else {
+		switch iter.incl {
+		case "none":
+			iter.incl = "low"
+		case "high":
+			iter.incl = "both"
+		}
+	}
+
+	atomic.AddInt64(&llrb.n_ranges, 1)
+	atomic.AddInt64(&llrb.activeiter, 1)
+	return iter
 }
 
 //---- IndexWriter{} interface

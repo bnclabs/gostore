@@ -13,9 +13,9 @@ IndexSnapshot statistics:
     to the writer version of the tree.
 
 `n_ranges`
-    number of range operations performed on this snapshot, note that
-    this value is counted only when there are no concurrent mutation happening
-    to the writer version of the tree.
+    number of range and iterate operations performed on this snapshot,
+    note that this value is counted only when there are no concurrent
+    mutation happening to the writer version of the tree.
 
 `n_cclookups`
     number of lookup operations performed on this snapshot, note that
@@ -23,9 +23,9 @@ IndexSnapshot statistics:
     to the writer version of the tree.
 
 `n_ccranges`
-    number of lookup operations performed on this snapshot, note that
-    this value is counted only when concurrent mutation is happening
-    to the writer version of the tree.
+    number of range and iterate operations performed on this snapshot,
+    note that this value is counted only when concurrent mutation is
+    happening to the writer version of the tree.
 
 when the snapshot is purged these counts are accumlated to the parent LLRB{}
 instance.
@@ -39,9 +39,9 @@ LLRB statistics:
     on all the snapshots (purged) so far.
 
 `n_ranges`
-    number of range operations performed on this tree, in case of MVCC
-    variant it is the cummulative count of all lookup operations performed
-    on all the snapshots (purged) so far.
+    number of range and iterate operations performed on this tree, in case
+    of MVCC variant it is the cummulative count of all lookup operations
+    performed on all the snapshots (purged) so far.
 
 `n_count`
     number of {key,value} entries in the tree.
@@ -76,9 +76,9 @@ MVCC statistics:
     to the writer version of the tree.
 
 `mvcc.n_ccranges`
-    the cummulative count of all range operations performed on all
-    the snapshots (purged) so far, when concurrent mutation is happening
-    to the writer version of the tree.
+    the cummulative count of all range and iterate operations performed
+    on all the snapshots (purged) so far, when concurrent mutation is
+    happening to the writer version of the tree.
 
 `mvcc.n_snapshots`
     number of snapshots created.

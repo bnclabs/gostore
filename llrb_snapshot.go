@@ -298,7 +298,58 @@ func (s *LLRBSnapshot) Range(lkey, hkey []byte, incl string, reverse bool, iter 
 
 // Iterate implement IndexReader{} interface.
 func (s *LLRBSnapshot) Iterate(lkey, hkey []byte, incl string, r bool) IndexIterator {
-	panic("yet to be implemented")
+
+	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
+		if incl == "none" {
+			return nil
+		} else if incl == "low" || incl == "high" {
+			incl = "both"
+		}
+	}
+
+	llrb := s.llrb
+	var iter *llrbIterator
+	select {
+	case iter = <-llrb.iterpool:
+	default:
+		iter = &llrbIterator{}
+	}
+
+	// NOTE: always re-initialize, because we are getting it back from pool.
+	iter.tree, iter.llrb = s, llrb
+	iter.nodes, iter.index, iter.limit = iter.nodes[:0], 0, 5
+	iter.continuate = false
+	iter.startkey, iter.endkey, iter.incl, iter.reverse = lkey, hkey, incl, r
+	iter.closed, iter.activeiter = false, &llrb.activeiter
+
+	if iter.nodes == nil {
+		iter.nodes = make([]Node, 0)
+	}
+
+	iter.rangefill()
+	if r {
+		switch iter.incl {
+		case "none":
+			iter.incl = "high"
+		case "low":
+			iter.incl = "both"
+		}
+	} else {
+		switch iter.incl {
+		case "none":
+			iter.incl = "low"
+		case "high":
+			iter.incl = "both"
+		}
+	}
+
+	if atomic.LoadInt64(&s.llrb.mvcc.ismut) == 1 {
+		atomic.AddInt64(&s.n_ccranges, 1)
+	} else {
+		atomic.AddInt64(&s.n_ranges, 1)
+	}
+	atomic.AddInt64(&llrb.activeiter, 1)
+	return iter
 }
 
 // don't use llrb.validate(), it will access stats that needs
