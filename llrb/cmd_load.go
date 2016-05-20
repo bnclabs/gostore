@@ -3,6 +3,7 @@ package main
 import "time"
 import "os"
 import "sync"
+import "sync/atomic"
 import "log"
 import "fmt"
 import "bytes"
@@ -202,30 +203,41 @@ func benchget(llrb *storage.LLRB, readch chan [2][]byte) int64 {
 		item := <-readch
 		keys, values = append(keys, item[0]), append(values, item[1])
 	}
-	var reader storage.IndexReader
-	if loadopts.mvcc > 0 {
-		ch := make(chan storage.IndexSnapshot, 1)
-		if err := llrb.RSnapshot(ch); err != nil {
-			fmt.Printf("error acquiring snapshot for mvcc-llrb\n")
-			log.Fatal(err)
+	count := int64(0)
+
+	doread := func(reader storage.IndexReader, repeat int, wg *sync.WaitGroup) {
+		for i := 0; i < repeat; i++ {
+			for j := 0; j < len(keys); j++ {
+				nd := reader.Get(keys[j])
+				if bytes.Compare(values[j], nd.Value()) != 0 {
+					fmsg := "expected %v, got %v\n"
+					fmt.Printf(fmsg, string(values[j]), string(nd.Value()))
+					log.Fatal("mismatch in get")
+				}
+			}
 		}
-		reader = <-ch
-	} else {
-		reader = llrb
+		atomic.AddInt64(&count, int64(len(keys)*repeat))
+		wg.Done()
 	}
 
-	count := int64(0)
-	for i := 0; i < 1000; i++ {
-		for j := 0; j < len(keys); j++ {
-			nd := reader.Get(keys[j])
-			if bytes.Compare(values[j], nd.Value()) != 0 {
-				fmsg := "expected %v, got %v\n"
-				fmt.Printf(fmsg, string(values[j]), string(nd.Value()))
-				log.Fatal("mismatch in get")
+	var wg sync.WaitGroup
+	repeat := 1000
+	if loadopts.mvcc > 0 {
+		for i := 0; i < loadopts.mvcc; i++ {
+			ch := make(chan storage.IndexSnapshot, 1)
+			if err := llrb.RSnapshot(ch); err != nil {
+				fmt.Printf("error acquiring snapshot for mvcc-llrb\n")
+				log.Fatal(err)
 			}
-			count++
+			reader := <-ch
+			wg.Add(1)
+			go doread(reader, repeat, &wg)
 		}
+	} else {
+		wg.Add(1)
+		go doread(llrb, repeat, &wg)
 	}
+	wg.Wait()
 	return count
 }
 
