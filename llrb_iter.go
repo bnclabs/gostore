@@ -70,7 +70,7 @@ func (iter *llrbIterator) rangefill() {
 				count++
 				return true
 			}
-			if iter.limit > 100 {
+			if iter.limit < 100 {
 				iter.limit *= 2
 			}
 			iter.continuate = true
