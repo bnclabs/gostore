@@ -221,21 +221,25 @@ func benchget(llrb *storage.LLRB, readch chan [2][]byte) int64 {
 	}
 
 	var wg sync.WaitGroup
+	var reader storage.IndexSnapshot
 	repeat := 1000
 	if loadopts.mvcc > 0 {
+		ch := make(chan storage.IndexSnapshot, 1)
+		if err := llrb.RSnapshot(ch); err != nil {
+			fmt.Printf("error acquiring snapshot for mvcc-llrb\n")
+			log.Fatal(err)
+		}
+		reader = <-ch
 		for i := 0; i < loadopts.mvcc; i++ {
-			ch := make(chan storage.IndexSnapshot, 1)
-			if err := llrb.RSnapshot(ch); err != nil {
-				fmt.Printf("error acquiring snapshot for mvcc-llrb\n")
-				log.Fatal(err)
-			}
-			reader := <-ch
 			wg.Add(1)
-			go doread(reader, repeat, &wg)
+			go doread(reader.(storage.IndexReader), repeat, &wg)
 		}
 	} else {
 		wg.Add(1)
 		go doread(llrb, repeat, &wg)
+	}
+	if reader != nil {
+		reader.Release()
 	}
 	wg.Wait()
 	return count
