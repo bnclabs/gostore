@@ -20,7 +20,7 @@ func (writer *LLRBWriter) snapshotticker(interval int, finch chan bool) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			log.Errorf("%v snapshotticker() crashed: %v\n", llrb.logPrefix, r)
+			log.Errorf("%v snapshotticker() crashed: %v\n", llrb.logprefix, r)
 			log.Errorf("\n%s", getStackTrace(2, debug.Stack()))
 			llrb.Destroy()
 		}
@@ -36,9 +36,9 @@ loop:
 			break loop
 		default:
 		}
-		log.Tracef("%v snapshot tick for %v ...\n", llrb.logPrefix, id)
+		log.Tracef("%v snapshot tick for %v ...\n", llrb.logprefix, id)
 		if err := writer.makeSnapshot(id); err != nil {
-			log.Errorf("%v make snapshot $%v failed: %v\n", llrb.logPrefix, err)
+			log.Errorf("%v make snapshot $%v failed: %v\n", llrb.logprefix, err)
 			break loop
 		}
 	}
@@ -80,7 +80,7 @@ type LLRBSnapshot struct {
 
 	// config
 	fmask     metadataMask
-	logPrefix string
+	logprefix string
 }
 
 // NewSnapshot mvcc version for LLRB tree.
@@ -105,7 +105,7 @@ func (llrb *LLRB) NewSnapshot(id string) *LLRBSnapshot {
 		valmemory:     llrb.valmemory,
 		h_upsertdepth: *llrb.h_upsertdepth,
 	}
-	snapshot.logPrefix = fmt.Sprintf("[LLRBSnapshot-%s/%s]", llrb.name, id)
+	snapshot.logprefix = fmt.Sprintf("[LLRBSnapshot-%s/%s]", llrb.name, id)
 
 	snapshot.reclaim = make([]*Llrbnode, len(llrb.mvcc.reclaim))
 	copy(snapshot.reclaim, llrb.mvcc.reclaim)
@@ -123,7 +123,7 @@ func (llrb *LLRB) NewSnapshot(id string) *LLRBSnapshot {
 	}
 
 	fmsg := "%v snapshot BORN %v nodes to reclaim...\n"
-	log.Debugf(fmsg, snapshot.logPrefix, len(snapshot.reclaim))
+	log.Debugf(fmsg, snapshot.logprefix, len(snapshot.reclaim))
 	llrb.mvcc.n_snapshots += 1
 	llrb.mvcc.n_activess += 1
 	return snapshot
@@ -148,13 +148,13 @@ func (snapshot *LLRBSnapshot) Isactive() bool {
 
 // Refer implement IndexSnapshot interface.
 func (snapshot *LLRBSnapshot) Refer() {
-	log.Debugf("%v snapshot REF\n", snapshot.logPrefix)
+	log.Debugf("%v snapshot REF\n", snapshot.logprefix)
 	atomic.AddInt64(&snapshot.refcount, 1)
 }
 
 // Release implement IndexSnapshot interface.
 func (snapshot *LLRBSnapshot) Release() {
-	log.Debugf("%v snapshot DEREF\n", snapshot.logPrefix)
+	log.Debugf("%v snapshot DEREF\n", snapshot.logprefix)
 	refcount := atomic.AddInt64(&snapshot.refcount, -1)
 	if refcount < 0 {
 		panic("Release(): snapshot refcount gone negative")

@@ -27,11 +27,11 @@ func (llrb *LLRB) MVCCWriter() *LLRBWriter {
 		reqch:   make(chan []interface{}, chansize),
 		finch:   make(chan bool),
 	}
-	log.Infof("%v starting mvcc writer ...\n", llrb.logPrefix)
+	log.Infof("%v starting mvcc writer ...\n", llrb.logprefix)
 	go llrb.mvcc.writer.run()
 
 	tick := llrb.config["mvcc.snapshot.tick"].(int)
-	log.Infof("%v starting snapshot ticker (%v) ...\n", llrb.logPrefix, tick)
+	log.Infof("%v starting snapshot ticker (%v) ...\n", llrb.logprefix, tick)
 	go llrb.mvcc.writer.snapshotticker(tick, llrb.mvcc.writer.finch)
 
 	return llrb.mvcc.writer
@@ -157,7 +157,7 @@ func (writer *LLRBWriter) run() {
 
 	defer func() {
 		if r := recover(); r != nil {
-			log.Errorf("%v writer() crashed: %v\n", llrb.logPrefix, r)
+			log.Errorf("%v writer() crashed: %v\n", llrb.logprefix, r)
 			log.Errorf("\n%s", getStackTrace(2, debug.Stack()))
 			ch := make(chan bool)
 			dodestroy(ch)
@@ -174,7 +174,7 @@ func (writer *LLRBWriter) run() {
 				close(msg[1].(chan *LLRBSnapshot))
 			}
 		}
-		log.Infof("%v ... stopping mvcc writer\n", llrb.logPrefix)
+		log.Infof("%v ... stopping mvcc writer\n", llrb.logprefix)
 	}()
 
 	reclaimNodes := func(opname string, reclaim []*Llrbnode) {
@@ -255,13 +255,13 @@ loop:
 					waiter <- snapshot
 				}
 				fmsg := "%v $%v snapshot ACCOUNTED to %v waiters\n"
-				log.Debugf(fmsg, llrb.logPrefix, id, ln)
+				log.Debugf(fmsg, llrb.logprefix, id, ln)
 				writer.waiters = writer.waiters[:0]
 			}
 
 		case cmdLlrbWriterGetSnapshot:
 			waiter := msg[1].(chan IndexSnapshot)
-			log.Debugf("%v adding waiter for next snapshot\n", llrb.logPrefix)
+			log.Debugf("%v adding waiter for next snapshot\n", llrb.logprefix)
 			writer.waiters = append(writer.waiters, waiter)
 
 		case cmdLlrbWriterPurgeSnapshot:
@@ -751,7 +751,7 @@ loop:
 		}
 		llrb.mvcc.n_activess -= 1
 		atomic.AddInt64(&llrb.mvcc.n_purgedss, 1)
-		log.Debugf("%v snapshot PURGED\n", snapshot.logPrefix)
+		log.Debugf("%v snapshot PURGED\n", snapshot.logprefix)
 		atomic.AddInt64(&llrb.n_lookups, snapshot.n_lookups)
 		atomic.AddInt64(&llrb.n_ranges, snapshot.n_ranges)
 		atomic.AddInt64(&llrb.mvcc.n_cclookups, snapshot.n_cclookups)

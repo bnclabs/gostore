@@ -143,7 +143,7 @@ func (llrb *LLRB) log(involved int, humanize bool) {
 		avail := dohumanize(stats["node.available"])
 		kmem := dohumanize(stats["keymemory"])
 		fmsg := "%v keymem(%v): %v useful, overhd %v allocated %v avail %v\n"
-		log.Infof(fmsg, llrb.logPrefix, kmem, use, overh, alloc, avail)
+		log.Infof(fmsg, llrb.logprefix, kmem, use, overh, alloc, avail)
 
 		// node utilization
 		arenapools := llrb.nodearena.mpools
@@ -167,7 +167,7 @@ func (llrb *LLRB) log(involved int, humanize bool) {
 			}
 		}
 		out := strings.Join(outs, "\n")
-		log.Infof("%v key utilization:\n%v\n", llrb.logPrefix, out)
+		log.Infof("%v key utilization:\n%v\n", llrb.logprefix, out)
 
 		// value memory
 		overh = dohumanize(stats["value.overhead"])
@@ -176,7 +176,7 @@ func (llrb *LLRB) log(involved int, humanize bool) {
 		avail = dohumanize(stats["value.available"])
 		vmem := dohumanize(stats["valmemory"])
 		fmsg = "%v valmem(%v): %v useful, overhd %v allocated %v avail %v\n"
-		log.Infof(fmsg, llrb.logPrefix, vmem, use, overh, alloc, avail)
+		log.Infof(fmsg, llrb.logprefix, vmem, use, overh, alloc, avail)
 
 		// value utilization
 		arenapools = llrb.valarena.mpools
@@ -200,7 +200,7 @@ func (llrb *LLRB) log(involved int, humanize bool) {
 			}
 		}
 		out = strings.Join(outs, "\n")
-		log.Infof("%v value utilization:\n%v\n", llrb.logPrefix, out)
+		log.Infof("%v value utilization:\n%v\n", llrb.logprefix, out)
 	}
 
 	// log statistics
@@ -208,7 +208,7 @@ func (llrb *LLRB) log(involved int, humanize bool) {
 	if err != nil {
 		panic(fmt.Errorf("log(): %v", err))
 	}
-	log.Infof("%v stats %v\n", llrb.logPrefix, string(text))
+	log.Infof("%v stats %v\n", llrb.logprefix, string(text))
 
 	// log snapshot chain
 	if llrb.mvcc.enabled {
@@ -219,6 +219,6 @@ func (llrb *LLRB) log(involved int, humanize bool) {
 			snapshot = snapshot.next
 		}
 		fmsg := "%v snapshot chain %v\n"
-		log.Infof(fmsg, llrb.logPrefix, strings.Join(chain, "->"))
+		log.Infof(fmsg, llrb.logprefix, strings.Join(chain, "->"))
 	}
 }

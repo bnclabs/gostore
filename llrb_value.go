@@ -8,6 +8,7 @@ import "unsafe"
 import "reflect"
 
 const nvaluesize = 16 // + valuesize
+
 type nodevalue struct {
 	hdr1     uint64 // valuesize[39:]
 	pool     *mempool

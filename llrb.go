@@ -84,7 +84,7 @@ type LLRB struct { // tree container
 	mdsize    int
 	maxvb     int
 	config    map[string]interface{}
-	logPrefix string
+	logprefix string
 
 	// scratch pad
 	strsl []string
@@ -107,7 +107,7 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	llrb.valarena = llrb.newvaluearena(config)
 
 	// set up logger
-	llrb.logPrefix = fmt.Sprintf("[LLRB-%s]", name)
+	llrb.logprefix = fmt.Sprintf("[LLRB-%s]", name)
 
 	// set up metadata options
 	llrb.fmask = llrb.setupfmask(config)
@@ -136,7 +136,7 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 		llrb.MVCCWriter()
 	}
 
-	log.Infof("%v started ...\n", llrb.logPrefix)
+	log.Infof("%v started ...\n", llrb.logprefix)
 	llrb.logconfig(config)
 	return llrb
 }
@@ -944,7 +944,7 @@ func (llrb *LLRB) logconfig(config map[string]interface{}) {
 	cp := humanize.Bytes(uint64(llrb.config["nodearena.capacity"].(int)))
 	pcp := humanize.Bytes(uint64(llrb.config["nodearena.pool.capacity"].(int)))
 	fmsg := "%v key arena %v blocks over {%v %v} cap %v poolcap %v\n"
-	log.Infof(fmsg, llrb.logPrefix, kblocks, min, max, cp, pcp)
+	log.Infof(fmsg, llrb.logprefix, kblocks, min, max, cp, pcp)
 
 	// value arena
 	vblocks := len(stats["value.blocks"].([]int64))
@@ -953,7 +953,7 @@ func (llrb *LLRB) logconfig(config map[string]interface{}) {
 	cp = humanize.Bytes(uint64(llrb.config["valarena.capacity"].(int)))
 	pcp = humanize.Bytes(uint64(llrb.config["valarena.pool.capacity"].(int)))
 	fmsg = "%v val arena %v blocks over {%v %v} cap %v poolcap %v\n"
-	log.Infof(fmsg, llrb.logPrefix, vblocks, min, max, cp, pcp)
+	log.Infof(fmsg, llrb.logprefix, vblocks, min, max, cp, pcp)
 }
 
 // rotation routines for 2-3-4 algorithm, not used.
