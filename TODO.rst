@@ -1,3 +1,7 @@
+* test case for config.go
+* rename nodevalue{} to llrbvalue{}
+  rename nvaluesize to llrbvaluesize
+* validate whether maxpools (256) is sufficient.
 * define an expected hierarchy of package dependencies and enforce them
   via `make check`.
 * include `go vet`, `go lint` and `errcheck` as part of `make check`

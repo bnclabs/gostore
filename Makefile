@@ -1,3 +1,6 @@
+build:
+	go build -tags dict
+
 test:
 	go test -v -race -tags dict -test.run=. -test.bench=. -test.benchmem=true
 
