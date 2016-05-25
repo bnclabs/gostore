@@ -7,7 +7,7 @@ import "strconv"
 import "fmt"
 
 // {vbuuid, mvalue, dead-seqnos, born-seqnos}
-var mdlookup = [16]int{
+var mdlookup = [16]byte{
 	0, // 0x0
 	1, // 0x1 bnseq
 	1, // 0x2 ddseq
@@ -104,7 +104,7 @@ func (md *metadata) sizeof() int {
 	n := sz
 	for i := uint64(0); i < 3; i++ {
 		off := (md.hdr >> (i * 4)) & 0xf
-		n += (mdlookup[off] * sz)
+		n += (int(mdlookup[off]) * sz)
 	}
 	return n
 }
