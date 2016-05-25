@@ -8,6 +8,22 @@ import "unsafe"
 
 var _ = fmt.Sprintf("dummy")
 
+func TestConstants(t *testing.T) {
+	if unsafe.Sizeof(Llrbnode{}) != (llrbnodesize + 8) {
+		t.Fatalf("Llrbnode{} size has changed")
+	} else if unsafe.Sizeof(nodevalue{}) != (nvaluesize + 8) {
+		t.Fatalf("nodevalue{} size has changed")
+	} else if MinKeymem != 32 {
+		t.Fatalf("MinKeymem has changed")
+	} else if MaxKeymem != 4096 {
+		t.Fatalf("MaxKeymem has changed")
+	} else if MinValmem != 0 {
+		t.Fatalf("MinKeymem has changed")
+	} else if MaxValmem != 10*1024*1024 {
+		t.Fatalf("MaxKeymem has changed")
+	}
+}
+
 func Testnode(t *testing.T) {
 	minblock, maxblock := int64(96), int64(1024*1024*10)
 	capacity, pcapacity := int64(1024*1024*1024), int64(1024*1024)
