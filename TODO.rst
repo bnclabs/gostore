@@ -1,6 +1,4 @@
 * test case for config.go
-* rename nodevalue{} to llrbvalue{}
-  rename nvaluesize to llrbvaluesize
 * validate whether maxpools (256) is sufficient.
 * define an expected hierarchy of package dependencies and enforce them
   via `make check`.
@@ -10,12 +8,21 @@
 
 LLRB:
 
+* rename nodevalue{} to llrbvalue{}
+  rename nvaluesize to llrbvaluesize
 * export metadata `mvalue` along with {pointer, level}
 * if there are no outstanding snapshots, may be we can do non-mvcc
   upserts and deletes ?
 * YCSB test cases.
 * add llrb tree validation rules, based on sedgewick paper.
 * refactor memory allocator into separate package.
+
+BUBT:
+
+* test bubt for empty list of key,value pairs.
+* instead of repeating the key-content in the intermediate nodes,
+  just refer them to znodes and cache all the references for future
+  use.
 
 clock:
 
