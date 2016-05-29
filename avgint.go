@@ -67,3 +67,15 @@ func (av *averageInt64) clone() *averageInt64 {
 	newav := (*av)
 	return &newav
 }
+
+func (av *averageInt64) stats() map[string]interface{} {
+	stats := map[string]interface{}{
+		"samples":     av.samples(),
+		"min":         av.min(),
+		"max":         av.max(),
+		"mean":        av.mean(),
+		"variance":    av.variance(),
+		"stddeviance": av.sd(),
+	}
+	return stats
+}
