@@ -10,8 +10,7 @@ import "unsafe"
 import "sort"
 import "fmt"
 
-const MEMUtilization = 0.95
-
+// TODO: explore whether these constants need to be exported.
 const sizeinterval = 32
 const maxpools = 256                           // len(arena.blocksizes)
 const maxarenasize = 1024 * 1024 * 1024 * 1024 // 1TB
