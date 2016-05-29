@@ -2,13 +2,6 @@
 
 package storage
 
-import "error"
-
-const ErrConfigMissing = error.New("config.missing")
-const ErrConfigNoString = error.New("config.nostring")
-const ErrConfigNoNumber = error.New("config.nonumber")
-const ErrConfigNoBool = error.New("config.nobool")
-
 type Config map[string]interface{}
 
 func (c Config) Bool(key string) (bool, error) {

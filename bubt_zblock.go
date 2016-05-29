@@ -42,13 +42,10 @@ func (z *bubtzblock) insert(nd Node) (ok bool) {
 
 	if nd == nil {
 		return false
-	} else if key, value = nd.Key(), nd.Value(); len(key) > 65535 {
-		panic("key cannot exceed 65535")
-	} else if z.f.hasdatafile() && len(value) > 65535 {
-		panic("value cannot exceed 65535, use datafile instead")
-	} else if len(value) > BubtMaxzvalue {
-		fmsg := "value %v > %v not allowed in zblock"
-		panic(fmt.Sprintf(fmsg, len(value), BubtMaxzvalue))
+	} else if key, value = nd.Key(), nd.Value(); len(key) > MaxKeymem {
+		panic(fmt.Errorf("key cannot exceed %v", MaxKeymem))
+	} else if len(value) > MaxValmem {
+		panic(fmt.Errorf("value cannot exceed %v", MaxValmem))
 	}
 
 	// check whether enough space available in the block.
@@ -69,8 +66,8 @@ func (z *bubtzblock) insert(nd Node) (ok bool) {
 	}
 
 	z.entries = append(z.entries, len(z.kbuffer))
-	z.f.h_keysize.add(len(key))
-	z.f.h_valsize.add(len(value))
+	z.f.a_keysize.add(int64(len(key)))
+	z.f.a_valsize.add(int64(len(value)))
 
 	// encode metadadata {vbno(2), vbuuid(8), bornseqno(8), deadseqno(8)}
 	binary.BigEndian.PutUint16(scratch[:2], nd.Vbno())         // 2 bytes
