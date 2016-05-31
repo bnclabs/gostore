@@ -1,6 +1,6 @@
 // +build ignore
 
-package storage
+package bubt
 
 import "os"
 import "fmt"
@@ -40,12 +40,12 @@ type Bubtstore struct {
 	mnodes     int64
 	znodes     int64
 	dcount     int64
-	a_zentries *histogramInt64
-	a_mentries *histogramInt64
-	a_keysize  *histogramInt64
-	a_valsize  *histogramInt64
-	a_redsize  *histogramInt64
-	h_depth    *histogramInt64
+	a_zentries *HistogramInt64
+	a_mentries *HistogramInt64
+	a_keysize  *HistogramInt64
+	a_valsize  *HistogramInt64
+	a_redsize  *HistogramInt64
+	h_depth    *HistogramInt64
 }
 
 type bubtblock interface {
@@ -68,45 +68,42 @@ func NewBubtstore(name string, iter IndexIterator, config Config, logg Logger) *
 		iquitch:    make(chan struct{}),
 		dquitch:    make(chan struct{}),
 		nodes:      make([]Node, 0),
-		a_zentries: &averageInt64{},
-		a_mentries: &averageInt64{},
-		a_keysize:  &averageInt64{},
-		a_valsize:  &averageInt64{},
-		a_redsize:  &averageInt64{},
-		h_depth:    newhistorgramInt64(0, bubtMpoolSize, 1),
+		a_zentries: &AverageInt64{},
+		a_mentries: &AverageInt64{},
+		a_keysize:  &AverageInt64{},
+		a_valsize:  &AverageInt64{},
+		a_redsize:  &AverageInt64{},
+		h_depth:    NewhistorgramInt64(0, bubtMpoolSize, 1),
 	}
 	f.logprefix = fmt.Sprintf("[BUBT-%s]", name)
 
-	if f.indexfile, err = config.String("indexfile"); err != nil {
-		panic(err)
-	} else if f.indexfd, err = os.Create(indexfile); err != nil {
+	f.indexfile = config.String("indexfile")
+	if f.indexfd, err = os.Create(indexfile); err != nil {
 		panic(err)
 	}
 
-	if f.datafile, err = config.String("datafile"); err != nil {
-		panic(err)
-	} else if datafile != "" {
+	f.datafile = config.String("datafile")
+	if datafile != "" {
 		if f.datafd, err = os.Create(datafile); err != nil {
 			panic(err)
 		}
 	}
 
 	maxblock, minblock := 4*1024*1024*1024, 512 // TODO: avoid magic numbers
-	if f.zblocksize, err = config.Int64("zblocksize"); err != nil {
-		panic(err)
-	} else if f.zblocksize > maxblock {
+	f.zblocksize = config.Int64("zblocksize")
+	if f.zblocksize > maxblock {
 		log.Errorf("zblocksize %v > %v", f.zblocksize, maxblock)
 	} else if f.zblocksize < minblock {
 		log.Errorf("zblocksize %v < %v", f.zblocksize, minblock)
-	} else if f.mblocksize, err = config.Int64("mblocksize"); err != nil {
-		panic(err)
-	} else if f.mblocksize > maxblock {
+	}
+	f.mblocksize = config.Int64("mblocksize")
+	if f.mblocksize > maxblock {
 		log.Errorf("mblocksize %v > %v", f.mblocksize, maxblock)
 	} else if f.mblocksize < minblock {
 		lgo.Errorf("mblocksize %v < %v", f.mblocksize, minblock)
-	} else if f.mreduce, ok = config.Bool("mreduce"); err != nil {
-		panic(err)
-	} else if f.hasdatafile() == false && f.mreduce == true {
+	}
+	f.mreduce = config.Bool("mreduce")
+	if f.hasdatafile() == false && f.mreduce == true {
 		panic("cannot mreduce without datafile")
 	}
 
@@ -163,12 +160,12 @@ func (f *Bubtstore) stats2json() []byte {
 		"rootfpos":   f.rootfpos,
 		"mnodes":     f.mnodes,
 		"znodes":     f.znodes,
-		"a_zentries": f.a_zentries.stats(),
-		"a_mentries": f.a_mentries.stats(),
-		"a_keysize":  f.a_keysize.stats(),
-		"a_valsize":  f.a_valsize.stats(),
-		"a_redsize":  f.a_redsize.stats(),
-		"h_depth":    f.h_depth.fullstats(),
+		"a_zentries": f.a_zentries.Stats(),
+		"a_mentries": f.a_mentries.Stats(),
+		"a_keysize":  f.a_keysize.Stats(),
+		"a_valsize":  f.a_valsize.Stats(),
+		"a_redsize":  f.a_redsize.Stats(),
+		"h_depth":    f.h_depth.Fullstats(),
 	}
 	data, err := json.Marshal(stats)
 	if err != nil {

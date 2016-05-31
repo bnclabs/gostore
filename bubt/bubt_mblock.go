@@ -1,6 +1,6 @@
 // +build ignore
 
-package storage
+package bubt
 
 type bubtmblock struct {
 	f        *bubtstore

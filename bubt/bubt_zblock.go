@@ -1,6 +1,6 @@
 // +build ignore
 
-package storage
+package bubt
 
 import "encoding/binary"
 import "fmt"
@@ -66,8 +66,8 @@ func (z *bubtzblock) insert(nd Node) (ok bool) {
 	}
 
 	z.entries = append(z.entries, len(z.kbuffer))
-	z.f.a_keysize.add(int64(len(key)))
-	z.f.a_valsize.add(int64(len(value)))
+	z.f.a_keysize.Add(int64(len(key)))
+	z.f.a_valsize.Add(int64(len(value)))
 
 	// encode metadadata {vbno(2), vbuuid(8), bornseqno(8), deadseqno(8)}
 	binary.BigEndian.PutUint16(scratch[:2], nd.Vbno())         // 2 bytes

@@ -1,6 +1,6 @@
 // +build ignore
 
-package storage
+package bubt
 
 func (f *Bubtstore) writeidx(data []byte) error {
 	select {

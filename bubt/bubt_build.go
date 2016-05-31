@@ -1,6 +1,6 @@
 // +build ignore
 
-package storage
+package bubt
 
 func (f *Bubtstore) Build() {
 	if f.frozen == false {
@@ -96,7 +96,7 @@ func (f *Bubtstore) buildz(fpos [2]int64) (bubtblock, [2]int64) {
 
 	f.dcount++
 	defer func() { f.dcount-- }()
-	defer func() { f.a_depth.add(f.dcount) }()
+	defer func() { f.a_depth.Add(f.dcount) }()
 
 	for nd, ok = f.pop(), z.insert(nd); ok; {
 		nd = f.pop()
@@ -116,7 +116,7 @@ func (f *Bubtstore) flush(block bubtblock, fpos [2]int64) (bubtblock, [2]int64) 
 			blk.finalize()
 			blk.rpos = fpos[1] + len(blk.dbuffer)
 			reducevalue := blk.reduce()
-			f.a_redsize.add(len(reducevalue))
+			f.a_redsize.Add(len(reducevalue))
 			blk.dbuffer = append(blk.dbuffer, reducevalue...)
 			vpos := fpos[1] + len(blk.dbuffer)
 			if f.writedata(blk.dbuffer); err != nil {
@@ -137,7 +137,7 @@ func (f *Bubtstore) flush(block bubtblock, fpos [2]int64) (bubtblock, [2]int64) 
 			blk.finalize()
 			blk.fpos, blk.rpos = fpos, fpos[1]+len(blk.dbuffer)
 			reducevalue := blk.reduce()
-			f.a_redsize.add(len(reducevalue))
+			f.a_redsize.Add(len(reducevalue))
 			blk.dbuffer = append(blk.dbuffer, reducevalue...)
 			vpos := fpos[1] + len(blk.dbuffer)
 			if f.writedata(blk.dbuffer); err != nil {
