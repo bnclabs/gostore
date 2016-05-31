@@ -6,6 +6,7 @@ import "unsafe"
 import "sort"
 
 import "github.com/prataprc/storage.go/lib"
+import "github.com/prataprc/storage.go/api"
 
 // Sizeinterval minblock and maxblocks should be multiples of Sizeinterval.
 const Sizeinterval = int64(32)
@@ -68,21 +69,20 @@ func NewArena(config lib.Config) *Arena {
 
 //---- operations
 
-// Alloc implement Mallocer{} interface.
-func (arena *Arena) Alloc(n int64) (ptr unsafe.Pointer, mpool Mpooler) {
+// Alloc implement api.Mallocer{} interface.
+func (arena *Arena) Alloc(n int64) (unsafe.Pointer, api.Mallocer) {
 	if arena.mpools == nil {
 		panicerr("arena released")
 	}
 
-	var ok bool
 	// check argument
 	if largest := arena.blocksizes[len(arena.blocksizes)-1]; n > largest {
 		panicerr("Alloc size %v exceeds maxblock size %v", n, largest)
 	}
 	// try to get from existing pool
 	size := SuitableSize(arena.blocksizes, n)
-	for _, mpool = range arena.mpools[size] {
-		if ptr, ok = mpool.Alloc(); ok {
+	for _, mpool := range arena.mpools[size] {
+		if ptr, ok := mpool.Allocchunk(); ok {
 			return ptr, mpool
 		}
 	}
@@ -109,10 +109,10 @@ func (arena *Arena) Alloc(n int64) (ptr unsafe.Pointer, mpool Mpooler) {
 		panic(ErrorOutofMemory)
 	}
 	// go ahead, create a new pool.
-	mpool = arena.poolmaker(size, numblocks)
+	mpool := arena.poolmaker(size, numblocks)
 	arena.mpools[size] = append(arena.mpools[size], mpool)
 	sort.Sort(arena.mpools[size])
-	ptr, _ = mpool.Alloc()
+	ptr, _ := mpool.Allocchunk()
 	return ptr, mpool
 }
 
@@ -124,6 +124,10 @@ func (arena *Arena) Release() {
 		}
 	}
 	arena.blocksizes, arena.mpools = nil, nil
+}
+
+func (arena *Arena) Free(ptr unsafe.Pointer) {
+	panicerr("Free cannot be called on arena, use Mpooler")
 }
 
 //---- statistics and maintenance

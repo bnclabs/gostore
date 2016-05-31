@@ -7,6 +7,8 @@ import "C"
 
 import "unsafe"
 
+import "github.com/prataprc/storage.go/api"
+
 // poolflist manages a memory block sliced up into equal sized chunks.
 type poolflist struct {
 	// 64-bit aligned stats
@@ -47,6 +49,12 @@ func (pool *poolflist) Chunksize() int64 {
 	return pool.size
 }
 
+// Chunksizes alias for Mallocer{} interface.
+func (pool *poolflist) Chunksizes() []int64 {
+	panicerr("cannot use this API on Mpooler.")
+	return nil
+}
+
 // Less import Mpooler{} interface.
 func (pool *poolflist) Less(other Mpooler) bool {
 	if oth, ok := other.(*poolflist); ok {
@@ -56,8 +64,14 @@ func (pool *poolflist) Less(other Mpooler) bool {
 	return false
 }
 
-// Alloc implement Mpooler{} interface.
-func (pool *poolflist) Alloc() (unsafe.Pointer, bool) {
+// Alloc implement Mallocer{} interface.
+func (pool *poolflist) Alloc(n int64) (unsafe.Pointer, api.Mallocer) {
+	panicerr("use Allocchunk")
+	return nil, nil
+}
+
+// Allocchunk implement Mpooler{} interface.
+func (pool *poolflist) Allocchunk() (unsafe.Pointer, bool) {
 	if pool.mallocated == pool.capacity {
 		return nil, false
 	}
@@ -113,8 +127,9 @@ func (pool *poolflist) Release() {
 	pool.mallocated = 0
 }
 
-func (pool *poolflist) Utilization() {
+func (pool *poolflist) Utilization() ([]int64, []float64) {
 	panicerr("call this method on arena object")
+	return nil, nil
 }
 
 //---- local functions

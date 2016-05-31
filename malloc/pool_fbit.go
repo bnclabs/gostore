@@ -7,6 +7,8 @@ import "C"
 
 import "unsafe"
 
+import "github.com/prataprc/storage.go/api"
+
 //import "fmt"
 
 // poolfbit manages a memory block sliced up into equal sized chunks.
@@ -44,6 +46,12 @@ func (pool *poolfbit) Chunksize() int64 {
 	return pool.size
 }
 
+// Chunksizes alias for Mallocer{} interface.
+func (pool *poolfbit) Chunksizes() []int64 {
+	panicerr("cannot use this API on Mpooler.")
+	return nil
+}
+
 // Less implement Mpooler{} interface.
 func (pool *poolfbit) Less(other Mpooler) bool {
 	if oth, ok := other.(*poolfbit); ok {
@@ -53,8 +61,14 @@ func (pool *poolfbit) Less(other Mpooler) bool {
 	return false
 }
 
-// Alloc implement Mpooler{} interface.
-func (pool *poolfbit) Alloc() (unsafe.Pointer, bool) {
+// Alloc implement Mallocer{} interface.
+func (pool *poolfbit) Alloc(n int64) (unsafe.Pointer, api.Mallocer) {
+	panicerr("use Allocchunk")
+	return nil, nil
+}
+
+// Allocchunk implement Mpooler{} interface.
+func (pool *poolfbit) Allocchunk() (unsafe.Pointer, bool) {
 	if pool.base == nil {
 		panicerr("pool already released")
 	} else if pool.mallocated == pool.capacity {
@@ -111,8 +125,9 @@ func (pool *poolfbit) Release() {
 	pool.mallocated = 0
 }
 
-func (pool *poolfbit) Utilization() {
+func (pool *poolfbit) Utilization() ([]int64, []float64) {
 	panicerr("call this method on arena object")
+	return nil, nil
 }
 
 //---- local functions
