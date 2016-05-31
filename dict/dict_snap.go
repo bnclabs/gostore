@@ -1,14 +1,14 @@
-// +build dict
-
 package storage
 
 import "strconv"
+
+import "github.com/prataprc/storage.go/api"
 
 // NOTE: sorted() cannot be called on DictSnapshot !!
 
 type DictSnapshot struct{ Dict }
 
-func (d *Dict) NewDictSnapshot() IndexSnapshot {
+func (d *Dict) NewDictSnapshot() api.IndexSnapshot {
 	d.snapn++
 	snapshot := &DictSnapshot{Dict: Dict{snapn: d.snapn, dead: d.dead}}
 	snapshot.dict = make(map[uint64]*dictnode)
@@ -25,34 +25,34 @@ func (d *DictSnapshot) Keys() []string {
 	return d.sortkeys
 }
 
-//---- IndexSnapshot{} interface.
+//---- api.IndexSnapshot{} interface.
 
-// Count implement IndexSnapshot{} interface.
+// Count implement api.IndexSnapshot{} interface.
 func (d *DictSnapshot) Count() int64 {
 	return int64(len(d.dict))
 }
 
-// Id implement IndexSnapshot{} interface.
+// Id implement api.IndexSnapshot{} interface.
 func (d *DictSnapshot) Id() string {
 	return d.id
 }
 
-// Isactive implement IndexSnapshot{} interface.
+// Isactive implement api.IndexSnapshot{} interface.
 func (d *DictSnapshot) Isactive() bool {
 	return !d.dead
 }
 
-// Refer implement IndexSnapshot{} interface.
+// Refer implement api.IndexSnapshot{} interface.
 func (d *DictSnapshot) Refer() {
 	return
 }
 
-// Release implement IndexSnapshot{} interface.
+// Release implement api.IndexSnapshot{} interface.
 func (d *DictSnapshot) Release() {
 	d.dead = true
 }
 
-// Validate implement IndexSnapshot{} interface.
+// Validate implement api.IndexSnapshot{} interface.
 func (d *DictSnapshot) Validate() {
 	panic("Validate(): not implemented for DictSnapshot")
 }
@@ -60,7 +60,7 @@ func (d *DictSnapshot) Validate() {
 //---- IndexReader{} interface.
 
 // Min implement IndexReader{} interface.
-func (d *DictSnapshot) Min() Node {
+func (d *DictSnapshot) Min() api.Node {
 	if len(d.dict) == 0 {
 		return nil
 	}
@@ -68,7 +68,7 @@ func (d *DictSnapshot) Min() Node {
 }
 
 // Max implement IndexReader{} interface.
-func (d *DictSnapshot) Max() Node {
+func (d *DictSnapshot) Max() api.Node {
 	if len(d.dict) == 0 {
 		return nil
 	}
@@ -76,7 +76,7 @@ func (d *DictSnapshot) Max() Node {
 }
 
 // Range implement IndexReader{} interface.
-func (d *DictSnapshot) Range(lk, hk []byte, incl string, reverse bool, iter RangeCallb) {
+func (d *DictSnapshot) Range(lk, hk []byte, incl string, reverse bool, iter api.RangeCallb) {
 	if reverse {
 		d.rangebackward(lk, hk, incl, iter)
 		return
@@ -85,7 +85,7 @@ func (d *DictSnapshot) Range(lk, hk []byte, incl string, reverse bool, iter Rang
 }
 
 // Iterate implement IndexReader{} interface.
-func (d *DictSnapshot) Iterate(lkey, hkey []byte, incl string, r bool) IndexIterator {
+func (d *DictSnapshot) Iterate(lkey, hkey []byte, incl string, r bool) api.IndexIterator {
 	return d.iterate(lkey, hkey, incl, r)
 }
 

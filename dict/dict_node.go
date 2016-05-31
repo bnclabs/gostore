@@ -1,5 +1,7 @@
 package storage
 
+import "github.com/prataprc/storage.go/api"
+
 type dictnode struct {
 	key    []byte
 	value  []byte
@@ -49,7 +51,7 @@ func (dn *dictnode) Value() []byte {
 }
 
 // SetVbno implement NodeSetter{} interface.
-func (dn *dictnode) Setvbno(vbno uint16) Node {
+func (dn *dictnode) Setvbno(vbno uint16) api.Node {
 	if dn != nil {
 		dn.vbno = vbno
 	}
@@ -57,12 +59,12 @@ func (dn *dictnode) Setvbno(vbno uint16) Node {
 }
 
 // Setaccess implement NodeSetter{} interface.
-func (dn *dictnode) Setaccess(access uint64) Node {
+func (dn *dictnode) Setaccess(access uint64) api.Node {
 	return dn
 }
 
 // SetVbuuid implement NodeSetter{} interface.
-func (dn *dictnode) SetVbuuid(vbuuid uint64) Node {
+func (dn *dictnode) SetVbuuid(vbuuid uint64) api.Node {
 	if dn != nil {
 		dn.vbuuid = vbuuid
 	}
@@ -70,7 +72,7 @@ func (dn *dictnode) SetVbuuid(vbuuid uint64) Node {
 }
 
 // SetBornseqno implement NodeSetter{} interface.
-func (dn *dictnode) SetBornseqno(seqno uint64) Node {
+func (dn *dictnode) SetBornseqno(seqno uint64) api.Node {
 	if dn != nil {
 		dn.bornsq = seqno
 	}
@@ -78,7 +80,7 @@ func (dn *dictnode) SetBornseqno(seqno uint64) Node {
 }
 
 // SetDeadseqno implement NodeSetter{} interface.
-func (dn *dictnode) SetDeadseqno(seqno uint64) Node {
+func (dn *dictnode) SetDeadseqno(seqno uint64) api.Node {
 	if dn != nil {
 		dn.deadsq = seqno
 	}

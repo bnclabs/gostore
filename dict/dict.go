@@ -1,5 +1,3 @@
-// +build dict
-
 package storage
 
 import "sort"
@@ -7,6 +5,9 @@ import "bytes"
 import "fmt"
 import "sync/atomic"
 import "hash/crc64"
+
+import "github.com/prataprc/storage.go/api"
+import "github.com/prataprc/storage.go/lib"
 
 var _ = fmt.Sprintf("dummy")
 
@@ -32,25 +33,25 @@ func NewDict() *Dict {
 	}
 }
 
-//---- Index{} interface.
+//---- api.Index{} interface.
 
-// Count implement Index{} / IndexSnapshot{} interface.
+// Count implement api.Index{} / api.IndexSnapshot{} interface.
 func (d *Dict) Count() int64 {
 	return int64(len(d.dict))
 }
 
-// Isactive implement Index{} / IndexSnapshot{} interface.
+// Isactive implement api.Index{} / api.IndexSnapshot{} interface.
 func (d *Dict) Isactive() bool {
 	return d.dead == false
 }
 
-// RSnapshot implement Index{} interface.
-func (d *Dict) RSnapshot(snapch chan IndexSnapshot) error {
+// RSnapshot implement api.Index{} interface.
+func (d *Dict) RSnapshot(snapch chan api.IndexSnapshot) error {
 	snapch <- d.NewDictSnapshot()
 	return nil
 }
 
-// Destroy implement Index{} interface.
+// Destroy implement api.Index{} interface.
 func (d *Dict) Destroy() error {
 	if atomic.LoadInt64(&d.activeiter) > 0 {
 		panic("cannot distroy Dict when iterators are active")
@@ -61,39 +62,39 @@ func (d *Dict) Destroy() error {
 	return nil
 }
 
-// Stats implement Index{} interface.
+// Stats implement api.Index{} interface.
 func (d *Dict) Stats() (map[string]interface{}, error) {
-	panic("Index.Stats() not implemented for Dict")
+	panic("dict.Stats() not implemented for Dict")
 }
 
-// Fullstats implement Index{} interface.
+// Fullstats implement api.Index{} interface.
 func (d *Dict) Fullstats() (map[string]interface{}, error) {
-	panic("Index.Fullstats() not implemented for Dict")
+	panic("dict.Fullstats() not implemented for Dict")
 }
 
-// Validate implement Index{} interface.
+// Validate implement api.Index{} interface.
 func (d *Dict) Validate() {
-	panic("Index.Validate() not implemented for Dict")
+	panic("dict.Validate() not implemented for Dict")
 }
 
-// Log implement Index{} interface.
+// Log implement api.Index{} interface.
 func (d *Dict) Log(involved int, humanize bool) {
-	panic("Index.Log() not implemented for Dict")
+	panic("dict.Log() not implemented for Dict")
 }
 
-//---- IndexSnapshot{} interface{}
+//---- api.IndexSnapshot{} interface{}
 
-// Id implement IndexSnapshot{} interface.
+// Id implement api.IndexSnapshot{} interface.
 func (d *Dict) Id() string {
 	return d.id
 }
 
-// Refer implement IndexSnapshot{} interface.
+// Refer implement api.IndexSnapshot{} interface.
 func (d *Dict) Refer() {
 	return
 }
 
-// Release implement IndexSnapshot{} interface.
+// Release implement api.IndexSnapshot{} interface.
 func (d *Dict) Release() {
 	d.Destroy()
 }
@@ -108,7 +109,7 @@ func (d *Dict) Has(key []byte) bool {
 }
 
 // Get implement IndexReader{} interface.
-func (d *Dict) Get(key []byte) Node {
+func (d *Dict) Get(key []byte) api.Node {
 	hashv := crc64.Checksum(key, crcisotab)
 	if nd, ok := d.dict[hashv]; ok {
 		return nd
@@ -117,7 +118,7 @@ func (d *Dict) Get(key []byte) Node {
 }
 
 // Min implement IndexReader{} interface.
-func (d *Dict) Min() Node {
+func (d *Dict) Min() api.Node {
 	if len(d.dict) == 0 {
 		return nil
 	}
@@ -126,7 +127,7 @@ func (d *Dict) Min() Node {
 }
 
 // Max implement IndexReader{} interface.
-func (d *Dict) Max() Node {
+func (d *Dict) Max() api.Node {
 	if len(d.dict) == 0 {
 		return nil
 	}
@@ -135,7 +136,7 @@ func (d *Dict) Max() Node {
 }
 
 // Range implement IndexReader{} interface.
-func (d *Dict) Range(lk, hk []byte, incl string, reverse bool, iter RangeCallb) {
+func (d *Dict) Range(lk, hk []byte, incl string, reverse bool, iter api.RangeCallb) {
 	d.sorted()
 	if reverse {
 		d.rangebackward(lk, hk, incl, iter)
@@ -144,7 +145,7 @@ func (d *Dict) Range(lk, hk []byte, incl string, reverse bool, iter RangeCallb) 
 	d.rangeforward(lk, hk, incl, iter)
 }
 
-func (d *Dict) rangeforward(lk, hk []byte, incl string, iter RangeCallb) {
+func (d *Dict) rangeforward(lk, hk []byte, incl string, iter api.RangeCallb) {
 	hashks := d.hashks
 	// parameter rewrite for lookup
 	if lk != nil && hk != nil && bytes.Compare(lk, hk) == 0 {
@@ -187,7 +188,7 @@ func (d *Dict) rangeforward(lk, hk []byte, incl string, iter RangeCallb) {
 	}
 }
 
-func (d *Dict) rangebackward(lk, hk []byte, incl string, iter RangeCallb) {
+func (d *Dict) rangebackward(lk, hk []byte, incl string, iter api.RangeCallb) {
 	hashks := d.hashks
 
 	// parameter rewrite for lookup
@@ -232,12 +233,12 @@ func (d *Dict) rangebackward(lk, hk []byte, incl string, iter RangeCallb) {
 }
 
 // Iterate implement IndexReader{} interface.
-func (d *Dict) Iterate(lkey, hkey []byte, incl string, r bool) IndexIterator {
+func (d *Dict) Iterate(lkey, hkey []byte, incl string, r bool) api.IndexIterator {
 	d.sorted()
 	return d.iterate(lkey, hkey, incl, r)
 }
 
-func (d *Dict) iterate(lkey, hkey []byte, incl string, r bool) IndexIterator {
+func (d *Dict) iterate(lkey, hkey []byte, incl string, r bool) api.IndexIterator {
 	iter := &dictIterator{
 		dict: d.dict, hashks: d.hashks, activeiter: &d.activeiter, reverse: r,
 	}
@@ -288,7 +289,7 @@ func (d *Dict) iterate(lkey, hkey []byte, incl string, r bool) IndexIterator {
 //---- IndexWriter{} interface.
 
 // Upsert implement IndexWriter{} interface.
-func (d *Dict) Upsert(key, value []byte, callb UpsertCallback) error {
+func (d *Dict) Upsert(key, value []byte, callb api.UpsertCallback) error {
 	newnd := newdictnode(key, value)
 	hashv := crc64.Checksum(key, crcisotab)
 	oldnd, ok := d.dict[hashv]
@@ -304,7 +305,7 @@ func (d *Dict) Upsert(key, value []byte, callb UpsertCallback) error {
 }
 
 // UpsertMany implement IndexWriter{} interface.
-func (d *Dict) UpsertMany(keys, values [][]byte, callb UpsertCallback) error {
+func (d *Dict) UpsertMany(keys, values [][]byte, callb api.UpsertCallback) error {
 	for i, key := range keys {
 		var value []byte
 		if len(values) > 0 {
@@ -326,7 +327,7 @@ func (d *Dict) UpsertMany(keys, values [][]byte, callb UpsertCallback) error {
 }
 
 // DeleteMin implement IndexWriter{} interface.
-func (d *Dict) DeleteMin(callb DeleteCallback) error {
+func (d *Dict) DeleteMin(callb api.DeleteCallback) error {
 	if len(d.dict) > 0 {
 		nd := d.Min()
 		d.Delete(nd.Key(), callb)
@@ -335,7 +336,7 @@ func (d *Dict) DeleteMin(callb DeleteCallback) error {
 }
 
 // DeleteMax implement IndexWriter{} interface.
-func (d *Dict) DeleteMax(callb DeleteCallback) error {
+func (d *Dict) DeleteMax(callb api.DeleteCallback) error {
 	if len(d.dict) > 0 {
 		nd := d.Max()
 		d.Delete(nd.Key(), callb)
@@ -344,7 +345,7 @@ func (d *Dict) DeleteMax(callb DeleteCallback) error {
 }
 
 // Delete implement IndexWriter{} interface.
-func (d *Dict) Delete(key []byte, callb DeleteCallback) error {
+func (d *Dict) Delete(key []byte, callb api.DeleteCallback) error {
 	if len(d.dict) > 0 {
 		hashv := crc64.Checksum(key, crcisotab)
 		deleted, ok := d.dict[hashv]
@@ -369,7 +370,8 @@ func (d *Dict) sorted() []uint64 {
 		sort.Strings(d.sortkeys)
 	}
 	for _, key := range d.sortkeys {
-		d.hashks = append(d.hashks, crc64.Checksum(str2bytes(key), crcisotab))
+		hashk := crc64.Checksum(lib.Str2bytes(key), crcisotab)
+		d.hashks = append(d.hashks, hashk)
 	}
 	return d.hashks
 }

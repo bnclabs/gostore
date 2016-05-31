@@ -3,6 +3,8 @@ package storage
 import "bytes"
 import "sync/atomic"
 
+import "github.com/prataprc/storage.go/api"
+
 type dictIterator struct {
 	dict       map[uint64]*dictnode
 	hashks     []uint64
@@ -15,7 +17,7 @@ type dictIterator struct {
 }
 
 // Next implement IndexIterator{} interface.
-func (iter *dictIterator) Next() Node {
+func (iter *dictIterator) Next() api.Node {
 	if iter.closed {
 		panic("cannot iterate over a closed iterator")
 	}
