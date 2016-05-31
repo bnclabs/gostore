@@ -1,4 +1,4 @@
-package storage
+package dict
 
 import "testing"
 import "bytes"

@@ -1,4 +1,4 @@
-package storage
+package dict
 
 import "github.com/prataprc/storage.go/api"
 
