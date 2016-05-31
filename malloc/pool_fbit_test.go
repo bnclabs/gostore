@@ -1,6 +1,6 @@
 // +build fbit
 
-package storage
+package malloc
 
 import "testing"
 import "unsafe"
@@ -11,9 +11,9 @@ import "fmt"
 
 var _ = fmt.Sprintf("dummy")
 
-func TestNewmempool(t *testing.T) {
+func TestNewpoolfbit(t *testing.T) {
 	size, n := int64(96), int64(512*512)
-	mpool := newmempool(size, n)
+	mpool := fbitfactory()(size, n)
 	if mpool.capacity != size*n {
 		t.Errorf("expected %v, got %v", size*n, mpool.capacity)
 	} else if x := int64(mpool.fbits.freeblocks()); x != n {
@@ -28,14 +28,14 @@ func TestNewmempool(t *testing.T) {
 				t.Errorf("expected panic")
 			}
 		}()
-		newmempool(size, 9)
+		newpoolfbit(size, 9)
 	}()
 }
 
 func TestMpoolAlloc(t *testing.T) {
 	size, n := int64(96), int64(56)
 	ptrs := make([]unsafe.Pointer, 0, n)
-	mpool := newmempool(size, n)
+	mpool := newpoolfbit(size, n)
 	flref := [][]uint8{[]uint8{255, 255, 255, 255, 255, 255, 255}}
 	if reflect.DeepEqual(mpool.fbits.bitmaps, flref) == false {
 		t.Errorf("expected %v, got %v", flref, mpool.fbits.bitmaps)
@@ -73,7 +73,7 @@ func TestMpoolAlloc(t *testing.T) {
 
 	size, n = 96, 512*512
 	ptrs = make([]unsafe.Pointer, 0, n)
-	mpool = newmempool(size, n)
+	mpool = newpoolfbit(size, n)
 	// allocate all of them
 	ptrs = make([]unsafe.Pointer, 0, n)
 	for i := int64(0); i < n; i++ {
@@ -117,7 +117,7 @@ func TestMpoolAlloc(t *testing.T) {
 
 func TestPoolMemory(t *testing.T) {
 	size, n := int64(96), int64(512*512)
-	mpool := newmempool(size, n)
+	mpool := newpoolfbit(size, n)
 	_, useful := mpool.memory()
 	if useful != 25165824 {
 		t.Errorf("expected %v, got %v", 25165824, useful)
@@ -128,7 +128,7 @@ func TestMpools(t *testing.T) {
 	size, n := int64(96), int64(8)
 	mpools := make(mempools, 0)
 	for i := 0; i < 1024*1024; i++ {
-		mpool := newmempool(size, n)
+		mpool := newpoolfbit(size, n)
 		mpools = append(mpools, mpool)
 	}
 	sort.Sort(mpools)
@@ -139,7 +139,7 @@ func TestMpools(t *testing.T) {
 
 func TestCheckAllocated(t *testing.T) {
 	size, n := int64(96), int64(56)
-	mpool := newmempool(size, n)
+	mpool := newpoolfbit(size, n)
 	// allocate
 	for i := int64(0); i < n; i++ {
 		mpool.alloc()
@@ -149,16 +149,16 @@ func TestCheckAllocated(t *testing.T) {
 	}
 }
 
-func BenchmarkNewmempool(b *testing.B) {
+func BenchmarkNewpoolfbit(b *testing.B) {
 	size, n := int64(96), int64(512*512)
 	for i := 0; i < b.N; i++ {
-		newmempool(size, n)
+		newpoolfbit(size, n)
 	}
 }
 
 func BenchmarkMpoolAllocX(b *testing.B) {
 	size, n := int64(96), int64(512*512)
-	mpool := newmempool(size, n)
+	mpool := newpoolfbit(size, n)
 	for i := 0; i < int(n-1); i++ {
 		mpool.alloc()
 	}

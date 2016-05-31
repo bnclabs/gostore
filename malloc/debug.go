@@ -1,6 +1,6 @@
 // +build debug
 
-package storage
+package malloc
 
 import "reflect"
 import "unsafe"

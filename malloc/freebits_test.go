@@ -1,4 +1,4 @@
-package storage
+package malloc
 
 import "testing"
 import "fmt"

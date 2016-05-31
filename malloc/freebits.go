@@ -1,7 +1,9 @@
-package storage
+package malloc
 
 //import "fmt" // TODO: remove this fmt
 import "unsafe"
+
+import "github.com/prataprc/storage.go/lib"
 
 // should always be power of 2.
 const cacheline = 64
@@ -45,7 +47,7 @@ func (fbits *freebits) initbits(bits int64) ([]uint8, int64) {
 	if x := (bits & 0x7); x > 0 {
 		byt := uint8(0)
 		for i := int64(0); i < x; i++ {
-			byt = setbit8(byt, uint8(i))
+			byt = lib.Bit8(byt).Setbit(uint8(i))
 		}
 		bitmap[len(bitmap)-1] = byt
 	}
@@ -64,7 +66,7 @@ func (fbits *freebits) sizeof() int64 {
 func (fbits *freebits) freeblocks() (n int64) {
 	ln := len(fbits.bitmaps)
 	for _, byt := range fbits.bitmaps[ln-1] {
-		n += int64(onesin8(byt))
+		n += int64(lib.Bit8(byt).Ones())
 	}
 	return
 }
@@ -83,11 +85,11 @@ func (fbits *freebits) doalloc(off, index int64) (int64, bool) {
 		if byt == 0 {
 			continue
 		}
-		n := findfirstset8(byt)
+		n := lib.Bit8(byt).Findfirstset()
 
 		bit := ((off + int64(i)) << 3) + int64(n)
 		if (index + 1) == int64(len(fbits.bitmaps)) { // terminating condition
-			bmap[off+int64(i)] = clearbit8(byt, uint8(n))
+			bmap[off+int64(i)] = lib.Bit8(byt).Clearbit(uint8(n))
 			if bit == (fbits.nblocks - 1) {
 				fbits.freeoffs[index] = -1
 				return bit, true
@@ -97,7 +99,7 @@ func (fbits *freebits) doalloc(off, index int64) (int64, bool) {
 
 		nthblock, fin := fbits.doalloc(bit*fbits.cacheline, index+1)
 		if fin {
-			bmap[off+int64(i)] = clearbit8(byt, uint8(n))
+			bmap[off+int64(i)] = lib.Bit8(byt).Clearbit(uint8(n))
 			if (n == 7) && (int64(i) == (fbits.cacheline - 1)) {
 				fbits.freeoffs[index] = -1
 				return nthblock, true
@@ -118,7 +120,7 @@ func (fbits *freebits) dofree(nthblock, index int64) int64 {
 	if (index + 1) == int64(len(fbits.bitmaps)) {
 		q, r := (nthblock >> 3), (nthblock & 0x7)
 		off, byt := q&fbits.cachemask, bmap[q]
-		bmap[q] = setbit8(byt, uint8(r))
+		bmap[q] = lib.Bit8(byt).Setbit(uint8(r))
 		if fbits.freeoffs[index] < 0 || off < fbits.freeoffs[index] {
 			fbits.freeoffs[index] = off
 		}
@@ -127,9 +129,16 @@ func (fbits *freebits) dofree(nthblock, index int64) int64 {
 	bit := fbits.dofree(nthblock, index+1)
 	q, r := (bit >> 3), (bit & 0x7)
 	off, byt := q&fbits.cachemask, bmap[q]
-	bmap[q] = setbit8(byt, uint8(r))
+	bmap[q] = lib.Bit8(byt).Setbit(uint8(r))
 	if fbits.freeoffs[index] < 0 || off < fbits.freeoffs[index] {
 		fbits.freeoffs[index] = off
 	}
 	return bit / (fbits.cacheline << 3)
+}
+
+func ceil(divident, divisor int64) int64 {
+	if divident%divisor == 0 {
+		return divident / divisor
+	}
+	return (divident / divisor) + 1
 }
