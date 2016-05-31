@@ -189,6 +189,24 @@ func (arena *Arena) Utilization() ([]int, []float64) {
 	return sizes, zs
 }
 
+// Chunksize alias for Mpooler{} interface.
+func (arena *Arena) Chunksize() int64 {
+	panicerr("Chunksize() cannot be applied on arena")
+	return 0
+}
+
+// Less alias for Mpooler{} interface.
+func (arena *Arena) Less(pool interface{}) bool {
+	panicerr("Less() cannot be applied on arena")
+	return false
+}
+
+// Allocate alias for Mpooler{} interface.
+func (arena *Arena) Allocchunk() (ptr unsafe.Pointer, ok bool) {
+	panicerr("Allocchunk() cannot be applied on arena")
+	return nil, false
+}
+
 // Mpoolers sortable based on base-pointer.
 type Mpoolers []Mpooler
 

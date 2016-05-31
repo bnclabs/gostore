@@ -56,7 +56,7 @@ func (pool *poolflist) Chunksizes() []int64 {
 }
 
 // Less import Mpooler{} interface.
-func (pool *poolflist) Less(other Mpooler) bool {
+func (pool *poolflist) Less(other interface{}) bool {
 	if oth, ok := other.(*poolflist); ok {
 		return uintptr(pool.base) < uintptr(oth.base)
 	}
@@ -127,7 +127,7 @@ func (pool *poolflist) Release() {
 	pool.mallocated = 0
 }
 
-func (pool *poolflist) Utilization() ([]int64, []float64) {
+func (pool *poolflist) Utilization() ([]int, []float64) {
 	panicerr("call this method on arena object")
 	return nil, nil
 }

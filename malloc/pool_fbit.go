@@ -53,7 +53,7 @@ func (pool *poolfbit) Chunksizes() []int64 {
 }
 
 // Less implement Mpooler{} interface.
-func (pool *poolfbit) Less(other Mpooler) bool {
+func (pool *poolfbit) Less(other interface{}) bool {
 	if oth, ok := other.(*poolfbit); ok {
 		return uintptr(pool.base) < uintptr(oth.base)
 	}
@@ -125,7 +125,7 @@ func (pool *poolfbit) Release() {
 	pool.mallocated = 0
 }
 
-func (pool *poolfbit) Utilization() ([]int64, []float64) {
+func (pool *poolfbit) Utilization() ([]int, []float64) {
 	panicerr("call this method on arena object")
 	return nil, nil
 }
@@ -135,19 +135,4 @@ func (pool *poolfbit) Utilization() ([]int64, []float64) {
 // can be costly operation.
 func (pool *poolfbit) checkallocated() int64 {
 	return pool.capacity - (pool.fbits.freeblocks() * pool.size)
-}
-
-// mempools sortable based on base-pointer.
-type mempools []*poolfbit
-
-func (pools mempools) Len() int {
-	return len(pools)
-}
-
-func (pools mempools) Less(i, j int) bool {
-	return uintptr(pools[i].base) < uintptr(pools[j].base)
-}
-
-func (pools mempools) Swap(i, j int) {
-	pools[i], pools[j] = pools[j], pools[i]
 }

@@ -10,7 +10,7 @@ type Mpooler interface {
 	Chunksize() int64
 
 	// Less ordering between pools
-	Less(pool Mpooler) bool
+	Less(pool interface{}) bool
 
 	// Allocate a chunk from pool
 	Allocchunk() (ptr unsafe.Pointer, ok bool)
@@ -37,5 +37,5 @@ type Mpooler interface {
 	Alloc(size int64) (ptr unsafe.Pointer, m api.Mallocer)
 
 	// Utilization map of chunk-size and its pool utilization
-	Utilization() ([]int64, []float64)
+	Utilization() ([]int, []float64)
 }
