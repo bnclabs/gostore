@@ -1,6 +1,6 @@
 //  Copyright (c) 2014 Couchbase, Inc.
 
-package lib
+package log
 
 import "io"
 import "os"

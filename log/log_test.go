@@ -1,4 +1,4 @@
-package lib
+package log
 
 import "testing"
 import "fmt"
