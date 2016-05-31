@@ -1,4 +1,6 @@
-package storage
+package api
+
+import "unsafe"
 
 // RangeCallb callback from Range API.
 type RangeCallb func(nd Node) bool
@@ -180,4 +182,31 @@ type IndexWriter interface {
 
 	// Delete entry specified by key.
 	Delete(key []byte, callb DeleteCallback) error
+}
+
+// Mallocer to manage memory arena.
+type Mallocer interface {
+	// Allocate a chunk of `n` bytes from `pool`.
+	Alloc(n int64) (ptr unsafe.Pointer, pool Mallocer)
+
+	// Free pointer back to the pool.
+	Free(ptr unsafe.Pointer)
+
+	// Memory return memory allocated from OS an overhead of managing it.
+	Memory() (overhead, useful int64)
+
+	// Allocated return memory allocated from `useful` memory.
+	Allocated() (allocated int64)
+
+	// Available return allocatable memory from arena.
+	Available() (available int64)
+
+	// Chunksizes allocatable chunk-sizes.
+	Chunksizes() (sizes []int64)
+
+	// Utilization map of chunch-size and its pool utilization
+	Utilization() map[int64]float64
+
+	// Release arena, all its pools and resources.
+	Release()
 }
