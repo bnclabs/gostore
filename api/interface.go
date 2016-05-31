@@ -204,9 +204,18 @@ type Mallocer interface {
 	// Chunksizes allocatable chunk-sizes.
 	Chunksizes() (sizes []int64)
 
-	// Utilization map of chunch-size and its pool utilization
-	Utilization() map[int64]float64
+	// Utilization map of chunk-size and its pool utilization
+	Utilization() ([]int, []float64)
 
 	// Release arena, all its pools and resources.
 	Release()
+
+	// Chunksize alias for Mpooler
+	Chunksize() int64
+
+	// Less alias for Mpooler
+	Less(pool interface{}) bool
+
+	// Allocate alias for Mpooler
+	Allocchunk() (ptr unsafe.Pointer, ok bool)
 }
