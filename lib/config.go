@@ -57,6 +57,8 @@ func (c Config) Int64(key string) int64 {
 		return int64(val)
 	case float32:
 		return int64(val)
+	case uint:
+		return int64(val)
 	case uint64:
 		return int64(val)
 	case uint32:
@@ -64,6 +66,8 @@ func (c Config) Int64(key string) int64 {
 	case uint16:
 		return int64(val)
 	case uint8:
+		return int64(val)
+	case int:
 		return int64(val)
 	case int64:
 		return int64(val)
@@ -88,6 +92,8 @@ func (c Config) Uint64(key string) uint64 {
 		return uint64(val)
 	case float32:
 		return uint64(val)
+	case uint:
+		return uint64(val)
 	case uint64:
 		return uint64(val)
 	case uint32:
@@ -95,6 +101,8 @@ func (c Config) Uint64(key string) uint64 {
 	case uint16:
 		return uint64(val)
 	case uint8:
+		return uint64(val)
+	case int:
 		return uint64(val)
 	case int64:
 		return uint64(val)
