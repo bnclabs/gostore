@@ -1,9 +1,9 @@
-package storage
+package lib
 
 import "math"
 import "strconv"
 
-type histogramInt64 struct {
+type HistogramInt64 struct {
 	// stats
 	n         int64
 	minval    int64
@@ -18,15 +18,15 @@ type histogramInt64 struct {
 	width int64
 }
 
-func newhistorgramInt64(from, till, width int64) *histogramInt64 {
+func NewhistorgramInt64(from, till, width int64) *HistogramInt64 {
 	from = (from / width) * width
 	till = (till / width) * width
-	h := &histogramInt64{from: from, till: till, width: width}
+	h := &HistogramInt64{from: from, till: till, width: width}
 	h.histogram = make([]int64, 1+((till-from)/width)+1)
 	return h
 }
 
-func (h *histogramInt64) add(sample int64) {
+func (h *HistogramInt64) Add(sample int64) {
 	h.n++
 	h.sum += sample
 	f := float64(sample)
@@ -48,45 +48,45 @@ func (h *histogramInt64) add(sample int64) {
 	}
 }
 
-func (h *histogramInt64) min() int64 {
+func (h *HistogramInt64) Min() int64 {
 	return h.minval
 }
 
-func (h *histogramInt64) max() int64 {
+func (h *HistogramInt64) Max() int64 {
 	return h.maxval
 }
 
-func (h *histogramInt64) samples() int64 {
+func (h *HistogramInt64) Samples() int64 {
 	return h.n
 }
 
-func (h *histogramInt64) total() int64 {
+func (h *HistogramInt64) Sum() int64 {
 	return h.sum
 }
 
-func (h *histogramInt64) mean() int64 {
+func (h *HistogramInt64) Mean() int64 {
 	if h.n == 0 {
 		return 0
 	}
 	return int64(float64(h.sum) / float64(h.n))
 }
 
-func (h *histogramInt64) variance() float64 {
+func (h *HistogramInt64) Variance() float64 {
 	if h.n == 0 {
 		return 0
 	}
-	n_f, mean_f := float64(h.n), float64(h.mean())
+	n_f, mean_f := float64(h.n), float64(h.Mean())
 	return (h.sumsq / n_f) - (mean_f * mean_f)
 }
 
-func (h *histogramInt64) sd() float64 {
+func (h *HistogramInt64) SD() float64 {
 	if h.n == 0 {
 		return 0
 	}
-	return math.Sqrt(h.variance())
+	return math.Sqrt(h.Variance())
 }
 
-func (h *histogramInt64) stats() map[string]int64 {
+func (h *HistogramInt64) Stats() map[string]int64 {
 	m := make(map[string]int64)
 	cumm := int64(0)
 	for i := len(h.histogram) - 1; i >= 0; i-- {
@@ -108,23 +108,23 @@ func (h *histogramInt64) stats() map[string]int64 {
 	return m
 }
 
-func (h *histogramInt64) fullstats() map[string]interface{} {
+func (h *HistogramInt64) Fullstats() map[string]interface{} {
 	hmap := make(map[string]interface{})
-	for k, v := range h.stats() {
+	for k, v := range h.Stats() {
 		hmap[k] = v
 	}
 	return map[string]interface{}{
-		"samples":     h.samples(),
-		"min":         h.min(),
-		"max":         h.max(),
-		"mean":        h.mean(),
-		"variance":    h.variance(),
-		"stddeviance": h.sd(),
+		"samples":     h.Samples(),
+		"min":         h.Min(),
+		"max":         h.Max(),
+		"mean":        h.Mean(),
+		"variance":    h.Variance(),
+		"stddeviance": h.SD(),
 		"histogram":   hmap,
 	}
 }
 
-func (h *histogramInt64) clone() *histogramInt64 {
+func (h *HistogramInt64) Clone() *HistogramInt64 {
 	newh := *h
 	newh.histogram = make([]int64, len(h.histogram))
 	copy(newh.histogram, h.histogram)

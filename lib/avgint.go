@@ -70,7 +70,7 @@ func (av *AverageInt64) Clone() *AverageInt64 {
 	return &newav
 }
 
-func (av *AverageInt64) stats() map[string]interface{} {
+func (av *AverageInt64) Stats() map[string]interface{} {
 	stats := map[string]interface{}{
 		"samples":     av.Samples(),
 		"min":         av.Min(),
