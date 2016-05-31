@@ -1,6 +1,6 @@
 //  Copyright (c) 2014 Couchbase, Inc.
 
-package storage
+package lib
 
 import "io"
 import "os"
@@ -20,12 +20,13 @@ type Logger interface {
 	Verbosef(format string, v ...interface{})
 	Debugf(format string, v ...interface{})
 	Tracef(format string, v ...interface{})
+	Printf(loglevel LogLevel, format string, v ...interface{})
 }
 
-type logLevel int
+type LogLevel int
 
 const (
-	logLevelIgnore logLevel = iota + 1
+	logLevelIgnore LogLevel = iota + 1
 	logLevelFatal
 	logLevelError
 	logLevelWarn
@@ -45,18 +46,13 @@ func SetLogger(logger Logger, config map[string]interface{}) Logger {
 	}
 
 	var err error
-	level := logLevelInfo
-	if val, ok := config["log.level"]; ok {
-		level = string2logLevel(val.(string))
-	}
+	level := string2logLevel(config["log.level"].(string))
 	logfd := os.Stdout
-	if val, ok := config["log.file"]; ok && val != nil {
-		if logfile, ok := val.(string); ok && len(logfile) > 0 {
-			logfd, err = os.OpenFile(logfile, os.O_RDWR|os.O_APPEND, 0660)
-			if err != nil {
-				if logfd, err = os.Create(logfile); err != nil {
-					panic(err)
-				}
+	if logfile := config["log.file"].(string); logfile != "" {
+		logfd, err = os.OpenFile(logfile, os.O_RDWR|os.O_APPEND, 0660)
+		if err != nil {
+			if logfd, err = os.Create(logfile); err != nil {
+				panic(err)
 			}
 		}
 	}
@@ -69,7 +65,7 @@ func SetLogger(logger Logger, config map[string]interface{}) Logger {
 // supply a Logger{} object when instantiating the
 // Transport.
 type defaultLogger struct {
-	level  logLevel
+	level  LogLevel
 	output io.Writer
 }
 
@@ -78,48 +74,48 @@ func (l *defaultLogger) SetLogLevel(level string) {
 }
 
 func (l *defaultLogger) Fatalf(format string, v ...interface{}) {
-	l.printf(logLevelFatal, format, v...)
+	l.Printf(logLevelFatal, format, v...)
 }
 
 func (l *defaultLogger) Errorf(format string, v ...interface{}) {
-	l.printf(logLevelError, format, v...)
+	l.Printf(logLevelError, format, v...)
 }
 
 func (l *defaultLogger) Warnf(format string, v ...interface{}) {
-	l.printf(logLevelWarn, format, v...)
+	l.Printf(logLevelWarn, format, v...)
 }
 
 func (l *defaultLogger) Infof(format string, v ...interface{}) {
-	l.printf(logLevelInfo, format, v...)
+	l.Printf(logLevelInfo, format, v...)
 }
 
 func (l *defaultLogger) Verbosef(format string, v ...interface{}) {
-	l.printf(logLevelVerbose, format, v...)
+	l.Printf(logLevelVerbose, format, v...)
 }
 
 func (l *defaultLogger) Debugf(format string, v ...interface{}) {
-	l.printf(logLevelDebug, format, v...)
+	l.Printf(logLevelDebug, format, v...)
 }
 
 func (l *defaultLogger) Tracef(format string, v ...interface{}) {
-	l.printf(logLevelTrace, format, v...)
+	l.Printf(logLevelTrace, format, v...)
 }
 
-func (l *defaultLogger) printf(level logLevel, format string, v ...interface{}) {
+func (l *defaultLogger) Printf(level LogLevel, format string, v ...interface{}) {
 	if l.canlog(level) {
 		ts := time.Now().Format("2006-01-02T15:04:05.999Z-07:00")
 		fmt.Fprintf(l.output, ts+" ["+level.String()+"] "+format, v...)
 	}
 }
 
-func (l *defaultLogger) canlog(level logLevel) bool {
+func (l *defaultLogger) canlog(level LogLevel) bool {
 	if level <= l.level {
 		return true
 	}
 	return false
 }
 
-func (l logLevel) String() string {
+func (l LogLevel) String() string {
 	switch l {
 	case logLevelIgnore:
 		return "Ignor"
@@ -141,7 +137,7 @@ func (l logLevel) String() string {
 	panic("unexpected log level") // should never reach here
 }
 
-func string2logLevel(s string) logLevel {
+func string2logLevel(s string) LogLevel {
 	s = strings.ToLower(s)
 	switch s {
 	case "ignore":
@@ -162,4 +158,32 @@ func string2logLevel(s string) logLevel {
 		return logLevelTrace
 	}
 	panic("unexpected log level") // should never reach here
+}
+
+func Fatalf(format string, v ...interface{}) {
+	log.Printf(logLevelFatal, format, v...)
+}
+
+func Errorf(format string, v ...interface{}) {
+	log.Printf(logLevelError, format, v...)
+}
+
+func Warnf(format string, v ...interface{}) {
+	log.Printf(logLevelWarn, format, v...)
+}
+
+func Infof(format string, v ...interface{}) {
+	log.Printf(logLevelInfo, format, v...)
+}
+
+func Verbosef(format string, v ...interface{}) {
+	log.Printf(logLevelVerbose, format, v...)
+}
+
+func Debugf(format string, v ...interface{}) {
+	log.Printf(logLevelDebug, format, v...)
+}
+
+func Tracef(format string, v ...interface{}) {
+	log.Printf(logLevelTrace, format, v...)
 }

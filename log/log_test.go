@@ -1,9 +1,44 @@
-package storage
+package lib
 
 import "testing"
 import "fmt"
+import "os"
+import "strings"
+import "io/ioutil"
 
 var _ = fmt.Sprintf("dummy")
+
+func TestSetLogger(t *testing.T) {
+	logfile := "setlogger_test.log.file"
+	logline := "hello world"
+	defer os.Remove(logfile)
+
+	ref := &defaultLogger{level: logLevelIgnore, output: nil}
+	log := SetLogger(ref, nil).(*defaultLogger)
+	if log.level != logLevelIgnore || log.output != nil {
+		t.Errorf("expected %v, got %v", ref, log)
+	}
+
+	// test a custom logger
+	config := map[string]interface{}{
+		"log.level": "info",
+		"log.file":  logfile,
+	}
+	clog := SetLogger(nil, config)
+	clog.Infof(logline)
+	clog.Verbosef(logline)
+	clog.Fatalf(logline)
+	clog.Errorf(logline)
+	clog.Warnf(logline)
+	clog.Tracef(logline)
+	if data, err := ioutil.ReadFile(logfile); err != nil {
+		t.Error(err)
+	} else if s := string(data); !strings.Contains(s, "hello world") {
+		t.Errorf("expected %v, got %v", logline, s)
+	} else if len(strings.Split(s, "\n")) != 1 {
+		t.Errorf("expected %v, got %v", logline, s)
+	}
+}
 
 func TestLogPrefix(t *testing.T) {
 	if ref, s := "Ignor", logLevelIgnore.String(); ref != s {
