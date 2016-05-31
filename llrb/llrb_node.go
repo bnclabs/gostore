@@ -1,4 +1,4 @@
-package storage
+package llrb
 
 import "unsafe"
 import "bytes"
@@ -7,19 +7,21 @@ import "strings"
 import "fmt"
 import "io"
 
-const llrbnodesize = 24 // + metadatasize + keysize
+import "github.com/prataprc/storage.go/api"
+
+const llrbnodesize = 32 // + metadatasize + keysize
 
 type Llrbnode struct {
 	left     *Llrbnode // TODO: unsafe.Pointer ???
 	right    *Llrbnode // TODO: unsafe.Pointer ???
-	pool     *mempool
+	pool     api.Mallocer
 	mdmarker unsafe.Pointer
 }
 
 //---- Exported methods for metadata.
 
 // Setvbno implement NodeSetter{}
-func (nd *Llrbnode) Setvbno(vbno uint16) Node {
+func (nd *Llrbnode) Setvbno(vbno uint16) api.Node {
 	if nd != nil {
 		nd.metadata().setvbno(vbno)
 	}
@@ -27,7 +29,7 @@ func (nd *Llrbnode) Setvbno(vbno uint16) Node {
 }
 
 // Setaccess implement NodeSetter{}
-func (nd *Llrbnode) Setaccess(access uint64) Node {
+func (nd *Llrbnode) Setaccess(access uint64) api.Node {
 	if nd != nil {
 		nd.metadata().setaccess(access)
 	}
@@ -35,7 +37,7 @@ func (nd *Llrbnode) Setaccess(access uint64) Node {
 }
 
 // SetBornseqno implemens NodeSetter{}
-func (nd *Llrbnode) SetBornseqno(seqno uint64) Node {
+func (nd *Llrbnode) SetBornseqno(seqno uint64) api.Node {
 	if nd != nil {
 		nd.metadata().setbnseq(seqno)
 	}
@@ -43,7 +45,7 @@ func (nd *Llrbnode) SetBornseqno(seqno uint64) Node {
 }
 
 // SetDeadseqno implement NodeSetter{}
-func (nd *Llrbnode) SetDeadseqno(seqno uint64) Node {
+func (nd *Llrbnode) SetDeadseqno(seqno uint64) api.Node {
 	if nd != nil {
 		nd.metadata().setddseq(seqno)
 	}
@@ -51,7 +53,7 @@ func (nd *Llrbnode) SetDeadseqno(seqno uint64) Node {
 }
 
 // SetVbuuid implement NodeSetter{}
-func (nd *Llrbnode) SetVbuuid(vbuuid uint64) Node {
+func (nd *Llrbnode) SetVbuuid(vbuuid uint64) api.Node {
 	if nd != nil {
 		nd.metadata().setvbuuid(vbuuid)
 	}
@@ -285,4 +287,11 @@ func isred(nd *Llrbnode) bool {
 
 func isblack(nd *Llrbnode) bool {
 	return !isred(nd)
+}
+
+func llndornil(nd *Llrbnode) api.Node {
+	if nd == nil {
+		return nil
+	}
+	return nd
 }

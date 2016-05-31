@@ -1,11 +1,13 @@
-package storage
+package llrb
 
 import "sync/atomic"
 
+import "github.com/prataprc/storage.go/api"
+
 type llrbIterator struct {
-	tree       IndexReader
+	tree       api.IndexReader
 	llrb       *LLRB
-	nodes      []Node
+	nodes      []api.Node
 	continuate bool
 	index      int
 	limit      int
@@ -18,7 +20,7 @@ type llrbIterator struct {
 }
 
 // Next implement IndexIterator{} interface.
-func (iter *llrbIterator) Next() Node {
+func (iter *llrbIterator) Next() api.Node {
 	if iter.closed {
 		panic("cannot iterate over a closed iterator")
 	} else if iter.index >= len(iter.nodes) && iter.continuate == false {
@@ -47,7 +49,7 @@ func (iter *llrbIterator) Close() {
 
 	// give it back to the pool if not overflowing.
 	llrb := iter.llrb
-	if len(llrb.iterpool) < llrb.config["iterpool.size"].(int) {
+	if int64(len(llrb.iterpool)) < llrb.config.Int64("iterpool.size") {
 		llrb.iterpool <- iter
 	}
 	atomic.AddInt64(iter.activeiter, -1)
@@ -63,7 +65,7 @@ func (iter *llrbIterator) rangefill() {
 	iter.nodes, iter.index, iter.continuate = iter.nodes[:0], 0, false
 	count := 0
 	iter.tree.Range(iter.startkey, iter.endkey, iter.incl, iter.reverse,
-		func(nd Node) bool {
+		func(nd api.Node) bool {
 			breakkey = nd.Key()
 			if count < iter.limit {
 				iter.nodes = append(iter.nodes, nd)

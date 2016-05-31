@@ -1,4 +1,4 @@
-package storage
+package llrb
 
 import "fmt"
 import "time"
@@ -9,6 +9,9 @@ import "bytes"
 import "sync"
 import "sync/atomic"
 
+import "github.com/prataprc/storage.go/lib"
+import "github.com/prataprc/storage.go/api"
+import "github.com/prataprc/storage.go/log"
 import humanize "github.com/dustin/go-humanize"
 
 var memratio = 0.41 // keymemory / allocated for each arena
@@ -47,18 +50,18 @@ type LLRB struct { // tree container
 		writer     *LLRBWriter
 		snapshot   *LLRBSnapshot
 		n_reclaims int64
-		h_bulkfree *histogramInt64
-		h_reclaims map[string]*histogramInt64
-		h_versions *histogramInt64
+		h_bulkfree *lib.HistogramInt64
+		h_reclaims map[string]*lib.HistogramInt64
+		h_versions *lib.HistogramInt64
 	}
 
-	h_upsertdepth *histogramInt64
+	h_upsertdepth *lib.HistogramInt64
 
 	// can be unaligned fields
 
 	name       string
-	nodearena  *memarena
-	valarena   *memarena
+	nodearena  api.Mallocer
+	valarena   api.Mallocer
 	root       *Llrbnode
 	borntime   time.Time
 	dead       bool
@@ -70,8 +73,8 @@ type LLRB struct { // tree container
 	// config
 	fmask     metadataMask // only 12 bits
 	mdsize    int
-	maxvb     int
-	config    map[string]interface{}
+	maxvb     int64
+	config    lib.Config
 	logprefix string
 
 	// scratch pad
@@ -79,15 +82,15 @@ type LLRB struct { // tree container
 }
 
 // NewLLRB a new instance of in-memory sorted index.
-func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
-	config = mixinconfig(llrbConfig(), config)
+func NewLLRB(name string, config lib.Config, logg log.Logger) *LLRB {
+	config = lib.Mixinconfig(llrbConfig(), config)
 
 	llrb := &LLRB{name: name, borntime: time.Now()}
-	llrb.iterpool = make(chan *llrbIterator, config["iterpool.size"].(int))
+	llrb.iterpool = make(chan *llrbIterator, config.Int64("iterpool.size"))
 
 	llrb.validateConfig(config)
 
-	llrb.maxvb = config["maxvb"].(int)
+	llrb.maxvb = config.Int64("maxvb")
 	llrb.clock = newvectorclock(llrb.maxvb)
 
 	// setup arena for nodes and node-values.
@@ -103,24 +106,24 @@ func NewLLRB(name string, config map[string]interface{}, logg Logger) *LLRB {
 	llrb.config = config
 
 	// statistics
-	llrb.h_upsertdepth = newhistorgramInt64(1, 256, 1)
+	llrb.h_upsertdepth = lib.NewhistorgramInt64(1, 256, 1)
 
 	// scratch pads
 	llrb.strsl = make([]string, 0)
 
 	// mvcc
-	llrb.mvcc.enabled = config["mvcc.enable"].(bool)
+	llrb.mvcc.enabled = config.Bool("mvcc.enable")
 	if llrb.mvcc.enabled {
 		llrb.mvcc.reclaim = make([]*Llrbnode, 0, 64)
-		llrb.mvcc.h_bulkfree = newhistorgramInt64(200000, 500000, 100000)
-		llrb.mvcc.h_reclaims = map[string]*histogramInt64{
-			"upsert": newhistorgramInt64(4, 1024, 4),
-			"upmany": newhistorgramInt64(4, 1024, 4),
-			"delmin": newhistorgramInt64(4, 1024, 4),
-			"delmax": newhistorgramInt64(4, 1024, 4),
-			"delete": newhistorgramInt64(4, 1024, 4),
+		llrb.mvcc.h_bulkfree = lib.NewhistorgramInt64(200000, 500000, 100000)
+		llrb.mvcc.h_reclaims = map[string]*lib.HistogramInt64{
+			"upsert": lib.NewhistorgramInt64(4, 1024, 4),
+			"upmany": lib.NewhistorgramInt64(4, 1024, 4),
+			"delmin": lib.NewhistorgramInt64(4, 1024, 4),
+			"delmax": lib.NewhistorgramInt64(4, 1024, 4),
+			"delete": lib.NewhistorgramInt64(4, 1024, 4),
 		}
-		llrb.mvcc.h_versions = newhistorgramInt64(0, 32, 1)
+		llrb.mvcc.h_versions = lib.NewhistorgramInt64(0, 32, 1)
 		llrb.MVCCWriter()
 	}
 
@@ -142,7 +145,7 @@ func (llrb *LLRB) Count() int64 {
 }
 
 // Setaccess implement Index{} interface.
-func (llrb *LLRB) Setaccess(nd Node) {
+func (llrb *LLRB) Setaccess(nd api.Node) {
 	nd.Setaccess(uint64(time.Now().UnixNano() >> 30))
 }
 
@@ -162,7 +165,7 @@ func (llrb *LLRB) Release() {
 }
 
 // RSnapshot implement Index{} interface.
-func (llrb *LLRB) RSnapshot(snapch chan IndexSnapshot) error {
+func (llrb *LLRB) RSnapshot(snapch chan api.IndexSnapshot) error {
 	if llrb.mvcc.enabled {
 		err := llrb.mvcc.writer.getSnapshot(snapch)
 		if err != nil {
@@ -184,8 +187,8 @@ func (llrb *LLRB) Destroy() error {
 			llrb.mvcc.reclaim, llrb.mvcc.writer = nil, nil
 			llrb.mvcc.h_reclaims = nil
 		}
-		llrb.nodearena.release()
-		llrb.valarena.release()
+		llrb.nodearena.Release()
+		llrb.valarena.Release()
 		llrb.root, llrb.clock = nil, nil
 		llrb.config, llrb.strsl = nil, nil
 		llrb.dead = true
@@ -250,7 +253,7 @@ func (llrb *LLRB) Has(key []byte) bool {
 }
 
 // Get implement IndexReader{} interface.
-func (llrb *LLRB) Get(key []byte) Node {
+func (llrb *LLRB) Get(key []byte) api.Node {
 	if llrb.mvcc.enabled {
 		panic("Get(): mvcc enabled, use snapshots for reading")
 	}
@@ -264,7 +267,7 @@ func (llrb *LLRB) Get(key []byte) Node {
 	return nd
 }
 
-func (llrb *LLRB) get(key []byte) Node {
+func (llrb *LLRB) get(key []byte) api.Node {
 	nd := llrb.root
 	for nd != nil {
 		if nd.gtkey(llrb.mdsize, key) {
@@ -279,7 +282,7 @@ func (llrb *LLRB) get(key []byte) Node {
 }
 
 // Min implement IndexReader{} interface.
-func (llrb *LLRB) Min() Node {
+func (llrb *LLRB) Min() api.Node {
 	if llrb.mvcc.enabled {
 		panic("Min(): mvcc enabled, use snapshots for reading")
 	}
@@ -293,7 +296,7 @@ func (llrb *LLRB) Min() Node {
 	return nd
 }
 
-func (llrb *LLRB) min() Node {
+func (llrb *LLRB) min() api.Node {
 	var nd *Llrbnode
 	if nd = llrb.root; nd == nil {
 		return nil
@@ -305,7 +308,7 @@ func (llrb *LLRB) min() Node {
 }
 
 // Max implement IndexReader{} interface.
-func (llrb *LLRB) Max() Node {
+func (llrb *LLRB) Max() api.Node {
 	if llrb.mvcc.enabled {
 		panic("Max(): mvcc enabled, use snapshots for reading")
 	}
@@ -319,7 +322,7 @@ func (llrb *LLRB) Max() Node {
 	return nd
 }
 
-func (llrb *LLRB) max() Node {
+func (llrb *LLRB) max() api.Node {
 	var nd *Llrbnode
 	if nd = llrb.root; nd == nil {
 		return nil
@@ -331,7 +334,7 @@ func (llrb *LLRB) max() Node {
 }
 
 // Range from lkey to hkey, incl can be "both", "low", "high", "none"
-func (llrb *LLRB) Range(lkey, hkey []byte, incl string, reverse bool, iter RangeCallb) {
+func (llrb *LLRB) Range(lkey, hkey []byte, incl string, reverse bool, iter api.RangeCallb) {
 
 	if llrb.mvcc.enabled {
 		panic("Range(): mvcc enabled, use snapshots for reading")
@@ -377,7 +380,7 @@ func (llrb *LLRB) Range(lkey, hkey []byte, incl string, reverse bool, iter Range
 }
 
 // Iterate implement IndexReader{} interface.
-func (llrb *LLRB) Iterate(lkey, hkey []byte, incl string, r bool) IndexIterator {
+func (llrb *LLRB) Iterate(lkey, hkey []byte, incl string, r bool) api.IndexIterator {
 
 	if llrb.mvcc.enabled {
 		panic("Iterate(): mvcc enabled, use snapshots for reading")
@@ -408,7 +411,7 @@ func (llrb *LLRB) Iterate(lkey, hkey []byte, incl string, r bool) IndexIterator 
 	iter.closed, iter.activeiter = false, &llrb.activeiter
 
 	if iter.nodes == nil {
-		iter.nodes = make([]Node, 0)
+		iter.nodes = make([]api.Node, 0)
 	}
 
 	iter.rangefill()
@@ -436,7 +439,7 @@ func (llrb *LLRB) Iterate(lkey, hkey []byte, incl string, r bool) IndexIterator 
 //---- IndexWriter{} interface
 
 // Upsert implement IndexWriter{} interface.
-func (llrb *LLRB) Upsert(key, value []byte, callb UpsertCallback) error {
+func (llrb *LLRB) Upsert(key, value []byte, callb api.UpsertCallback) error {
 	if key == nil {
 		panic("Upsert(): upserting nil key")
 	}
@@ -463,7 +466,7 @@ func (llrb *LLRB) Upsert(key, value []byte, callb UpsertCallback) error {
 }
 
 // UpsertMany implement IndexWriter{} interface.
-func (llrb *LLRB) UpsertMany(keys, values [][]byte, callb UpsertCallback) error {
+func (llrb *LLRB) UpsertMany(keys, values [][]byte, callb api.UpsertCallback) error {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.wupsertmany(keys, values, callb)
 	}
@@ -502,7 +505,7 @@ func (llrb *LLRB) upsert(
 
 	if nd == nil {
 		newnd := llrb.newnode(key, value)
-		llrb.h_upsertdepth.add(depth)
+		llrb.h_upsertdepth.Add(depth)
 		return newnd, newnd, nil
 	}
 
@@ -516,12 +519,12 @@ func (llrb *LLRB) upsert(
 		oldnd, dirty = llrb.clone(nd), false
 		if nd.metadata().ismvalue() {
 			if nv := nd.nodevalue(); nv != nil { // free the value if present
-				nv.pool.free(unsafe.Pointer(nv))
+				nv.pool.Free(unsafe.Pointer(nv))
 				nd, dirty = nd.setnodevalue(nil), true
 			}
 		}
 		if nd.metadata().ismvalue() && value != nil { // add new value if req.
-			ptr, mpool := llrb.valarena.alloc(int64(nvaluesize + len(value)))
+			ptr, mpool := llrb.valarena.Alloc(int64(nvaluesize + len(value)))
 			nv := (*nodevalue)(ptr)
 			nv.pool = mpool
 			nd, dirty = nd.setnodevalue(nv.setvalue(value)), true
@@ -530,7 +533,7 @@ func (llrb *LLRB) upsert(
 		if dirty {
 			nd.metadata().setdirty()
 		}
-		llrb.h_upsertdepth.add(depth)
+		llrb.h_upsertdepth.Add(depth)
 	}
 
 	nd = llrb.walkuprot23(nd)
@@ -538,7 +541,7 @@ func (llrb *LLRB) upsert(
 }
 
 // DeleteMin implement IndexWriter{} interface.
-func (llrb *LLRB) DeleteMin(callb DeleteCallback) error {
+func (llrb *LLRB) DeleteMin(callb api.DeleteCallback) error {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.wdeleteMin(callb)
 	}
@@ -577,7 +580,7 @@ func (llrb *LLRB) deletemin(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 }
 
 // DeleteMax implements IndexWriter{} interface.
-func (llrb *LLRB) DeleteMax(callb DeleteCallback) error {
+func (llrb *LLRB) DeleteMax(callb api.DeleteCallback) error {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.wdeleteMax(callb)
 	}
@@ -620,7 +623,7 @@ func (llrb *LLRB) deletemax(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 }
 
 // Delete implement IndexWriter{} interface.
-func (llrb *LLRB) Delete(key []byte, callb DeleteCallback) error {
+func (llrb *LLRB) Delete(key []byte, callb api.DeleteCallback) error {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.wdelete(key, callb)
 	}
@@ -805,14 +808,14 @@ func (llrb *LLRB) Dotdump(buffer io.Writer) {
 //---- local functions
 
 func (llrb *LLRB) newnode(k, v []byte) *Llrbnode {
-	ptr, mpool := llrb.nodearena.alloc(int64(llrbnodesize + llrb.mdsize + len(k)))
+	ptr, mpool := llrb.nodearena.Alloc(int64(llrbnodesize + llrb.mdsize + len(k)))
 	nd := (*Llrbnode)(ptr)
 	nd.metadata().initMetadata(0, llrb.fmask).setdirty().setred()
 	nd.setkey(llrb.mdsize, k)
 	nd.pool, nd.left, nd.right = mpool, nil, nil
 
 	if v != nil && nd.metadata().ismvalue() {
-		ptr, mpool = llrb.valarena.alloc(int64(nvaluesize + len(v)))
+		ptr, mpool = llrb.valarena.Alloc(int64(nvaluesize + len(v)))
 		nv := (*nodevalue)(ptr)
 		nv.pool = mpool
 		nvarg := (uintptr)(unsafe.Pointer(nv.setvalue(v)))
@@ -830,26 +833,26 @@ func (llrb *LLRB) freenode(nd *Llrbnode) {
 		if nd.metadata().ismvalue() {
 			nv := nd.nodevalue()
 			if nv != nil {
-				nv.pool.free(unsafe.Pointer(nv))
+				nv.pool.Free(unsafe.Pointer(nv))
 			}
 		}
-		nd.pool.free(unsafe.Pointer(nd))
+		nd.pool.Free(unsafe.Pointer(nd))
 		llrb.n_frees += 1
 	}
 }
 
 func (llrb *LLRB) clone(nd *Llrbnode) (newnd *Llrbnode) {
 	// clone Llrbnode.
-	newndptr, mpool := llrb.nodearena.alloc(nd.pool.size)
+	newndptr, mpool := llrb.nodearena.Alloc(nd.pool.Chunksize())
 	newnd = (*Llrbnode)(newndptr)
-	memcpy(unsafe.Pointer(newnd), unsafe.Pointer(nd), int(nd.pool.size))
+	lib.Memcpy(unsafe.Pointer(newnd), unsafe.Pointer(nd), int(nd.pool.Chunksize()))
 	newnd.pool = mpool
 	// clone value if value is present.
 	if nd.metadata().ismvalue() {
 		if mvalue, level := nd.metadata().mvalue(); level == 0 && mvalue != 0 {
 			nv := (*nodevalue)(unsafe.Pointer((uintptr)(mvalue)))
-			newnvptr, mpool := llrb.valarena.alloc(nv.pool.size)
-			memcpy(newnvptr, unsafe.Pointer(nv), int(nv.pool.size))
+			newnvptr, mpool := llrb.valarena.Alloc(nv.pool.Chunksize())
+			lib.Memcpy(newnvptr, unsafe.Pointer(nv), int(nv.pool.Chunksize()))
 			newnv := (*nodevalue)(newnvptr)
 			newnv.pool = mpool
 			newnd.setnodevalue(newnv)
@@ -920,26 +923,26 @@ func (llrb *LLRB) equivalent(n1, n2 *Llrbnode) bool {
 	return true
 }
 
-func (llrb *LLRB) logconfig(config map[string]interface{}) {
+func (llrb *LLRB) logconfig(config lib.Config) {
 	// key arena
 	stats, err := llrb.stats()
 	if err != nil {
 		panic(fmt.Errorf("logconfig(): %v", err))
 	}
 	kblocks := len(stats["node.blocks"].([]int64))
-	min := humanize.Bytes(uint64(llrb.config["nodearena.minblock"].(int)))
-	max := humanize.Bytes(uint64(llrb.config["nodearena.maxblock"].(int)))
-	cp := humanize.Bytes(uint64(llrb.config["nodearena.capacity"].(int)))
-	pcp := humanize.Bytes(uint64(llrb.config["nodearena.pool.capacity"].(int)))
+	min := humanize.Bytes(uint64(llrb.config.Int64("nodearena.minblock")))
+	max := humanize.Bytes(uint64(llrb.config.Int64("nodearena.maxblock")))
+	cp := humanize.Bytes(uint64(llrb.config.Int64("nodearena.capacity")))
+	pcp := humanize.Bytes(uint64(llrb.config.Int64("nodearena.pool.capacity")))
 	fmsg := "%v key arena %v blocks over {%v %v} cap %v poolcap %v\n"
 	log.Infof(fmsg, llrb.logprefix, kblocks, min, max, cp, pcp)
 
 	// value arena
 	vblocks := len(stats["value.blocks"].([]int64))
-	min = humanize.Bytes(uint64(llrb.config["valarena.minblock"].(int)))
-	max = humanize.Bytes(uint64(llrb.config["valarena.maxblock"].(int)))
-	cp = humanize.Bytes(uint64(llrb.config["valarena.capacity"].(int)))
-	pcp = humanize.Bytes(uint64(llrb.config["valarena.pool.capacity"].(int)))
+	min = humanize.Bytes(uint64(llrb.config.Int64("valarena.minblock")))
+	max = humanize.Bytes(uint64(llrb.config.Int64("valarena.maxblock")))
+	cp = humanize.Bytes(uint64(llrb.config.Int64("valarena.capacity")))
+	pcp = humanize.Bytes(uint64(llrb.config.Int64("valarena.pool.capacity")))
 	fmsg = "%v val arena %v blocks over {%v %v} cap %v poolcap %v\n"
 	log.Infof(fmsg, llrb.logprefix, vblocks, min, max, cp, pcp)
 }

@@ -1,4 +1,4 @@
-package storage
+package llrb
 
 import "unsafe"
 import "time"
@@ -6,9 +6,13 @@ import "fmt"
 import "sync/atomic"
 import "runtime/debug"
 
+import "github.com/prataprc/storage.go/api"
+import "github.com/prataprc/storage.go/log"
+import "github.com/prataprc/storage.go/lib"
+
 type LLRBWriter struct {
 	llrb    *LLRB
-	waiters []chan IndexSnapshot
+	waiters []chan api.IndexSnapshot
 	reqch   chan []interface{}
 	finch   chan bool
 }
@@ -20,17 +24,17 @@ func (llrb *LLRB) MVCCWriter() *LLRBWriter {
 		panic(fmt.Errorf("MVCCWriter(): concurrent writers are not allowed"))
 	}
 
-	chansize := llrb.config["mvcc.writer.chanbuffer"].(int)
+	chansize := llrb.config.Int64("mvcc.writer.chanbuffer")
 	llrb.mvcc.writer = &LLRBWriter{
 		llrb:    llrb,
-		waiters: make([]chan IndexSnapshot, 0, 128),
+		waiters: make([]chan api.IndexSnapshot, 0, 128),
 		reqch:   make(chan []interface{}, chansize),
 		finch:   make(chan bool),
 	}
 	log.Infof("%v starting mvcc writer ...\n", llrb.logprefix)
 	go llrb.mvcc.writer.run()
 
-	tick := llrb.config["mvcc.snapshot.tick"].(int)
+	tick := llrb.config.Int64("mvcc.snapshot.tick")
 	log.Infof("%v starting snapshot ticker (%v) ...\n", llrb.logprefix, tick)
 	go llrb.mvcc.writer.snapshotticker(tick, llrb.mvcc.writer.finch)
 
@@ -56,90 +60,90 @@ const (
 )
 
 func (writer *LLRBWriter) wupsert(
-	key, value []byte, callb UpsertCallback) error {
+	key, value []byte, callb api.UpsertCallback) error {
 
 	respch := make(chan []interface{}, 0)
 	cmd := []interface{}{cmdLlrbWriterUpsert, key, value, callb, respch}
-	_, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
+	_, err := lib.FailsafeRequest(writer.reqch, respch, cmd, writer.finch)
 	return err
 }
 
 func (writer *LLRBWriter) wupsertmany(
-	keys, values [][]byte, callb UpsertCallback) error {
+	keys, values [][]byte, callb api.UpsertCallback) error {
 
 	respch := make(chan []interface{}, 0)
 	cmd := []interface{}{cmdLlrbWriterUpsertMany, keys, values, callb, respch}
-	_, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
+	_, err := lib.FailsafeRequest(writer.reqch, respch, cmd, writer.finch)
 	return err
 }
 
-func (writer *LLRBWriter) wdeleteMin(callb DeleteCallback) error {
+func (writer *LLRBWriter) wdeleteMin(callb api.DeleteCallback) error {
 	respch := make(chan []interface{}, 0)
 	cmd := []interface{}{cmdLlrbWriterDeleteMin, callb, respch}
-	_, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
+	_, err := lib.FailsafeRequest(writer.reqch, respch, cmd, writer.finch)
 	return err
 }
 
-func (writer *LLRBWriter) wdeleteMax(callb DeleteCallback) error {
+func (writer *LLRBWriter) wdeleteMax(callb api.DeleteCallback) error {
 	respch := make(chan []interface{}, 0)
 	cmd := []interface{}{cmdLlrbWriterDeleteMax, callb, respch}
-	_, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
+	_, err := lib.FailsafeRequest(writer.reqch, respch, cmd, writer.finch)
 	return err
 }
 
-func (writer *LLRBWriter) wdelete(key []byte, callb DeleteCallback) error {
+func (writer *LLRBWriter) wdelete(key []byte, callb api.DeleteCallback) error {
 	respch := make(chan []interface{}, 0)
 	cmd := []interface{}{cmdLlrbWriterDelete, key, callb, respch}
-	_, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
+	_, err := lib.FailsafeRequest(writer.reqch, respch, cmd, writer.finch)
 	return err
 }
 
 func (writer *LLRBWriter) makeSnapshot(id string) error {
 	cmd := []interface{}{cmdLlrbWriterMakeSnapshot, id}
-	return failsafePost(writer.reqch, cmd, writer.finch)
+	return lib.FailsafePost(writer.reqch, cmd, writer.finch)
 }
 
-func (writer *LLRBWriter) getSnapshot(snapch chan IndexSnapshot) error {
+func (writer *LLRBWriter) getSnapshot(snapch chan api.IndexSnapshot) error {
 	cmd := []interface{}{cmdLlrbWriterGetSnapshot, snapch}
-	return failsafePost(writer.reqch, cmd, writer.finch)
+	return lib.FailsafePost(writer.reqch, cmd, writer.finch)
 }
 
 func (writer *LLRBWriter) purgeSnapshot() error {
 	cmd := []interface{}{cmdLlrbWriterPurgeSnapshot}
-	return failsafePost(writer.reqch, cmd, writer.finch)
+	return lib.FailsafePost(writer.reqch, cmd, writer.finch)
 }
 
 func (writer *LLRBWriter) stats() (map[string]interface{}, error) {
 	respch := make(chan []interface{}, 1)
 	cmd := []interface{}{cmdLlrbWriterStats, respch}
-	resp, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
-	return resp[0].(map[string]interface{}), responseError(err, resp, 1)
+	resp, err := lib.FailsafeRequest(writer.reqch, respch, cmd, writer.finch)
+	return resp[0].(map[string]interface{}), lib.ResponseError(err, resp, 1)
 }
 
 func (writer *LLRBWriter) fullstats() (map[string]interface{}, error) {
 	respch := make(chan []interface{}, 1)
 	cmd := []interface{}{cmdLlrbWriterFullstats, respch}
-	resp, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
-	return resp[0].(map[string]interface{}), responseError(err, resp, 1)
+	resp, err := lib.FailsafeRequest(writer.reqch, respch, cmd, writer.finch)
+	return resp[0].(map[string]interface{}), lib.ResponseError(err, resp, 1)
 }
 
 func (writer *LLRBWriter) validate() error {
 	respch := make(chan []interface{}, 1)
 	cmd := []interface{}{cmdLlrbWriterValidate, respch}
-	_, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
+	_, err := lib.FailsafeRequest(writer.reqch, respch, cmd, writer.finch)
 	return err
 }
 
 func (writer *LLRBWriter) log(involved int, humanize bool) {
 	respch := make(chan []interface{}, 1)
 	cmd := []interface{}{cmdLlrbWriterLog, involved, humanize, respch}
-	failsafeRequest(writer.reqch, respch, cmd, writer.finch)
+	lib.FailsafeRequest(writer.reqch, respch, cmd, writer.finch)
 }
 
 func (writer *LLRBWriter) destroy() error {
 	respch := make(chan []interface{}, 0)
 	cmd := []interface{}{cmdLlrbWriterDestroy, respch}
-	_, err := failsafeRequest(writer.reqch, respch, cmd, writer.finch)
+	_, err := lib.FailsafeRequest(writer.reqch, respch, cmd, writer.finch)
 	return err
 }
 
@@ -158,7 +162,7 @@ func (writer *LLRBWriter) run() {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Errorf("%v writer() crashed: %v\n", llrb.logprefix, r)
-			log.Errorf("\n%s", getStackTrace(2, debug.Stack()))
+			log.Errorf("\n%s", lib.GetStacktrace(2, debug.Stack()))
 			ch := make(chan bool)
 			dodestroy(ch)
 			<-ch
@@ -179,7 +183,7 @@ func (writer *LLRBWriter) run() {
 
 	reclaimNodes := func(opname string, reclaim []*Llrbnode) {
 		if len(reclaim) > 0 {
-			llrb.mvcc.h_reclaims[opname].add(int64(len(reclaim)))
+			llrb.mvcc.h_reclaims[opname].Add(int64(len(reclaim)))
 			llrb.mvcc.n_reclaims += int64(len(reclaim))
 			if llrb.mvcc.n_activess == 0 {
 				// no snapshots are refering to these nodes, free them.
@@ -200,7 +204,7 @@ loop:
 		switch msg[0].(byte) {
 		case cmdLlrbWriterUpsert:
 			key, value := msg[1].([]byte), msg[2].([]byte)
-			callb := msg[3].(UpsertCallback)
+			callb := msg[3].(api.UpsertCallback)
 			respch := msg[4].(chan []interface{})
 
 			reclaim = writer.mvccupsert(key, value, callb, reclaim)
@@ -209,7 +213,7 @@ loop:
 
 		case cmdLlrbWriterUpsertMany:
 			keys, values := msg[1].([][]byte), msg[2].([][]byte)
-			callb := msg[3].(UpsertCallback)
+			callb := msg[3].(api.UpsertCallback)
 			respch := msg[4].(chan []interface{})
 
 			reclaim = writer.mvccupsertmany(
@@ -222,7 +226,7 @@ loop:
 			close(respch)
 
 		case cmdLlrbWriterDeleteMin:
-			callb := msg[1].(DeleteCallback)
+			callb := msg[1].(api.DeleteCallback)
 			respch := msg[2].(chan []interface{})
 
 			reclaim = writer.mvccdelmin(callb, reclaim)
@@ -230,7 +234,7 @@ loop:
 			close(respch)
 
 		case cmdLlrbWriterDeleteMax:
-			callb := msg[1].(DeleteCallback)
+			callb := msg[1].(api.DeleteCallback)
 			respch := msg[2].(chan []interface{})
 
 			reclaim = writer.mvccdelmax(callb, reclaim)
@@ -238,7 +242,7 @@ loop:
 			close(respch)
 
 		case cmdLlrbWriterDelete:
-			key, callb := msg[1].([]byte), msg[2].(DeleteCallback)
+			key, callb := msg[1].([]byte), msg[2].(api.DeleteCallback)
 			respch := msg[3].(chan []interface{})
 
 			reclaim = writer.mvccdelete(key, callb, reclaim)
@@ -260,7 +264,7 @@ loop:
 			}
 
 		case cmdLlrbWriterGetSnapshot:
-			waiter := msg[1].(chan IndexSnapshot)
+			waiter := msg[1].(chan api.IndexSnapshot)
 			log.Debugf("%v adding waiter for next snapshot\n", llrb.logprefix)
 			writer.waiters = append(writer.waiters, waiter)
 
@@ -302,12 +306,13 @@ loop:
 }
 
 func (writer *LLRBWriter) mvccupsert(
-	key, value []byte, callb UpsertCallback, reclaim []*Llrbnode) []*Llrbnode {
+	key, value []byte, callb api.UpsertCallback,
+	reclaim []*Llrbnode) []*Llrbnode {
 
 	var root, newnd, oldnd *Llrbnode
 
 	llrb := writer.llrb
-	llrb.mvcc.h_versions.add(llrb.mvcc.n_activess)
+	llrb.mvcc.h_versions.Add(llrb.mvcc.n_activess)
 
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
 
@@ -325,13 +330,13 @@ func (writer *LLRBWriter) mvccupsert(
 }
 
 func (writer *LLRBWriter) mvccupsertmany(
-	keys, values [][]byte, callb UpsertCallback,
+	keys, values [][]byte, callb api.UpsertCallback,
 	reclaim []*Llrbnode, rfn func([]*Llrbnode) []*Llrbnode) []*Llrbnode {
 
 	var root, newnd, oldnd *Llrbnode
 
 	llrb := writer.llrb
-	llrb.mvcc.h_versions.add(llrb.mvcc.n_activess)
+	llrb.mvcc.h_versions.Add(llrb.mvcc.n_activess)
 
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
 
@@ -367,7 +372,7 @@ func (writer *LLRBWriter) upsert(
 
 	if nd == nil {
 		newnd := llrb.newnode(key, value)
-		llrb.h_upsertdepth.add(depth)
+		llrb.h_upsertdepth.Add(depth)
 		return newnd, newnd, nil, reclaim
 	}
 	reclaim = append(reclaim, nd)
@@ -385,19 +390,19 @@ func (writer *LLRBWriter) upsert(
 		oldnd = nd
 		if ndmvcc.metadata().ismvalue() {
 			if nv := ndmvcc.nodevalue(); nv != nil { // free the value if pres.
-				nv.pool.free(unsafe.Pointer(nv))
+				nv.pool.Free(unsafe.Pointer(nv))
 				ndmvcc = ndmvcc.setnodevalue(nil)
 			}
 		}
 		if ndmvcc.metadata().ismvalue() && value != nil { // add new value.
-			ptr, mpool := llrb.valarena.alloc(int64(nvaluesize + len(value)))
+			ptr, mpool := llrb.valarena.Alloc(int64(nvaluesize + len(value)))
 			nv := (*nodevalue)(ptr)
 			nv.pool = mpool
 			ndmvcc = ndmvcc.setnodevalue(nv.setvalue(value))
 		}
 		ndmvcc.metadata().setdirty()
 		newnd = ndmvcc
-		llrb.h_upsertdepth.add(depth)
+		llrb.h_upsertdepth.Add(depth)
 	}
 
 	ndmvcc, reclaim = writer.walkuprot23(ndmvcc, reclaim)
@@ -405,12 +410,12 @@ func (writer *LLRBWriter) upsert(
 }
 
 func (writer *LLRBWriter) mvccdelmin(
-	callb DeleteCallback, reclaim []*Llrbnode) []*Llrbnode {
+	callb api.DeleteCallback, reclaim []*Llrbnode) []*Llrbnode {
 
 	var root, deleted *Llrbnode
 
 	llrb := writer.llrb
-	llrb.mvcc.h_versions.add(llrb.mvcc.n_activess)
+	llrb.mvcc.h_versions.Add(llrb.mvcc.n_activess)
 
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
 
@@ -457,12 +462,12 @@ func (writer *LLRBWriter) deletemin(
 }
 
 func (writer *LLRBWriter) mvccdelmax(
-	callb DeleteCallback, reclaim []*Llrbnode) []*Llrbnode {
+	callb api.DeleteCallback, reclaim []*Llrbnode) []*Llrbnode {
 
 	var root, deleted *Llrbnode
 
 	llrb := writer.llrb
-	llrb.mvcc.h_versions.add(llrb.mvcc.n_activess)
+	llrb.mvcc.h_versions.Add(llrb.mvcc.n_activess)
 
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
 
@@ -511,12 +516,12 @@ func (writer *LLRBWriter) deletemax(
 }
 
 func (writer *LLRBWriter) mvccdelete(
-	key []byte, callb DeleteCallback, reclaim []*Llrbnode) []*Llrbnode {
+	key []byte, callb api.DeleteCallback, reclaim []*Llrbnode) []*Llrbnode {
 
 	var root, deleted *Llrbnode
 
 	llrb := writer.llrb
-	llrb.mvcc.h_versions.add(llrb.mvcc.n_activess)
+	llrb.mvcc.h_versions.Add(llrb.mvcc.n_activess)
 
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
 	atomic.AddInt64(&llrb.mvcc.ismut, -1)
@@ -745,7 +750,7 @@ loop:
 		} else if refcount > 0 {
 			break loop
 		}
-		llrb.mvcc.h_bulkfree.add(int64(len(snapshot.reclaim)))
+		llrb.mvcc.h_bulkfree.Add(int64(len(snapshot.reclaim)))
 		for _, nd := range snapshot.reclaim {
 			snapshot.llrb.freenode(nd)
 		}

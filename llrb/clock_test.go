@@ -1,4 +1,4 @@
-package storage
+package llrb
 
 import "testing"
 import "fmt"
@@ -218,7 +218,7 @@ func testcreatevc(numvb int) *vectorclock {
 	vbnos, vbuuids := make([]uint16, 0, numvb), make([]uint64, 0, numvb)
 	seqnos := make([]uint64, 0, numvb)
 
-	vc := newvectorclock(numvb)
+	vc := newvectorclock(int64(numvb))
 	for i := 0; i < numvb; i++ {
 		vbnos = append(vbnos, uint16(i))
 		vbuuids = append(vbuuids, uint64(rand.Int63()))

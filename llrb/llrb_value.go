@@ -2,16 +2,18 @@
 //
 // maximum size of value : 2^40 bytes
 
-package storage
+package llrb
 
 import "unsafe"
 import "reflect"
 
-const nvaluesize = 16 // + valuesize
+import "github.com/prataprc/storage.go/api"
+
+const nvaluesize = 24 // + valuesize
 
 type nodevalue struct {
 	hdr1     uint64 // valuesize[39:]
-	pool     *mempool
+	pool     api.Mallocer
 	valstart unsafe.Pointer // just a place-holder
 }
 

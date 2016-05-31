@@ -1,12 +1,15 @@
-package storage
+package llrb
 
 import "testing"
 import "fmt"
 import "reflect"
 import "bytes"
 import "math/rand"
-
 import "time"
+
+import "github.com/prataprc/storage.go/lib"
+import "github.com/prataprc/storage.go/api"
+import "github.com/prataprc/storage.go/dict"
 
 var _ = fmt.Sprintf("dummy")
 
@@ -18,20 +21,20 @@ func TestNewLLRBMvcc(t *testing.T) {
 	if llrb == nil {
 		t.Errorf("unexpected nil")
 	}
-	nodavail := config["nodearena.capacity"].(int)
-	valavail := config["valarena.capacity"].(int)
+	nodavail := config.Int64("nodearena.capacity")
+	valavail := config.Int64("valarena.capacity")
 
 	stats, err := llrb.Fullstats()
 	if err != nil {
 		t.Error(stats)
 	}
 
-	if overhead := stats["node.overhead"].(int64); overhead != 2112 {
-		t.Errorf("expected %v, got %v", 0, 2112)
+	if overhead := stats["node.overhead"].(int64); overhead != 616 {
+		t.Errorf("expected %v, got %v", 616, overhead)
 	} else if useful := stats["node.useful"].(int64); useful != 0 {
 		t.Errorf("expected %v, got %v", 0, useful)
-	} else if overhead = stats["value.overhead"].(int64); overhead != 2112 {
-		t.Errorf("expected %v, got %v", 0, overhead)
+	} else if overhead = stats["value.overhead"].(int64); overhead != 1128 {
+		t.Errorf("expected %v, got %v", 1128, overhead)
 	} else if useful = stats["value.useful"].(int64); useful != 0 {
 		t.Errorf("expected %v, got %v", 0, overhead)
 	} else if x, y := int64(0), stats["node.allocated"].(int64); x != y {
@@ -71,7 +74,7 @@ func TestLLRBMvccBasicSnapshot(t *testing.T) {
 	llrb := makellrbmvcc(t, "bmvccsnapshot", inserts, config)
 	writer := llrb.mvcc.writer
 
-	snapch := make(chan IndexSnapshot, 1)
+	snapch := make(chan api.IndexSnapshot, 1)
 	err := llrb.RSnapshot(snapch)
 	if err != nil {
 		t.Error(err)
@@ -108,7 +111,7 @@ func TestLLRBMvcclBasicLookup(t *testing.T) {
 	llrb := makellrbmvcc(t, "bmvcclookup", inserts, config)
 	writer := llrb.mvcc.writer
 
-	snapch := make(chan IndexSnapshot, 1)
+	snapch := make(chan api.IndexSnapshot, 1)
 	err := llrb.RSnapshot(snapch)
 	if err != nil {
 		t.Error(err)
@@ -181,7 +184,7 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 	countref := llrb.Count()
 	llrb.Upsert(
 		inserts[0][0], newvalue,
-		func(index Index, _ int64, newnd, oldnd Node) {
+		func(index api.Index, _ int64, newnd, oldnd api.Node) {
 			newnd.Setvbno(vbno).SetVbuuid(vbuuid).SetBornseqno(seqno)
 			vs := oldnd.Value()
 			if bytes.Compare(vs, inserts[0][1]) != 0 {
@@ -195,7 +198,7 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 			}
 		})
 
-	snapch := make(chan IndexSnapshot, 1)
+	snapch := make(chan api.IndexSnapshot, 1)
 	err := llrb.RSnapshot(snapch)
 	if err != nil {
 		t.Error(err)
@@ -222,7 +225,7 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 	//-- delete-min
 	countref, key, value := llrb.Count(), []byte(nil), []byte(nil)
 	llrb.DeleteMin(
-		func(index Index, nd Node) {
+		func(index api.Index, nd api.Node) {
 			key, value = nd.Key(), nd.Value()
 			fmsg := "expected %v, got %v"
 			if bytes.Compare(key, inserts[0][0]) != 0 {
@@ -259,7 +262,7 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 	// delete-max
 	countref, key, value = llrb.Count(), nil, nil
 	llrb.DeleteMax(
-		func(index Index, nd Node) {
+		func(index api.Index, nd api.Node) {
 			key, value = nd.Key(), nd.Value()
 			fmsg := "expected %v, got %v"
 			if bytes.Compare(key, []byte("key5")) != 0 {
@@ -296,7 +299,7 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 	countref, key, value = llrb.Count(), []byte("key2"), nil
 	llrb.Delete(
 		key,
-		func(index Index, nd Node) {
+		func(index api.Index, nd api.Node) {
 			value = nd.Value()
 			fmsg := "expected %v, got %v"
 			if bytes.Compare(value, []byte("value2")) != 0 {
@@ -390,7 +393,7 @@ func TestLLRBMvccBasicRange(t *testing.T) {
 
 		// forward range, return true
 		outs := make([][2][]byte, 0)
-		snapshot.Range(lowkey, highkey, incl, false, func(nd Node) bool {
+		snapshot.Range(lowkey, highkey, incl, false, func(nd api.Node) bool {
 			outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
 			return true
 		})
@@ -400,7 +403,7 @@ func TestLLRBMvccBasicRange(t *testing.T) {
 		}
 		// forward range, return false
 		outs = make([][2][]byte, 0)
-		snapshot.Range(lowkey, highkey, incl, false, func(nd Node) bool {
+		snapshot.Range(lowkey, highkey, incl, false, func(nd api.Node) bool {
 			outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
 			return false
 		})
@@ -428,7 +431,7 @@ func TestLLRBMvccRange(t *testing.T) {
 	llrb := makellrbmvcc(t, "mvccrange", nil, config)
 	writer := llrb.mvcc.writer
 
-	d := NewDict()
+	d := dict.NewDict()
 
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(0x12345678)
 	keys, values := make([][]byte, 0), make([][]byte, 0)
@@ -439,7 +442,7 @@ func TestLLRBMvccRange(t *testing.T) {
 		key, value = makekeyvalue(key, value)
 		llrb.Upsert(
 			key, value,
-			func(index Index, _ int64, newnd, oldnd Node) {
+			func(index api.Index, _ int64, newnd, oldnd api.Node) {
 				if oldnd != nil {
 					t.Errorf("expected nil")
 				} else if x := llrb.Count(); x != int64(i+1) {
@@ -468,13 +471,13 @@ func TestLLRBMvccRange(t *testing.T) {
 
 		// foward range
 		llrbks, llrbvs := make([][]byte, 0), make([][]byte, 0)
-		snapshot.Range(lowkey, highkey, incl, false, func(nd Node) bool {
+		snapshot.Range(lowkey, highkey, incl, false, func(nd api.Node) bool {
 			llrbks = append(llrbks, nd.Key())
 			llrbvs = append(llrbvs, nd.Value())
 			return true
 		})
 		dks, dvs := make([][]byte, 0), make([][]byte, 0)
-		d.Range(lowkey, highkey, incl, false, func(nd Node) bool {
+		d.Range(lowkey, highkey, incl, false, func(nd api.Node) bool {
 			dks, dvs = append(dks, nd.Key()), append(dvs, nd.Value())
 			return true
 		})
@@ -493,13 +496,13 @@ func TestLLRBMvccRange(t *testing.T) {
 
 		// backward range
 		llrbks, llrbvs = make([][]byte, 0), make([][]byte, 0)
-		snapshot.Range(lowkey, highkey, incl, true, func(nd Node) bool {
+		snapshot.Range(lowkey, highkey, incl, true, func(nd api.Node) bool {
 			llrbks = append(llrbks, nd.Key())
 			llrbvs = append(llrbvs, nd.Value())
 			return true
 		})
 		dks, dvs = make([][]byte, 0), make([][]byte, 0)
-		d.Range(lowkey, highkey, incl, true, func(nd Node) bool {
+		d.Range(lowkey, highkey, incl, true, func(nd api.Node) bool {
 			dks, dvs = append(dks, nd.Key()), append(dvs, nd.Value())
 			return true
 		})
@@ -636,7 +639,7 @@ func TestLLRBMvccIterate(t *testing.T) {
 	llrb := makellrbmvcc(t, "mvcciterate", nil, config)
 	writer := llrb.mvcc.writer
 
-	d := NewDict()
+	d := dict.NewDict()
 
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
 	keys, values := make([][]byte, 0), make([][]byte, 0)
@@ -647,7 +650,7 @@ func TestLLRBMvccIterate(t *testing.T) {
 		key, value = makekeyvalue(key, value)
 		llrb.Upsert(
 			key, value,
-			func(index Index, _ int64, newnd, oldnd Node) {
+			func(index api.Index, _ int64, newnd, oldnd api.Node) {
 				if oldnd != nil {
 					t.Errorf("expected nil")
 				} else if x := index.Count(); x != int64(i+1) {
@@ -868,7 +871,7 @@ func TestLLRBMvccUpsert(t *testing.T) {
 		newvalues = append(newvalues, value)
 		llrb.Upsert(
 			key, value,
-			func(index Index, _ int64, newnd, oldnd Node) {
+			func(index api.Index, _ int64, newnd, oldnd api.Node) {
 				if oldnd == nil {
 					t.Errorf("unexpected nil")
 				} else if x := oldnd.Vbno(); x != vbno {
@@ -963,7 +966,7 @@ func TestLLRBMvccDeleteMin(t *testing.T) {
 	// delete first item
 	vbno, vbuuid := uint16(10), uint64(0xABCD)
 	llrb.DeleteMin(
-		func(index Index, nd Node) {
+		func(index api.Index, nd api.Node) {
 			if nd == nil {
 				t.Errorf("unexpected nil")
 			} else if x := nd.Vbno(); x != vbno {
@@ -1018,7 +1021,7 @@ func TestLLRBMvccDelete(t *testing.T) {
 	for i, key := range keys[:count/2] {
 		llrb.Delete(
 			key,
-			func(index Index, nd Node) {
+			func(index api.Index, nd api.Node) {
 				if nd == nil {
 					t.Errorf("unexpected nil")
 				} else if x := nd.Vbno(); x != vbno {
@@ -1045,7 +1048,7 @@ func TestLLRBMvccDelete(t *testing.T) {
 	// delete minimums
 	for i := 0; i < len(keys[count/2:(2*count)/3]); i++ {
 		llrb.DeleteMin(
-			func(index Index, nd Node) {
+			func(index api.Index, nd api.Node) {
 				if nd == nil {
 					t.Errorf("unexpected nil")
 				} else if x := nd.Vbno(); x != vbno {
@@ -1065,7 +1068,7 @@ func TestLLRBMvccDelete(t *testing.T) {
 	// delete maximums
 	for i := 0; i < len(keys[(2*count)/3:]); i++ {
 		llrb.DeleteMax(
-			func(index Index, nd Node) {
+			func(index api.Index, nd api.Node) {
 				if nd == nil {
 					t.Errorf("unexpected nil")
 				} else if x := nd.Vbno(); x != vbno {
@@ -1121,8 +1124,7 @@ func TestLLRBMvccDelete(t *testing.T) {
 }
 
 func makellrbmvcc(
-	t *testing.T, nm string, inserts [][2][]byte,
-	config map[string]interface{}) *LLRB {
+	t *testing.T, nm string, inserts [][2][]byte, config lib.Config) *LLRB {
 
 	llrb := NewLLRB(nm, config, nil)
 	if llrb.Count() != 0 {
@@ -1137,7 +1139,7 @@ func makellrbmvcc(
 	}
 	llrb.UpsertMany(
 		keys, values,
-		func(index Index, i int64, newnd, oldnd Node) {
+		func(index api.Index, i int64, newnd, oldnd api.Node) {
 			if oldnd != nil {
 				t.Errorf("expected old Llrbnode as nil")
 			}
@@ -1149,10 +1151,10 @@ func makellrbmvcc(
 	return llrb
 }
 
-func validatesnapshot(sleep int, writer *LLRBWriter) (IndexSnapshot, error) {
+func validatesnapshot(sleep int, writer *LLRBWriter) (api.IndexSnapshot, error) {
 	time.Sleep(time.Duration(sleep) * time.Millisecond)
 
-	snapch := make(chan IndexSnapshot, 1)
+	snapch := make(chan api.IndexSnapshot, 1)
 	err := writer.llrb.RSnapshot(snapch)
 	if err != nil {
 		return nil, err

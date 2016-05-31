@@ -1,4 +1,4 @@
-package storage
+package llrb
 
 import "testing"
 import "fmt"
@@ -7,6 +7,10 @@ import "reflect"
 import "time"
 import "math/rand"
 import "bytes"
+
+import "github.com/prataprc/storage.go/api"
+import "github.com/prataprc/storage.go/dict"
+import "github.com/prataprc/storage.go/lib"
 
 var _ = fmt.Sprintf("dummy")
 
@@ -23,8 +27,8 @@ func TestNewLLRB(t *testing.T) {
 		t.Error(err)
 	}
 
-	ovrhd, used, allc := int64(2112), int64(0), int64(0)
-	nodavail := int64(config["nodearena.capacity"].(int))
+	ovrhd, used, allc := int64(616), int64(0), int64(0)
+	nodavail := config.Int64("nodearena.capacity")
 	if x := stats["node.overhead"].(int64); x != ovrhd {
 		t.Errorf("expected %v, got %v", ovrhd, x)
 	} else if x := stats["node.useful"].(int64); x != used {
@@ -35,8 +39,8 @@ func TestNewLLRB(t *testing.T) {
 		t.Errorf("expected %v, got %v", x, y)
 	}
 
-	ovrhd, used, allc = int64(2112), int64(0), int64(0)
-	valavail := int64(config["valarena.capacity"].(int))
+	ovrhd, used, allc = int64(1128), int64(0), int64(0)
+	valavail := config.Int64("valarena.capacity")
 	if x := stats["value.overhead"].(int64); x != ovrhd {
 		t.Errorf("expected %v, got %v", ovrhd, x)
 	} else if x := stats["value.useful"].(int64); x != used {
@@ -194,7 +198,7 @@ func TestLLRBBasicUpdates(t *testing.T) {
 	countref := llrb.Count()
 	llrb.Upsert(
 		inserts[0][0], newvalue,
-		func(index Index, _ int64, newnd, oldnd Node) {
+		func(index api.Index, _ int64, newnd, oldnd api.Node) {
 			newnd.Setvbno(vbno).SetVbuuid(vbuuid).SetBornseqno(seqno)
 			vs := oldnd.Value()
 			if bytes.Compare(vs, inserts[0][1]) != 0 {
@@ -221,7 +225,7 @@ func TestLLRBBasicUpdates(t *testing.T) {
 	// delete
 	countref, key, value := llrb.Count(), []byte(nil), []byte(nil)
 	llrb.DeleteMin(
-		func(index Index, nd Node) {
+		func(index api.Index, nd api.Node) {
 			key, value = nd.Key(), nd.Value()
 			fmsg := "expected %v, got %v"
 			if bytes.Compare(key, inserts[0][0]) != 0 {
@@ -244,7 +248,7 @@ func TestLLRBBasicUpdates(t *testing.T) {
 	// delete-max
 	countref, key, value = llrb.Count(), nil, nil
 	llrb.DeleteMax(
-		func(index Index, nd Node) {
+		func(index api.Index, nd api.Node) {
 			k, v := nd.Key(), nd.Value()
 			fmsg := "expected %v, got %v"
 			if bytes.Compare(k, []byte("key5")) != 0 {
@@ -268,7 +272,7 @@ func TestLLRBBasicUpdates(t *testing.T) {
 	countref, key, value = llrb.Count(), nil, nil
 	llrb.Delete(
 		[]byte("key2"),
-		func(index Index, nd Node) {
+		func(index api.Index, nd api.Node) {
 			v := nd.Value()
 			fmsg := "expected %v, got %v"
 			if bytes.Compare(v, []byte("value2")) != 0 {
@@ -307,7 +311,7 @@ func TestLLRBBasicRange(t *testing.T) {
 	for _, kv := range inserts {
 		llrb.Upsert(
 			kv[0], kv[1],
-			func(index Index, _ int64, newnd, oldnd Node) {
+			func(index api.Index, _ int64, newnd, oldnd api.Node) {
 				if oldnd != nil {
 					t.Errorf("expected old Llrbnode as nil")
 				}
@@ -353,7 +357,7 @@ func TestLLRBBasicRange(t *testing.T) {
 
 		// forward range, return true
 		outs := make([][2][]byte, 0)
-		llrb.Range(lowkey, highkey, incl, false, func(nd Node) bool {
+		llrb.Range(lowkey, highkey, incl, false, func(nd api.Node) bool {
 			outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
 			return true
 		})
@@ -363,7 +367,7 @@ func TestLLRBBasicRange(t *testing.T) {
 		}
 		// forward range, return false
 		outs = make([][2][]byte, 0)
-		llrb.Range(lowkey, highkey, incl, false, func(nd Node) bool {
+		llrb.Range(lowkey, highkey, incl, false, func(nd api.Node) bool {
 			outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
 			return false
 		})
@@ -386,7 +390,7 @@ func TestLLRBBasicRange(t *testing.T) {
 		// backward range, return true
 		refs = reverse(tcase[3].([][2][]byte))
 		outs = make([][2][]byte, 0)
-		llrb.Range(lowkey, highkey, incl, true, func(nd Node) bool {
+		llrb.Range(lowkey, highkey, incl, true, func(nd api.Node) bool {
 			outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
 			return true
 		})
@@ -396,7 +400,7 @@ func TestLLRBBasicRange(t *testing.T) {
 		}
 		// backward range, return false
 		outs = make([][2][]byte, 0)
-		llrb.Range(lowkey, highkey, incl, true, func(nd Node) bool {
+		llrb.Range(lowkey, highkey, incl, true, func(nd api.Node) bool {
 			outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
 			return false
 		})
@@ -419,7 +423,7 @@ func TestLLRBRange(t *testing.T) {
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
 	llrb := NewLLRB("test", config, nil)
-	d := NewDict()
+	d := dict.NewDict()
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
 	keys, values := make([][]byte, 0), make([][]byte, 0)
 	// insert 10K items
@@ -429,7 +433,7 @@ func TestLLRBRange(t *testing.T) {
 		key, value = makekeyvalue(key, value)
 		llrb.Upsert(
 			key, value,
-			func(index Index, _ int64, newnd, oldnd Node) {
+			func(index api.Index, _ int64, newnd, oldnd api.Node) {
 				if oldnd != nil {
 					t.Errorf("expected nil")
 				} else if x := index.Count(); x != int64(i+1) {
@@ -452,13 +456,13 @@ func TestLLRBRange(t *testing.T) {
 
 		// forward range
 		llrbks, llrbvs := make([][]byte, 0), make([][]byte, 0)
-		llrb.Range(lowkey, highkey, incl, false, func(nd Node) bool {
+		llrb.Range(lowkey, highkey, incl, false, func(nd api.Node) bool {
 			llrbks = append(llrbks, nd.Key())
 			llrbvs = append(llrbvs, nd.Value())
 			return true
 		})
 		dks, dvs := make([][]byte, 0), make([][]byte, 0)
-		d.Range(lowkey, highkey, incl, false, func(nd Node) bool {
+		d.Range(lowkey, highkey, incl, false, func(nd api.Node) bool {
 			dks, dvs = append(dks, nd.Key()), append(dvs, nd.Value())
 			return true
 		})
@@ -477,13 +481,13 @@ func TestLLRBRange(t *testing.T) {
 
 		// backward range
 		llrbks, llrbvs = make([][]byte, 0), make([][]byte, 0)
-		llrb.Range(lowkey, highkey, incl, true, func(nd Node) bool {
+		llrb.Range(lowkey, highkey, incl, true, func(nd api.Node) bool {
 			llrbks = append(llrbks, nd.Key())
 			llrbvs = append(llrbvs, nd.Value())
 			return true
 		})
 		dks, dvs = make([][]byte, 0), make([][]byte, 0)
-		d.Range(lowkey, highkey, incl, true, func(nd Node) bool {
+		d.Range(lowkey, highkey, incl, true, func(nd api.Node) bool {
 			dks, dvs = append(dks, nd.Key()), append(dvs, nd.Value())
 			return true
 		})
@@ -549,7 +553,7 @@ func TestLLRBBasicIterate(t *testing.T) {
 	for _, kv := range inserts {
 		llrb.Upsert(
 			kv[0], kv[1],
-			func(index Index, _ int64, newnd, oldnd Node) {
+			func(index api.Index, _ int64, newnd, oldnd api.Node) {
 				if oldnd != nil {
 					t.Errorf("expected old Llrbnode as nil")
 				}
@@ -645,7 +649,7 @@ func TestLLRBIterate(t *testing.T) {
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
 	llrb := NewLLRB("test", config, nil)
-	d := NewDict()
+	d := dict.NewDict()
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
 	keys, values := make([][]byte, 0), make([][]byte, 0)
 	// insert 10K items
@@ -655,7 +659,7 @@ func TestLLRBIterate(t *testing.T) {
 		key, value = makekeyvalue(key, value)
 		llrb.Upsert(
 			key, value,
-			func(index Index, _ int64, newnd, oldnd Node) {
+			func(index api.Index, _ int64, newnd, oldnd api.Node) {
 				if oldnd != nil {
 					t.Errorf("expected nil")
 				} else if x := index.Count(); x != int64(i+1) {
@@ -769,7 +773,7 @@ func TestLLRBInsert(t *testing.T) {
 		key, value = makekeyvalue(key, value)
 		llrb.Upsert(
 			key, value,
-			func(index Index, _ int64, newnd, oldnd Node) {
+			func(index api.Index, _ int64, newnd, oldnd api.Node) {
 				if oldnd != nil {
 					t.Errorf("expected old Llrbnode to be nil")
 				} else if x := index.Count(); x != int64(i+1) {
@@ -789,7 +793,7 @@ func TestLLRBInsert(t *testing.T) {
 	}
 
 	useful := int64(2096640)
-	allocated, avail := int64(1600000), int64(1072141824)
+	allocated, avail := int64(1920000), int64(1071821824)
 	if x := stats["node.useful"].(int64); x != useful {
 		t.Errorf("expected %v, got %v", useful, x)
 	}
@@ -856,7 +860,7 @@ func TestLLRBUpsert(t *testing.T) {
 		key, value = makekeyvalue(key, value)
 		llrb.Upsert(
 			key, value,
-			func(index Index, _ int64, newnd, oldnd Node) {
+			func(index api.Index, _ int64, newnd, oldnd api.Node) {
 				if oldnd != nil {
 					t.Errorf("expected old Llrbnode to be nil")
 				} else if x := index.Count(); x != int64(i+1) {
@@ -878,7 +882,7 @@ func TestLLRBUpsert(t *testing.T) {
 		newvalues = append(newvalues, value)
 		llrb.Upsert(
 			key, value,
-			func(index Index, _ int64, newnd, oldnd Node) {
+			func(index api.Index, _ int64, newnd, oldnd api.Node) {
 				if oldnd == nil {
 					t.Errorf("unexpected nil")
 				} else if x := newnd.Vbno(); x != vbno {
@@ -912,7 +916,7 @@ func TestLLRBUpsert(t *testing.T) {
 	if useful := stats["value.useful"].(int64); useful != 23068672 {
 		t.Errorf("expected %v, got %v", 23068672, useful)
 	}
-	x, y := int64(1600000), stats["node.allocated"].(int64)
+	x, y := int64(1920000), stats["node.allocated"].(int64)
 	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
@@ -920,7 +924,7 @@ func TestLLRBUpsert(t *testing.T) {
 	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
-	x, y = int64(1072141824), stats["node.available"].(int64)
+	x, y = int64(1071821824), stats["node.available"].(int64)
 	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
@@ -951,7 +955,7 @@ func TestLLRBDelete(t *testing.T) {
 		key, value = makekeyvalue(key, value)
 		llrb.Upsert(
 			key, value,
-			func(index Index, _ int64, newnd, oldnd Node) {
+			func(index api.Index, _ int64, newnd, oldnd api.Node) {
 				if oldnd != nil {
 					t.Errorf("expected nil")
 				} else if x := llrb.Count(); x != int64(i+1) {
@@ -970,7 +974,7 @@ func TestLLRBDelete(t *testing.T) {
 	for i, key := range keys[:count/2] {
 		llrb.Delete(
 			key,
-			func(index Index, nd Node) {
+			func(index api.Index, nd api.Node) {
 				if nd == nil {
 					t.Errorf("unexpected nil")
 				} else if x := nd.Vbno(); x != vbno {
@@ -993,7 +997,7 @@ func TestLLRBDelete(t *testing.T) {
 	// delete minimums
 	for i := 0; i < len(keys[count/2:(3*count)/4]); i++ {
 		llrb.DeleteMin(
-			func(index Index, nd Node) {
+			func(index api.Index, nd api.Node) {
 				if nd == nil {
 					t.Errorf("unexpected nil")
 				} else if x := nd.Vbno(); x != vbno {
@@ -1009,7 +1013,7 @@ func TestLLRBDelete(t *testing.T) {
 	// delete maximums
 	for i := 0; i < len(keys[(3*count)/4:]); i++ {
 		llrb.DeleteMax(
-			func(index Index, nd Node) {
+			func(index api.Index, nd api.Node) {
 				if nd == nil {
 					t.Errorf("unexpected nil")
 				} else if x := nd.Vbno(); x != vbno {
@@ -1119,8 +1123,7 @@ func makekeyvalue(key, value []byte) ([]byte, []byte) {
 }
 
 func makellrb(
-	t *testing.T, nm string, inserts [][2][]byte,
-	config map[string]interface{}) *LLRB {
+	t *testing.T, nm string, inserts [][2][]byte, config lib.Config) *LLRB {
 
 	llrb := NewLLRB(nm, config, nil)
 	if llrb.Count() != 0 {
@@ -1135,7 +1138,7 @@ func makellrb(
 	}
 	llrb.UpsertMany(
 		keys, values,
-		func(index Index, i int64, newnd, oldnd Node) {
+		func(index api.Index, i int64, newnd, oldnd api.Node) {
 			if oldnd != nil {
 				t.Errorf("expected old Llrbnode as nil")
 			}

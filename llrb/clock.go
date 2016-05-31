@@ -41,7 +41,7 @@
 //		 anything.
 //	   * if other is subset of clock - lt, and le always return false.
 
-package storage
+package llrb
 
 import "hash"
 import "bytes"
@@ -57,7 +57,7 @@ type vectorclock struct {
 
 var resetseqnos = make([]byte, 2024*8) // TODO: avoid magic numbers
 
-func newvectorclock(numvb int) *vectorclock {
+func newvectorclock(numvb int64) *vectorclock {
 	clock := &vectorclock{
 		vbuuids: make([]uint64, numvb),
 		seqnos:  make([]byte, numvb*8),
@@ -109,7 +109,7 @@ func (clock *vectorclock) updateseqnos(vbnos []uint16, seqnos []uint64) {
 }
 
 func (clock *vectorclock) clone() *vectorclock {
-	newclock := newvectorclock(len(clock.vbuuids))
+	newclock := newvectorclock(int64(len(clock.vbuuids)))
 	copy(newclock.vbuuids, clock.vbuuids)
 	copy(newclock.seqnos, clock.seqnos)
 	newclock.hash()

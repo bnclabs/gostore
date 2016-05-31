@@ -1,6 +1,6 @@
 // LLRB MVCC snapshot readers.
 
-package storage
+package llrb
 
 import "sync/atomic"
 import "time"
@@ -12,16 +12,20 @@ import "fmt"
 import "strconv"
 import "runtime/debug"
 
+import "github.com/prataprc/storage.go/lib"
+import "github.com/prataprc/storage.go/log"
+import "github.com/prataprc/storage.go/api"
+
 //---- snapshot ticker
 
-func (writer *LLRBWriter) snapshotticker(interval int, finch chan bool) {
+func (writer *LLRBWriter) snapshotticker(interval int64, finch chan bool) {
 	llrb := writer.llrb
 	tick := time.NewTicker(time.Duration(interval) * time.Millisecond)
 
 	defer func() {
 		if r := recover(); r != nil {
 			log.Errorf("%v snapshotticker() crashed: %v\n", llrb.logprefix, r)
-			log.Errorf("\n%s", getStackTrace(2, debug.Stack()))
+			log.Errorf("\n%s", lib.GetStacktrace(2, debug.Stack()))
 			llrb.Destroy()
 		}
 		tick.Stop()
@@ -63,7 +67,7 @@ type LLRBSnapshot struct {
 	n_reclaims    int64
 	keymemory     int64
 	valmemory     int64
-	h_upsertdepth histogramInt64
+	h_upsertdepth lib.HistogramInt64
 
 	// can be unaligned fields
 
@@ -186,7 +190,7 @@ func (snapshot *LLRBSnapshot) Has(key []byte) bool {
 }
 
 // Get implement IndexReader{} interface.
-func (snapshot *LLRBSnapshot) Get(key []byte) Node {
+func (snapshot *LLRBSnapshot) Get(key []byte) api.Node {
 	nd := snapshot.get(key)
 	if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
 		atomic.AddInt64(&snapshot.n_cclookups, 1)
@@ -196,7 +200,7 @@ func (snapshot *LLRBSnapshot) Get(key []byte) Node {
 	return nd
 }
 
-func (snapshot *LLRBSnapshot) get(key []byte) Node {
+func (snapshot *LLRBSnapshot) get(key []byte) api.Node {
 	mdsize, nd := snapshot.llrb.mdsize, snapshot.root
 	for nd != nil {
 		if nd.gtkey(mdsize, key) {
@@ -211,7 +215,7 @@ func (snapshot *LLRBSnapshot) get(key []byte) Node {
 }
 
 // Min implement IndexReader{} interface.
-func (snapshot *LLRBSnapshot) Min() Node {
+func (snapshot *LLRBSnapshot) Min() api.Node {
 	nd := snapshot.min()
 	if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
 		atomic.AddInt64(&snapshot.n_cclookups, 1)
@@ -221,7 +225,7 @@ func (snapshot *LLRBSnapshot) Min() Node {
 	return nd
 }
 
-func (snapshot *LLRBSnapshot) min() Node {
+func (snapshot *LLRBSnapshot) min() api.Node {
 	var nd *Llrbnode
 	if nd = snapshot.root; nd == nil {
 		return nil
@@ -233,7 +237,7 @@ func (snapshot *LLRBSnapshot) min() Node {
 }
 
 // Max implement IndexReader{} interface.
-func (snapshot *LLRBSnapshot) Max() Node {
+func (snapshot *LLRBSnapshot) Max() api.Node {
 	nd := snapshot.max()
 	if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
 		atomic.AddInt64(&snapshot.n_cclookups, 1)
@@ -243,7 +247,7 @@ func (snapshot *LLRBSnapshot) Max() Node {
 	return nd
 }
 
-func (snapshot *LLRBSnapshot) max() Node {
+func (snapshot *LLRBSnapshot) max() api.Node {
 	var nd *Llrbnode
 	if nd = snapshot.root; nd == nil {
 		return nil
@@ -255,7 +259,7 @@ func (snapshot *LLRBSnapshot) max() Node {
 }
 
 // Range implement IndexReader{} interface.
-func (s *LLRBSnapshot) Range(lkey, hkey []byte, incl string, reverse bool, iter RangeCallb) {
+func (s *LLRBSnapshot) Range(lkey, hkey []byte, incl string, reverse bool, iter api.RangeCallb) {
 	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
 		if incl == "none" {
 			return
@@ -297,7 +301,7 @@ func (s *LLRBSnapshot) Range(lkey, hkey []byte, incl string, reverse bool, iter 
 }
 
 // Iterate implement IndexReader{} interface.
-func (s *LLRBSnapshot) Iterate(lkey, hkey []byte, incl string, r bool) IndexIterator {
+func (s *LLRBSnapshot) Iterate(lkey, hkey []byte, incl string, r bool) api.IndexIterator {
 
 	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
 		if incl == "none" {
@@ -323,7 +327,7 @@ func (s *LLRBSnapshot) Iterate(lkey, hkey []byte, incl string, r bool) IndexIter
 	iter.closed, iter.activeiter = false, &llrb.activeiter
 
 	if iter.nodes == nil {
-		iter.nodes = make([]Node, 0)
+		iter.nodes = make([]api.Node, 0)
 	}
 
 	iter.rangefill()
@@ -357,7 +361,7 @@ func (s *LLRBSnapshot) Iterate(lkey, hkey []byte, incl string, r bool) IndexIter
 func (snapshot *LLRBSnapshot) validate(root *Llrbnode) {
 	llrb := snapshot.llrb
 
-	h := newhistorgramInt64(1, 256, 1)
+	h := lib.NewhistorgramInt64(1, 256, 1)
 	_, km, vm := llrb.validatetree(root, isred(root), 0 /*blck*/, 1 /*dep*/, h)
 	if km != snapshot.keymemory {
 		fmsg := "validate(): keymemory:%v != actual:%v"
@@ -369,11 +373,11 @@ func (snapshot *LLRBSnapshot) validate(root *Llrbnode) {
 
 	// `h_height`.max should not exceed certain limit
 	llrb.validatetree(root, isred(root), 0 /*blacks*/, 1 /*depth*/, h)
-	if h.samples() > 8 {
+	if h.Samples() > 8 {
 		nf := float64(snapshot.Count())
-		if float64(h.max()) > (3 * math.Log2(nf)) {
+		if float64(h.Max()) > (3 * math.Log2(nf)) {
 			fmsg := "validate(): max height %v exceeds log2(snapshot.count) %v"
-			panic(fmt.Errorf(fmsg, float64(h.max()), nf))
+			panic(fmt.Errorf(fmsg, float64(h.Max()), nf))
 		}
 	}
 

@@ -1,21 +1,22 @@
-package storage
+package llrb
 
-import "sort"
 import "fmt"
 import "math"
 import "strings"
 import "encoding/json"
 
 import gohumanize "github.com/dustin/go-humanize"
+import "github.com/prataprc/storage.go/lib"
+import "github.com/prataprc/storage.go/log"
 
 func (llrb *LLRB) stats() (map[string]interface{}, error) {
 	stats := llrb.statsmem(map[string]interface{}{})
 	stats = llrb.stattree(stats)
-	stats["h_upsertdepth"] = llrb.h_upsertdepth.fullstats()
+	stats["h_upsertdepth"] = llrb.h_upsertdepth.Fullstats()
 	if llrb.mvcc.enabled {
-		stats["mvcc.h_bulkfree"] = llrb.mvcc.h_bulkfree.fullstats()
+		stats["mvcc.h_bulkfree"] = llrb.mvcc.h_bulkfree.Fullstats()
 		for k, h := range llrb.mvcc.h_reclaims {
-			stats["mvcc.h_reclaims."+k] = h.fullstats()
+			stats["mvcc.h_reclaims."+k] = h.Fullstats()
 		}
 	}
 	return stats, nil
@@ -26,9 +27,9 @@ func (llrb *LLRB) fullstats() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	h_heightav := newhistorgramInt64(1, 256, 1)
+	h_heightav := lib.NewhistorgramInt64(1, 256, 1)
 	llrb.heightStats(llrb.root, 1 /*depth*/, h_heightav)
-	stats["h_height"] = h_heightav.fullstats()
+	stats["h_height"] = h_heightav.Fullstats()
 	stats["n_blacks"] = llrb.countblacks(llrb.root, 0)
 
 	h_height := stats["h_height"].(map[string]interface{})
@@ -42,18 +43,18 @@ func (llrb *LLRB) fullstats() (map[string]interface{}, error) {
 // memory statistics -
 //	   node-arena, value.arena, total-keysize, total-valuesize
 func (llrb *LLRB) statsmem(stats map[string]interface{}) map[string]interface{} {
-	overhead, useful := llrb.nodearena.memory()
+	overhead, useful := llrb.nodearena.Memory()
 	stats["node.overhead"] = overhead
 	stats["node.useful"] = useful
-	stats["node.allocated"] = llrb.nodearena.allocated()
-	stats["node.available"] = llrb.nodearena.available()
-	stats["node.blocks"] = llrb.nodearena.blocksizes
-	overhead, useful = llrb.valarena.memory()
+	stats["node.allocated"] = llrb.nodearena.Allocated()
+	stats["node.available"] = llrb.nodearena.Available()
+	stats["node.blocks"] = llrb.nodearena.Chunksizes()
+	overhead, useful = llrb.valarena.Memory()
 	stats["value.overhead"] = overhead
 	stats["value.useful"] = useful
-	stats["value.allocated"] = llrb.valarena.allocated()
-	stats["value.available"] = llrb.valarena.available()
-	stats["value.blocks"] = llrb.valarena.blocksizes
+	stats["value.allocated"] = llrb.valarena.Allocated()
+	stats["value.available"] = llrb.valarena.Available()
+	stats["value.blocks"] = llrb.valarena.Chunksizes()
 	stats["keymemory"] = llrb.keymemory
 	stats["valmemory"] = llrb.valmemory
 
@@ -112,7 +113,7 @@ func (llrb *LLRB) validatestats() error {
 	}
 
 	for k, h_reclaim := range llrb.mvcc.h_reclaims {
-		if max := h_reclaim.max(); max > 0 {
+		if max := h_reclaim.Max(); max > 0 {
 			nf := float64(llrb.Count())
 			if float64(max) > (4 * math.Log2(nf)) {
 				fmsg := "validatestats(): max %v reclaim %v exceeds log2(%v)"
@@ -146,25 +147,11 @@ func (llrb *LLRB) log(involved int, humanize bool) {
 		log.Infof(fmsg, llrb.logprefix, kmem, use, overh, alloc, avail)
 
 		// node utilization
-		arenapools := llrb.nodearena.mpools
-		sizes := []int{}
-		for size := range arenapools {
-			sizes = append(sizes, int(size))
-		}
-		sort.Ints(sizes)
 		outs := []string{}
-		fmsg = "  %4v blocks %3v pools of %v, utilz: %2.2f%%"
-		for _, size := range sizes {
-			mpools := arenapools[int64(size)]
-			allocated, capct := int64(0), int64(0)
-			if len(mpools) > 0 {
-				for _, mpool := range mpools {
-					allocated += mpool.allocated()
-					capct += mpool.capacity
-				}
-				z := (float64(allocated) / float64(capct)) * 100
-				outs = append(outs, fmt.Sprintf(fmsg, size, len(mpools), capct, z))
-			}
+		fmsg = "  %4v chunk-size, utilz: %2.2f%%"
+		sizes, zs := llrb.nodearena.Utilization()
+		for i, size := range sizes {
+			outs = append(outs, fmt.Sprintf(fmsg, size, zs[i]))
 		}
 		out := strings.Join(outs, "\n")
 		log.Infof("%v key utilization:\n%v\n", llrb.logprefix, out)
@@ -179,25 +166,11 @@ func (llrb *LLRB) log(involved int, humanize bool) {
 		log.Infof(fmsg, llrb.logprefix, vmem, use, overh, alloc, avail)
 
 		// value utilization
-		arenapools = llrb.valarena.mpools
-		sizes = []int{}
-		for size := range arenapools {
-			sizes = append(sizes, int(size))
-		}
-		sort.Ints(sizes)
 		outs = []string{}
-		fmsg = "  %4v blocks %3v pools of %v each, utilz: %2.2f%%"
-		for _, size := range sizes {
-			mpools := arenapools[int64(size)]
-			allocated, capct := int64(0), int64(0)
-			if len(mpools) > 0 {
-				for _, mpool := range mpools {
-					allocated += mpool.allocated()
-					capct += mpool.capacity
-				}
-				z := (float64(allocated) / float64(capct)) * 100
-				outs = append(outs, fmt.Sprintf(fmsg, size, len(mpools), capct, z))
-			}
+		fmsg = "  %4v chunk-size, utilz: %2.2f%%"
+		sizes, zs = llrb.valarena.Utilization()
+		for i, size := range sizes {
+			outs = append(outs, fmt.Sprintf(fmsg, size, zs[i]))
 		}
 		out = strings.Join(outs, "\n")
 		log.Infof("%v value utilization:\n%v\n", llrb.logprefix, out)

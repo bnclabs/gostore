@@ -43,4 +43,4 @@
 //   * maximum value size - 1 Terabyte.
 //   * maximum born seqno - (2^64 - 1)
 //   * maximum dead seqno - (2^64 - 1)
-package storage
+package llrb

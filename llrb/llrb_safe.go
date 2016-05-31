@@ -1,14 +1,17 @@
 // llrb methods in this file are safe to be shared between
 // single threaded and mvcc flavours.
 
-package storage
+package llrb
 
 import "fmt"
 import "math"
 import "bytes"
 
+import "github.com/prataprc/storage.go/api"
+import "github.com/prataprc/storage.go/lib"
+
 // low <= (keys) <= high
-func (llrb *LLRB) rangehele(nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
+func (llrb *LLRB) rangehele(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) bool {
 	if nd == nil {
 		return true
 	}
@@ -28,7 +31,7 @@ func (llrb *LLRB) rangehele(nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
 }
 
 // low <= (keys) < hk
-func (llrb *LLRB) rangehelt(nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
+func (llrb *LLRB) rangehelt(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) bool {
 	if nd == nil {
 		return true
 	}
@@ -48,7 +51,7 @@ func (llrb *LLRB) rangehelt(nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
 }
 
 // low < (keys) <= hk
-func (llrb *LLRB) rangehtle(nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
+func (llrb *LLRB) rangehtle(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) bool {
 	if nd == nil {
 		return true
 	}
@@ -68,7 +71,7 @@ func (llrb *LLRB) rangehtle(nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
 }
 
 // low < (keys) < hk
-func (llrb *LLRB) rangehtlt(nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
+func (llrb *LLRB) rangehtlt(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) bool {
 	if nd == nil {
 		return true
 	}
@@ -88,7 +91,7 @@ func (llrb *LLRB) rangehtlt(nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
 }
 
 // high >= (keys) >= low
-func (llrb *LLRB) rvrslehe(nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
+func (llrb *LLRB) rvrslehe(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) bool {
 	if nd == nil {
 		return true
 	}
@@ -108,7 +111,7 @@ func (llrb *LLRB) rvrslehe(nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
 }
 
 // high >= (keys) > low
-func (llrb *LLRB) rvrsleht(nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
+func (llrb *LLRB) rvrsleht(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) bool {
 	if nd == nil {
 		return true
 	}
@@ -128,7 +131,7 @@ func (llrb *LLRB) rvrsleht(nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
 }
 
 // high > (keys) >= low
-func (llrb *LLRB) rvrslthe(nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
+func (llrb *LLRB) rvrslthe(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) bool {
 	if nd == nil {
 		return true
 	}
@@ -148,7 +151,7 @@ func (llrb *LLRB) rvrslthe(nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
 }
 
 // high > (keys) > low
-func (llrb *LLRB) rvrsltht(nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
+func (llrb *LLRB) rvrsltht(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) bool {
 	if nd == nil {
 		return true
 	}
@@ -168,7 +171,7 @@ func (llrb *LLRB) rvrsltht(nd *Llrbnode, lk, hk []byte, iter RangeCallb) bool {
 }
 
 func (llrb *LLRB) validate(root *Llrbnode) {
-	h := newhistorgramInt64(1, 256, 1)
+	h := lib.NewhistorgramInt64(1, 256, 1)
 
 	_, km, vm := llrb.validatetree(root, isred(root), 0 /*blck*/, 1 /*dep*/, h)
 	if km != llrb.keymemory {
@@ -180,11 +183,11 @@ func (llrb *LLRB) validate(root *Llrbnode) {
 	}
 
 	// `h_height`.max should not exceed certain limit
-	if h.samples() > 8 {
+	if h.Samples() > 8 {
 		nf := float64(llrb.Count())
-		if float64(h.max()) > (3 * (math.Log2(nf) + 1)) {
+		if float64(h.Max()) > (3 * (math.Log2(nf) + 1)) {
 			fmsg := "validate(): max height %v exceeds log2(%v)"
-			panic(fmt.Errorf(fmsg, float64(h.max()), nf))
+			panic(fmt.Errorf(fmsg, float64(h.Max()), nf))
 		}
 	}
 
@@ -212,10 +215,10 @@ func (llrb *LLRB) validatemem() {
 
 func (llrb *LLRB) validatetree(
 	nd *Llrbnode, fromred bool, blacks, depth int64,
-	h *histogramInt64) (nblacks, keymem, valmem int64) {
+	h *lib.HistogramInt64) (nblacks, keymem, valmem int64) {
 
 	if nd != nil {
-		h.add(depth)
+		h.Add(depth)
 		if fromred && isred(nd) {
 			panic("validate(): consequetive red spotted")
 		}
@@ -246,11 +249,11 @@ func (llrb *LLRB) validatetree(
 	return blacks, 0, 0
 }
 
-func (llrb *LLRB) heightStats(nd *Llrbnode, depth int64, h *histogramInt64) {
+func (llrb *LLRB) heightStats(nd *Llrbnode, depth int64, h *lib.HistogramInt64) {
 	if nd == nil {
 		return
 	}
-	h.add(depth)
+	h.Add(depth)
 	llrb.heightStats(nd.left, depth+1, h)
 	llrb.heightStats(nd.right, depth+1, h)
 }
