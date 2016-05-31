@@ -88,3 +88,7 @@ func GetStacktrace(skip int, stack []byte) string {
 	}
 	return buf.String()
 }
+
+func panicerr(fmsg string, args ...interface{}) {
+	panic(fmt.Errorf(fmsg, args...))
+}
