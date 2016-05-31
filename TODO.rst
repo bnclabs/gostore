@@ -1,5 +1,7 @@
 * test case for config.go
-* validate whether maxpools (256) is sufficient.
+* figure out a proper place for malloc/const.go
+* refactor vectorclock out of llrb.
+* validate whether Maxpools (256) is sufficient.
 * define an expected hierarchy of package dependencies and enforce them
   via `make check`.
 * include `go vet`, `go lint` and `errcheck` as part of `make check`
