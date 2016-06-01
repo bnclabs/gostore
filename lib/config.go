@@ -2,9 +2,10 @@ package lib
 
 import "strings"
 
+// Config map of settings parameter to configuration value.
 type Config map[string]interface{}
 
-// SectionConfig will create a new config object with parameters
+// Section will create a new config object with parameters
 // starting with `prefix`.
 func (config Config) Section(prefix string) Config {
 	section := make(Config)
@@ -36,6 +37,25 @@ func (config Config) Filter(subs string) Config {
 	return subconfig
 }
 
+// Mixin configuration to override `config` with `configs`.
+func (config Config) Mixin(configs ...interface{}) Config {
+	update := func(arg map[string]interface{}) {
+		for key, value := range arg {
+			config[key] = value
+		}
+	}
+	for _, arg := range configs {
+		switch cnf := arg.(type) {
+		case Config:
+			update(map[string]interface{}(cnf))
+		case map[string]interface{}:
+			update(cnf)
+		}
+	}
+	return config
+}
+
+// Bool return the boolean value for key.
 func (config Config) Bool(key string) bool {
 	if value, ok := config[key]; !ok {
 		panicerr("missing config %q", key)
@@ -47,6 +67,7 @@ func (config Config) Bool(key string) bool {
 	panic("unreachable code")
 }
 
+// Int64 return the int64 value for key.
 func (config Config) Int64(key string) int64 {
 	value, ok := config[key]
 	if !ok {
@@ -82,6 +103,7 @@ func (config Config) Int64(key string) int64 {
 	return 0
 }
 
+// Uint64 return the uint64 value for key.
 func (config Config) Uint64(key string) uint64 {
 	value, ok := config[key]
 	if !ok {
@@ -117,6 +139,7 @@ func (config Config) Uint64(key string) uint64 {
 	return 0
 }
 
+// String return the string value for key.
 func (config Config) String(key string) string {
 	if value, ok := config[key]; !ok {
 		panicerr("missing config %q", key)
@@ -126,23 +149,4 @@ func (config Config) String(key string) string {
 		return val
 	}
 	panic("unreachable code")
-}
-
-func Mixinconfig(configs ...interface{}) Config {
-	update := func(dst Config, config map[string]interface{}) Config {
-		for key, value := range config {
-			dst[key] = value
-		}
-		return dst
-	}
-	dst := make(Config)
-	for _, config := range configs {
-		switch cnf := config.(type) {
-		case Config:
-			dst = update(dst, map[string]interface{}(cnf))
-		case map[string]interface{}:
-			dst = update(dst, cnf)
-		}
-	}
-	return dst
 }

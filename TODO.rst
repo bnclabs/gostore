@@ -1,4 +1,3 @@
-* test case for config.go
 * figure out a proper place for malloc/const.go
 * figure out a nice place for memratio.
 * add interface for vector-clock under api:Index{} and api:IndexSnapshot{}
@@ -19,7 +18,6 @@ LLRB:
   upserts and deletes ?
 * YCSB test cases.
 * add llrb tree validation rules, based on sedgewick paper.
-* refactor memory allocator into separate package.
 
 BUBT:
 
