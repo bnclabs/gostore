@@ -1,19 +1,21 @@
+// Package api define types and interfaces common to all storage
+// algorithms implemented by this package.
 package api
 
 import "unsafe"
+
+// DeleteCallback callback from Delete API. Don't keep any reference to
+// deleted node, it is read-only and valid until callback returns.
+type DeleteCallback func(index Index, deleted Node)
 
 // RangeCallb callback from Range API.
 type RangeCallb func(nd Node) bool
 
 // UpsertCallback callback from Upsert API. Don't keep any reference
 // to newnd and oldnd:
-// * oldnd can only be read.
-// * newnd can be read or updated.
+//   * oldnd can only be read.
+//   * newnd can be read or updated.
 type UpsertCallback func(index Index, offset int64, newnd, oldnd Node)
-
-// DeleteCallback callback from Delete API. Don't keep any reference
-// deleted node, it is read-only and valid until callback returns.
-type DeleteCallback func(index Index, deleted Node)
 
 // Node interface methods to access node attributes.
 type Node interface {
@@ -63,8 +65,8 @@ type NodeSetter interface {
 	SetDeadseqno(seqno uint64) Node
 }
 
-// IndexIterator interface to pull entries from index over a range of
-// low key and high key.
+// IndexIterator interface to pull entries from index over a range of low key
+// and high key.
 type IndexIterator interface {
 	// Next node if present, else nil.
 	Next() Node
@@ -74,37 +76,37 @@ type IndexIterator interface {
 }
 
 // Index interface for managing key,value pairs.
-// TODO: add interface for vector-clock.
 type Index interface {
-	// index id
+	// Id return index id. Typically, it is human readable and unique.
 	Id() string
 
-	// Count return the number of entries indexed
+	// Count return the number of entries indexed.
 	Count() int64
 
 	// Isactive return whether index is active or not.
 	Isactive() bool
 
-	// RSnapshot return snapshot that shan't be disturbed by
-	// subsequent writes. Caller should make sure to call
-	// snapshot.Release() once it is done with the snapshot.
+	// RSnapshot return snapshot that shan't be disturbed by subsequent writes.
+	// Caller should make sure to call snapshot.Release() once it is done with
+	// the snapshot.
 	RSnapshot(snapch chan IndexSnapshot) error
 
 	// Stats return a set of index statistics.
 	Stats() (map[string]interface{}, error)
 
-	// Fullstats return an involved set of index statistics,
-	// calling this function may lead to a full table scan.
+	// Fullstats return an involved set of index statistics, calling this
+	// function may lead to a full table scan.
 	Fullstats() (map[string]interface{}, error)
 
-	// Log current statistics, if humanize is true log some or
-	// all of the stats in human readable format.
+	// Log current statistics, if humanize is true log some or all of the stats
+	// in human readable format.
 	Log(involved int, humanize bool)
 
 	// Validate check whether index is in sane state.
 	Validate()
 
-	// Destroy to delete an index and clean up its resources.
+	// Destroy to delete an index and clean up its resources. Calling this
+	// method while keeping references to its resources is not advised.
 	Destroy() error
 
 	IndexReader
@@ -112,21 +114,23 @@ type Index interface {
 }
 
 // IndexSnapshot for read-only operation into the index.
-// TBD: add interface for vector-clock.
 type IndexSnapshot interface {
-	// unique id for snapshot
+	// Id return index id. Typically, it is human readable and unique.
 	Id() string
 
-	// Count return the number of entries indexed
+	// Count return the number of entries indexed.
 	Count() int64
 
 	// Isactive return whether the index is active or not.
 	Isactive() bool
 
-	// Refer() snapshot before reading, don't hold on to it for long time.
+	// Refer snapshot before reading, don't hold on to it for long time.
+	// Note that RSnapshot() implicitly call a Refer() and there after Refer()
+	// should be called once of every new reference.
 	Refer()
 
-	// Release snapshot after reading.
+	// Release snapshot after reading. Should be called after RSnapshot() and
+	// for every Refer() calls made on that snapshot.
 	Release()
 
 	// Validate check whether index is in sane state.
@@ -143,7 +147,7 @@ type IndexReader interface {
 	// Get entry for key.
 	Get(key []byte) Node
 
-	// Min get entry that sort befor every other entries in the index.
+	// Min get entry that sort before every other entries in the index.
 	Min() Node
 
 	// Max get entry that sort after every other entries in the index.
@@ -184,7 +188,7 @@ type IndexWriter interface {
 	Delete(key []byte, callb DeleteCallback) error
 }
 
-// Mallocer to manage memory arena.
+// Mallocer interface for custom memory management.
 type Mallocer interface {
 	// Allocate a chunk of `n` bytes from `pool`.
 	Alloc(n int64) (ptr unsafe.Pointer, pool Mallocer)
@@ -192,7 +196,7 @@ type Mallocer interface {
 	// Free pointer back to the pool.
 	Free(ptr unsafe.Pointer)
 
-	// Memory return memory allocated from OS an overhead of managing it.
+	// Memory return memory allocated from OS and overhead of managing it.
 	Memory() (overhead, useful int64)
 
 	// Allocated return memory allocated from `useful` memory.
@@ -210,12 +214,12 @@ type Mallocer interface {
 	// Release arena, all its pools and resources.
 	Release()
 
-	// Chunksize alias for Mpooler
+	// Chunksize alias for alloc:Mpooler{} interface.
 	Chunksize() int64
 
-	// Less alias for Mpooler
+	// Less alias for alloc:Mpooler interface.
 	Less(pool interface{}) bool
 
-	// Allocate alias for Mpooler
+	// Allocate alias for alloc:Mpooler interface.
 	Allocchunk() (ptr unsafe.Pointer, ok bool)
 }
