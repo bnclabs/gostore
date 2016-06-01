@@ -36,8 +36,8 @@ func (config Config) Filter(subs string) Config {
 	return subconfig
 }
 
-func (c Config) Bool(key string) bool {
-	if value, ok := c[key]; !ok {
+func (config Config) Bool(key string) bool {
+	if value, ok := config[key]; !ok {
 		panicerr("missing config %q", key)
 	} else if val, ok := value.(bool); !ok {
 		panicerr("config %q not a bool: %T", key, value)
@@ -47,8 +47,8 @@ func (c Config) Bool(key string) bool {
 	panic("unreachable code")
 }
 
-func (c Config) Int64(key string) int64 {
-	value, ok := c[key]
+func (config Config) Int64(key string) int64 {
+	value, ok := config[key]
 	if !ok {
 		panicerr("missing config %q", key)
 	}
@@ -82,8 +82,8 @@ func (c Config) Int64(key string) int64 {
 	return 0
 }
 
-func (c Config) Uint64(key string) uint64 {
-	value, ok := c[key]
+func (config Config) Uint64(key string) uint64 {
+	value, ok := config[key]
 	if !ok {
 		panicerr("missing config %q", key)
 	}
@@ -117,8 +117,8 @@ func (c Config) Uint64(key string) uint64 {
 	return 0
 }
 
-func (c Config) String(key string) string {
-	if value, ok := c[key]; !ok {
+func (config Config) String(key string) string {
+	if value, ok := config[key]; !ok {
 		panicerr("missing config %q", key)
 	} else if val, ok := value.(string); !ok {
 		panicerr("config %v not a number: %T", key, value)

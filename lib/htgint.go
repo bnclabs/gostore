@@ -3,6 +3,7 @@ package lib
 import "math"
 import "strconv"
 
+// HistogramInt64 statistical histogram.
 type HistogramInt64 struct {
 	// stats
 	n         int64
@@ -18,6 +19,7 @@ type HistogramInt64 struct {
 	width int64
 }
 
+// NewhistorgramInt64 return a new histogram object.
 func NewhistorgramInt64(from, till, width int64) *HistogramInt64 {
 	from = (from / width) * width
 	till = (till / width) * width

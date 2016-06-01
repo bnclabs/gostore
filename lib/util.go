@@ -7,6 +7,8 @@ import "errors"
 import "bytes"
 import "strings"
 
+// Memcpy copy memory block of length `ln` from `src` to `dst`. This
+// function is useful if memory block is obtained outside golang runtime.
 func Memcpy(dst, src unsafe.Pointer, ln int) int {
 	var srcnd, dstnd []byte
 	srcsl := (*reflect.SliceHeader)(unsafe.Pointer(&srcnd))
@@ -18,6 +20,7 @@ func Memcpy(dst, src unsafe.Pointer, ln int) int {
 	return copy(dstnd, srcnd)
 }
 
+// FailsafeRequest gen-server api abstraction.
 func FailsafeRequest(
 	reqch, respch chan []interface{},
 	cmd []interface{}, finch chan bool) ([]interface{}, error) {
@@ -38,6 +41,7 @@ func FailsafeRequest(
 	return nil, nil
 }
 
+// FailsafePost gen-server api abstraction.
 func FailsafePost(
 	reqch chan []interface{}, cmd []interface{}, finch chan bool) error {
 
@@ -49,6 +53,7 @@ func FailsafePost(
 	return nil
 }
 
+// ResponseError gen-server api abstraction.
 func ResponseError(err error, resp []interface{}, idx int) error {
 	if err != nil {
 		return err
@@ -62,6 +67,8 @@ func ResponseError(err error, resp []interface{}, idx int) error {
 	return nil
 }
 
+// Bytes2str morph byte slice to a string without copying. Note that the
+// source byte-slice should remain in scope as long as string is in scope.
 func Bytes2str(bytes []byte) string {
 	if bytes == nil {
 		return ""
@@ -71,6 +78,8 @@ func Bytes2str(bytes []byte) string {
 	return *(*string)(unsafe.Pointer(st))
 }
 
+// Str2bytes morph string to a byte-slice without copying. Note that the
+// source string should remain in scope as long as byte-slice is in scope.
 func Str2bytes(str string) []byte {
 	if str == "" {
 		return nil
@@ -80,6 +89,7 @@ func Str2bytes(str string) []byte {
 	return *(*[]byte)(unsafe.Pointer(sl))
 }
 
+// GetStacktrace return stack-trace in human readable format.
 func GetStacktrace(skip int, stack []byte) string {
 	var buf bytes.Buffer
 	lines := strings.Split(string(stack), "\n")

@@ -17,22 +17,19 @@ var lookupffs = [256]int8{ // lookup-table for findfirstset8
 	4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
 }
 
-// Findfirstset in byte.
+// Findfirstset first bit set in byte.
 func (b Bit8) Findfirstset() int8 {
 	return lookupffs[b]
 }
 
-// Clearbit clears nth bit.
 func (b Bit8) Clearbit(n uint8) byte {
 	return byte(b & (0xff ^ (1 << n)))
 }
 
-// Setbit sets nth bit.
 func (b Bit8) Setbit(n uint8) byte {
 	return byte(b | (1 << n))
 }
 
-// Ones return number of set bits in byte.
 func (b Bit8) Ones() (c int8) {
 	for c = 0; b != 0; b >>= 1 { // count set bits
 		c += int8(b & 1)
@@ -40,7 +37,6 @@ func (b Bit8) Ones() (c int8) {
 	return c
 }
 
-// Zeros return number of clear bits in byte
 func (b Bit8) Zeros() int8 { // move this to ASM.
 	return 8 - b.Ones()
 }
