@@ -14,7 +14,7 @@ import "github.com/prataprc/storage.go/api"
 import "github.com/prataprc/storage.go/log"
 import humanize "github.com/dustin/go-humanize"
 
-var memratio = 0.41 // keymemory / allocated for each arena
+var memratio = 0.38 // keymemory / allocated for each arena
 
 // LLRB to manage in-memory sorted index using left-leaning-red-black trees.
 type LLRB struct { // tree container
