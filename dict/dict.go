@@ -1,3 +1,6 @@
+// Package dict implement a dictionary of key,value pairs based on golang
+// map. Primarily meant as reference for testing more useful storage
+// algorithms.
 package dict
 
 import "sort"
