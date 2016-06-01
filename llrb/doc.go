@@ -1,7 +1,5 @@
-// Package storage implement a collection of indexing and persistance
-// algorithm.
-//
-// LLRB:
+// Package llrb implement a self-balancing verions of binary-tree, called,
+// LLRB (Left Leaning Red Black).
 //
 //   * index key, value (value is optional).
 //   * each key shall be unique within the index sample-set.
@@ -35,7 +33,7 @@
 //     will pick a file that contains the value and mvalue[:3] describes the
 //     file-position to fetch the entry from file.
 //
-// llrb hard limits:
+// Hard Limits:
 //
 //   * maximum vbuckets   - 65535
 //   * maximum access     - 2^20 counted in steps of 1.07S for 12 days
