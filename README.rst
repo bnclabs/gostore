@@ -1,4 +1,3 @@
-To build llrb/
 .. code-block:: bash
     $ go build -tags dict
 

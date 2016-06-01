@@ -1,5 +1,6 @@
 * test case for config.go
 * figure out a proper place for malloc/const.go
+* add interface for vector-clock under api:Index{} and api:IndexSnapshot{}
 * refactor vectorclock out of llrb.
 * validate whether Maxpools (256) is sufficient.
 * define an expected hierarchy of package dependencies and enforce them
