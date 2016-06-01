@@ -178,7 +178,7 @@ func (arena *Arena) Utilization() ([]int, []float64) {
 	}
 	sort.Ints(sizes)
 
-	zs := make([]float64, 0)
+	ss, zs := make([]int, 0), make([]float64, 0)
 	capacity, allocated := float64(0), float64(0)
 	for _, size := range sizes {
 		for _, mpool := range arena.mpools[int64(size)] {
@@ -186,9 +186,12 @@ func (arena *Arena) Utilization() ([]int, []float64) {
 			capacity += float64(useful)
 			allocated += float64(mpool.Allocated())
 		}
-		zs = append(zs, (allocated/capacity)*100)
+		if capacity > 0 {
+			ss = append(ss, size)
+			zs = append(zs, (allocated/capacity)*100)
+		}
 	}
-	return sizes, zs
+	return ss, zs
 }
 
 // Chunksize alias for Mpooler{} interface.
