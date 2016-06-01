@@ -62,7 +62,7 @@ func NewArena(config lib.Config) *Arena {
 		arena.poolmaker = fbitfactory()
 	}
 	for _, size := range arena.blocksizes {
-		arena.mpools[size] = make(Mpoolers, 0, arena.maxpools)
+		arena.mpools[size] = make(Mpoolers, 0, arena.maxpools/2)
 	}
 	return arena
 }
@@ -110,8 +110,10 @@ func (arena *Arena) Alloc(n int64) (unsafe.Pointer, api.Mallocer) {
 	}
 	// go ahead, create a new pool.
 	mpool := arena.poolmaker(size, numblocks)
-	arena.mpools[size] = append(arena.mpools[size], mpool)
-	sort.Sort(arena.mpools[size])
+	ln := len(arena.mpools[size])
+	arena.mpools[size] = append(arena.mpools[size], nil)
+	copy(arena.mpools[size][1:], arena.mpools[size][:ln])
+	arena.mpools[size][0] = mpool
 	ptr, _ := mpool.Allocchunk()
 	return ptr, mpool
 }
