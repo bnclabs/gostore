@@ -1,4 +1,6 @@
-package malloc
+// storage constants.
+
+package api
 
 // MinKeymem minimum key size.
 const MinKeymem = int64(32)

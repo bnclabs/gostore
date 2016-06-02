@@ -5,6 +5,8 @@ package bubt
 import "encoding/binary"
 import "fmt"
 
+import "github.com/prataprc/storage.go/api"
+
 type bubtzblock struct {
 	f        *bubtstore
 	fpos     [2]int64 // kpos, vpos
@@ -27,7 +29,7 @@ func (f *bubtstore) newz(fpos [2]int64) (z *bubtzblock) {
 		z = &bubtzblock{
 			f:        f,
 			fpos:     fpos,
-			firstkey: make([]byte, 0, MaxKeymem),
+			firstkey: make([]byte, 0, api.MaxKeymem),
 			entries:  make([]uint32, 0),
 		}
 		z.kbuffer, z.dbuffer = f.getbuffer(), f.getbuffer()
@@ -42,10 +44,10 @@ func (z *bubtzblock) insert(nd Node) (ok bool) {
 
 	if nd == nil {
 		return false
-	} else if key, value = nd.Key(), nd.Value(); len(key) > MaxKeymem {
-		panic(fmt.Errorf("key cannot exceed %v", MaxKeymem))
-	} else if len(value) > MaxValmem {
-		panic(fmt.Errorf("value cannot exceed %v", MaxValmem))
+	} else if key, value = nd.Key(), nd.Value(); len(key) > api.MaxKeymem {
+		panic(fmt.Errorf("key cannot exceed %v", api.MaxKeymem))
+	} else if len(value) > api.MaxValmem {
+		panic(fmt.Errorf("value cannot exceed %v", api.MaxValmem))
 	}
 
 	// check whether enough space available in the block.

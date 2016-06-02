@@ -7,6 +7,7 @@ import "strings"
 import "unsafe"
 
 import "github.com/prataprc/storage.go/malloc"
+import "github.com/prataprc/storage.go/api"
 import "github.com/prataprc/storage.go/lib"
 
 var _ = fmt.Sprintf("dummy")
@@ -16,14 +17,14 @@ func TestConstants(t *testing.T) {
 		t.Fatalf("Llrbnode{} size has changed")
 	} else if unsafe.Sizeof(nodevalue{}) != (nvaluesize + 8) {
 		t.Fatalf("nodevalue{} size has changed")
-	} else if malloc.MinKeymem != 32 {
+	} else if api.MinKeymem != 32 {
 		t.Fatalf("MinKeymem has changed")
-	} else if malloc.MaxKeymem != 4096 {
+	} else if api.MaxKeymem != 4096 {
 		t.Fatalf("MaxKeymem has changed")
-	} else if malloc.MinValmem != 0 {
-		t.Fatalf("MinKeymem has changed")
-	} else if malloc.MaxValmem != 10*1024*1024 {
-		t.Fatalf("MaxKeymem has changed")
+	} else if api.MinValmem != 0 {
+		t.Fatalf("MinValmem has changed")
+	} else if api.MaxValmem != 10*1024*1024 {
+		t.Fatalf("MaxValmem has changed")
 	}
 }
 

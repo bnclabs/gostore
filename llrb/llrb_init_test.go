@@ -4,6 +4,7 @@ import "fmt"
 import "testing"
 
 import "github.com/prataprc/storage.go/lib"
+import "github.com/prataprc/storage.go/api"
 import "github.com/prataprc/storage.go/log"
 import "github.com/prataprc/storage.go/malloc"
 
@@ -30,11 +31,11 @@ func TestLLRBValidate(t *testing.T) {
 	}
 
 	config := makellrbconfig()
-	config["nodearena.minblock"] = malloc.MinKeymem - 1
+	config["nodearena.minblock"] = api.MinKeymem - 1
 	dotest(config)
 
 	config = makellrbconfig()
-	config["nodearena.maxblock"] = malloc.MaxKeymem + 1
+	config["nodearena.maxblock"] = api.MaxKeymem + 1
 	dotest(config)
 
 	config = makellrbconfig()
@@ -42,11 +43,11 @@ func TestLLRBValidate(t *testing.T) {
 	dotest(config)
 
 	config = makellrbconfig()
-	config["valarena.minblock"] = malloc.MinValmem - 1
+	config["valarena.minblock"] = api.MinValmem - 1
 	dotest(config)
 
 	config = makellrbconfig()
-	config["valarena.maxblock"] = malloc.MaxValmem + 1
+	config["valarena.maxblock"] = api.MaxValmem + 1
 	dotest(config)
 
 	config = makellrbconfig()
