@@ -11,6 +11,7 @@ import "github.com/prataprc/storage.go/api"
 
 const llrbnodesize = 32 // + metadatasize + keysize
 
+// Llrbnode defines a node in LLRB tree.
 type Llrbnode struct {
 	left     *Llrbnode // TODO: unsafe.Pointer ???
 	right    *Llrbnode // TODO: unsafe.Pointer ???

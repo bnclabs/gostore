@@ -54,8 +54,8 @@ func (av *AverageInt64) Variance() float64 {
 	if av.n == 0 {
 		return 0
 	}
-	n_f, mean_f := float64(av.n), float64(av.Mean())
-	return (av.sumsq / n_f) - (mean_f * mean_f)
+	nF, meanF := float64(av.n), float64(av.Mean())
+	return (av.sumsq / nF) - (meanF * meanF)
 }
 
 func (av *AverageInt64) SD() float64 {

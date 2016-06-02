@@ -238,7 +238,7 @@ func testvbnolist(numvb int) []uint16 {
 }
 
 func testseqnos2uint64(seqnosb []byte) []uint64 {
-	seqnos := make([]uint64, 0)
+	var seqnos []uint64
 	for i := 0; i < len(seqnosb); i += 8 {
 		seqnos = append(seqnos, binary.BigEndian.Uint64(seqnosb[i:i+8]))
 	}

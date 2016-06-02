@@ -188,7 +188,7 @@ func (llrb *LLRB) log(involved int, humanize bool) {
 		chain := []string{"root"}
 		snapshot := llrb.mvcc.snapshot
 		if snapshot != nil {
-			chain = append(chain, snapshot.Id())
+			chain = append(chain, snapshot.ID())
 			snapshot = snapshot.next
 		}
 		fmsg := "%v snapshot chain %v\n"

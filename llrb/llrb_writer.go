@@ -10,6 +10,7 @@ import "github.com/prataprc/storage.go/api"
 import "github.com/prataprc/storage.go/log"
 import "github.com/prataprc/storage.go/lib"
 
+// LLRBWriter defines writer routine in mvcc mode.
 type LLRBWriter struct {
 	llrb    *LLRB
 	waiters []chan api.IndexSnapshot
@@ -17,6 +18,8 @@ type LLRBWriter struct {
 	finch   chan bool
 }
 
+// MVCCWriter spawns a new writer. Only one writer routine is allowed for each
+// LLRB instance.
 func (llrb *LLRB) MVCCWriter() *LLRBWriter {
 	if llrb.mvcc.enabled == false {
 		panic(fmt.Errorf("MVCCWriter(): mvcc not enabled"))
@@ -754,7 +757,7 @@ loop:
 		for _, nd := range snapshot.reclaim {
 			snapshot.llrb.freenode(nd)
 		}
-		llrb.mvcc.n_activess -= 1
+		llrb.mvcc.n_activess--
 		atomic.AddInt64(&llrb.mvcc.n_purgedss, 1)
 		log.Debugf("%v snapshot PURGED\n", snapshot.logprefix)
 		atomic.AddInt64(&llrb.n_lookups, snapshot.n_lookups)

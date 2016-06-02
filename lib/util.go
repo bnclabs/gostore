@@ -60,9 +60,8 @@ func ResponseError(err error, resp []interface{}, idx int) error {
 	} else if resp != nil {
 		if resp[idx] != nil {
 			return resp[idx].(error)
-		} else {
-			return nil
 		}
+		return nil
 	}
 	return nil
 }

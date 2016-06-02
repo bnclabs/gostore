@@ -128,15 +128,15 @@ func (llrb *LLRB) NewSnapshot(id string) *LLRBSnapshot {
 
 	fmsg := "%v snapshot BORN %v nodes to reclaim...\n"
 	log.Debugf(fmsg, snapshot.logprefix, len(snapshot.reclaim))
-	llrb.mvcc.n_snapshots += 1
-	llrb.mvcc.n_activess += 1
+	llrb.mvcc.n_snapshots++
+	llrb.mvcc.n_activess++
 	return snapshot
 }
 
 //---- IndexSnapshot{} interface.
 
-// Id implement IndexSnapshot{} interface.
-func (snapshot *LLRBSnapshot) Id() string {
+// ID implement IndexSnapshot{} interface.
+func (snapshot *LLRBSnapshot) ID() string {
 	return snapshot.id
 }
 
@@ -170,6 +170,8 @@ func (snapshot *LLRBSnapshot) Validate() {
 	snapshot.validate(snapshot.root)
 }
 
+// Dotdump to convert whole tree into dot script that can be visualized using
+// graphviz.
 func (snapshot *LLRBSnapshot) Dotdump(buffer io.Writer) {
 	lines := []string{
 		"digraph llrb {",
@@ -259,7 +261,7 @@ func (snapshot *LLRBSnapshot) max() api.Node {
 }
 
 // Range implement IndexReader{} interface.
-func (s *LLRBSnapshot) Range(lkey, hkey []byte, incl string, reverse bool, iter api.RangeCallb) {
+func (snapshot *LLRBSnapshot) Range(lkey, hkey []byte, incl string, reverse bool, iter api.RangeCallb) {
 	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
 		if incl == "none" {
 			return
@@ -271,37 +273,37 @@ func (s *LLRBSnapshot) Range(lkey, hkey []byte, incl string, reverse bool, iter 
 	if reverse {
 		switch incl {
 		case "both":
-			s.llrb.rvrslehe(s.root, lkey, hkey, iter)
+			snapshot.llrb.rvrslehe(snapshot.root, lkey, hkey, iter)
 		case "high":
-			s.llrb.rvrsleht(s.root, lkey, hkey, iter)
+			snapshot.llrb.rvrsleht(snapshot.root, lkey, hkey, iter)
 		case "low":
-			s.llrb.rvrslthe(s.root, lkey, hkey, iter)
+			snapshot.llrb.rvrslthe(snapshot.root, lkey, hkey, iter)
 		default:
-			s.llrb.rvrsltht(s.root, lkey, hkey, iter)
+			snapshot.llrb.rvrsltht(snapshot.root, lkey, hkey, iter)
 		}
 
 	} else {
 		switch incl {
 		case "both":
-			s.llrb.rangehele(s.root, lkey, hkey, iter)
+			snapshot.llrb.rangehele(snapshot.root, lkey, hkey, iter)
 		case "high":
-			s.llrb.rangehtle(s.root, lkey, hkey, iter)
+			snapshot.llrb.rangehtle(snapshot.root, lkey, hkey, iter)
 		case "low":
-			s.llrb.rangehelt(s.root, lkey, hkey, iter)
+			snapshot.llrb.rangehelt(snapshot.root, lkey, hkey, iter)
 		default:
-			s.llrb.rangehtlt(s.root, lkey, hkey, iter)
+			snapshot.llrb.rangehtlt(snapshot.root, lkey, hkey, iter)
 		}
 	}
 
-	if atomic.LoadInt64(&s.llrb.mvcc.ismut) == 1 {
-		atomic.AddInt64(&s.n_ccranges, 1)
+	if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
+		atomic.AddInt64(&snapshot.n_ccranges, 1)
 	} else {
-		atomic.AddInt64(&s.n_ranges, 1)
+		atomic.AddInt64(&snapshot.n_ranges, 1)
 	}
 }
 
 // Iterate implement IndexReader{} interface.
-func (s *LLRBSnapshot) Iterate(lkey, hkey []byte, incl string, r bool) api.IndexIterator {
+func (snapshot *LLRBSnapshot) Iterate(lkey, hkey []byte, incl string, r bool) api.IndexIterator {
 
 	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
 		if incl == "none" {
@@ -311,7 +313,7 @@ func (s *LLRBSnapshot) Iterate(lkey, hkey []byte, incl string, r bool) api.Index
 		}
 	}
 
-	llrb := s.llrb
+	llrb := snapshot.llrb
 	var iter *llrbIterator
 	select {
 	case iter = <-llrb.iterpool:
@@ -320,7 +322,7 @@ func (s *LLRBSnapshot) Iterate(lkey, hkey []byte, incl string, r bool) api.Index
 	}
 
 	// NOTE: always re-initialize, because we are getting it back from pool.
-	iter.tree, iter.llrb = s, llrb
+	iter.tree, iter.llrb = snapshot, llrb
 	iter.nodes, iter.index, iter.limit = iter.nodes[:0], 0, 5
 	iter.continuate = false
 	iter.startkey, iter.endkey, iter.incl, iter.reverse = lkey, hkey, incl, r
@@ -347,10 +349,10 @@ func (s *LLRBSnapshot) Iterate(lkey, hkey []byte, incl string, r bool) api.Index
 		}
 	}
 
-	if atomic.LoadInt64(&s.llrb.mvcc.ismut) == 1 {
-		atomic.AddInt64(&s.n_ccranges, 1)
+	if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
+		atomic.AddInt64(&snapshot.n_ccranges, 1)
 	} else {
-		atomic.AddInt64(&s.n_ranges, 1)
+		atomic.AddInt64(&snapshot.n_ranges, 1)
 	}
 	atomic.AddInt64(&llrb.activeiter, 1)
 	return iter

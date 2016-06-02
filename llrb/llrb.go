@@ -140,8 +140,8 @@ func (llrb *LLRB) SetMemratio(memratio float64) {
 
 // ---- Index{} interface
 
-// Id implement Index{} interface.
-func (llrb *LLRB) Id() string {
+// ID implement Index{} interface.
+func (llrb *LLRB) ID() string {
 	return llrb.name
 }
 
@@ -800,6 +800,8 @@ func (llrb *LLRB) fixup(nd *Llrbnode) *Llrbnode {
 	return nd
 }
 
+// Dotdump to convert whole tree into dot script that can be visualized using
+// graphviz.
 func (llrb *LLRB) Dotdump(buffer io.Writer) {
 	lines := []string{
 		"digraph llrb {",
@@ -830,7 +832,7 @@ func (llrb *LLRB) newnode(k, v []byte) *Llrbnode {
 		panic("newnode(): llrb tree not configured for accepting value")
 	}
 
-	llrb.n_nodes += 1
+	llrb.n_nodes++
 	return nd
 }
 
@@ -843,7 +845,7 @@ func (llrb *LLRB) freenode(nd *Llrbnode) {
 			}
 		}
 		nd.pool.Free(unsafe.Pointer(nd))
-		llrb.n_frees += 1
+		llrb.n_frees++
 	}
 }
 
@@ -864,20 +866,20 @@ func (llrb *LLRB) clone(nd *Llrbnode) (newnd *Llrbnode) {
 			newnd.setnodevalue(newnv)
 		}
 	}
-	llrb.n_clones += 1
+	llrb.n_clones++
 	return
 }
 
 func (llrb *LLRB) upsertcounts(key, value []byte, oldnd *Llrbnode) {
 	if oldnd == nil {
-		llrb.n_count += 1
-		llrb.n_inserts += 1
+		llrb.n_count++
+		llrb.n_inserts++
 	} else {
 		llrb.keymemory -= int64(len(oldnd.key(llrb.mdsize)))
 		if oldnd.metadata().ismvalue() {
 			llrb.valmemory -= int64(len(oldnd.nodevalue().value()))
 		}
-		llrb.n_updates += 1
+		llrb.n_updates++
 	}
 	llrb.keymemory += int64(len(key))
 	llrb.valmemory += int64(len(value))
@@ -889,8 +891,8 @@ func (llrb *LLRB) delcount(nd *Llrbnode) {
 		if nd.metadata().ismvalue() {
 			llrb.valmemory -= int64(len(nd.nodevalue().value()))
 		}
-		llrb.n_count -= 1
-		llrb.n_deletes += 1
+		llrb.n_count--
+		llrb.n_deletes++
 	}
 }
 

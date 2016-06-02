@@ -1,4 +1,4 @@
-SUBDIRS := api bubt dict lib llrb log malloc
+SUBDIRS := api log malloc dict lib bubt llrb
 
 build:
 	@for dir in $(SUBDIRS); do \

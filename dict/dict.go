@@ -87,8 +87,8 @@ func (d *Dict) Log(involved int, humanize bool) {
 
 //---- api.IndexSnapshot{} interface{}
 
-// Id implement api.IndexSnapshot{} interface.
-func (d *Dict) Id() string {
+// ID implement api.IndexSnapshot{} interface.
+func (d *Dict) ID() string {
 	return d.id
 }
 

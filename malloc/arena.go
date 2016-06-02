@@ -20,7 +20,8 @@ const Maxpools = int64(256)
 // Maxchunks maximum number of chunks allowed in a pool.
 const Maxchunks = int64(65536)
 
-// Arena
+// Arena defines a large memory block that can divided into different pool
+// size.
 type Arena struct {
 	blocksizes []int64            // sorted list of block-sizes in this arena
 	mpools     map[int64]Mpoolers // size -> list of Mpooler
@@ -36,6 +37,7 @@ type Arena struct {
 	allocator string // allocator algorithm
 }
 
+// NewArena create a new memory arena.
 func NewArena(config lib.Config) *Arena {
 	minblock, maxblock := config.Int64("minblock"), config.Int64("maxblock")
 	arena := &Arena{
@@ -128,6 +130,7 @@ func (arena *Arena) Release() {
 	arena.blocksizes, arena.mpools = nil, nil
 }
 
+// Free object.
 func (arena *Arena) Free(ptr unsafe.Pointer) {
 	panicerr("Free cannot be called on arena, use Mpooler")
 }
@@ -172,7 +175,7 @@ func (arena *Arena) Chunksizes() []int64 {
 
 // Utilization implement Mallocer{} interface.
 func (arena *Arena) Utilization() ([]int, []float64) {
-	sizes := make([]int, 0)
+	var sizes []int
 	for _, size := range arena.blocksizes {
 		sizes = append(sizes, int(size))
 	}
@@ -206,7 +209,7 @@ func (arena *Arena) Less(pool interface{}) bool {
 	return false
 }
 
-// Allocate alias for Mpooler{} interface.
+// Allocchunk alias for Mpooler{} interface.
 func (arena *Arena) Allocchunk() (ptr unsafe.Pointer, ok bool) {
 	panicerr("Allocchunk() cannot be applied on arena")
 	return nil, false

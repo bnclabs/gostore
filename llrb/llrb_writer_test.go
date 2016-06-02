@@ -866,7 +866,7 @@ func TestLLRBMvccUpsert(t *testing.T) {
 
 	// upsert same items
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(0x12345678)
-	newvalues := make([][]byte, 0)
+	var newvalues [][]byte
 	for i, key := range keys {
 		_, value := makekeyvalue(nil, make([]byte, 200))
 		newvalues = append(newvalues, value)
@@ -952,7 +952,7 @@ func TestLLRBMvccDeleteMin(t *testing.T) {
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
 
-	inserts := make([][2][]byte, 0)
+	var inserts [][2][]byte
 	keys, values := make([][]byte, 0), make([][]byte, 0)
 	// insert 1 item
 	count := 1
@@ -998,7 +998,7 @@ func TestLLRBMvccDelete(t *testing.T) {
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
 
-	inserts := make([][2][]byte, 0)
+	var inserts [][2][]byte
 	keys, values := make([][]byte, 0), make([][]byte, 0)
 	// insert 10K items
 	count := 10 * 1000

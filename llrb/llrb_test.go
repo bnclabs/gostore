@@ -879,7 +879,7 @@ func TestLLRBUpsert(t *testing.T) {
 	llrb.Validate()
 
 	// upsert same items
-	newvalues := make([][]byte, 0)
+	var newvalues [][]byte
 	for i, key := range keys {
 		value := make([]byte, 200)
 		_, value = makekeyvalue(nil, value)

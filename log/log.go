@@ -23,6 +23,7 @@ type Logger interface {
 	Printlf(loglevel LogLevel, format string, v ...interface{})
 }
 
+// LogLevel defines storage log level.
 type LogLevel int
 
 const (

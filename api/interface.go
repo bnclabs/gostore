@@ -78,7 +78,7 @@ type IndexIterator interface {
 // Index interface for managing key,value pairs.
 type Index interface {
 	// Id return index id. Typically, it is human readable and unique.
-	Id() string
+	ID() string
 
 	// Count return the number of entries indexed.
 	Count() int64
@@ -116,7 +116,7 @@ type Index interface {
 // IndexSnapshot for read-only operation into the index.
 type IndexSnapshot interface {
 	// Id return index id. Typically, it is human readable and unique.
-	Id() string
+	ID() string
 
 	// Count return the number of entries indexed.
 	Count() int64

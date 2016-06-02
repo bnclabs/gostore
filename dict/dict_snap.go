@@ -6,8 +6,10 @@ import "github.com/prataprc/storage.go/api"
 
 // NOTE: sorted() cannot be called on DictSnapshot !!
 
+// DictSnapshot provides a read-only snapshot of Dict map.
 type DictSnapshot struct{ Dict }
 
+// NewDictSnapshot create a new instance of DictSnapshot.
 func (d *Dict) NewDictSnapshot() api.IndexSnapshot {
 	d.snapn++
 	snapshot := &DictSnapshot{Dict: Dict{snapn: d.snapn, dead: d.dead}}
@@ -32,8 +34,8 @@ func (d *DictSnapshot) Count() int64 {
 	return int64(len(d.dict))
 }
 
-// Id implement api.IndexSnapshot{} interface.
-func (d *DictSnapshot) Id() string {
+// ID implement api.IndexSnapshot{} interface.
+func (d *DictSnapshot) ID() string {
 	return d.id
 }
 

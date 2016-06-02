@@ -23,7 +23,7 @@ func TestNewFreebits(t *testing.T) {
 func TestFreebitAlloc(t *testing.T) {
 	cacheline, nblocks := int64(4), int64(1024+32)
 	fbits := newfreebits(cacheline, nblocks)
-	allocblocks := make([]int64, 0)
+	var allocblocks []int64
 	for i := int64(0); i < nblocks; i++ {
 		blockbit, _ := fbits.alloc()
 		if blockbit == -1 {

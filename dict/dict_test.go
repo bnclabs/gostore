@@ -187,7 +187,7 @@ func TestDictBasicRange(t *testing.T) {
 		})
 		if reflect.DeepEqual(outs, tcase[3]) == false {
 			fmsg := "failed for %v (%v,%v)"
-			t.Errorf(fmsg, casenum, string(lowkey), string(highkey))
+			t.Fatalf(fmsg, casenum, string(lowkey), string(highkey))
 		}
 		// forward range, return false
 		outs = make([][2][]byte, 0)
@@ -255,7 +255,7 @@ func TestDictRange(t *testing.T) {
 	}
 
 	inclusions := []string{"none", "low", "high", "both"}
-	tcases := make([][]interface{}, 0)
+	var tcases [][]interface{}
 	for i := 0; i < n; i++ {
 		for j := 0; j < n; j++ {
 			for _, incl := range inclusions {

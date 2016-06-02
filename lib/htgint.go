@@ -77,8 +77,8 @@ func (h *HistogramInt64) Variance() float64 {
 	if h.n == 0 {
 		return 0
 	}
-	n_f, mean_f := float64(h.n), float64(h.Mean())
-	return (h.sumsq / n_f) - (mean_f * mean_f)
+	nF, meanF := float64(h.n), float64(h.Mean())
+	return (h.sumsq / nF) - (meanF * meanF)
 }
 
 func (h *HistogramInt64) SD() float64 {
