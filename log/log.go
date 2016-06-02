@@ -20,7 +20,7 @@ type Logger interface {
 	Verbosef(format string, v ...interface{})
 	Debugf(format string, v ...interface{})
 	Tracef(format string, v ...interface{})
-	Printf(loglevel LogLevel, format string, v ...interface{})
+	Printlf(loglevel LogLevel, format string, v ...interface{})
 }
 
 type LogLevel int
@@ -74,34 +74,34 @@ func (l *defaultLogger) SetLogLevel(level string) {
 }
 
 func (l *defaultLogger) Fatalf(format string, v ...interface{}) {
-	l.Printf(logLevelFatal, format, v...)
+	l.Printlf(logLevelFatal, format, v...)
 }
 
 func (l *defaultLogger) Errorf(format string, v ...interface{}) {
-	l.Printf(logLevelError, format, v...)
+	l.Printlf(logLevelError, format, v...)
 }
 
 func (l *defaultLogger) Warnf(format string, v ...interface{}) {
-	l.Printf(logLevelWarn, format, v...)
+	l.Printlf(logLevelWarn, format, v...)
 }
 
 func (l *defaultLogger) Infof(format string, v ...interface{}) {
-	l.Printf(logLevelInfo, format, v...)
+	l.Printlf(logLevelInfo, format, v...)
 }
 
 func (l *defaultLogger) Verbosef(format string, v ...interface{}) {
-	l.Printf(logLevelVerbose, format, v...)
+	l.Printlf(logLevelVerbose, format, v...)
 }
 
 func (l *defaultLogger) Debugf(format string, v ...interface{}) {
-	l.Printf(logLevelDebug, format, v...)
+	l.Printlf(logLevelDebug, format, v...)
 }
 
 func (l *defaultLogger) Tracef(format string, v ...interface{}) {
-	l.Printf(logLevelTrace, format, v...)
+	l.Printlf(logLevelTrace, format, v...)
 }
 
-func (l *defaultLogger) Printf(level LogLevel, format string, v ...interface{}) {
+func (l *defaultLogger) Printlf(level LogLevel, format string, v ...interface{}) {
 	if l.canlog(level) {
 		ts := time.Now().Format("2006-01-02T15:04:05.999Z-07:00")
 		fmt.Fprintf(l.output, ts+" ["+level.String()+"] "+format, v...)
@@ -161,29 +161,29 @@ func string2logLevel(s string) LogLevel {
 }
 
 func Fatalf(format string, v ...interface{}) {
-	log.Printf(logLevelFatal, format, v...)
+	log.Printlf(logLevelFatal, format, v...)
 }
 
 func Errorf(format string, v ...interface{}) {
-	log.Printf(logLevelError, format, v...)
+	log.Printlf(logLevelError, format, v...)
 }
 
 func Warnf(format string, v ...interface{}) {
-	log.Printf(logLevelWarn, format, v...)
+	log.Printlf(logLevelWarn, format, v...)
 }
 
 func Infof(format string, v ...interface{}) {
-	log.Printf(logLevelInfo, format, v...)
+	log.Printlf(logLevelInfo, format, v...)
 }
 
 func Verbosef(format string, v ...interface{}) {
-	log.Printf(logLevelVerbose, format, v...)
+	log.Printlf(logLevelVerbose, format, v...)
 }
 
 func Debugf(format string, v ...interface{}) {
-	log.Printf(logLevelDebug, format, v...)
+	log.Printlf(logLevelDebug, format, v...)
 }
 
 func Tracef(format string, v ...interface{}) {
-	log.Printf(logLevelTrace, format, v...)
+	log.Printlf(logLevelTrace, format, v...)
 }

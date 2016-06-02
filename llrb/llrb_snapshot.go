@@ -40,9 +40,9 @@ loop:
 			break loop
 		default:
 		}
-		log.Tracef("%v snapshot tick for %v ...\n", llrb.logprefix, id)
+		log.Tracef("%v snapshot tick for $%v ...\n", llrb.logprefix, id)
 		if err := writer.makeSnapshot(id); err != nil {
-			log.Errorf("%v make snapshot $%v failed: %v\n", llrb.logprefix, err)
+			log.Errorf("%v make snapshot $%v failed: %v\n", llrb.logprefix, id, err)
 			break loop
 		}
 	}
