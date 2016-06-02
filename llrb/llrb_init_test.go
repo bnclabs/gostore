@@ -15,7 +15,6 @@ func init() {
 		"log.level": "warn",
 		"log.file":  "",
 	}
-	memratio = 0.04
 	log.SetLogger(nil, config)
 }
 

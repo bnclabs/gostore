@@ -1,4 +1,3 @@
-* figure out a proper place for malloc/const.go
 * figure out a nice place for memratio.
 * add interface for vector-clock under api:Index{} and api:IndexSnapshot{}
 * refactor vectorclock out of llrb.

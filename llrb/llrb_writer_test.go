@@ -625,6 +625,7 @@ func TestLLRBMvccBasicIterate(t *testing.T) {
 	}
 
 	snapshot.Release()
+	llrb.SetMemratio(0.04)
 	llrb.Validate()
 	llrb.Destroy()
 }

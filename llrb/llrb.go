@@ -14,8 +14,6 @@ import "github.com/prataprc/storage.go/api"
 import "github.com/prataprc/storage.go/log"
 import humanize "github.com/dustin/go-humanize"
 
-var memratio = 0.38 // keymemory / allocated for each arena
-
 // LLRB to manage in-memory sorted index using left-leaning-red-black trees.
 type LLRB struct { // tree container
 	// 64-bit aligned reader statistics
@@ -76,6 +74,7 @@ type LLRB struct { // tree container
 	maxvb     int64
 	config    lib.Config
 	logprefix string
+	memratio  float64
 
 	// scratch pad
 	strsl []string
@@ -110,6 +109,7 @@ func NewLLRB(name string, config lib.Config, logg log.Logger) *LLRB {
 
 	// scratch pads
 	llrb.strsl = make([]string, 0)
+	llrb.memratio = 0.4 // (keymemory / allocated) for each arena
 
 	// mvcc
 	llrb.mvcc.enabled = config.Bool("mvcc.enable")
@@ -130,6 +130,12 @@ func NewLLRB(name string, config lib.Config, logg log.Logger) *LLRB {
 	log.Infof("%v started ...\n", llrb.logprefix)
 	llrb.logconfig(config)
 	return llrb
+}
+
+// SetMemratio for validating memory consumption. Set this to minimum expected
+// ratio of keymemory / allocated, before calling llrb.Validate().
+func (llrb *LLRB) SetMemratio(memratio float64) {
+	llrb.memratio = memratio
 }
 
 // ---- Index{} interface
