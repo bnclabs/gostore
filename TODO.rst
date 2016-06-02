@@ -1,9 +1,3 @@
-* figure out a nice place for memratio.
-* add interface for vector-clock under api:Index{} and api:IndexSnapshot{}
-* refactor vectorclock out of llrb.
-* validate whether Maxpools (256) is sufficient.
-* define an expected hierarchy of package dependencies and enforce them
-  via `make check`.
 * include `go vet`, `go lint` and `errcheck` as part of `make check`
 * Value can be evicted from in-memory structure. In which case there
   should be a reference on where to find the value, like {file,fpos}.
@@ -17,6 +11,8 @@ LLRB:
   upserts and deletes ?
 * YCSB test cases.
 * add llrb tree validation rules, based on sedgewick paper.
+* add interface for vector-clock under api:Index{} and api:IndexSnapshot{}
+* refactor vectorclock out of llrb.
 
 BUBT:
 
