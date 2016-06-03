@@ -9,7 +9,7 @@ import "io"
 
 import "github.com/prataprc/storage.go/api"
 
-const llrbnodesize = 32 // + metadatasize + keysize
+const nodesize = 32 // + metadatasize + keysize
 
 // Llrbnode defines a node in LLRB tree.
 type Llrbnode struct {

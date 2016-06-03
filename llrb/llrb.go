@@ -816,7 +816,7 @@ func (llrb *LLRB) Dotdump(buffer io.Writer) {
 //---- local functions
 
 func (llrb *LLRB) newnode(k, v []byte) *Llrbnode {
-	ptr, mpool := llrb.nodearena.Alloc(int64(llrbnodesize + llrb.mdsize + len(k)))
+	ptr, mpool := llrb.nodearena.Alloc(int64(nodesize + llrb.mdsize + len(k)))
 	nd := (*Llrbnode)(ptr)
 	nd.metadata().initMetadata(0, llrb.fmask).setdirty().setred()
 	nd.setkey(llrb.mdsize, k)

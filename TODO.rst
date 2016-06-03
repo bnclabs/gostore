@@ -1,11 +1,7 @@
-* Value can be evicted from in-memory structure. In which case there
-  should be a reference on where to find the value, like {file,fpos}.
-
 LLRB:
 
 * rename nodevalue{} to llrbvalue{}
   rename nvaluesize to llrbvaluesize
-* export metadata `mvalue` along with {pointer, level}
 * if there are no outstanding snapshots, may be we can do non-mvcc
   upserts and deletes ?
 * YCSB test cases.
