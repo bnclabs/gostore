@@ -3,7 +3,7 @@ package llrb
 import "github.com/prataprc/storage.go/lib"
 import "github.com/prataprc/storage.go/malloc"
 
-func llrbConfig() lib.Config {
+func defaultconfig() lib.Config {
 	config := lib.Config{
 		"maxvb":                   int64(1024),
 		"log.level":               "info",
