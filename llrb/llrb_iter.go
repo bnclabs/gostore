@@ -4,7 +4,7 @@ import "sync/atomic"
 
 import "github.com/prataprc/storage.go/api"
 
-type llrbIterator struct {
+type iterator struct {
 	tree       api.IndexReader
 	llrb       *LLRB
 	nodes      []api.Node
@@ -20,7 +20,7 @@ type llrbIterator struct {
 }
 
 // Next implement IndexIterator{} interface.
-func (iter *llrbIterator) Next() api.Node {
+func (iter *iterator) Next() api.Node {
 	if iter.closed {
 		panic("cannot iterate over a closed iterator")
 	} else if iter.index >= len(iter.nodes) && iter.continuate == false {
@@ -40,7 +40,7 @@ func (iter *llrbIterator) Next() api.Node {
 	return nil
 }
 
-func (iter *llrbIterator) Close() {
+func (iter *iterator) Close() {
 	iter.closed, iter.nodes = true, iter.nodes[:cap(iter.nodes)]
 	for i := range iter.nodes {
 		iter.nodes[i] = nil
@@ -60,7 +60,7 @@ func (iter *llrbIterator) Close() {
 	}
 }
 
-func (iter *llrbIterator) rangefill() {
+func (iter *iterator) rangefill() {
 	var breakkey []byte
 	iter.nodes, iter.index, iter.continuate = iter.nodes[:0], 0, false
 	count := 0

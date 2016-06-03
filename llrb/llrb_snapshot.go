@@ -314,11 +314,11 @@ func (snapshot *LLRBSnapshot) Iterate(lkey, hkey []byte, incl string, r bool) ap
 	}
 
 	llrb := snapshot.llrb
-	var iter *llrbIterator
+	var iter *iterator
 	select {
 	case iter = <-llrb.iterpool:
 	default:
-		iter = &llrbIterator{}
+		iter = &iterator{}
 	}
 
 	// NOTE: always re-initialize, because we are getting it back from pool.

@@ -65,7 +65,7 @@ type LLRB struct { // tree container
 	dead       bool
 	clock      *vectorclock // current clock
 	rw         sync.RWMutex
-	iterpool   chan *llrbIterator
+	iterpool   chan *iterator
 	activeiter int64
 
 	// config
@@ -85,7 +85,7 @@ func NewLLRB(name string, config lib.Config, logg log.Logger) *LLRB {
 	config = make(lib.Config).Mixin(defaultconfig(), config)
 
 	llrb := &LLRB{name: name, borntime: time.Now()}
-	llrb.iterpool = make(chan *llrbIterator, config.Int64("iterpool.size"))
+	llrb.iterpool = make(chan *iterator, config.Int64("iterpool.size"))
 
 	llrb.validateConfig(config)
 
@@ -402,11 +402,11 @@ func (llrb *LLRB) Iterate(lkey, hkey []byte, incl string, r bool) api.IndexItera
 
 	llrb.rw.RLock()
 
-	var iter *llrbIterator
+	var iter *iterator
 	select {
 	case iter = <-llrb.iterpool:
 	default:
-		iter = &llrbIterator{}
+		iter = &iterator{}
 	}
 
 	// NOTE: always re-initialize, because we are getting it back from pool.
