@@ -30,6 +30,11 @@ func (dn *dictnode) Vbuuid() uint64 {
 	return dn.vbuuid
 }
 
+// Fpos implement NodeGetter{} interface.
+func (dn *dictnode) Fpos() (level byte, offset uint64) {
+	panic("not implemented")
+}
+
 // Bornseqno implement NodeGetter{} interface.
 func (dn *dictnode) Bornseqno() uint64 {
 	return dn.bornsq
@@ -69,6 +74,11 @@ func (dn *dictnode) SetVbuuid(vbuuid uint64) api.Node {
 		dn.vbuuid = vbuuid
 	}
 	return dn
+}
+
+// SetFpos implement NodeSetter{} interface.
+func (dn *dictnode) SetFpos(level byte, offset uint64) api.Node {
+	panic("not implemented")
 }
 
 // SetBornseqno implement NodeSetter{} interface.

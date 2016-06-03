@@ -55,6 +55,10 @@ configure LLRB based on system resources and requirements.
 `metadata.vbuuid`
     as boolean, if true, use metadata field to book-keep node's vbuuid.
 
+`metadata.fpos`
+    as boolean, if true, use file position in disk files where value is
+    stored.
+
 `iterpool.size`
     number concurrent iterations that are supported.
 

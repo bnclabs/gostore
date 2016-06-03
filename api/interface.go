@@ -31,14 +31,17 @@ type NodeGetter interface {
 	// Access return entry's access timestamp.
 	Access() (ts uint64)
 
-	// Vbuuid return entry's unique vbucket id.
-	Vbuuid() (uuid uint64)
-
 	// Bornseqno return vbucket-seqno at which this entry was upserted.
 	Bornseqno() (seqno uint64)
 
 	// Deadseqno return vbucket-seqno at which this entry was deleted.
 	Deadseqno() (seqno uint64)
+
+	// Vbuuid return entry's unique vbucket id.
+	Vbuuid() (uuid uint64)
+
+	// Fpos return disk backed position for value.
+	Fpos() (level byte, offset uint64)
 
 	// Key return entry key as byte slice.
 	Key() (key []byte)
@@ -57,6 +60,9 @@ type NodeSetter interface {
 
 	// SetVbuuid to set unique vbucket id for this entry
 	SetVbuuid(uuid uint64) Node
+
+	// SetFpos to set unique vbucket id for this entry
+	SetFpos(level byte, offset uint64) Node
 
 	// SetBornseqno to set vbucket-seqno at which this entry was upserted.
 	SetBornseqno(seqno uint64) Node

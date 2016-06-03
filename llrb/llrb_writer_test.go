@@ -69,6 +69,7 @@ func TestLLRBMvccBasicSnapshot(t *testing.T) {
 	config := makellrbconfig()
 	config["mvcc.enable"] = true
 	config["metadata.mvalue"] = true
+	config["metadata.fpos"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
 	llrb := makellrbmvcc(t, "bmvccsnapshot", inserts, config)
@@ -949,6 +950,7 @@ func TestLLRBMvccDeleteMin(t *testing.T) {
 	config := makellrbconfig()
 	config["mvcc.enable"] = true
 	config["metadata.mvalue"] = true
+	config["metadata.fpos"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
 

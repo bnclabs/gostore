@@ -65,6 +65,7 @@ func TestNewLLRBNode(t *testing.T) {
 	config["metadata.bornseqno"] = true
 	config["metadata.deadseqno"] = true
 	config["metadata.mvalue"] = true
+	config["metadata.fpos"] = true
 	config["metadata.vbuuid"] = true
 	llrb := NewLLRB("test", config, nil)
 
@@ -72,7 +73,7 @@ func TestNewLLRBNode(t *testing.T) {
 	vbno, vbuuid := uint16(10), uint64(0xABCD)
 	bnseqno, ddseqno := uint64(12345678), uint64(12345690)
 	nd := llrb.newnode(key, value)
-	fmask := metadataMask(0).enableMvalue().enableVbuuid()
+	fmask := metadataMask(0).enableMvalue().enableVbuuid().enableFpos()
 	fmask = fmask.enableBornSeqno().enableDeadSeqno()
 	nd.metadata().initMetadata(vbno, fmask).setvbuuid(vbuuid)
 	nd.metadata().setbnseq(bnseqno).setddseq(ddseqno)
@@ -296,6 +297,7 @@ func TestLLRBBasicUpdates(t *testing.T) {
 func TestLLRBBasicRange(t *testing.T) {
 	config := makellrbconfig()
 	config["metadata.mvalue"] = true
+	config["metadata.fpos"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
 	llrb := NewLLRB("test", config, nil)

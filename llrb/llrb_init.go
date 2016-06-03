@@ -50,5 +50,8 @@ func (llrb *LLRB) setupfmask(config lib.Config) metadataMask {
 	if config.Bool("metadata.vbuuid") {
 		fmask = fmask.enableVbuuid()
 	}
+	if config.Bool("metadata.fpos") {
+		fmask = fmask.enableFpos()
+	}
 	return fmask
 }

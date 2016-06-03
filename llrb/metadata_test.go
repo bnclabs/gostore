@@ -88,20 +88,33 @@ func TestMvalueMetadata(t *testing.T) {
 		md := randomMetadata()
 		md.initMetadata(0, md.fmask().enableMvalue())
 		mvalue := (uint64(0xabcdef0123456789) + i) & 0xfffffffffffffff8
-		for level := byte(0); level < 8; level++ {
-			mval, lvl := md.setmvalue(mvalue, level).mvalue()
-			if md.ismvalue() {
-				if mvalue != mval {
-					t.Errorf("expected %v, for %v", mvalue, mval)
+		mval := md.setmvalue(mvalue).mvalue()
+		if md.ismvalue() {
+			if mvalue != mval {
+				t.Errorf("expected %v, for %v", mvalue, mval)
+			}
+		} else {
+			t.Errorf("expected mvalue to be enabled")
+		}
+	}
+}
+
+func TestFposMetadata(t *testing.T) {
+	for i := uint64(0); i < 10000; i++ {
+		md := randomMetadata()
+		md.initMetadata(0, md.fmask().enableFpos())
+		offset := (uint64(0x12345678) + i) & 0x07FFFFFFFFFFFFFF
+		for level := byte(0); level < 32; level++ {
+			md.setfpos(level, offset)
+			lvl, off := md.setfpos(level, offset).fpos()
+			if md.isfpos() {
+				if offset != off {
+					t.Errorf("expected %v, for %v", offset, off)
 				} else if level != lvl {
 					t.Errorf("expected %v, for %v", level, lvl)
 				}
 			} else {
-				if 0 != mval {
-					t.Errorf("expected %v, for %v", 0, mval)
-				} else if 0 != lvl {
-					t.Errorf("expected %v, for %v", 0, lvl)
-				}
+				t.Errorf("expected fpos to be enabled")
 			}
 		}
 	}
@@ -193,7 +206,7 @@ func BenchmarkMdSetMvalue(b *testing.B) {
 	fmask := metadataMask(0).enableBornSeqno().enableDeadSeqno().enableMvalue()
 	md.initMetadata(0x10, fmask)
 	for i := 0; i < b.N; i++ {
-		md.setmvalue(0x12345, 4)
+		md.setmvalue(0x12345)
 	}
 }
 
@@ -201,7 +214,7 @@ func BenchmarkMdGetmvalue(b *testing.B) {
 	md := &metadata{}
 	fmask := metadataMask(0).enableBornSeqno().enableDeadSeqno().enableMvalue()
 	md.initMetadata(0x10, fmask)
-	md.setmvalue(0x12345, 4)
+	md.setmvalue(0x12345)
 	for i := 0; i < b.N; i++ {
 		md.mvalue()
 	}
@@ -228,6 +241,27 @@ func BenchmarkMdGetvbuuid(b *testing.B) {
 	}
 }
 
+func BenchmarkMdSetfpos(b *testing.B) {
+	md := &metadata{}
+	fmask := metadataMask(0).enableBornSeqno().enableDeadSeqno()
+	fmask = fmask.enableMvalue().enableFpos()
+	md.initMetadata(0x10, fmask)
+	for i := 0; i < b.N; i++ {
+		md.setfpos(4, 0x12345)
+	}
+}
+
+func BenchmarkMdGetfpos(b *testing.B) {
+	md := &metadata{}
+	fmask := metadataMask(0).enableBornSeqno().enableDeadSeqno()
+	fmask = fmask.enableMvalue().enableFpos()
+	md.initMetadata(0x10, fmask)
+	md.setfpos(4, 0x12345)
+	for i := 0; i < b.N; i++ {
+		md.fpos()
+	}
+}
+
 func randomMetadata() *metadata {
 	var flags metadataMask
 	if rand.Intn(2) == 1 {
@@ -241,6 +275,9 @@ func randomMetadata() *metadata {
 	}
 	if rand.Intn(2) == 1 {
 		flags.enableVbuuid()
+	}
+	if rand.Intn(2) == 1 {
+		flags.enableFpos()
 	}
 	return (&metadata{}).initMetadata(0, flags)
 }

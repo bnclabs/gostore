@@ -6,41 +6,59 @@ import "strings"
 import "strconv"
 import "fmt"
 
-// {vbuuid, mvalue, dead-seqnos, born-seqnos}
-var mdlookup = [16]byte{
-	0, // 0x0
-	1, // 0x1 bnseq
-	1, // 0x2 ddseq
-	2, // 0x3 ddseq bnseq
-	1, // 0x4 mvalue
-	2, // 0x5 mvalue bnseq
-	2, // 0x6 mvalue ddseq
-	3, // 0x7 mvalue ddseq bnseq
-	1, // 0x8 vbuuid
-	2, // 0x9 vbuuid bnseq
-	2, // 0xa vbuuid ddseq
-	3, // 0xb vbuuid ddseq bnseq
-	2, // 0xc vbuuid mvalue
-	3, // 0xd vbuuid mvalue bnseq
-	3, // 0xe vbuuid mvalue ddseq
-	4, // 0xf vbuuid mvalue ddseq bnseq
+// {fpos, vbuuid, mvalue, dead-seqnos, born-seqnos}
+var mdlookup = [32]byte{
+	0, // 0x00
+	1, // 0x01 bnseq
+	1, // 0x02 ddseq
+	2, // 0x03 ddseq bnseq
+	1, // 0x04 mvalue
+	2, // 0x05 mvalue bnseq
+	2, // 0x06 mvalue ddseq
+	3, // 0x07 mvalue ddseq bnseq
+	1, // 0x08 vbuuid
+	2, // 0x09 vbuuid bnseq
+	2, // 0x0a vbuuid ddseq
+	3, // 0x0b vbuuid ddseq bnseq
+	2, // 0x0c vbuuid mvalue
+	3, // 0x0d vbuuid mvalue bnseq
+	3, // 0x0e vbuuid mvalue ddseq
+	4, // 0x0f vbuuid mvalue ddseq bnseq
+	1, // 0x10 fpos
+	2, // 0x11 fpos bnseq
+	2, // 0x12 fpos ddseq
+	3, // 0x13 fpos ddseq bnseq
+	2, // 0x14 fpos mvalue
+	3, // 0x15 fpos mvalue bnseq
+	3, // 0x16 fpos mvalue ddseq
+	4, // 0x17 fpos mvalue ddseq bnseq
+	2, // 0x18 fpos vbuuid
+	3, // 0x19 fpos vbuuid bnseq
+	3, // 0x1a fpos vbuuid ddseq
+	4, // 0x1b fpos vbuuid ddseq bnseq
+	3, // 0x1c fpos vbuuid mvalue
+	4, // 0x1d fpos vbuuid mvalue bnseq
+	4, // 0x1e fpos vbuuid mvalue ddseq
+	5, // 0x1f fpos vbuuid mvalue ddseq bnseq
 }
 
 var mdOffsetmaskBnseq = uint64(0x1)
 var mdOffsetmaskDdseq = uint64(0x3)
 var mdOffsetmaskMvalue = uint64(0x7)
 var mdOffsetmaskVbuuid = uint64(0xf)
-var mdOffsetmaskFull = 0xffff
+var mdOffsetmaskFpos = uint64(0x1f)
+var mdOffsetmaskFull = uint64(0xffff)
 
 //---- metadataMask
 
 type metadataMask uint16
 
 const (
-	mdFlagBornseqno metadataMask = 0x1
-	mdFlagDeadseqno              = 0x2
-	mdFlagMvalue                 = 0x4
-	mdFlagVbuuid                 = 0x8
+	mdFlagBornseqno metadataMask = 0x0001
+	mdFlagDeadseqno              = 0x0002
+	mdFlagMvalue                 = 0x0004
+	mdFlagVbuuid                 = 0x0008
+	mdFlagFpos                   = 0x0010
 	mdFlagBlack                  = 0x1000
 	mdFlagDirty                  = 0x2000
 	mdFlagDeleted                = 0x4000
@@ -62,13 +80,17 @@ func (mask metadataMask) enableVbuuid() metadataMask {
 	return mask | mdFlagVbuuid
 }
 
+func (mask metadataMask) enableFpos() metadataMask {
+	return mask | mdFlagFpos
+}
+
 //---- metadata
 
 type metadata struct {
 	// ksize(63:52) access(52:32) vbno(32:16)
 	// reserved deleted dirty black fields[12:] -- flags
 	hdr uint64
-	// vbuuid mvalue dead-seqnos born-seqno
+	// fpos vbuuid mvalue dead-seqnos born-seqno
 	fields [12]uint64 // maximum 12 fields.
 }
 
@@ -88,7 +110,7 @@ func (md *metadata) dotdump() string {
 	if md.isdeleted() {
 		s = append(s, "deleted")
 	}
-	mask := md.hdr & 0xffff
+	mask := md.hdr & mdOffsetmaskFull
 	offset := 0
 	for i := uint(0); i < 12; i++ {
 		if ((mask >> i) & 1) > 0 {
@@ -129,6 +151,10 @@ func (md *metadata) ismvalue() bool {
 
 func (md *metadata) isvbuuid() bool {
 	return (md.hdr & uint64(mdFlagVbuuid)) != 0
+}
+
+func (md *metadata) isfpos() bool {
+	return (md.hdr & uint64(mdFlagFpos)) != 0
 }
 
 //---- black or red
@@ -215,8 +241,7 @@ func (md *metadata) setddseq(seqno uint64) *metadata {
 	return md
 }
 
-func (md *metadata) setmvalue(mvalue uint64, level byte) *metadata {
-	mvalue = (mvalue & 0xfffffffffffffff8) | uint64(level&0x7)
+func (md *metadata) setmvalue(mvalue uint64) *metadata {
 	off := mdlookup[mdOffsetmaskMvalue&md.hdr]
 	md.fields[off-1] = mvalue
 	return md
@@ -225,6 +250,13 @@ func (md *metadata) setmvalue(mvalue uint64, level byte) *metadata {
 func (md *metadata) setvbuuid(vbuuid uint64) *metadata {
 	off := mdlookup[mdOffsetmaskVbuuid&md.hdr]
 	md.fields[off-1] = vbuuid
+	return md
+}
+
+func (md *metadata) setfpos(level byte, offset uint64) *metadata {
+	fpos := (uint64(level) << 59) | offset&0x07FFFFFFFFFFFFFF
+	off := mdlookup[mdOffsetmaskFpos&md.hdr]
+	md.fields[off-1] = fpos
 	return md
 }
 
@@ -252,13 +284,18 @@ func (md *metadata) ddseq() uint64 {
 	return md.fields[off-1]
 }
 
-func (md *metadata) mvalue() (uint64, byte) {
+func (md *metadata) mvalue() uint64 {
 	off := mdlookup[mdOffsetmaskMvalue&md.hdr]
-	mvalue := md.fields[off-1]
-	return mvalue & 0xfffffffffffffff8, byte(mvalue & 0x7)
+	return md.fields[off-1]
 }
 
 func (md *metadata) vbuuid() uint64 {
 	off := mdlookup[mdOffsetmaskVbuuid&md.hdr]
 	return md.fields[off-1]
+}
+
+func (md *metadata) fpos() (level byte, offset uint64) {
+	off := mdlookup[mdOffsetmaskFpos&md.hdr]
+	fpos := md.fields[off-1]
+	return byte(fpos >> 59), fpos & 0x07FFFFFFFFFFFFFF
 }

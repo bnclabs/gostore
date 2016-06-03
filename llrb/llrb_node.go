@@ -61,6 +61,14 @@ func (nd *Llrbnode) SetVbuuid(vbuuid uint64) api.Node {
 	return nd
 }
 
+// SetFpos implement NodeSetter{}
+func (nd *Llrbnode) SetFpos(level byte, offset uint64) api.Node {
+	if nd != nil {
+		nd.metadata().setfpos(level, offset)
+	}
+	return nd
+}
+
 // Vbno implement NodeGetter{}
 func (nd *Llrbnode) Vbno() uint16 {
 	if nd != nil {
@@ -109,6 +117,14 @@ func (nd *Llrbnode) Vbuuid() uint64 {
 	return 0
 }
 
+// Fpos implement NodeGetter{}
+func (nd *Llrbnode) Fpos() (level byte, offset uint64) {
+	if nd != nil {
+		return nd.metadata().fpos()
+	}
+	return 0, 0
+}
+
 // Value implement NodeGetter{}
 func (nd *Llrbnode) Value() []byte {
 	if nd != nil && nd.metadata().ismvalue() {
@@ -140,7 +156,7 @@ func (nd *Llrbnode) setkeysize(size int) *Llrbnode {
 
 func (nd *Llrbnode) setnodevalue(nv *nodevalue) *Llrbnode {
 	arg := (uintptr)(unsafe.Pointer(nv))
-	nd.metadata().setmvalue(uint64(arg), 0)
+	nd.metadata().setmvalue(uint64(arg))
 	return nd
 }
 
@@ -158,7 +174,7 @@ func (nd *Llrbnode) keysize() int {
 }
 
 func (nd *Llrbnode) nodevalue() *nodevalue {
-	nv, _ := nd.metadata().mvalue()
+	nv := nd.metadata().mvalue()
 	return (*nodevalue)(unsafe.Pointer(uintptr(nv)))
 }
 

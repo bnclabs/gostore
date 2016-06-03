@@ -107,14 +107,16 @@ func TestNodeFields(t *testing.T) {
 	ptr, mpool := marena.Alloc(blocksize)
 	nd := (*Llrbnode)(ptr)
 	fmask := metadataMask(0).enableBornSeqno().enableDeadSeqno().enableVbuuid()
-	fmask = fmask.enableMvalue()
+	fmask = fmask.enableMvalue().enableFpos()
 	nd.metadata().initMetadata(0, fmask)
 	nd.pool = mpool
 
 	ptr, mpool = marena.Alloc(blocksize)
 	nv := (*nodevalue)(ptr)
 	nv.pool = mpool
-	nd.metadata().setmvalue((uint64)((uintptr)(unsafe.Pointer(nv))), 0)
+	nd.metadata().setmvalue((uint64)((uintptr)(unsafe.Pointer(nv))))
+	level, offset := byte(1), uint64(0x1234)
+	nd.metadata().setfpos(level, offset)
 
 	// metadata fields
 	vbno, bornsno := uint16(0x1111), uint64(0x1111222233334444)
@@ -129,6 +131,10 @@ func TestNodeFields(t *testing.T) {
 		t.Errorf("expected %v, got %v", deadsno, x)
 	} else if x := nd.Vbuuid(); x != vbuuid {
 		t.Errorf("expected %v, got %v", deadsno, x)
+	} else if lvl, off := nd.Fpos(); level != 1 {
+		t.Errorf("expected %v, got %v", level, lvl)
+	} else if off != offset {
+		t.Errorf("expected %v, got %v", offset, off)
 	}
 
 	// key, value

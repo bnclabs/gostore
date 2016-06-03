@@ -1,4 +1,3 @@
-* include `go vet`, `go lint` and `errcheck` as part of `make check`
 * Value can be evicted from in-memory structure. In which case there
   should be a reference on where to find the value, like {file,fpos}.
 

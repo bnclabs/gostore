@@ -13,6 +13,7 @@ func llrbConfig() lib.Config {
 		"metadata.deadseqno":      true,
 		"metadata.mvalue":         true,
 		"metadata.vbuuid":         false,
+		"metadata.fpos":           true,
 		"nodearena.minblock":      int64(96),
 		"nodearena.maxblock":      int64(1024),
 		"nodearena.capacity":      int64(1024 * 1024 * 1024),

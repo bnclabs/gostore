@@ -827,7 +827,7 @@ func (llrb *LLRB) newnode(k, v []byte) *Llrbnode {
 		nv := (*nodevalue)(ptr)
 		nv.pool = mpool
 		nvarg := (uintptr)(unsafe.Pointer(nv.setvalue(v)))
-		nd.metadata().setmvalue((uint64)(nvarg), 0)
+		nd.metadata().setmvalue((uint64)(nvarg))
 	} else if v != nil {
 		panic("newnode(): llrb tree not configured for accepting value")
 	}
@@ -857,7 +857,7 @@ func (llrb *LLRB) clone(nd *Llrbnode) (newnd *Llrbnode) {
 	newnd.pool = mpool
 	// clone value if value is present.
 	if nd.metadata().ismvalue() {
-		if mvalue, level := nd.metadata().mvalue(); level == 0 && mvalue != 0 {
+		if mvalue := nd.metadata().mvalue(); mvalue != 0 {
 			nv := (*nodevalue)(unsafe.Pointer((uintptr)(mvalue)))
 			newnvptr, mpool := llrb.valarena.Alloc(nv.pool.Chunksize())
 			lib.Memcpy(newnvptr, unsafe.Pointer(nv), int(nv.pool.Chunksize()))
