@@ -8,14 +8,14 @@ import "unsafe"
 // deleted node, it is read-only and valid until callback returns.
 type DeleteCallback func(index Index, deleted Node)
 
-// RangeCallb callback from Range API.
-type RangeCallb func(nd Node) bool
-
 // UpsertCallback callback from Upsert API. Don't keep any reference
 // to newnd and oldnd:
 //   * oldnd can only be read.
 //   * newnd can be read or updated.
 type UpsertCallback func(index Index, offset int64, newnd, oldnd Node)
+
+// RangeCallb callback from Range API.
+type RangeCallb func(nd Node) bool
 
 // Node interface methods to access node attributes.
 type Node interface {

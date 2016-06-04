@@ -1,0 +1,6 @@
+* if there are no outstanding snapshots, may be we can do non-mvcc
+  upserts and deletes ?
+* YCSB test cases.
+* add llrb tree validation rules, based on sedgewick paper.
+* add interface for vector-clock under api:Index{} and api:IndexSnapshot{}
+* refactor vectorclock out of llrb.

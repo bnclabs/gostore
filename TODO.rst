@@ -1,21 +1,3 @@
-LLRB:
-
-* rename nodevalue{} to llrbvalue{}
-  rename nvaluesize to llrbvaluesize
-* if there are no outstanding snapshots, may be we can do non-mvcc
-  upserts and deletes ?
-* YCSB test cases.
-* add llrb tree validation rules, based on sedgewick paper.
-* add interface for vector-clock under api:Index{} and api:IndexSnapshot{}
-* refactor vectorclock out of llrb.
-
-BUBT:
-
-* test bubt for empty list of key,value pairs.
-* instead of repeating the key-content in the intermediate nodes,
-  just refer them to znodes and cache all the references for future
-  use.
-
 clock:
 
 * exhaust all possible combination of clock comparision TestVectorclockOrder.
