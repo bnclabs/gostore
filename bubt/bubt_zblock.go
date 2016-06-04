@@ -1,5 +1,3 @@
-// +build ignore
-
 package bubt
 
 import "encoding/binary"
@@ -8,7 +6,7 @@ import "fmt"
 import "github.com/prataprc/storage.go/api"
 
 type bubtzblock struct {
-	f        *bubtstore
+	f        *Bubtstore
 	fpos     [2]int64 // kpos, vpos
 	rpos     int64
 	firstkey []byte
@@ -17,9 +15,9 @@ type bubtzblock struct {
 	dbuffer  []byte
 }
 
-func (f *bubtstore) newz(fpos [2]int64) (z *bubtzblock) {
+func (f *Bubtstore) newz(fpos [2]int64) (z *bubtzblock) {
 	select {
-	case z = f.zpool:
+	case z = <-f.zpool:
 		z.f, z.fpos = f, fpos
 		z.firstkey = z.firstkey[:0]
 		z.entries = z.entries[:0]
@@ -38,15 +36,15 @@ func (f *bubtstore) newz(fpos [2]int64) (z *bubtzblock) {
 	return
 }
 
-func (z *bubtzblock) insert(nd Node) (ok bool) {
+func (z *bubtzblock) insert(nd api.Node) (ok bool) {
 	var key, value []byte
 	var scratch [26]byte
 
 	if nd == nil {
 		return false
-	} else if key, value = nd.Key(), nd.Value(); len(key) > api.MaxKeymem {
+	} else if key, value = nd.Key(), nd.Value(); int64(len(key)) > api.MaxKeymem {
 		panic(fmt.Errorf("key cannot exceed %v", api.MaxKeymem))
-	} else if len(value) > api.MaxValmem {
+	} else if int64(len(value)) > api.MaxValmem {
 		panic(fmt.Errorf("value cannot exceed %v", api.MaxValmem))
 	}
 
@@ -58,7 +56,7 @@ func (z *bubtzblock) insert(nd Node) (ok bool) {
 		entrysz += 2 + len(value) // TODO: avoid magic numbers
 	}
 	arrayblock := 4 + (len(z.entries) * 4)
-	if (arrayblock + len(z.kbuffer) + entrysz) > z.f.zblocksize {
+	if int64(arrayblock+len(z.kbuffer)+entrysz) > z.f.zblocksize {
 		return false
 	}
 
@@ -67,7 +65,7 @@ func (z *bubtzblock) insert(nd Node) (ok bool) {
 		copy(z.firstkey, key)
 	}
 
-	z.entries = append(z.entries, len(z.kbuffer))
+	z.entries = append(z.entries, uint32(len(z.kbuffer)))
 	z.f.a_keysize.Add(int64(len(key)))
 	z.f.a_valsize.Add(int64(len(value)))
 
@@ -78,19 +76,19 @@ func (z *bubtzblock) insert(nd Node) (ok bool) {
 	binary.BigEndian.PutUint64(scratch[18:26], nd.Deadseqno()) // 8 bytes
 	z.kbuffer = append(z.kbuffer, scratch[:26]...)
 	// encode key {keylen(2-byte), key(n-byte)}
-	binary.BigEndian.PutUint16(scratch[:2], len(key))
+	binary.BigEndian.PutUint16(scratch[:2], uint16(len(key)))
 	z.kbuffer = append(z.kbuffer, scratch[:2]...)
 	z.kbuffer = append(z.kbuffer, key...)
 	// encode value
 	if z.f.hasdatafile() {
-		vpos := z.fpos[1] + len(z.dbuffer)
-		binary.BigEndian.PutUint16(scratch[:2], len(value))
+		vpos := z.fpos[1] + int64(len(z.dbuffer))
+		binary.BigEndian.PutUint16(scratch[:2], uint16(len(value)))
 		z.dbuffer = append(z.dbuffer, scratch[:2]...)
 		z.dbuffer = append(z.dbuffer, value...)
-		binary.BigEndian.PutUint64(scratch[:8], vpos)
+		binary.BigEndian.PutUint64(scratch[:8], uint64(vpos))
 		z.kbuffer = append(z.kbuffer, scratch[:8]...)
 	} else {
-		binary.BigEndian.PutUint16(scratch[:2], len(value))
+		binary.BigEndian.PutUint16(scratch[:2], uint16(len(value)))
 		z.kbuffer = append(z.kbuffer, scratch[:2]...)
 		z.kbuffer = append(z.kbuffer, value...)
 	}
@@ -100,7 +98,7 @@ func (z *bubtzblock) insert(nd Node) (ok bool) {
 func (z *bubtzblock) startkey() (int64, []byte) {
 	if len(z.entries) > 0 {
 		koff := binary.BigEndian.Uint32(z.kbuffer[4:8])
-		return z.fpos[0] + koff, z.firstkey
+		return z.fpos[0] + int64(koff), z.firstkey
 	}
 	return z.fpos[0], nil
 }
@@ -116,7 +114,7 @@ func (z *bubtzblock) roffset() int64 {
 func (z *bubtzblock) finalize() {
 	arrayblock := 4 + (len(z.entries) * 4)
 	sz, ln := arrayblock+len(z.kbuffer), len(z.kbuffer)
-	if sz > z.f.zblocksize {
+	if int64(sz) > z.f.zblocksize {
 		fmsg := "zblock buffer overflow %v > %v, call the programmer!"
 		panic(fmt.Sprintf(fmsg, sz, z.f.zblocksize))
 	}
@@ -128,7 +126,7 @@ func (z *bubtzblock) finalize() {
 	binary.BigEndian.PutUint32(z.kbuffer[n:], uint32(len(z.entries)))
 	n += 4
 	for _, koff := range z.entries {
-		binary.BigEndian.PutUint32(z.kbuffer[n:], arrayblock+koff)
+		binary.BigEndian.PutUint32(z.kbuffer[n:], uint32(arrayblock)+koff)
 		n += 4
 	}
 }

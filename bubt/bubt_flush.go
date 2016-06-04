@@ -1,6 +1,9 @@
-// +build ignore
-
 package bubt
+
+import "os"
+import "fmt"
+
+import "github.com/prataprc/storage.go/log"
 
 func (f *Bubtstore) writeidx(data []byte) error {
 	select {

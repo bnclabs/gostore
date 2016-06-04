@@ -1,6 +1,9 @@
-// +build ignore
-
 package bubt
+
+import "encoding/binary"
+
+import "github.com/prataprc/storage.go/api"
+import "github.com/prataprc/storage.go/log"
 
 func (f *Bubtstore) Build() {
 	if f.frozen == false {
@@ -12,7 +15,8 @@ func (f *Bubtstore) Build() {
 
 	// add a new level to the btree.
 	prependlevel := func(ms []*bubtmblock, mblock *bubtmblock) []*bubtmblock {
-		ln, ms = len(ms), append(ms, nil)
+		ln := len(ms)
+		ms = append(ms, nil)
 		copy(ms[1:], ms[:ln])
 		ms[0] = mblock
 		return ms
@@ -35,14 +39,14 @@ func (f *Bubtstore) Build() {
 	// flush statistics
 	finblock := make([]byte, 4096)
 	if stats := f.stats2json(); len(stats) > len(finblock) {
-		binary.BigEndian.PutUint16(finblock[:8], len(stats))
+		binary.BigEndian.PutUint16(finblock[:8], uint16(len(stats)))
 		copy(finblock[8:], stats)
 		f.writeidx(finblock)
 	}
 	log.Infof("%v wrote stat block\n", f.logprefix)
 	// flush configuration
 	if config := f.config2json(); len(config) > len(finblock) {
-		binary.BigEndian.PutUint16(finblock[:8], len(config))
+		binary.BigEndian.PutUint16(finblock[:8], uint16(len(config)))
 		copy(finblock[8:], config)
 		f.writeidx(finblock)
 	}
@@ -91,12 +95,14 @@ func (f *Bubtstore) buildm(ms []*bubtmblock, fpos [2]int64) (
 }
 
 func (f *Bubtstore) buildz(fpos [2]int64) (bubtblock, [2]int64) {
-	var nd Node
+	var nd api.Node
+	var ok bool
+
 	z := f.newz(fpos)
 
 	f.dcount++
 	defer func() { f.dcount-- }()
-	defer func() { f.a_depth.Add(f.dcount) }()
+	defer func() { f.h_depth.Add(f.dcount) }()
 
 	for nd, ok = f.pop(), z.insert(nd); ok; {
 		nd = f.pop()
@@ -112,17 +118,17 @@ func (f *Bubtstore) flush(block bubtblock, fpos [2]int64) (bubtblock, [2]int64) 
 	switch blk := block.(type) {
 	case *bubtzblock:
 		if len(blk.entries) > 0 {
-			f.a_zentries(len(blk.entries))
+			f.a_zentries.Add(int64(len(blk.entries)))
 			blk.finalize()
-			blk.rpos = fpos[1] + len(blk.dbuffer)
+			blk.rpos = fpos[1] + int64(len(blk.dbuffer))
 			reducevalue := blk.reduce()
-			f.a_redsize.Add(len(reducevalue))
+			f.a_redsize.Add(int64(len(reducevalue)))
 			blk.dbuffer = append(blk.dbuffer, reducevalue...)
-			vpos := fpos[1] + len(blk.dbuffer)
-			if f.writedata(blk.dbuffer); err != nil {
+			vpos := fpos[1] + int64(len(blk.dbuffer))
+			if err := f.writedata(blk.dbuffer); err != nil {
 				panic(err)
 			}
-			kpos := fpos[0] + len(blk.kbuffer)
+			kpos := fpos[0] + int64(len(blk.kbuffer))
 			if err := f.writeidx(blk.kbuffer[:f.zblocksize]); err != nil {
 				panic(err)
 			}
@@ -133,17 +139,17 @@ func (f *Bubtstore) flush(block bubtblock, fpos [2]int64) (bubtblock, [2]int64) 
 
 	case *bubtmblock:
 		if len(blk.entries) > 0 {
-			f.a_zentries(len(blk.entries))
+			f.a_zentries.Add(int64(len(blk.entries)))
 			blk.finalize()
-			blk.fpos, blk.rpos = fpos, fpos[1]+len(blk.dbuffer)
+			blk.fpos, blk.rpos = fpos, fpos[1]+int64(len(blk.dbuffer))
 			reducevalue := blk.reduce()
-			f.a_redsize.Add(len(reducevalue))
+			f.a_redsize.Add(int64(len(reducevalue)))
 			blk.dbuffer = append(blk.dbuffer, reducevalue...)
-			vpos := fpos[1] + len(blk.dbuffer)
-			if f.writedata(blk.dbuffer); err != nil {
+			vpos := fpos[1] + int64(len(blk.dbuffer))
+			if err := f.writedata(blk.dbuffer); err != nil {
 				panic(err)
 			}
-			kpos := fpos[0], len(blk.kbuffer)
+			kpos := fpos[0] + int64(len(blk.kbuffer))
 			if err := f.writeidx(blk.kbuffer[:f.mblocksize]); err != nil {
 				panic(err)
 			}
@@ -155,16 +161,16 @@ func (f *Bubtstore) flush(block bubtblock, fpos [2]int64) (bubtblock, [2]int64) 
 	panic("unreachable code")
 }
 
-func (f *Bubtstore) pop() Node {
+func (f *Bubtstore) pop() api.Node {
 	if ln := len(f.nodes); ln > 0 {
 		nd := f.nodes[ln-1]
-		f.nodes = fnodes[:ln-1]
+		f.nodes = f.nodes[:ln-1]
 		return nd
 	}
 	return f.iterator.Next()
 }
 
-func (f *Bubtstore) push(nd Node) {
+func (f *Bubtstore) push(nd api.Node) {
 	f.nodes = append(f.nodes, nd)
 }
 

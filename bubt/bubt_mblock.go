@@ -1,17 +1,20 @@
-// +build ignore
-
 package bubt
 
+// import "github.com/prataprc/storage.go/
+import "fmt"
+import "encoding/binary"
+
 type bubtmblock struct {
-	f        *bubtstore
+	f        *Bubtstore
 	fpos     [2]int64
 	rpos     int64
 	firstkey []byte
 	entries  []uint32
 	kbuffer  []byte
+	dbuffer  []byte // TODO: may not be needed
 }
 
-func (f *bubtstore) newm() (m *bubtmblock) {
+func (f *Bubtstore) newm() (m *bubtmblock) {
 	select {
 	case m = <-f.mpool:
 		m.f = f
@@ -37,13 +40,13 @@ func (m *bubtmblock) insert(block bubtblock) (ok bool) {
 		return false
 	}
 
-	kpos, key := block.startkey()
-	childpos, rpos := block.offset(), block.roffset()
+	_, key := block.startkey()
+	childpos := block.offset()
 
 	// check whether enough space available in the block.
 	entrysz := 2 + len(key) + 8 /*vpos*/ + 8 /*rpos*/
 	arrayblock := 4 + (len(m.entries) * 4)
-	if (arrayblock + len(m.kbuffer) + entrysz) > m.f.mblocksize {
+	if (arrayblock + len(m.kbuffer) + entrysz) > int(m.f.mblocksize) {
 		return false
 	}
 
@@ -53,18 +56,18 @@ func (m *bubtmblock) insert(block bubtblock) (ok bool) {
 		copy(m.firstkey, key)
 	}
 
-	m.entries = append(m.entries, len(m.kbuffer))
+	m.entries = append(m.entries, uint32(len(m.kbuffer)))
 
 	// encode key
-	binary.BigEndian.PutUint16(scratch[:2], len(key))
-	m.kbuffer = append(m.kbuffer, scratch[:2])
+	binary.BigEndian.PutUint16(scratch[:2], uint16(len(key)))
+	m.kbuffer = append(m.kbuffer, scratch[:2]...)
 	m.kbuffer = append(m.kbuffer, key...)
 	// encode value
-	binary.BigEndian.PutUint64(scratch[:8], m.f.mvpos(childpos))
+	binary.BigEndian.PutUint64(scratch[:8], uint64(m.f.mvpos(childpos)))
 	m.kbuffer = append(m.kbuffer, scratch[:8]...)
 	// encode reduce-value
 	if m.f.mreduce {
-		binary.BigEndian.PutUint64(scratch[:8], m.f.mvpos(childpos))
+		binary.BigEndian.PutUint64(scratch[:8], uint64(m.f.mvpos(childpos)))
 		m.kbuffer = append(m.kbuffer, scratch[:8]...)
 	}
 
@@ -72,7 +75,7 @@ func (m *bubtmblock) insert(block bubtblock) (ok bool) {
 }
 
 func (m *bubtmblock) startkey() (int64, []byte) {
-	return -1, m.f.firstkey // NOTE: we don't need kpos
+	return -1, m.firstkey // NOTE: we don't need kpos
 }
 
 func (m *bubtmblock) offset() int64 {
@@ -86,7 +89,7 @@ func (m *bubtmblock) roffset() int64 {
 func (m *bubtmblock) finalize() {
 	arrayblock := 4 + (len(m.entries) * 4)
 	sz, ln := arrayblock+len(m.kbuffer), len(m.kbuffer)
-	if sz > m.f.mblocksize {
+	if int64(sz) > m.f.mblocksize {
 		fmsg := "mblock buffer overflow %v > %v"
 		panic(fmt.Sprintf(fmsg, sz, m.f.mblocksize))
 	}
@@ -95,17 +98,17 @@ func (m *bubtmblock) finalize() {
 
 	copy(m.kbuffer[arrayblock:], m.kbuffer[:ln])
 	n := 0
-	binary.BigEndian.PutUint32(m.kbuffer[n:], len(m.entries))
+	binary.BigEndian.PutUint32(m.kbuffer[n:], uint32(len(m.entries)))
 	n += 4
 	for _, entry := range m.entries {
-		binary.BigEndian.PutUint32(m.kbuffer[n:], arrayblock+entry)
+		binary.BigEndian.PutUint32(m.kbuffer[n:], uint32(arrayblock)+entry)
 		n += 4
 	}
 }
 
 func (m *bubtmblock) reduce() []byte {
 	if m.f.mreduce {
-		if z.f.hasdatafile() {
+		if m.f.hasdatafile() {
 			return nil
 		}
 		panic("enable datafile for mreduce")
