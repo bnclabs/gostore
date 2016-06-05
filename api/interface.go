@@ -71,16 +71,6 @@ type NodeSetter interface {
 	SetDeadseqno(seqno uint64) Node
 }
 
-// IndexIterator interface to pull entries from index over a range of low key
-// and high key.
-type IndexIterator interface {
-	// Next node if present, else nil.
-	Next() Node
-
-	// Close iterator, to release resources.
-	Close()
-}
-
 // Index interface for managing key,value pairs.
 type Index interface {
 	// Id return index id. Typically, it is human readable and unique.
@@ -174,6 +164,16 @@ type IndexReader interface {
 	//  "high" - ignore lowkey but include highkey
 	//  "both" - include both lowkey and highkey
 	Iterate(lowkey, highkey []byte, incl string, reverse bool) IndexIterator
+}
+
+// IndexIterator interface to pull entries from index over a range of low key
+// and high key.
+type IndexIterator interface {
+	// Next node if present, else nil.
+	Next() Node
+
+	// Close iterator, to release resources.
+	Close()
 }
 
 // IndexWriter interface methods for updating index.
