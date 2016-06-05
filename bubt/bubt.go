@@ -15,6 +15,21 @@ const bubtBufpoolSize = bubtMpoolSize + bubtZpoolSize
 // Bubtstore manages sorted key,value entries in persisted, immutable btree
 // built bottoms up and not updated there after.
 type Bubtstore struct {
+	// statistics, need to be 8 byte aligned.
+	rootblock  int64
+	rootreduce int64
+	mnodes     int64
+	znodes     int64
+	dcount     int64
+	a_zentries *lib.AverageInt64
+	a_mentries *lib.AverageInt64
+	a_keysize  *lib.AverageInt64
+	a_valsize  *lib.AverageInt64
+	a_redsize  *lib.AverageInt64
+	h_depth    *lib.HistogramInt64
+
+	name     string
+	level    byte
 	indexfd  *os.File
 	datafd   *os.File
 	iterator api.IndexIterator
@@ -36,19 +51,6 @@ type Bubtstore struct {
 	mblocksize int64
 	zblocksize int64
 	mreduce    bool
-
-	// statistics
-	rootblock  int64
-	rootreduce int64
-	mnodes     int64
-	znodes     int64
-	dcount     int64
-	a_zentries *lib.AverageInt64
-	a_mentries *lib.AverageInt64
-	a_keysize  *lib.AverageInt64
-	a_valsize  *lib.AverageInt64
-	a_redsize  *lib.AverageInt64
-	h_depth    *lib.HistogramInt64
 }
 
 type bubtblock interface {
@@ -63,6 +65,7 @@ func NewBubtstore(name string, config lib.Config, logg log.Logger) *Bubtstore {
 	var err error
 
 	f := &Bubtstore{
+		name:       name,
 		zpool:      make(chan *bubtzblock, bubtZpoolSize),
 		mpool:      make(chan *bubtmblock, bubtMpoolSize),
 		idxch:      make(chan []byte, bubtBufpoolSize),
@@ -113,6 +116,11 @@ func NewBubtstore(name string, config lib.Config, logg log.Logger) *Bubtstore {
 	}
 	log.Infof("%v started ...", f.logprefix)
 	return f
+}
+
+// Setlevel will set the storage level.
+func (f *Bubtstore) Setlevel(level byte) {
+	f.level = level
 }
 
 //---- helper methods.

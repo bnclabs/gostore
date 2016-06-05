@@ -15,7 +15,7 @@ type bubtmblock struct {
 	kbuffer  []byte
 }
 
-func (f *Bubtstore) newm() (m *bubtmblock) {
+func (f *Bubtstore) newmblock() (m *bubtmblock) {
 	select {
 	case m = <-f.mpool:
 		m.f = f

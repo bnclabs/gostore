@@ -155,3 +155,125 @@ func (z *bubtzblock) reduce() []byte {
 	z.reduced = doreduce(false /*rereduce*/, z.keys, z.values)
 	return z.reduced
 }
+
+//----- read path
+
+type bubtznode struct {
+	f      *Bubtstore
+	offset int64
+	data   []byte
+	value  []byte
+}
+
+func (f *Bubtstore) newbubtznode(data []byte, offset int64) *bubtznode {
+	return &bubtznode{
+		f:      f,
+		data:   data,
+		offset: offset,
+		value:  make([]byte, 0),
+	}
+}
+
+//---- NodeGetter implementation
+
+// Vbno implement NodeGetter{} interface.
+func (n *bubtznode) Vbno() (vbno uint16) {
+	return binary.BigEndian.Uint16(n.data[:2])
+}
+
+// Access implement NodeGetter{} interface.
+func (n *bubtznode) Access() (ts uint64) {
+	return 0 // TODO: should we panic ??
+}
+
+// Vbuuid implement NodeGetter{} interface.
+func (n *bubtznode) Vbuuid() (uuid uint64) {
+	return binary.BigEndian.Uint64(n.data[2:10])
+}
+
+// Bornseqno implement NodeGetter{} interface.
+func (n *bubtznode) Bornseqno() (seqno uint64) {
+	return binary.BigEndian.Uint64(n.data[10:18])
+}
+
+// Deadseqno implement NodeGetter{} interface.
+func (n *bubtznode) Deadseqno() (seqno uint64) {
+	return binary.BigEndian.Uint64(n.data[18:26])
+}
+
+// Key implement NodeGetter{} interface.
+func (n *bubtznode) Key() (key []byte) {
+	klen := binary.BigEndian.Uint16(n.data[26:28])
+	return n.data[28 : 28+klen]
+}
+
+// Value implement NodeGetter{} interface.
+func (n *bubtznode) Value() (value []byte) {
+	klen := binary.BigEndian.Uint16(n.data[26:28])
+	start := 28 + klen
+	if n.f.hasdatafile() {
+		var vbuf [2]byte
+		vpos := int64(binary.BigEndian.Uint64(n.data[start : start+8]))
+		if ln, err := n.f.datafd.ReadAt(vbuf[:], vpos); err != nil {
+			panic(err)
+		} else if ln != len(vbuf) {
+			panic("insufficient data")
+		}
+		vlen := int64(binary.BigEndian.Uint16(vbuf[:]))
+		if int64(cap(n.value)) < vlen {
+			n.value = make([]byte, 0, vlen)
+		}
+		n.value = n.value[:vlen]
+		if ln, err := n.f.datafd.ReadAt(n.value, vpos+2); err != nil {
+			panic(err)
+		} else if ln != len(n.value) {
+			panic("insufficient data")
+		}
+		return n.value
+	}
+	vlen := binary.BigEndian.Uint16(n.data[start : start+2])
+	return n.data[start+2 : start+2+vlen]
+}
+
+// Fpos implement NodeGetter{} interface.
+func (n *bubtznode) Fpos() (level byte, offset int64) {
+	klen := binary.BigEndian.Uint16(n.data[26:28])
+	start := 28 + klen
+	if n.f.hasdatafile() {
+		vpos := binary.BigEndian.Uint64(n.data[start : start+8])
+		return n.f.level, int64(vpos)
+	}
+	return n.f.level, n.offset + int64(start)
+}
+
+//---- NodeSetter implementation
+
+// Setvbno implement NodeSetter{} interface.
+func (n *bubtznode) Setvbno(vbno uint16) api.Node {
+	panic("not implemented")
+}
+
+// Setaccess implement NodeSetter{} interface.
+func (n *bubtznode) Setaccess(access uint64) api.Node {
+	panic("not implemented")
+}
+
+// SetVbuuid implement NodeSetter{} interface.
+func (n *bubtznode) SetVbuuid(uuid uint64) api.Node {
+	panic("not implemented")
+}
+
+// SetFpos implement NodeSetter{} interface.
+func (n *bubtznode) SetFpos(level byte, offset uint64) api.Node {
+	panic("not implemented")
+}
+
+// SetBornseqno implement NodeSetter{} interface.
+func (n *bubtznode) SetBornseqno(seqno uint64) api.Node {
+	panic("not implemented")
+}
+
+// SetDeadseqno implement NodeSetter{} interface.
+func (n *bubtznode) SetDeadseqno(seqno uint64) api.Node {
+	panic("not implemented")
+}

@@ -28,7 +28,7 @@ func (f *Bubtstore) Build(iter api.IndexIterator) {
 	// build
 	ms, fpos := []*bubtmblock{}, [2]int64{0, 0}
 	for ms, block, fpos = f.buildm(ms, fpos); block != nil; {
-		mblock := f.newm()
+		mblock := f.newmblock()
 		if mblock.insert(block) == false {
 			panic("error inserting first entry into mblock")
 		}
@@ -96,7 +96,7 @@ func (f *Bubtstore) buildm(ms []*bubtmblock, fpos [2]int64) (
 	}
 	_, fpos = f.flush(mblock, fpos)
 	if block != nil {
-		ms[0] = f.newm()
+		ms[0] = f.newmblock()
 		if ms[0].insert(block) == false {
 			panic("error inserting first entry into mblock")
 		}
