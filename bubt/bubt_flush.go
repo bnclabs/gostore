@@ -50,11 +50,10 @@ func (f *Bubtstore) flusher(fd *os.File, ch chan []byte, quitch chan struct{}) {
 		if write(block) == false {
 			return
 		}
-		f.putbuffer(block)
 	}
 
 	// flush marker block
-	markerblock := make([]byte, 4096)
+	markerblock := make([]byte, f.zblocksize)
 	for i := 0; i < len(markerblock); i++ {
 		markerblock[i] = 0xAB
 	}

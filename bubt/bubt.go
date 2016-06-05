@@ -13,7 +13,7 @@ const bubtMpoolSize = 8
 const bubtBufpoolSize = bubtMpoolSize + bubtZpoolSize
 
 // Bubtstore manages sorted key,value entries in persisted, immutable btree
-// build bottoms up and not updated there after.
+// built bottoms up and not updated there after.
 type Bubtstore struct {
 	indexfd  *os.File
 	datafd   *os.File
@@ -24,7 +24,6 @@ type Bubtstore struct {
 	// builder data
 	zpool         chan *bubtzblock
 	mpool         chan *bubtmblock
-	bufpool       chan []byte
 	idxch, datach chan []byte
 	iquitch       chan struct{}
 	dquitch       chan struct{}
@@ -39,7 +38,8 @@ type Bubtstore struct {
 	mreduce    bool
 
 	// statistics
-	rootfpos   int64
+	rootblock  int64
+	rootreduce int64
 	mnodes     int64
 	znodes     int64
 	dcount     int64
@@ -53,18 +53,18 @@ type Bubtstore struct {
 
 type bubtblock interface {
 	startkey() (kpos int64, key []byte)
+	reduce() []byte
 	offset() int64
 	roffset() int64
 }
 
-func NewBubtstore(name string, iter api.IndexIterator, config lib.Config, logg log.Logger) *Bubtstore {
+// NewBubtstore create a Bubtstore instance to build a new bottoms-up btree.
+func NewBubtstore(name string, config lib.Config, logg log.Logger) *Bubtstore {
 	var err error
 
 	f := &Bubtstore{
-		iterator:   iter,
 		zpool:      make(chan *bubtzblock, bubtZpoolSize),
 		mpool:      make(chan *bubtmblock, bubtMpoolSize),
-		bufpool:    make(chan []byte, bubtBufpoolSize),
 		idxch:      make(chan []byte, bubtBufpoolSize),
 		datach:     make(chan []byte, bubtBufpoolSize),
 		iquitch:    make(chan struct{}),
@@ -107,11 +107,6 @@ func NewBubtstore(name string, iter api.IndexIterator, config lib.Config, logg l
 		panic("cannot mreduce without datafile")
 	}
 
-	// initialize buffer pool
-	for i := 0; i < cap(f.bufpool); i++ {
-		f.bufpool <- make([]byte, f.zblocksize)
-	}
-
 	go f.flusher(f.indexfd, f.idxch, f.iquitch)
 	if f.hasdatafile() {
 		go f.flusher(f.datafd, f.datach, f.dquitch)
@@ -126,7 +121,7 @@ func (f *Bubtstore) hasdatafile() bool {
 	return f.datafile != ""
 }
 
-func (f *Bubtstore) mvpos(vpos int64) int64 {
+func (f *Bubtstore) makemvpos(vpos int64) int64 {
 	if (vpos & 0x7) != 0 {
 		panic(fmt.Errorf("vpos %v expected to 8-bit aligned", vpos))
 	}
@@ -157,7 +152,8 @@ func (f *Bubtstore) config2json() []byte {
 
 func (f *Bubtstore) stats2json() []byte {
 	stats := map[string]interface{}{
-		"rootfpos":   f.rootfpos,
+		"rootblock":  f.rootblock,
+		"rootreduce": f.rootreduce,
 		"mnodes":     f.mnodes,
 		"znodes":     f.znodes,
 		"a_zentries": f.a_zentries.Stats(),

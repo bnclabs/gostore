@@ -5,12 +5,16 @@ import "encoding/binary"
 import "github.com/prataprc/storage.go/api"
 import "github.com/prataprc/storage.go/log"
 
-func (f *Bubtstore) Build() {
+// Build starts building the tree from iterator, iterator is expected to be a
+// full-table scan over another data-store.
+func (f *Bubtstore) Build(iter api.IndexIterator) {
 	if f.frozen == false {
 		panic("cannot build a frozen bottoms up btree")
 	}
 
 	log.Infof("%v build started ...", f.logprefix)
+
+	f.iterator = iter
 	var block bubtblock
 
 	// add a new level to the btree.
@@ -21,7 +25,7 @@ func (f *Bubtstore) Build() {
 		ms[0] = mblock
 		return ms
 	}
-
+	// build
 	ms, fpos := []*bubtmblock{}, [2]int64{0, 0}
 	for ms, block, fpos = f.buildm(ms, fpos); block != nil; {
 		mblock := f.newm()
@@ -30,12 +34,19 @@ func (f *Bubtstore) Build() {
 		}
 		ms, block, fpos = f.buildm(prependlevel(ms, mblock), fpos)
 	}
-	f.frozen = true
-	f.rootfpos = block.offset()
-	if _, ok := block.(*bubtmblock); ok {
-		f.rootfpos = f.mvpos(f.rootfpos)
+
+	if len(ms) == 0 {
+		log.Infof("%v empty iterator", f.logprefix)
+		return
 	}
 
+	// root-block and its reduced value.
+	f.frozen, block = true, ms[0]
+	f.rootblock = block.offset()
+	if _, ok := block.(*bubtmblock); ok {
+		f.rootblock = f.makemvpos(f.rootblock)
+	}
+	f.rootreduce = block.roffset()
 	// flush statistics
 	finblock := make([]byte, 4096)
 	if stats := f.stats2json(); len(stats) > len(finblock) {
@@ -120,10 +131,12 @@ func (f *Bubtstore) flush(block bubtblock, fpos [2]int64) (bubtblock, [2]int64) 
 		if len(blk.entries) > 0 {
 			f.a_zentries.Add(int64(len(blk.entries)))
 			blk.finalize()
+			// reduce
 			blk.rpos = fpos[1] + int64(len(blk.dbuffer))
 			reducevalue := blk.reduce()
-			f.a_redsize.Add(int64(len(reducevalue)))
 			blk.dbuffer = append(blk.dbuffer, reducevalue...)
+			f.a_redsize.Add(int64(len(reducevalue)))
+			// move forward [2]fpos
 			vpos := fpos[1] + int64(len(blk.dbuffer))
 			if err := f.writedata(blk.dbuffer); err != nil {
 				panic(err)
@@ -141,12 +154,13 @@ func (f *Bubtstore) flush(block bubtblock, fpos [2]int64) (bubtblock, [2]int64) 
 		if len(blk.entries) > 0 {
 			f.a_zentries.Add(int64(len(blk.entries)))
 			blk.finalize()
-			blk.fpos, blk.rpos = fpos, fpos[1]+int64(len(blk.dbuffer))
+			// reduce
+			blk.fpos, blk.rpos = fpos, fpos[1]
 			reducevalue := blk.reduce()
 			f.a_redsize.Add(int64(len(reducevalue)))
-			blk.dbuffer = append(blk.dbuffer, reducevalue...)
-			vpos := fpos[1] + int64(len(blk.dbuffer))
-			if err := f.writedata(blk.dbuffer); err != nil {
+			// move forward [2]fpos
+			vpos := fpos[1] + int64(len(reducevalue))
+			if err := f.writedata(reducevalue); err != nil {
 				panic(err)
 			}
 			kpos := fpos[0] + int64(len(blk.kbuffer))
@@ -172,12 +186,4 @@ func (f *Bubtstore) pop() api.Node {
 
 func (f *Bubtstore) push(nd api.Node) {
 	f.nodes = append(f.nodes, nd)
-}
-
-func (f *Bubtstore) getbuffer() []byte {
-	return <-f.bufpool
-}
-
-func (f *Bubtstore) putbuffer(buffer []byte) {
-	f.bufpool <- buffer
 }

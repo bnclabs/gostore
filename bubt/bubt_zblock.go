@@ -11,6 +11,9 @@ type bubtzblock struct {
 	rpos     int64
 	firstkey []byte
 	entries  []uint32
+	keys     [][]byte
+	values   [][]byte
+	reduced  []byte
 	kbuffer  []byte
 	dbuffer  []byte
 }
@@ -21,16 +24,21 @@ func (f *Bubtstore) newz(fpos [2]int64) (z *bubtzblock) {
 		z.f, z.fpos = f, fpos
 		z.firstkey = z.firstkey[:0]
 		z.entries = z.entries[:0]
-		z.kbuffer, z.dbuffer = f.getbuffer(), f.getbuffer()
+		z.keys = z.keys[:0]
+		z.values = z.values[:0]
+		z.kbuffer, z.dbuffer = z.kbuffer[:0], z.dbuffer[:0]
 
 	default:
 		z = &bubtzblock{
 			f:        f,
 			fpos:     fpos,
 			firstkey: make([]byte, 0, api.MaxKeymem),
-			entries:  make([]uint32, 0),
+			entries:  make([]uint32, 0, 16),
+			keys:     make([][]byte, 0, 16),
+			values:   make([][]byte, 0, 16),
+			kbuffer:  make([]byte, 0, f.zblocksize),
+			dbuffer:  make([]byte, 0, f.zblocksize),
 		}
-		z.kbuffer, z.dbuffer = f.getbuffer(), f.getbuffer()
 	}
 	f.znodes++
 	return
@@ -59,6 +67,8 @@ func (z *bubtzblock) insert(nd api.Node) (ok bool) {
 	if int64(arrayblock+len(z.kbuffer)+entrysz) > z.f.zblocksize {
 		return false
 	}
+
+	z.keys, z.values = append(z.keys, key), append(z.values, value)
 
 	if len(z.firstkey) == 0 {
 		z.firstkey = z.firstkey[:len(key)]
@@ -132,11 +142,16 @@ func (z *bubtzblock) finalize() {
 }
 
 func (z *bubtzblock) reduce() []byte {
-	if z.f.mreduce {
-		if z.f.hasdatafile() {
-			return nil
-		}
-		panic("enable datafile for mreduce")
+	doreduce := func(rereduce bool, keys, values [][]byte) []byte {
+		return nil
 	}
-	return nil
+	if z.f.mreduce && z.f.hasdatafile() == false {
+		panic("enable datafile for mreduce")
+	} else if z.f.mreduce == false {
+		panic("mreduce not configured")
+	} else if z.reduced != nil {
+		return z.reduced
+	}
+	z.reduced = doreduce(false /*rereduce*/, z.keys, z.values)
+	return z.reduced
 }

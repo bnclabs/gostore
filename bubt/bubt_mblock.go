@@ -10,8 +10,9 @@ type bubtmblock struct {
 	rpos     int64
 	firstkey []byte
 	entries  []uint32
+	values   [][]byte
+	reduced  []byte
 	kbuffer  []byte
-	dbuffer  []byte // TODO: may not be needed
 }
 
 func (f *Bubtstore) newm() (m *bubtmblock) {
@@ -20,14 +21,16 @@ func (f *Bubtstore) newm() (m *bubtmblock) {
 		m.f = f
 		m.firstkey = m.firstkey[:0]
 		m.entries = m.entries[:0]
-		m.kbuffer = f.getbuffer()
+		m.values = m.values[:0]
+		m.kbuffer = m.kbuffer[:0]
 
 	default:
 		m = &bubtmblock{
 			f:       f,
-			entries: make([]uint32, 0),
+			entries: make([]uint32, 0, 16),
+			values:  make([][]byte, 0, 16),
+			kbuffer: make([]byte, 0, f.mblocksize),
 		}
-		m.kbuffer = f.getbuffer()
 	}
 	f.mnodes++
 	return
@@ -41,7 +44,8 @@ func (m *bubtmblock) insert(block bubtblock) (ok bool) {
 	}
 
 	_, key := block.startkey()
-	childpos := block.offset()
+	cblock, rpos := block.offset(), block.roffset()
+	m.values = append(m.values, block.reduce())
 
 	// check whether enough space available in the block.
 	entrysz := 2 + len(key) + 8 /*vpos*/ + 8 /*rpos*/
@@ -63,11 +67,11 @@ func (m *bubtmblock) insert(block bubtblock) (ok bool) {
 	m.kbuffer = append(m.kbuffer, scratch[:2]...)
 	m.kbuffer = append(m.kbuffer, key...)
 	// encode value
-	binary.BigEndian.PutUint64(scratch[:8], uint64(m.f.mvpos(childpos)))
+	binary.BigEndian.PutUint64(scratch[:8], uint64(m.f.makemvpos(cblock)))
 	m.kbuffer = append(m.kbuffer, scratch[:8]...)
 	// encode reduce-value
 	if m.f.mreduce {
-		binary.BigEndian.PutUint64(scratch[:8], uint64(m.f.mvpos(childpos)))
+		binary.BigEndian.PutUint64(scratch[:8], uint64(rpos))
 		m.kbuffer = append(m.kbuffer, scratch[:8]...)
 	}
 
@@ -107,11 +111,16 @@ func (m *bubtmblock) finalize() {
 }
 
 func (m *bubtmblock) reduce() []byte {
-	if m.f.mreduce {
-		if m.f.hasdatafile() {
-			return nil
-		}
-		panic("enable datafile for mreduce")
+	doreduce := func(rereduce bool, keys, values [][]byte) []byte {
+		return nil
 	}
-	return nil
+	if m.f.mreduce && m.f.hasdatafile() == false {
+		panic("enable datafile for mreduce")
+	} else if m.f.mreduce == false {
+		panic("mreduce not configured")
+	} else if m.reduced != nil {
+		return m.reduced
+	}
+	m.reduced = doreduce(true /*rereduce*/, nil, m.values)
+	return m.reduced
 }
