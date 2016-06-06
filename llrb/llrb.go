@@ -81,7 +81,7 @@ type LLRB struct { // tree container
 }
 
 // NewLLRB a new instance of in-memory sorted index.
-func NewLLRB(name string, config lib.Config, logg log.Logger) *LLRB {
+func NewLLRB(name string, config lib.Config) *LLRB {
 	config = make(lib.Config).Mixin(defaultconfig(), config)
 
 	llrb := &LLRB{name: name, borntime: time.Now()}
@@ -96,7 +96,6 @@ func NewLLRB(name string, config lib.Config, logg log.Logger) *LLRB {
 	llrb.nodearena = llrb.newnodearena(config)
 	llrb.valarena = llrb.newvaluearena(config)
 
-	// set up logger
 	llrb.logprefix = fmt.Sprintf("[LLRB-%s]", name)
 
 	// set up metadata options
