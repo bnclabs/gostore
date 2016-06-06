@@ -2,6 +2,7 @@ package bubt
 
 import "fmt"
 import "os"
+import "bytes"
 import "encoding/binary"
 
 import "github.com/prataprc/storage.go/api"
@@ -88,13 +89,24 @@ func OpenBubtstore(name, indexfile, datafile string, zblocksize int64) (f *Bubts
 	return f, nil
 }
 
-func (f *Bubtstore) rangekey(key []byte, fpos int64, callb api.RangeCallb) bool {
+func (f *Bubtstore) rangekey(key []byte, fpos int64, cmp [2]int, callb api.RangeCallb) bool {
 	switch ndblk := f.readat(fpos).(type) {
 	case mnode:
+		var from int32
+
 		entries := ndblk.entryslice()
-		from := ndblk.searchkey(key, entries)
-		for x := from; x < uint32(len(entries)/4); x++ {
-			if f.rangekey(key, ndblk.getentry(x).vpos(), callb) == false {
+		switch len(entries) {
+		case 0:
+			return false
+		case 4:
+			from = 0
+		default:
+			from = 1 + ndblk.searchkey(key, entries[4:], cmp[0])
+		}
+		for x := from; x < int32(len(entries)/4); x++ {
+			vpos := ndblk.getentry(uint32(x), entries).vpos()
+			if f.rangekey(key, vpos, cmp, callb) == false {
+				f.mnodepool <- []byte(ndblk)
 				return false
 			}
 		}
@@ -102,13 +114,23 @@ func (f *Bubtstore) rangekey(key []byte, fpos int64, callb api.RangeCallb) bool 
 
 	case znode:
 		var nd node
+
 		entries := ndblk.entryslice()
-		from := ndblk.searchkey(key, entries)
-		for x := from; x < uint32(len(entries)/4); x++ {
-			koff := x * 4
-			offset := fpos + int64(binary.BigEndian.Uint32(entries[koff:koff+4]))
-			f.newznode(&nd, []byte(ndblk), offset)
-			if callb(&nd) == false {
+		from := ndblk.searchkey(key, entries, cmp[0])
+		for x := from; x < int32(len(entries)/4); x++ {
+			ge := bytes.Compare(key, ndblk.getentry(uint32(x), entries).key()) >= cmp[0]
+			le := bytes.Compare(key, ndblk.getentry(uint32(x), entries).key()) >= cmp[1]
+			if ge && le {
+				koff := x * 4
+				offset := fpos + int64(binary.BigEndian.Uint32(entries[koff:koff+4]))
+				f.newznode(&nd, []byte(ndblk), offset)
+				if callb(&nd) == false {
+					f.znodepool <- []byte(ndblk)
+					return false
+				}
+
+			} else if le == false {
+				f.znodepool <- []byte(ndblk)
 				return false
 			}
 		}

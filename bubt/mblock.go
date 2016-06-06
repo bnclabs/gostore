@@ -134,26 +134,30 @@ func (m *mblock) roffset() int64 {
 
 type mnode []byte
 
-func (m mnode) getentry(n uint32) mentry {
+func (m mnode) getentry(n uint32, entries []byte) mentry {
 	off := n * 4
-	koff := binary.BigEndian.Uint32(m[off : off+4])
-	return mentry(m[koff:len(m)])
+	koff := binary.BigEndian.Uint32(entries[off : off+4])
+	return mentry(entries[koff:len(entries)])
 }
 
-func (m mnode) searchkey(key []byte, entries []byte) uint32 {
+func (m mnode) searchkey(key []byte, entries []byte, cmp int) int32 {
 	if (len(entries) % 4) != 0 {
 		panic("unaligned entries slice")
 	}
 
 	switch count := len(entries) / 4; count {
 	case 1:
-		return 0
-	default:
-		mid := uint32(count / 2)
-		if bytes.Compare(key, m.getentry(mid).key()) >= 0 {
-			return mid + m.searchkey(key, entries[mid*4:])
+		if bytes.Compare(key, m.getentry(0, entries).key()) >= cmp {
+			return 0
 		}
-		return mid + m.searchkey(key, entries[:mid*4])
+		return -1
+
+	default:
+		mid := int32(count / 2)
+		if bytes.Compare(key, m.getentry(uint32(mid), entries).key()) >= cmp {
+			return mid + m.searchkey(key, entries[mid*4:], cmp)
+		}
+		return m.searchkey(key, entries[:mid*4], cmp)
 	}
 }
 

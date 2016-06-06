@@ -165,13 +165,13 @@ func (z *zblock) roffset() int64 {
 
 type znode []byte
 
-func (z znode) getentry(n uint32) zentry {
+func (z znode) getentry(n uint32, entries []byte) zentry {
 	off := n * 4
-	koff := binary.BigEndian.Uint32(z[off : off+4])
-	return zentry(z[koff:len(z)])
+	koff := binary.BigEndian.Uint32(entries[off : off+4])
+	return zentry(entries[koff:len(entries)])
 }
 
-func (z znode) searchkey(key []byte, entries []byte) uint32 {
+func (z znode) searchkey(key []byte, entries []byte, cmp int) int32 {
 	if (len(entries) % 4) != 0 {
 		panic("unaligned entries slice")
 	}
@@ -179,12 +179,13 @@ func (z znode) searchkey(key []byte, entries []byte) uint32 {
 	switch count := len(entries) / 4; count {
 	case 1:
 		return 0
+
 	default:
-		mid := uint32(count / 2)
-		if bytes.Compare(key, z.getentry(mid).key()) >= 0 {
-			return mid + z.searchkey(key, entries[mid*4:])
+		mid := int32(count / 2)
+		if bytes.Compare(key, z.getentry(uint32(mid), entries).key()) >= cmp {
+			return mid + z.searchkey(key, entries[mid*4:], cmp)
 		}
-		return mid + z.searchkey(key, entries[:mid*4])
+		return z.searchkey(key, entries[:mid*4], cmp)
 	}
 }
 
