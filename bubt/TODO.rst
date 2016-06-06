@@ -4,10 +4,8 @@
   use.
 * useful types and interfaces from api/
   RangeCallb
-  NodeGetter
-  NodeSetter (panic as not-implemented)
-  IndexIterator
   Index (panic on RSnapshot)
   IndexSnapshot (panic as not-implemented)
   IndexReader
+  IndexIterator
   IndexWriter (panic as not-implemented)

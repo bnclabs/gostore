@@ -8,14 +8,11 @@ import "github.com/prataprc/storage.go/api"
 import "github.com/prataprc/storage.go/log"
 import "github.com/prataprc/storage.go/lib"
 
-const bubtZpoolSize = 1
-const bubtMpoolSize = 8
-const bubtBufpoolSize = bubtMpoolSize + bubtZpoolSize
-
 // Bubtstore manages sorted key,value entries in persisted, immutable btree
 // built bottoms up and not updated there after.
 type Bubtstore struct {
-	// statistics, need to be 8 byte aligned.
+	// statistics, need to be 8 byte aligned, these statisitcs will be flushed
+	// to the tip of indexfile.
 	rootblock  int64
 	rootreduce int64
 	mnodes     int64
@@ -28,29 +25,25 @@ type Bubtstore struct {
 	a_redsize  *lib.AverageInt64
 	h_depth    *lib.HistogramInt64
 
-	name     string
-	level    byte
-	indexfd  *os.File
-	datafd   *os.File
-	iterator api.IndexIterator
-
-	frozen bool
+	indexfd   *os.File
+	datafd    *os.File
+	logprefix string
 
 	// builder data
-	zpool         chan *bubtzblock
-	mpool         chan *bubtmblock
-	idxch, datach chan []byte
-	iquitch       chan struct{}
-	dquitch       chan struct{}
-	nodes         []api.Node
-	logprefix     string
+	iterator api.IndexIterator
+	zpool    chan *bubtzblock
+	mpool    chan *bubtmblock
+	nodes    []api.Node
+	flusher  *bubtflusher
 
-	// configuration
+	// configuration, will be flushed to the tip of indexfile.
+	name       string
 	indexfile  string
 	datafile   string
 	mblocksize int64
 	zblocksize int64
 	mreduce    bool
+	level      byte
 }
 
 type bubtblock interface {
@@ -61,17 +54,13 @@ type bubtblock interface {
 }
 
 // NewBubtstore create a Bubtstore instance to build a new bottoms-up btree.
-func NewBubtstore(name string, config lib.Config, logg log.Logger) *Bubtstore {
+func NewBubtstore(name string, config lib.Config) *Bubtstore {
 	var err error
 
 	f := &Bubtstore{
 		name:       name,
 		zpool:      make(chan *bubtzblock, bubtZpoolSize),
 		mpool:      make(chan *bubtmblock, bubtMpoolSize),
-		idxch:      make(chan []byte, bubtBufpoolSize),
-		datach:     make(chan []byte, bubtBufpoolSize),
-		iquitch:    make(chan struct{}),
-		dquitch:    make(chan struct{}),
 		nodes:      make([]api.Node, 0),
 		a_zentries: &lib.AverageInt64{},
 		a_mentries: &lib.AverageInt64{},
@@ -92,28 +81,24 @@ func NewBubtstore(name string, config lib.Config, logg log.Logger) *Bubtstore {
 		panic(err)
 	}
 
-	maxblock, minblock := int64(4*1024*1024*1024), int64(512) // TODO: avoid magic numbers
 	f.zblocksize = config.Int64("zblocksize")
-	if f.zblocksize > maxblock {
-		log.Errorf("zblocksize %v > %v", f.zblocksize, maxblock)
-	} else if f.zblocksize < minblock {
-		log.Errorf("zblocksize %v < %v", f.zblocksize, minblock)
+	if f.zblocksize > maxBlock { // 1 TB
+		log.Errorf("zblocksize %v > %v", f.zblocksize, maxBlock)
+	} else if f.zblocksize < minBlock { // 512 byte, HDD sector size.
+		log.Errorf("zblocksize %v < %v", f.zblocksize, minBlock)
 	}
 	f.mblocksize = config.Int64("mblocksize")
-	if f.mblocksize > maxblock {
-		log.Errorf("mblocksize %v > %v", f.mblocksize, maxblock)
-	} else if f.mblocksize < minblock {
-		log.Errorf("mblocksize %v < %v", f.mblocksize, minblock)
+	if f.mblocksize > maxBlock {
+		log.Errorf("mblocksize %v > %v", f.mblocksize, maxBlock)
+	} else if f.mblocksize < minBlock {
+		log.Errorf("mblocksize %v < %v", f.mblocksize, minBlock)
 	}
 	f.mreduce = config.Bool("mreduce")
 	if f.hasdatafile() == false && f.mreduce == true {
 		panic("cannot mreduce without datafile")
 	}
 
-	go f.flusher(f.indexfd, f.idxch, f.iquitch)
-	if f.hasdatafile() {
-		go f.flusher(f.datafd, f.datach, f.dquitch)
-	}
+	f.flusher = f.startflusher()
 	log.Infof("%v started ...", f.logprefix)
 	return f
 }
@@ -121,6 +106,33 @@ func NewBubtstore(name string, config lib.Config, logg log.Logger) *Bubtstore {
 // Setlevel will set the storage level.
 func (f *Bubtstore) Setlevel(level byte) {
 	f.level = level
+}
+
+//---- IndexWriter interface{}
+
+// Upsert IndexWriter{} method, will panic if called.
+func (f *Bubtstore) Upsert(key, value []byte, callb api.UpsertCallback) error {
+	panic("IndexWriter.Upsert() not implemented")
+}
+
+// UpsertMany IndexWriter{} method, will panic if called.
+func (f *Bubtstore) UpsertMany(keys, values [][]byte, callb api.UpsertCallback) error {
+	panic("IndexWriter.UpsertMany() not implemented")
+}
+
+// DeleteMin IndexWriter{} method, will panic if called.
+func (f *Bubtstore) DeleteMin(callb api.DeleteCallback) error {
+	panic("IndexWriter.DeleteMin() not implemented")
+}
+
+// DeleteMax IndexWriter{} method, will panic if called.
+func (f *Bubtstore) DeleteMax(callb api.DeleteCallback) error {
+	panic("IndexWriter.DeleteMax() not implemented")
+}
+
+// Delete IndexWriter{} method, will panic if called.
+func (f *Bubtstore) Delete(key []byte, callb api.DeleteCallback) error {
+	panic("IndexWriter.Delete() not implemented")
 }
 
 //---- helper methods.
@@ -145,17 +157,34 @@ func (f Bubtstore) ismvpos(vpos int64) (int64, bool) {
 
 func (f *Bubtstore) config2json() []byte {
 	config := map[string]interface{}{
+		"name":       f.name,
 		"indexfile":  f.indexfile,
 		"datafile":   f.datafile,
 		"zblocksize": f.zblocksize,
 		"mblocksize": f.mblocksize,
 		"mreduce":    f.mreduce,
+		"level":      f.level,
 	}
 	data, err := json.Marshal(config)
 	if err != nil {
 		panic(err)
 	}
 	return data
+}
+
+func (f *Bubtstore) json2config(data []byte) error {
+	var config lib.Config
+	if err := json.Unmarshal(data, &config); err != nil {
+		return err
+	}
+	f.name = config.String("name")
+	f.indexfile = config.String("indexfile")
+	f.datafile = config.String("datafile")
+	f.zblocksize = config.Int64("zblocksize")
+	f.mblocksize = config.Int64("mblocksize")
+	f.mreduce = config.Bool("mreduce")
+	f.level = byte(config.Int64("level"))
+	return nil
 }
 
 func (f *Bubtstore) stats2json() []byte {
