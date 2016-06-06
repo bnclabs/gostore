@@ -40,8 +40,9 @@ type NodeGetter interface {
 	// Vbuuid return entry's unique vbucket id.
 	Vbuuid() (uuid uint64)
 
-	// Fpos return disk backed position for value.
-	Fpos() (level byte, offset uint64)
+	// Fpos return disk backed position for value. Returned offset points
+	// to value on disk encoded as {2byte-len, value-byte-array}
+	Fpos() (level byte, offset int64)
 
 	// Key return entry key as byte slice.
 	Key() (key []byte)
