@@ -12,10 +12,10 @@ func (f *Bubtstore) Build(iter api.IndexIterator) {
 	log.Infof("%v build started ...", f.logprefix)
 
 	f.iterator = iter
-	var block bubtblock
+	var block blocker
 
 	// add a new level to the btree.
-	prependlevel := func(ms []*bubtmblock, mblock *bubtmblock) []*bubtmblock {
+	prependlevel := func(ms []*mblock, mblock *mblock) []*mblock {
 		ln := len(ms)
 		ms = append(ms, nil)
 		copy(ms[1:], ms[:ln])
@@ -23,7 +23,7 @@ func (f *Bubtstore) Build(iter api.IndexIterator) {
 		return ms
 	}
 	// build
-	ms, fpos := []*bubtmblock{}, [2]int64{0, 0}
+	ms, fpos := []*mblock{}, [2]int64{0, 0}
 	for ms, block, fpos = f.buildm(ms, fpos); block != nil; {
 		mblock := f.newmblock()
 		if mblock.insert(block) == false {
@@ -39,14 +39,10 @@ func (f *Bubtstore) Build(iter api.IndexIterator) {
 
 	// root-block and its reduced value.
 	block = ms[0]
-	f.rootblock = block.offset()
-	if _, ok := block.(*bubtmblock); ok {
-		f.rootblock = f.makemvpos(f.rootblock)
-	}
-	f.rootreduce = block.roffset()
+	f.rootblock, f.rootreduce = block.backref(), block.roffset()
 
 	// flush statistics
-	finblock := make([]byte, 4096)
+	finblock := make([]byte, markerBlocksize)
 	if stats := f.stats2json(); len(stats) <= len(finblock) {
 		binary.BigEndian.PutUint16(finblock[:2], uint16(len(stats)))
 		copy(finblock[2:], stats)
@@ -57,9 +53,11 @@ func (f *Bubtstore) Build(iter api.IndexIterator) {
 	log.Infof("%v wrote stat block\n", f.logprefix)
 
 	// flush configuration
+	binary.BigEndian.PutUint64(finblock[:8], uint64(f.rootblock))
+	binary.BigEndian.PutUint64(finblock[8:16], uint64(f.rootreduce))
 	if config := f.config2json(); len(config) <= len(finblock) {
-		binary.BigEndian.PutUint16(finblock[:2], uint16(len(config)))
-		copy(finblock[2:], config)
+		binary.BigEndian.PutUint16(finblock[16:18], uint16(len(config)))
+		copy(finblock[18:], config)
 		f.flusher.writeidx(finblock)
 	} else {
 		panic(fmt.Errorf("config %v > %v", len(config), len(finblock)))
@@ -71,10 +69,8 @@ func (f *Bubtstore) Build(iter api.IndexIterator) {
 	log.Infof("%v ... build completed", f.logprefix)
 }
 
-func (f *Bubtstore) buildm(ms []*bubtmblock, fpos [2]int64) (
-	[]*bubtmblock, bubtblock, [2]int64) {
-
-	var block bubtblock
+func (f *Bubtstore) buildm(ms []*mblock, fpos [2]int64) ([]*mblock, blocker, [2]int64) {
+	var block blocker
 
 	if len(ms) == 0 {
 		block, fpos = f.buildz(fpos)
@@ -104,7 +100,7 @@ func (f *Bubtstore) buildm(ms []*bubtmblock, fpos [2]int64) (
 	return ms, nil, fpos
 }
 
-func (f *Bubtstore) buildz(fpos [2]int64) (bubtblock, [2]int64) {
+func (f *Bubtstore) buildz(fpos [2]int64) (blocker, [2]int64) {
 	var nd api.Node
 	var ok bool
 
@@ -124,9 +120,9 @@ func (f *Bubtstore) buildz(fpos [2]int64) (bubtblock, [2]int64) {
 	return f.flush(z, fpos)
 }
 
-func (f *Bubtstore) flush(block bubtblock, fpos [2]int64) (bubtblock, [2]int64) {
+func (f *Bubtstore) flush(block blocker, fpos [2]int64) (blocker, [2]int64) {
 	switch blk := block.(type) {
-	case *bubtzblock:
+	case *zblock:
 		if len(blk.entries) > 0 {
 			f.a_zentries.Add(int64(len(blk.entries)))
 			blk.finalize()
@@ -152,7 +148,7 @@ func (f *Bubtstore) flush(block bubtblock, fpos [2]int64) (bubtblock, [2]int64) 
 		}
 		return nil, fpos
 
-	case *bubtmblock:
+	case *mblock:
 		if len(blk.entries) > 0 {
 			f.a_zentries.Add(int64(len(blk.entries)))
 			blk.finalize()

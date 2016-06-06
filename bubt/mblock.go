@@ -2,9 +2,10 @@ package bubt
 
 // import "github.com/prataprc/storage.go/
 import "fmt"
+import "bytes"
 import "encoding/binary"
 
-type bubtmblock struct {
+type mblock struct {
 	f        *Bubtstore
 	fpos     [2]int64
 	rpos     int64
@@ -15,7 +16,7 @@ type bubtmblock struct {
 	kbuffer  []byte
 }
 
-func (f *Bubtstore) newmblock() (m *bubtmblock) {
+func (f *Bubtstore) newmblock() (m *mblock) {
 	select {
 	case m = <-f.mpool:
 		m.f = f
@@ -25,7 +26,7 @@ func (f *Bubtstore) newmblock() (m *bubtmblock) {
 		m.kbuffer = m.kbuffer[:0]
 
 	default:
-		m = &bubtmblock{
+		m = &mblock{
 			f:       f,
 			entries: make([]uint32, 0, 16),
 			values:  make([][]byte, 0, 16),
@@ -36,7 +37,7 @@ func (f *Bubtstore) newmblock() (m *bubtmblock) {
 	return
 }
 
-func (m *bubtmblock) insert(block bubtblock) (ok bool) {
+func (m *mblock) insert(block blocker) (ok bool) {
 	var scratch [16]byte // 2 + 8
 
 	if block == nil {
@@ -44,7 +45,7 @@ func (m *bubtmblock) insert(block bubtblock) (ok bool) {
 	}
 
 	_, key := block.startkey()
-	cblock, rpos := block.offset(), block.roffset()
+	coffset, rpos := block.backref(), block.roffset()
 	m.values = append(m.values, block.reduce())
 
 	// check whether enough space available in the block.
@@ -67,7 +68,7 @@ func (m *bubtmblock) insert(block bubtblock) (ok bool) {
 	m.kbuffer = append(m.kbuffer, scratch[:2]...)
 	m.kbuffer = append(m.kbuffer, key...)
 	// encode value
-	binary.BigEndian.PutUint64(scratch[:8], uint64(m.f.makemvpos(cblock)))
+	binary.BigEndian.PutUint64(scratch[:8], uint64(coffset))
 	m.kbuffer = append(m.kbuffer, scratch[:8]...)
 	// encode reduce-value
 	if m.f.mreduce {
@@ -78,19 +79,7 @@ func (m *bubtmblock) insert(block bubtblock) (ok bool) {
 	return true
 }
 
-func (m *bubtmblock) startkey() (int64, []byte) {
-	return -1, m.firstkey // NOTE: we don't need kpos
-}
-
-func (m *bubtmblock) offset() int64 {
-	return m.fpos[0]
-}
-
-func (m *bubtmblock) roffset() int64 {
-	return m.rpos
-}
-
-func (m *bubtmblock) finalize() {
+func (m *mblock) finalize() {
 	arrayblock := 4 + (len(m.entries) * 4)
 	sz, ln := arrayblock+len(m.kbuffer), len(m.kbuffer)
 	if int64(sz) > m.f.mblocksize {
@@ -98,19 +87,19 @@ func (m *bubtmblock) finalize() {
 		panic(fmt.Sprintf(fmsg, sz, m.f.mblocksize))
 	}
 
-	m.kbuffer = m.kbuffer[:sz] // first increase slice length
+	m.kbuffer = m.kbuffer[:m.f.mblocksize] // first increase slice length
 
 	copy(m.kbuffer[arrayblock:], m.kbuffer[:ln])
 	n := 0
 	binary.BigEndian.PutUint32(m.kbuffer[n:], uint32(len(m.entries)))
 	n += 4
-	for _, entry := range m.entries {
-		binary.BigEndian.PutUint32(m.kbuffer[n:], uint32(arrayblock)+entry)
+	for _, koff := range m.entries {
+		binary.BigEndian.PutUint32(m.kbuffer[n:], uint32(arrayblock)+koff)
 		n += 4
 	}
 }
 
-func (m *bubtmblock) reduce() []byte {
+func (m *mblock) reduce() []byte {
 	doreduce := func(rereduce bool, keys, values [][]byte) []byte {
 		return nil
 	}
@@ -123,4 +112,69 @@ func (m *bubtmblock) reduce() []byte {
 	}
 	m.reduced = doreduce(true /*rereduce*/, nil, m.values)
 	return m.reduced
+}
+
+func (m *mblock) startkey() (int64, []byte) {
+	return -1, m.firstkey // NOTE: we don't need kpos
+}
+
+func (m *mblock) offset() int64 {
+	return m.fpos[0]
+}
+
+func (m *mblock) backref() int64 {
+	return m.offset() | 0x1
+}
+
+func (m *mblock) roffset() int64 {
+	return m.rpos
+}
+
+//---- mnode for reading entries.
+
+type mnode []byte
+
+func (m mnode) getentry(n uint32) mentry {
+	off := n * 4
+	koff := binary.BigEndian.Uint32(m[off : off+4])
+	return mentry(m[koff:len(m)])
+}
+
+func (m mnode) searchkey(key []byte, entries []byte) uint32 {
+	if (len(entries) % 4) != 0 {
+		panic("unaligned entries slice")
+	}
+
+	switch count := len(entries) / 4; count {
+	case 1:
+		return 0
+	default:
+		mid := uint32(count / 2)
+		if bytes.Compare(key, m.getentry(mid).key()) >= 0 {
+			return mid + m.searchkey(key, entries[mid*4:])
+		}
+		return mid + m.searchkey(key, entries[:mid*4])
+	}
+}
+
+func (m mnode) entryslice() []byte {
+	count := binary.BigEndian.Uint32(m[:4])
+	return m[4 : 4+(count*4)]
+}
+
+type mentry []byte
+
+func (m mentry) key() []byte {
+	klen := binary.BigEndian.Uint16(m[:2])
+	return m[2 : 2+klen]
+}
+
+func (m mentry) vpos() int64 {
+	klen := binary.BigEndian.Uint16(m[:2])
+	return int64(binary.BigEndian.Uint64(m[2+klen:]))
+}
+
+func (m mentry) rpos() int64 {
+	klen := binary.BigEndian.Uint16(m[:2])
+	return int64(binary.BigEndian.Uint64(m[2+klen+8:]))
 }

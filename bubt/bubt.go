@@ -11,8 +11,8 @@ import "github.com/prataprc/storage.go/lib"
 // Bubtstore manages sorted key,value entries in persisted, immutable btree
 // built bottoms up and not updated there after.
 type Bubtstore struct {
-	// statistics, need to be 8 byte aligned, these statisitcs will be flushed
-	// to the tip of indexfile.
+	// builder statistics, need to be 8 byte aligned, these statisitcs will be
+	// flushed to the tip of indexfile.
 	rootblock  int64
 	rootreduce int64
 	mnodes     int64
@@ -25,58 +25,64 @@ type Bubtstore struct {
 	a_redsize  *lib.AverageInt64
 	h_depth    *lib.HistogramInt64
 
+	indexfile string
+	datafile  string
 	indexfd   *os.File
 	datafd    *os.File
 	logprefix string
 
 	// builder data
 	iterator api.IndexIterator
-	zpool    chan *bubtzblock
-	mpool    chan *bubtmblock
+	zpool    chan *zblock
+	mpool    chan *mblock
 	nodes    []api.Node
 	flusher  *bubtflusher
 
+	// reader data
+	builderstats map[string]interface{}
+	znodepool    chan []byte
+	mnodepool    chan []byte
+
 	// configuration, will be flushed to the tip of indexfile.
 	name       string
-	indexfile  string
-	datafile   string
 	mblocksize int64
 	zblocksize int64
 	mreduce    bool
 	level      byte
 }
 
-type bubtblock interface {
+type blocker interface {
 	startkey() (kpos int64, key []byte)
 	reduce() []byte
 	offset() int64
+	backref() int64
 	roffset() int64
 }
 
 // NewBubtstore create a Bubtstore instance to build a new bottoms-up btree.
-func NewBubtstore(name string, config lib.Config) *Bubtstore {
+func NewBubtstore(name, indexfile, datafile string, config lib.Config) *Bubtstore {
 	var err error
 
 	f := &Bubtstore{
 		name:       name,
-		zpool:      make(chan *bubtzblock, bubtZpoolSize),
-		mpool:      make(chan *bubtmblock, bubtMpoolSize),
+		zpool:      make(chan *zblock, zpoolSize),
+		mpool:      make(chan *mblock, mpoolSize),
 		nodes:      make([]api.Node, 0),
 		a_zentries: &lib.AverageInt64{},
 		a_mentries: &lib.AverageInt64{},
 		a_keysize:  &lib.AverageInt64{},
 		a_valsize:  &lib.AverageInt64{},
 		a_redsize:  &lib.AverageInt64{},
-		h_depth:    lib.NewhistorgramInt64(0, bubtMpoolSize, 1),
+		h_depth:    lib.NewhistorgramInt64(0, mpoolSize, 1),
 	}
 	f.logprefix = fmt.Sprintf("[BUBT-%s]", name)
 
-	f.indexfile = config.String("indexfile")
+	f.indexfile = indexfile
 	if f.indexfd, err = os.Create(f.indexfile); err != nil {
 		panic(err)
 	}
 
-	f.datafile = config.String("datafile")
+	f.datafile = datafile
 	if f.datafd, err = os.Create(f.datafile); err != nil {
 		panic(err)
 	}
@@ -141,13 +147,6 @@ func (f *Bubtstore) hasdatafile() bool {
 	return f.datafile != ""
 }
 
-func (f *Bubtstore) makemvpos(vpos int64) int64 {
-	if (vpos & 0x7) != 0 {
-		panic(fmt.Errorf("vpos %v expected to 8-bit aligned", vpos))
-	}
-	return vpos | 0x1
-}
-
 func (f Bubtstore) ismvpos(vpos int64) (int64, bool) {
 	if (vpos & 0x1) == 1 {
 		return int64(uint64(vpos) & 0xFFFFFFFFFFFFFFF8), true
@@ -158,8 +157,6 @@ func (f Bubtstore) ismvpos(vpos int64) (int64, bool) {
 func (f *Bubtstore) config2json() []byte {
 	config := map[string]interface{}{
 		"name":       f.name,
-		"indexfile":  f.indexfile,
-		"datafile":   f.datafile,
 		"zblocksize": f.zblocksize,
 		"mblocksize": f.mblocksize,
 		"mreduce":    f.mreduce,
@@ -178,8 +175,6 @@ func (f *Bubtstore) json2config(data []byte) error {
 		return err
 	}
 	f.name = config.String("name")
-	f.indexfile = config.String("indexfile")
-	f.datafile = config.String("datafile")
 	f.zblocksize = config.Int64("zblocksize")
 	f.mblocksize = config.Int64("mblocksize")
 	f.mreduce = config.Bool("mreduce")
@@ -205,4 +200,11 @@ func (f *Bubtstore) stats2json() []byte {
 		panic(err)
 	}
 	return data
+}
+
+func (f *Bubtstore) json2stats(data []byte) error {
+	if err := json.Unmarshal(data, &f.builderstats); err != nil {
+		return err
+	}
+	return nil
 }

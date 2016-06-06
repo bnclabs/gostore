@@ -14,8 +14,8 @@ type bubtflusher struct {
 func (f *Bubtstore) startflusher() *bubtflusher {
 	flusher := &bubtflusher{
 		f:       f,
-		idxch:   make(chan []byte, bubtBufpoolSize),
-		datach:  make(chan []byte, bubtBufpoolSize),
+		idxch:   make(chan []byte, bufpoolSize),
+		datach:  make(chan []byte, bufpoolSize),
 		iquitch: make(chan struct{}),
 		dquitch: make(chan struct{}),
 	}

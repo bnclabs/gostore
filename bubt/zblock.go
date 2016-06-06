@@ -2,10 +2,11 @@ package bubt
 
 import "encoding/binary"
 import "fmt"
+import "bytes"
 
 import "github.com/prataprc/storage.go/api"
 
-type bubtzblock struct {
+type zblock struct {
 	f        *Bubtstore
 	fpos     [2]int64 // kpos, vpos
 	rpos     int64
@@ -18,7 +19,7 @@ type bubtzblock struct {
 	dbuffer  []byte
 }
 
-func (f *Bubtstore) newz(fpos [2]int64) (z *bubtzblock) {
+func (f *Bubtstore) newz(fpos [2]int64) (z *zblock) {
 	select {
 	case z = <-f.zpool:
 		z.f, z.fpos = f, fpos
@@ -29,7 +30,7 @@ func (f *Bubtstore) newz(fpos [2]int64) (z *bubtzblock) {
 		z.kbuffer, z.dbuffer = z.kbuffer[:0], z.dbuffer[:0]
 
 	default:
-		z = &bubtzblock{
+		z = &zblock{
 			f:        f,
 			fpos:     fpos,
 			firstkey: make([]byte, 0, api.MaxKeymem),
@@ -44,7 +45,7 @@ func (f *Bubtstore) newz(fpos [2]int64) (z *bubtzblock) {
 	return
 }
 
-func (z *bubtzblock) insert(nd api.Node) (ok bool) {
+func (z *zblock) insert(nd api.Node) (ok bool) {
 	var key, value []byte
 	var scratch [26]byte
 
@@ -105,23 +106,7 @@ func (z *bubtzblock) insert(nd api.Node) (ok bool) {
 	return true
 }
 
-func (z *bubtzblock) startkey() (int64, []byte) {
-	if len(z.entries) > 0 {
-		koff := binary.BigEndian.Uint32(z.kbuffer[4:8])
-		return z.fpos[0] + int64(koff), z.firstkey
-	}
-	return z.fpos[0], nil
-}
-
-func (z *bubtzblock) offset() int64 {
-	return z.fpos[0]
-}
-
-func (z *bubtzblock) roffset() int64 {
-	return z.rpos
-}
-
-func (z *bubtzblock) finalize() {
+func (z *zblock) finalize() {
 	arrayblock := 4 + (len(z.entries) * 4)
 	sz, ln := arrayblock+len(z.kbuffer), len(z.kbuffer)
 	if int64(sz) > z.f.zblocksize {
@@ -129,7 +114,7 @@ func (z *bubtzblock) finalize() {
 		panic(fmt.Sprintf(fmsg, sz, z.f.zblocksize))
 	}
 
-	z.kbuffer = z.kbuffer[:sz] // first increase slice length
+	z.kbuffer = z.kbuffer[:z.f.zblocksize] // first increase slice length
 
 	copy(z.kbuffer[arrayblock:], z.kbuffer[:ln])
 	n := 0
@@ -141,7 +126,7 @@ func (z *bubtzblock) finalize() {
 	}
 }
 
-func (z *bubtzblock) reduce() []byte {
+func (z *zblock) reduce() []byte {
 	doreduce := func(rereduce bool, keys, values [][]byte) []byte {
 		return nil
 	}
@@ -156,59 +141,116 @@ func (z *bubtzblock) reduce() []byte {
 	return z.reduced
 }
 
-//----- read path
+func (z *zblock) startkey() (int64, []byte) {
+	if len(z.entries) > 0 {
+		koff := binary.BigEndian.Uint32(z.kbuffer[4:8])
+		return z.fpos[0] + int64(koff), z.firstkey
+	}
+	return z.fpos[0], nil
+}
 
-type bubtznode struct {
+func (z *zblock) offset() int64 {
+	return z.fpos[0]
+}
+
+func (z *zblock) backref() int64 {
+	return z.offset()
+}
+
+func (z *zblock) roffset() int64 {
+	return z.rpos
+}
+
+//---- znode for reading entries.
+
+type znode []byte
+
+func (z znode) getentry(n uint32) zentry {
+	off := n * 4
+	koff := binary.BigEndian.Uint32(z[off : off+4])
+	return zentry(z[koff:len(z)])
+}
+
+func (z znode) searchkey(key []byte, entries []byte) uint32 {
+	if (len(entries) % 4) != 0 {
+		panic("unaligned entries slice")
+	}
+
+	switch count := len(entries) / 4; count {
+	case 1:
+		return 0
+	default:
+		mid := uint32(count / 2)
+		if bytes.Compare(key, z.getentry(mid).key()) >= 0 {
+			return mid + z.searchkey(key, entries[mid*4:])
+		}
+		return mid + z.searchkey(key, entries[:mid*4])
+	}
+}
+
+func (z znode) entryslice() []byte {
+	count := binary.BigEndian.Uint32(z[:4])
+	return z[4 : 4+(count*4)]
+}
+
+type zentry []byte
+
+func (z zentry) key() []byte {
+	klen := binary.BigEndian.Uint16(z[26 : 26+2])
+	return z[26+2 : 26+2+klen]
+}
+
+//----- node definition for bubt, implements api.Node
+
+type node struct {
 	f      *Bubtstore
 	offset int64
 	data   []byte
 	value  []byte
 }
 
-func (f *Bubtstore) newbubtznode(data []byte, offset int64) *bubtznode {
-	return &bubtznode{
-		f:      f,
-		data:   data,
-		offset: offset,
-		value:  make([]byte, 0),
-	}
+func (f *Bubtstore) newznode(nd *node, data []byte, offset int64) {
+	nd.f = f
+	nd.data = data
+	nd.offset = offset
+	nd.value = make([]byte, 0)
 }
 
 //---- NodeGetter implementation
 
 // Vbno implement NodeGetter{} interface.
-func (n *bubtznode) Vbno() (vbno uint16) {
+func (n *node) Vbno() (vbno uint16) {
 	return binary.BigEndian.Uint16(n.data[:2])
 }
 
 // Access implement NodeGetter{} interface.
-func (n *bubtznode) Access() (ts uint64) {
+func (n *node) Access() (ts uint64) {
 	return 0 // TODO: should we panic ??
 }
 
 // Vbuuid implement NodeGetter{} interface.
-func (n *bubtznode) Vbuuid() (uuid uint64) {
+func (n *node) Vbuuid() (uuid uint64) {
 	return binary.BigEndian.Uint64(n.data[2:10])
 }
 
 // Bornseqno implement NodeGetter{} interface.
-func (n *bubtznode) Bornseqno() (seqno uint64) {
+func (n *node) Bornseqno() (seqno uint64) {
 	return binary.BigEndian.Uint64(n.data[10:18])
 }
 
 // Deadseqno implement NodeGetter{} interface.
-func (n *bubtznode) Deadseqno() (seqno uint64) {
+func (n *node) Deadseqno() (seqno uint64) {
 	return binary.BigEndian.Uint64(n.data[18:26])
 }
 
 // Key implement NodeGetter{} interface.
-func (n *bubtznode) Key() (key []byte) {
+func (n *node) Key() (key []byte) {
 	klen := binary.BigEndian.Uint16(n.data[26:28])
 	return n.data[28 : 28+klen]
 }
 
 // Value implement NodeGetter{} interface.
-func (n *bubtznode) Value() (value []byte) {
+func (n *node) Value() (value []byte) {
 	klen := binary.BigEndian.Uint16(n.data[26:28])
 	start := 28 + klen
 	if n.f.hasdatafile() {
@@ -236,7 +278,7 @@ func (n *bubtznode) Value() (value []byte) {
 }
 
 // Fpos implement NodeGetter{} interface.
-func (n *bubtznode) Fpos() (level byte, offset int64) {
+func (n *node) Fpos() (level byte, offset int64) {
 	klen := binary.BigEndian.Uint16(n.data[26:28])
 	start := 28 + klen
 	if n.f.hasdatafile() {
@@ -249,31 +291,31 @@ func (n *bubtznode) Fpos() (level byte, offset int64) {
 //---- NodeSetter implementation
 
 // Setvbno implement NodeSetter{} interface.
-func (n *bubtznode) Setvbno(vbno uint16) api.Node {
+func (n *node) Setvbno(vbno uint16) api.Node {
 	panic("not implemented")
 }
 
 // Setaccess implement NodeSetter{} interface.
-func (n *bubtznode) Setaccess(access uint64) api.Node {
+func (n *node) Setaccess(access uint64) api.Node {
 	panic("not implemented")
 }
 
 // SetVbuuid implement NodeSetter{} interface.
-func (n *bubtznode) SetVbuuid(uuid uint64) api.Node {
+func (n *node) SetVbuuid(uuid uint64) api.Node {
 	panic("not implemented")
 }
 
 // SetFpos implement NodeSetter{} interface.
-func (n *bubtznode) SetFpos(level byte, offset uint64) api.Node {
+func (n *node) SetFpos(level byte, offset uint64) api.Node {
 	panic("not implemented")
 }
 
 // SetBornseqno implement NodeSetter{} interface.
-func (n *bubtznode) SetBornseqno(seqno uint64) api.Node {
+func (n *node) SetBornseqno(seqno uint64) api.Node {
 	panic("not implemented")
 }
 
 // SetDeadseqno implement NodeSetter{} interface.
-func (n *bubtznode) SetDeadseqno(seqno uint64) api.Node {
+func (n *node) SetDeadseqno(seqno uint64) api.Node {
 	panic("not implemented")
 }
