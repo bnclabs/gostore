@@ -226,7 +226,10 @@ func (ss *Snapshot) Release() {
 //---- IndexReader{} interface.
 
 func (ss *Snapshot) Has(key []byte) bool {
-	return false
+	if ss.Get(key) == nil {
+		return false
+	}
+	return true
 }
 
 func (ss *Snapshot) Get(key []byte) api.Node {
@@ -245,7 +248,7 @@ func (ss *Snapshot) Range(lowkey, highkey []byte, incl string, reverse bool, ite
 }
 
 func (ss *Snapshot) Iterate(lowkey, highkey []byte, incl string, reverse bool) api.IndexIterator {
-	return nil
+	panic("TBD")
 }
 
 //---- IndexWriter interface{}
