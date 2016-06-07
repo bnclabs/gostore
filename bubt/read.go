@@ -18,7 +18,7 @@ func OpenBubtstore(name, indexfile, datafile string, zblocksize int64) (f *Bubts
 	defer readmu.Unlock()
 
 	if f, ok = openstores[name]; ok {
-		return f
+		return f, nil
 	}
 
 	f = &Bubtstore{

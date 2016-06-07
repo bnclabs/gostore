@@ -3,6 +3,7 @@ package bubt
 import "os"
 import "fmt"
 import "errors"
+import "sync/atomic"
 import "encoding/json"
 
 import "github.com/prataprc/storage.go/api"
@@ -139,7 +140,7 @@ func (f *Bubtstore) Isactive() bool {
 }
 
 // RSnapshot implement Index{} interface.
-func (f *Bubtstore) RSnapshot(snapch chan IndexSnapshot) error {
+func (f *Bubtstore) RSnapshot(snapch chan api.IndexSnapshot) error {
 	f.Refer()
 	go func() { snapch <- f }()
 	return nil
@@ -278,7 +279,7 @@ func (f *Bubtstore) stats2json() []byte {
 	stats := map[string]interface{}{
 		"rootblock":  f.rootblock,
 		"rootreduce": f.rootreduce,
-		"n_count":    f.z.n_count,
+		"n_count":    f.n_count,
 		"mnodes":     f.mnodes,
 		"znodes":     f.znodes,
 		"a_zentries": f.a_zentries.Stats(),
