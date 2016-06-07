@@ -2,7 +2,6 @@ package bubt
 
 import "os"
 import "fmt"
-import "bytes"
 import "errors"
 import "sync"
 import "sync/atomic"
@@ -313,49 +312,14 @@ func (ss *Snapshot) json2stats(data []byte) error {
 func (ss *Snapshot) rangekey(key []byte, fpos int64, cmp [2]int, callb api.RangeCallb) bool {
 	switch ndblk := ss.readat(fpos).(type) {
 	case mnode:
-		var from int32
-
-		entries := ndblk.entryslice()
-		switch len(entries) {
-		case 0:
-			return false
-		case 4:
-			from = 0
-		default:
-			from = 1 + ndblk.searchkey(key, entries[4:], cmp[0])
-		}
-		for x := from; x < int32(len(entries)/4); x++ {
-			vpos := ndblk.getentry(uint32(x), entries).vpos()
-			if ss.rangekey(key, vpos, cmp, callb) == false {
-				ss.mnodepool <- []byte(ndblk)
-				return false
-			}
-		}
+		rc := ndblk.rangekey(ss, key, cmp, callb)
 		ss.mnodepool <- []byte(ndblk)
+		return rc
 
 	case znode:
-		var nd node
-
-		entries := ndblk.entryslice()
-		from := ndblk.searchkey(key, entries, cmp[0])
-		for x := from; x < int32(len(entries)/4); x++ {
-			ge := bytes.Compare(key, ndblk.getentry(uint32(x), entries).key()) >= cmp[0]
-			le := bytes.Compare(key, ndblk.getentry(uint32(x), entries).key()) >= cmp[1]
-			if ge && le {
-				koff := x * 4
-				offset := fpos + int64(binary.BigEndian.Uint32(entries[koff:koff+4]))
-				ss.newznode(&nd, []byte(ndblk), offset)
-				if callb(&nd) == false {
-					ss.znodepool <- []byte(ndblk)
-					return false
-				}
-
-			} else if le == false {
-				ss.znodepool <- []byte(ndblk)
-				return false
-			}
-		}
+		rc := ndblk.rangekey(ss, key, fpos, cmp, callb)
 		ss.znodepool <- []byte(ndblk)
+		return rc
 	}
 	return true
 }

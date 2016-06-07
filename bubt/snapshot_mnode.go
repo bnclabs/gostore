@@ -3,7 +3,32 @@ package bubt
 import "bytes"
 import "encoding/binary"
 
+import "github.com/prataprc/storage.go/api"
+
 type mnode []byte
+
+func (m mnode) rangekey(
+	ss *Snapshot, key []byte, cmp [2]int, callb api.RangeCallb) bool {
+
+	var from int32
+
+	entries := m.entryslice()
+	switch len(entries) {
+	case 0:
+		return false
+	case 4:
+		from = 0
+	default:
+		from = 1 + m.searchkey(key, entries[4:], cmp[0])
+	}
+	for x := from; x < int32(len(entries)/4); x++ {
+		vpos := m.getentry(uint32(x), entries).vpos()
+		if ss.rangekey(key, vpos, cmp, callb) == false {
+			return false
+		}
+	}
+	return true
+}
 
 func (m mnode) getentry(n uint32, entries []byte) mentry {
 	off := n * 4

@@ -9,6 +9,33 @@ import "github.com/prataprc/storage.go/api"
 
 type znode []byte
 
+func (z znode) rangekey(
+	ss *Snapshot,
+	key []byte, fpos int64, cmp [2]int, callb api.RangeCallb) bool {
+
+	var nd node
+
+	entries := z.entryslice()
+	from := z.searchkey(key, entries, cmp[0])
+	for x := from; x < int32(len(entries)/4); x++ {
+		ekey := z.getentry(uint32(x), entries).key()
+		ge := bytes.Compare(key, ekey) >= cmp[0]
+		le := bytes.Compare(key, ekey) >= cmp[1]
+		if ge && le {
+			koff := x * 4
+			offset := fpos + int64(binary.BigEndian.Uint32(entries[koff:koff+4]))
+			ss.newznode(&nd, []byte(z), offset)
+			if callb(&nd) == false {
+				return false
+			}
+
+		} else if le == false {
+			return false
+		}
+	}
+	return true
+}
+
 func (z znode) getentry(n uint32, entries []byte) zentry {
 	off := n * 4
 	koff := binary.BigEndian.Uint32(entries[off : off+4])
@@ -43,124 +70,4 @@ type zentry []byte
 func (z zentry) key() []byte {
 	klen := binary.BigEndian.Uint16(z[26 : 26+2])
 	return z[26+2 : 26+2+klen]
-}
-
-//----- node definition for bubt, implements api.Node
-
-type node struct {
-	ss     *Snapshot
-	offset int64
-	data   []byte
-	value  []byte
-}
-
-func (ss *Snapshot) newznode(nd *node, data []byte, offset int64) {
-	nd.ss = ss
-	nd.data = data
-	nd.offset = offset
-	nd.value = make([]byte, 0)
-}
-
-//---- NodeGetter implementation
-
-// Vbno implement NodeGetter{} interface.
-func (n *node) Vbno() (vbno uint16) {
-	return binary.BigEndian.Uint16(n.data[:2])
-}
-
-// Access implement NodeGetter{} interface.
-func (n *node) Access() (ts uint64) {
-	return 0 // TODO: should we panic ??
-}
-
-// Vbuuid implement NodeGetter{} interface.
-func (n *node) Vbuuid() (uuid uint64) {
-	return binary.BigEndian.Uint64(n.data[2:10])
-}
-
-// Bornseqno implement NodeGetter{} interface.
-func (n *node) Bornseqno() (seqno uint64) {
-	return binary.BigEndian.Uint64(n.data[10:18])
-}
-
-// Deadseqno implement NodeGetter{} interface.
-func (n *node) Deadseqno() (seqno uint64) {
-	return binary.BigEndian.Uint64(n.data[18:26])
-}
-
-// Key implement NodeGetter{} interface.
-func (n *node) Key() (key []byte) {
-	klen := binary.BigEndian.Uint16(n.data[26:28])
-	return n.data[28 : 28+klen]
-}
-
-// Value implement NodeGetter{} interface.
-func (n *node) Value() (value []byte) {
-	klen := binary.BigEndian.Uint16(n.data[26:28])
-	start := 28 + klen
-	if n.ss.hasdatafile() {
-		var vbuf [2]byte
-		vpos := int64(binary.BigEndian.Uint64(n.data[start : start+8]))
-		if ln, err := n.ss.datafd.ReadAt(vbuf[:], vpos); err != nil {
-			panic(err)
-		} else if ln != len(vbuf) {
-			panic("insufficient data")
-		}
-		vlen := int64(binary.BigEndian.Uint16(vbuf[:]))
-		if int64(cap(n.value)) < vlen {
-			n.value = make([]byte, 0, vlen)
-		}
-		n.value = n.value[:vlen]
-		if ln, err := n.ss.datafd.ReadAt(n.value, vpos+2); err != nil {
-			panic(err)
-		} else if ln != len(n.value) {
-			panic("insufficient data")
-		}
-		return n.value
-	}
-	vlen := binary.BigEndian.Uint16(n.data[start : start+2])
-	return n.data[start+2 : start+2+vlen]
-}
-
-// Fpos implement NodeGetter{} interface.
-func (n *node) Fpos() (level byte, offset int64) {
-	klen := binary.BigEndian.Uint16(n.data[26:28])
-	start := 28 + klen
-	if n.ss.hasdatafile() {
-		vpos := binary.BigEndian.Uint64(n.data[start : start+8])
-		return n.ss.level, int64(vpos)
-	}
-	return n.ss.level, n.offset + int64(start)
-}
-
-//---- NodeSetter implementation
-
-// Setvbno implement NodeSetter{} interface.
-func (n *node) Setvbno(vbno uint16) api.Node {
-	panic("not implemented")
-}
-
-// Setaccess implement NodeSetter{} interface.
-func (n *node) Setaccess(access uint64) api.Node {
-	panic("not implemented")
-}
-
-// SetVbuuid implement NodeSetter{} interface.
-func (n *node) SetVbuuid(uuid uint64) api.Node {
-	panic("not implemented")
-}
-
-// SetFpos implement NodeSetter{} interface.
-func (n *node) SetFpos(level byte, offset uint64) api.Node {
-	panic("not implemented")
-}
-
-// SetBornseqno implement NodeSetter{} interface.
-func (n *node) SetBornseqno(seqno uint64) api.Node {
-	panic("not implemented")
-}
-
-// SetDeadseqno implement NodeSetter{} interface.
-func (n *node) SetDeadseqno(seqno uint64) api.Node {
-	panic("not implemented")
 }

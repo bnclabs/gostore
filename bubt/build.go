@@ -9,13 +9,13 @@ import "github.com/prataprc/storage.go/api"
 import "github.com/prataprc/storage.go/lib"
 import "github.com/prataprc/storage.go/log"
 
-// Bubt manages sorted key,value entries in persisted, immutable btree
+// Bubt manages sorted {key,value} entries in persisted, immutable btree
 // built bottoms up and not updated there after.
 type Bubt struct {
-	// statistics, need to be 8 byte aligned, these statisitcs will be
-	// flushed to the tip of indexfile.
 	rootblock  int64
 	rootreduce int64
+	// statistics, need to be 8 byte aligned, these statisitcs will be
+	// flushed to the tip of indexfile.
 	n_count    int64
 	mnodes     int64
 	znodes     int64
