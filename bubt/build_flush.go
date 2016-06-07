@@ -6,12 +6,12 @@ import "fmt"
 import "github.com/prataprc/storage.go/log"
 
 type bubtflusher struct {
-	f                *Bubtstore
+	f                *Bubt
 	idxch, datach    chan []byte
 	iquitch, dquitch chan struct{}
 }
 
-func (f *Bubtstore) startflusher() *bubtflusher {
+func (f *Bubt) startflusher() *bubtflusher {
 	flusher := &bubtflusher{
 		f:       f,
 		idxch:   make(chan []byte, bufpoolSize),
