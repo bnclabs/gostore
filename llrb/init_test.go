@@ -25,7 +25,7 @@ func TestLLRBValidate(t *testing.T) {
 				t.Errorf("expected panic")
 			}
 		}()
-		llrb := NewLLRB("test", config, nil)
+		llrb := NewLLRB("test", config)
 		llrb.validateConfig(config)
 	}
 

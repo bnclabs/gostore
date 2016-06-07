@@ -62,19 +62,23 @@ func (d *DictSnapshot) Validate() {
 //---- IndexReader{} interface.
 
 // Min implement IndexReader{} interface.
-func (d *DictSnapshot) Min() api.Node {
+func (d *DictSnapshot) Min(callb api.NodeCallb) bool {
 	if len(d.dict) == 0 {
-		return nil
+		return false
+	} else if callb == nil {
+		return true
 	}
-	return d.dict[d.hashks[0]]
+	return callb(d.dict[d.hashks[0]])
 }
 
 // Max implement IndexReader{} interface.
-func (d *DictSnapshot) Max() api.Node {
+func (d *DictSnapshot) Max(callb api.NodeCallb) bool {
 	if len(d.dict) == 0 {
-		return nil
+		return false
+	} else if callb == nil {
+		return true
 	}
-	return d.dict[d.hashks[len(d.hashks)-1]]
+	return callb(d.dict[d.hashks[len(d.hashks)-1]])
 }
 
 // Range implement IndexReader{} interface.

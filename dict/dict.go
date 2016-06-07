@@ -112,30 +112,39 @@ func (d *Dict) Has(key []byte) bool {
 }
 
 // Get implement IndexReader{} interface.
-func (d *Dict) Get(key []byte) api.Node {
+func (d *Dict) Get(key []byte, callb api.NodeCallb) bool {
 	hashv := crc64.Checksum(key, crcisotab)
 	if nd, ok := d.dict[hashv]; ok {
-		return nd
+		if callb == nil {
+			return true
+		}
+		return callb(nd)
 	}
-	return nil
+	return false
 }
 
 // Min implement IndexReader{} interface.
-func (d *Dict) Min() api.Node {
+func (d *Dict) Min(callb api.NodeCallb) bool {
 	if len(d.dict) == 0 {
-		return nil
+		return false
 	}
 	hashv := d.sorted()[0]
-	return d.dict[hashv]
+	if callb == nil {
+		return true
+	}
+	return callb(d.dict[hashv])
 }
 
 // Max implement IndexReader{} interface.
-func (d *Dict) Max() api.Node {
+func (d *Dict) Max(callb api.NodeCallb) bool {
 	if len(d.dict) == 0 {
-		return nil
+		return false
 	}
 	hashks := d.sorted()
-	return d.dict[hashks[len(hashks)-1]]
+	if callb == nil {
+		return true
+	}
+	return callb(d.dict[hashks[len(hashks)-1]])
 }
 
 // Range implement IndexReader{} interface.
@@ -332,8 +341,10 @@ func (d *Dict) UpsertMany(keys, values [][]byte, callb api.UpsertCallback) error
 // DeleteMin implement IndexWriter{} interface.
 func (d *Dict) DeleteMin(callb api.DeleteCallback) error {
 	if len(d.dict) > 0 {
-		nd := d.Min()
-		d.Delete(nd.Key(), callb)
+		d.Min(func(nd api.Node) bool {
+			d.Delete(nd.Key(), callb)
+			return true
+		})
 	}
 	return nil
 }
@@ -341,8 +352,10 @@ func (d *Dict) DeleteMin(callb api.DeleteCallback) error {
 // DeleteMax implement IndexWriter{} interface.
 func (d *Dict) DeleteMax(callb api.DeleteCallback) error {
 	if len(d.dict) > 0 {
-		nd := d.Max()
-		d.Delete(nd.Key(), callb)
+		d.Max(func(nd api.Node) bool {
+			d.Delete(nd.Key(), callb)
+			return true
+		})
 	}
 	return nil
 }

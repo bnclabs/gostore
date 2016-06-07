@@ -17,7 +17,7 @@ var _ = fmt.Sprintf("dummy")
 func TestNewLLRB(t *testing.T) {
 	config := makellrbconfig()
 
-	llrb := NewLLRB("test", config, nil)
+	llrb := NewLLRB("test", config)
 	if llrb == nil {
 		t.Errorf("unexpected nil")
 	}
@@ -67,7 +67,7 @@ func TestNewLLRBNode(t *testing.T) {
 	config["metadata.mvalue"] = true
 	config["metadata.fpos"] = true
 	config["metadata.vbuuid"] = true
-	llrb := NewLLRB("test", config, nil)
+	llrb := NewLLRB("test", config)
 
 	key, value := makekeyvalue(make([]byte, 128), make([]byte, 1024))
 	vbno, vbuuid := uint16(10), uint64(0xABCD)
@@ -99,7 +99,7 @@ func TestNewLLRBNode(t *testing.T) {
 func TestNewLLRBNodePanic(t *testing.T) {
 	config := makellrbconfig()
 	config["metadata.mvalue"] = false
-	llrb := NewLLRB("test", config, nil)
+	llrb := NewLLRB("test", config)
 	key, value := makekeyvalue(make([]byte, 128), make([]byte, 1024))
 	func() {
 		defer func() {
@@ -116,7 +116,7 @@ func TestNewLLRBNodePanic(t *testing.T) {
 func TestCloneLLRBNode(t *testing.T) {
 	config := makellrbconfig()
 	config["metadata.mvalue"] = true
-	llrb := NewLLRB("test", config, nil)
+	llrb := NewLLRB("test", config)
 
 	key, value := makekeyvalue(make([]byte, 128), make([]byte, 1024))
 	nd := llrb.newnode(key, value)
@@ -153,23 +153,45 @@ func TestLLRBBasicLookup(t *testing.T) {
 	if llrb.Has(inserts[1][0]) == false {
 		t.Errorf("expected key - %v", string(inserts[0][0]))
 	}
-	nd := llrb.Get(inserts[2][0])
-	if v := nd.Value(); bytes.Compare(v, inserts[2][1]) != 0 {
+
+	var nd api.Node
+	rc := llrb.Get(inserts[2][0], func(x api.Node) bool {
+		nd = x
+		return true
+	})
+	if rc == false {
+		t.Errorf("missingkey %v", string(inserts[2][0]))
+	} else if v := nd.Value(); bytes.Compare(v, inserts[2][1]) != 0 {
 		t.Errorf("expected %v, got %v", string(inserts[2][1]), string(v))
 	}
-	if nd := llrb.Get([]byte("key10")); nd != nil {
+
+	if rc := llrb.Get([]byte("key10"), nil); rc == true {
 		t.Errorf("expected nil when Get() on missing key")
 	}
+
 	// min
-	nd = llrb.Min()
-	if k, v := nd.Key(), nd.Value(); bytes.Compare(k, inserts[0][0]) != 0 {
+	nd = nil
+	rc = llrb.Min(func(x api.Node) bool {
+		nd = x
+		return true
+	})
+	if rc == false {
+		t.Errorf("missing minimum key")
+	} else if k, v := nd.Key(), nd.Value(); bytes.Compare(k, inserts[0][0]) != 0 {
 		t.Errorf("expected %v, got %v", string(inserts[0][0]), string(k))
 	} else if bytes.Compare(v, inserts[0][1]) != 0 {
 		t.Errorf("expected %v, got %v", string(inserts[0][1]), string(v))
 	}
+
 	// max
-	nd = llrb.Max()
-	if k, v := nd.Key(), nd.Value(); bytes.Compare(k, []byte("key5")) != 0 {
+	nd = nil
+	rc = llrb.Max(func(x api.Node) bool {
+		nd = x
+		return true
+	})
+	if rc == false {
+		t.Errorf("missing maximum key")
+	} else if k, v := nd.Key(), nd.Value(); bytes.Compare(k, []byte("key5")) != 0 {
 		t.Errorf("expected %v, got %v", "key5", string(k))
 	} else if bytes.Compare(v, []byte("value5")) != 0 {
 		t.Errorf("expected %v, got %v", "value5", string(v))
@@ -215,8 +237,14 @@ func TestLLRBBasicUpdates(t *testing.T) {
 	// check
 	if countref != llrb.Count() {
 		t.Errorf("expected %v, got %v", countref, llrb.Count())
-	} else if nd := llrb.Get(inserts[0][0]); nd == nil {
-		t.Errorf("expeced valid node")
+	}
+	var nd api.Node
+	rc := llrb.Get(inserts[0][0], func(x api.Node) bool {
+		nd = x
+		return true
+	})
+	if rc == false {
+		t.Errorf("expected valid node")
 	} else if bytes.Compare(newvalue, nd.Value()) != 0 {
 		t.Errorf("expected %v, got %v", newvalue, nd.Value())
 	}
@@ -241,8 +269,8 @@ func TestLLRBBasicUpdates(t *testing.T) {
 	// check
 	if countref-1 != llrb.Count() {
 		t.Errorf("expected %v, got %v", countref-1, llrb.Count())
-	} else if nd := llrb.Get(key); nd != nil {
-		t.Errorf("expeced node as nil")
+	} else if rc := llrb.Get(key, nil); rc == true {
+		t.Errorf("expected missing key")
 	}
 
 	llrb.Validate()
@@ -264,8 +292,8 @@ func TestLLRBBasicUpdates(t *testing.T) {
 	// check
 	if countref-1 != llrb.Count() {
 		t.Errorf("expected %v, got %v", countref-1, llrb.Count())
-	} else if nd := llrb.Get(key); nd != nil {
-		t.Errorf("expeced node as nil")
+	} else if rc := llrb.Get(key, nil); rc == true {
+		t.Errorf("expeced missing key")
 	}
 
 	llrb.Validate()
@@ -286,8 +314,8 @@ func TestLLRBBasicUpdates(t *testing.T) {
 	// check
 	if countref-1 != llrb.Count() {
 		t.Errorf("expected %v, got %v", countref-1, llrb.Count())
-	} else if nd := llrb.Get(key); nd != nil {
-		t.Errorf("expeced node as nil")
+	} else if rc := llrb.Get(key, nil); rc == true {
+		t.Errorf("expected missing key")
 	}
 
 	llrb.Validate()
@@ -300,7 +328,7 @@ func TestLLRBBasicRange(t *testing.T) {
 	config["metadata.fpos"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
-	llrb := NewLLRB("test", config, nil)
+	llrb := NewLLRB("test", config)
 
 	// inserts
 	inserts := [][2][]byte{
@@ -426,7 +454,7 @@ func TestLLRBRange(t *testing.T) {
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
-	llrb := NewLLRB("test", config, nil)
+	llrb := NewLLRB("test", config)
 	d := dict.NewDict()
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
 	keys, values := make([][]byte, 0), make([][]byte, 0)
@@ -520,7 +548,7 @@ func TestLLRBIteratePool(t *testing.T) {
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
 	config["iterpool.size"] = 1
-	llrb := NewLLRB("test", config, nil)
+	llrb := NewLLRB("test", config)
 
 	// seed the pool
 	iter1 := llrb.Iterate(nil, nil, "both", false)
@@ -543,7 +571,7 @@ func TestLLRBBasicIterate(t *testing.T) {
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
-	llrb := NewLLRB("test", config, nil)
+	llrb := NewLLRB("test", config)
 
 	// inserts
 	inserts := [][2][]byte{
@@ -653,7 +681,7 @@ func TestLLRBIterate(t *testing.T) {
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
-	llrb := NewLLRB("test", config, nil)
+	llrb := NewLLRB("test", config)
 	d := dict.NewDict()
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
 	keys, values := make([][]byte, 0), make([][]byte, 0)
@@ -769,7 +797,7 @@ func TestLLRBInsert(t *testing.T) {
 	config["metadata.bornseqno"] = true
 	config["metadata.deadseqno"] = false
 	config["metadata.vbuuid"] = true
-	llrb := NewLLRB("test", config, nil)
+	llrb := NewLLRB("test", config)
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
 	keys, values := make([][]byte, 0), make([][]byte, 0)
 	// insert 10K items
@@ -828,11 +856,16 @@ func TestLLRBInsert(t *testing.T) {
 	}
 
 	// Get items
+	var nd api.Node
 	vbno, vbuuid, seqno = uint16(10), uint64(0xABCD), uint64(12345678)
 	for i, key := range keys {
-		nd := llrb.Get(key)
-		if nd == nil {
-			t.Errorf("unexpected nil")
+		nd = nil
+		rc := llrb.Get(key, func(x api.Node) bool {
+			nd = x
+			return true
+		})
+		if rc == false {
+			t.Errorf("missing key")
 		} else if x := nd.Vbno(); x != vbno {
 			t.Errorf("expected %v, got %v", vbno, x)
 		} else if x := nd.Vbuuid(); x != vbuuid {
@@ -856,7 +889,7 @@ func TestLLRBUpsert(t *testing.T) {
 	config["metadata.bornseqno"] = true
 	config["metadata.deadseqno"] = false
 	config["metadata.vbuuid"] = true
-	llrb := NewLLRB("test", config, nil)
+	llrb := NewLLRB("test", config)
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
 	keys, values := make([][]byte, 0), make([][]byte, 0)
 	// insert 10K items
@@ -951,7 +984,7 @@ func TestLLRBDelete(t *testing.T) {
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
-	llrb := NewLLRB("test", config, nil)
+	llrb := NewLLRB("test", config)
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
 	keys, values := make([][]byte, 0), make([][]byte, 0)
 	// insert 10K items
@@ -1069,7 +1102,7 @@ func BenchmarkLLRBCloneKey(b *testing.B) {
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
-	llrb := NewLLRB("test", config, nil)
+	llrb := NewLLRB("test", config)
 
 	b.ResetTimer()
 
@@ -1085,7 +1118,7 @@ func BenchmarkLLRBCloneSmall(b *testing.B) {
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
-	llrb := NewLLRB("test", config, nil)
+	llrb := NewLLRB("test", config)
 
 	b.ResetTimer()
 
@@ -1101,7 +1134,7 @@ func BenchmarkLLRBCloneLarge(b *testing.B) {
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
-	llrb := NewLLRB("test", config, nil)
+	llrb := NewLLRB("test", config)
 
 	b.ResetTimer()
 
@@ -1131,7 +1164,7 @@ func makekeyvalue(key, value []byte) ([]byte, []byte) {
 func makellrb(
 	t *testing.T, nm string, inserts [][2][]byte, config lib.Config) *LLRB {
 
-	llrb := NewLLRB(nm, config, nil)
+	llrb := NewLLRB(nm, config)
 	if llrb.Count() != 0 {
 		t.Fatalf("expected an empty dict")
 	}

@@ -118,7 +118,7 @@ func (nd *Llrbnode) Vbuuid() uint64 {
 }
 
 // Fpos implement NodeGetter{}
-func (nd *Llrbnode) Fpos() (level byte, offset uint64) {
+func (nd *Llrbnode) Fpos() (level byte, offset int64) {
 	if nd != nil {
 		return nd.metadata().fpos()
 	}

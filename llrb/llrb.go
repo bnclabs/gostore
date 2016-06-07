@@ -254,22 +254,26 @@ func (llrb *LLRB) Has(key []byte) bool {
 	if llrb.mvcc.enabled {
 		panic("Has(): mvcc enabled, use snapshots for reading")
 	}
-	return llrb.Get(key) != nil
+	return llrb.Get(key, nil)
 }
 
 // Get implement IndexReader{} interface.
-func (llrb *LLRB) Get(key []byte) api.Node {
+func (llrb *LLRB) Get(key []byte, callb api.NodeCallb) bool {
 	if llrb.mvcc.enabled {
 		panic("Get(): mvcc enabled, use snapshots for reading")
 	}
 
 	llrb.rw.RLock()
+	defer llrb.rw.RUnlock()
+	defer atomic.AddInt64(&llrb.n_lookups, 1)
 
-	nd := llrb.get(key)
-
-	llrb.rw.RUnlock()
-	atomic.AddInt64(&llrb.n_lookups, 1)
-	return nd
+	if nd := llrb.get(key); nd != nil {
+		if callb == nil {
+			return true
+		}
+		return callb(nd)
+	}
+	return false
 }
 
 func (llrb *LLRB) get(key []byte) api.Node {
@@ -287,18 +291,22 @@ func (llrb *LLRB) get(key []byte) api.Node {
 }
 
 // Min implement IndexReader{} interface.
-func (llrb *LLRB) Min() api.Node {
+func (llrb *LLRB) Min(callb api.NodeCallb) bool {
 	if llrb.mvcc.enabled {
 		panic("Min(): mvcc enabled, use snapshots for reading")
 	}
 
 	llrb.rw.RLock()
+	defer llrb.rw.RUnlock()
+	defer atomic.AddInt64(&llrb.n_lookups, 1)
 
-	nd := llrb.min()
-
-	llrb.rw.RUnlock()
-	atomic.AddInt64(&llrb.n_lookups, 1)
-	return nd
+	if nd := llrb.min(); nd != nil {
+		if callb == nil {
+			return true
+		}
+		return callb(nd)
+	}
+	return false
 }
 
 func (llrb *LLRB) min() api.Node {
@@ -313,18 +321,22 @@ func (llrb *LLRB) min() api.Node {
 }
 
 // Max implement IndexReader{} interface.
-func (llrb *LLRB) Max() api.Node {
+func (llrb *LLRB) Max(callb api.NodeCallb) bool {
 	if llrb.mvcc.enabled {
 		panic("Max(): mvcc enabled, use snapshots for reading")
 	}
 
 	llrb.rw.RLock()
+	defer llrb.rw.RUnlock()
+	defer atomic.AddInt64(&llrb.n_lookups, 1)
 
-	nd := llrb.max()
-
-	llrb.rw.RUnlock()
-	atomic.AddInt64(&llrb.n_lookups, 1)
-	return nd
+	if nd := llrb.max(); nd != nil {
+		if callb == nil {
+			return true
+		}
+		return callb(nd)
+	}
+	return false
 }
 
 func (llrb *LLRB) max() api.Node {

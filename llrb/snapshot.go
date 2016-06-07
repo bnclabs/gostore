@@ -188,18 +188,26 @@ func (snapshot *LLRBSnapshot) Dotdump(buffer io.Writer) {
 
 // Has implement IndexReader{} interface.
 func (snapshot *LLRBSnapshot) Has(key []byte) bool {
-	return snapshot.Get(key) != nil
+	return snapshot.Get(key, nil)
 }
 
 // Get implement IndexReader{} interface.
-func (snapshot *LLRBSnapshot) Get(key []byte) api.Node {
-	nd := snapshot.get(key)
-	if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
-		atomic.AddInt64(&snapshot.n_cclookups, 1)
-	} else {
-		atomic.AddInt64(&snapshot.n_lookups, 1)
+func (snapshot *LLRBSnapshot) Get(key []byte, callb api.NodeCallb) bool {
+	defer func() {
+		if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
+			atomic.AddInt64(&snapshot.n_cclookups, 1)
+		} else {
+			atomic.AddInt64(&snapshot.n_lookups, 1)
+		}
+	}()
+
+	if nd := snapshot.get(key); nd != nil {
+		if callb == nil {
+			return true
+		}
+		return callb(nd)
 	}
-	return nd
+	return false
 }
 
 func (snapshot *LLRBSnapshot) get(key []byte) api.Node {
@@ -217,14 +225,22 @@ func (snapshot *LLRBSnapshot) get(key []byte) api.Node {
 }
 
 // Min implement IndexReader{} interface.
-func (snapshot *LLRBSnapshot) Min() api.Node {
-	nd := snapshot.min()
-	if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
-		atomic.AddInt64(&snapshot.n_cclookups, 1)
-	} else {
-		atomic.AddInt64(&snapshot.n_lookups, 1)
+func (snapshot *LLRBSnapshot) Min(callb api.NodeCallb) bool {
+	defer func() {
+		if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
+			atomic.AddInt64(&snapshot.n_cclookups, 1)
+		} else {
+			atomic.AddInt64(&snapshot.n_lookups, 1)
+		}
+	}()
+
+	if nd := snapshot.min(); nd != nil {
+		if callb == nil {
+			return true
+		}
+		return callb(nd)
 	}
-	return nd
+	return false
 }
 
 func (snapshot *LLRBSnapshot) min() api.Node {
@@ -239,14 +255,22 @@ func (snapshot *LLRBSnapshot) min() api.Node {
 }
 
 // Max implement IndexReader{} interface.
-func (snapshot *LLRBSnapshot) Max() api.Node {
-	nd := snapshot.max()
-	if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
-		atomic.AddInt64(&snapshot.n_cclookups, 1)
-	} else {
-		atomic.AddInt64(&snapshot.n_lookups, 1)
+func (snapshot *LLRBSnapshot) Max(callb api.NodeCallb) bool {
+	defer func() {
+		if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
+			atomic.AddInt64(&snapshot.n_cclookups, 1)
+		} else {
+			atomic.AddInt64(&snapshot.n_lookups, 1)
+		}
+	}()
+
+	if nd := snapshot.max(); nd != nil {
+		if callb == nil {
+			return true
+		}
+		return callb(nd)
 	}
-	return nd
+	return false
 }
 
 func (snapshot *LLRBSnapshot) max() api.Node {

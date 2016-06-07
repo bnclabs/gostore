@@ -17,7 +17,7 @@ func TestNewLLRBMvcc(t *testing.T) {
 	config := makellrbconfig()
 	config["mvcc.enable"] = true
 
-	llrb := NewLLRB("test", config, nil)
+	llrb := NewLLRB("test", config)
 	if llrb == nil {
 		t.Errorf("unexpected nil")
 	}
@@ -133,16 +133,30 @@ func TestLLRBMvcclBasicLookup(t *testing.T) {
 	if snapshot.Has(inserts[1][0]) == false {
 		t.Errorf("expected key - %v", string(inserts[0][0]))
 	}
-	nd := snapshot.Get(inserts[2][0])
+	var nd api.Node
+	rc := snapshot.Get(inserts[2][0], func(x api.Node) bool {
+		nd = x
+		return true
+	})
+	if rc == false {
+		t.Errorf("missing key")
+	}
 	v := nd.Value()
 	if bytes.Compare(v, inserts[2][1]) != 0 {
 		t.Errorf("expected %v, got %v", string(inserts[2][1]), string(v))
 	}
-	if nd := snapshot.Get([]byte("key10")); nd != nil {
+	if rc := snapshot.Get([]byte("key10"), nil); rc == true {
 		t.Errorf("expected nil when Get() on missing key")
 	}
 	// min
-	nd = snapshot.Min()
+	nd = nil
+	rc = snapshot.Min(func(x api.Node) bool {
+		nd = x
+		return true
+	})
+	if rc == false {
+		t.Errorf("missing minimum key")
+	}
 	k, v := nd.Key(), nd.Value()
 	if bytes.Compare(k, inserts[0][0]) != 0 {
 		t.Errorf("expected %v, got %v", string(inserts[0][0]), string(k))
@@ -150,7 +164,14 @@ func TestLLRBMvcclBasicLookup(t *testing.T) {
 		t.Errorf("expected %v, got %v", string(inserts[0][1]), string(v))
 	}
 	// max
-	nd = snapshot.Max()
+	nd = nil
+	rc = snapshot.Max(func(x api.Node) bool {
+		nd = x
+		return true
+	})
+	if rc == false {
+		t.Errorf("missing maximum key")
+	}
 	k, v = nd.Key(), nd.Value()
 	if bytes.Compare(k, []byte("key5")) != 0 {
 		t.Errorf("expected %v, got %v", "key5", string(k))
@@ -209,7 +230,13 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 	// check
 	if countref != llrb.Count() {
 		t.Errorf("expected %v, got %v", countref, llrb.Count())
-	} else if nd := snapshot.Get(inserts[0][0]); nd == nil {
+	}
+	var nd api.Node
+	rc := snapshot.Get(inserts[0][0], func(x api.Node) bool {
+		nd = x
+		return true
+	})
+	if rc == false {
 		t.Errorf("expeced valid node")
 	} else if x := nd.Value(); bytes.Compare(newvalue, x) != 0 {
 		t.Errorf("expected %v, got %v", newvalue, nd.Value())
@@ -243,7 +270,15 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 	// check with old snapshot
 	if countref-1 != llrb.Count() {
 		t.Errorf("expected %v, got %v", countref-1, llrb.Count())
-	} else if nd := snapshot.Get(key); bytes.Compare(nd.Value(), value) != 0 {
+	}
+	nd = nil
+	rc = snapshot.Get(key, func(x api.Node) bool {
+		nd = x
+		return true
+	})
+	if rc == false {
+		t.Errorf("missing key %v", string(key))
+	} else if bytes.Compare(nd.Value(), value) != 0 {
 		t.Errorf("expected %q, got %q", string(value), string(nd.Value()))
 	}
 
@@ -256,8 +291,8 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 	}
 
 	// and then with new snapshot
-	if nd := snapshot.Get(key); nd != nil {
-		t.Errorf("expected nil")
+	if rc := snapshot.Get(key, nil); rc == true {
+		t.Errorf("expected false")
 	}
 
 	// delete-max
@@ -280,7 +315,15 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 	// check
 	if countref-1 != llrb.Count() {
 		t.Errorf("expected %v, got %v", countref-1, llrb.Count())
-	} else if nd := snapshot.Get(key); bytes.Compare(nd.Value(), value) != 0 {
+	}
+	nd = nil
+	rc = snapshot.Get(key, func(x api.Node) bool {
+		nd = x
+		return true
+	})
+	if rc == false {
+		t.Errorf("missing key %v", string(key))
+	} else if bytes.Compare(nd.Value(), value) != 0 {
 		t.Errorf("expected %v, got %v", value, nd.Value())
 	}
 
@@ -292,8 +335,8 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 		t.Error(err)
 	}
 
-	if nd := snapshot.Get(key); nd != nil {
-		t.Errorf("expected nil")
+	if rc := snapshot.Get(key, nil); rc == true {
+		t.Errorf("expected false")
 	}
 
 	// delete
@@ -315,7 +358,15 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 	// check
 	if countref-1 != llrb.Count() {
 		t.Errorf("expected %v, got %v", countref-1, llrb.Count())
-	} else if nd := snapshot.Get(key); bytes.Compare(nd.Value(), value) != 0 {
+	}
+	nd = nil
+	rc = snapshot.Get(key, func(x api.Node) bool {
+		nd = x
+		return true
+	})
+	if rc == false {
+		t.Errorf("missing key %v", string(key))
+	} else if bytes.Compare(nd.Value(), value) != 0 {
 		t.Errorf("expected %v, got %v", value, nd.Value())
 	}
 
@@ -327,8 +378,8 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 		t.Error(err)
 	}
 
-	if nd := snapshot.Get(key); nd != nil {
-		t.Errorf("expected nil")
+	if rc := snapshot.Get(key, nil); rc == true {
+		t.Errorf("expected false")
 	}
 	snapshot.Release()
 
@@ -817,10 +868,15 @@ func TestLLRBMvccInsert(t *testing.T) {
 	}
 	// Get items
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(0x12345678)
+	var nd api.Node
 	for i, key := range keys {
-		nd := snapshot.Get(key)
-		if nd == nil {
-			t.Fatalf("unexpected nil")
+		nd = nil
+		rc := snapshot.Get(key, func(x api.Node) bool {
+			nd = x
+			return true
+		})
+		if rc == false {
+			t.Fatalf("missing key %v", string(key))
 		} else if x := nd.Vbno(); x != vbno {
 			t.Errorf("expected %v, got %v", vbno, x)
 		} else if x := nd.Vbuuid(); x != vbuuid {
@@ -1129,7 +1185,7 @@ func TestLLRBMvccDelete(t *testing.T) {
 func makellrbmvcc(
 	t *testing.T, nm string, inserts [][2][]byte, config lib.Config) *LLRB {
 
-	llrb := NewLLRB(nm, config, nil)
+	llrb := NewLLRB(nm, config)
 	if llrb.Count() != 0 {
 		t.Fatalf("expected an empty dict")
 	}

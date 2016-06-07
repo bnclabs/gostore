@@ -35,23 +35,49 @@ func TestDict(t *testing.T) {
 	if d.Has(inserts[1][0]) == false {
 		t.Errorf("expected key %v", string(inserts[0][0]))
 	}
-	nd := d.Get(inserts[2][0])
+
+	var nd api.Node
+	rc := d.Get(inserts[2][0], func(x api.Node) bool {
+		nd = x
+		return true
+	})
+	if !rc {
+		t.Errorf("missing key %v", string(inserts[2][0]))
+	}
 	if bytes.Compare(nd.Value(), inserts[2][1]) != 0 {
 		t.Errorf("expected %v, got %v", string(inserts[2][1]), string(nd.Value()))
 	}
-	if nd := d.Get([]byte("missingkey")); nd != nil {
-		t.Errorf("expected %v, got %v", nil, string(nd.Value()))
+
+	if rc := d.Get([]byte("missingkey"), nil); rc == true {
+		t.Errorf("expected %v", nil)
 	}
-	if nd := d.Min(); bytes.Compare(nd.Key(), inserts[0][0]) != 0 {
+
+	nd = nil
+	rc = d.Min(func(x api.Node) bool {
+		nd = x
+		return true
+	})
+	if rc == false {
+		t.Errorf("missing minimum key")
+	} else if bytes.Compare(nd.Key(), inserts[0][0]) != 0 {
 		t.Errorf("expected %v, got %v", string(inserts[0][0]), string(nd.Key()))
 	} else if bytes.Compare(nd.Value(), inserts[0][1]) != 0 {
 		t.Errorf("expected %v, got %v", string(inserts[0][1]), string(nd.Value()))
 	}
-	if nd := d.Max(); bytes.Compare(nd.Key(), []byte("key5")) != 0 {
+
+	nd = nil
+	rc = d.Max(func(x api.Node) bool {
+		nd = x
+		return true
+	})
+	if rc == false {
+		t.Errorf("missing maximum key")
+	} else if bytes.Compare(nd.Key(), []byte("key5")) != 0 {
 		t.Errorf("expected %v, got %v", "key5", string(nd.Key()))
 	} else if bytes.Compare(nd.Value(), []byte("value5")) != 0 {
 		t.Errorf("expected %v, got %v", "value5", string(nd.Value()))
 	}
+
 	// upsert
 	d.Upsert(
 		inserts[0][0], []byte("value11"),
@@ -95,11 +121,11 @@ func TestDict(t *testing.T) {
 	// test corner cases for Min, Max, DeleteMin, DeleteMax
 	d.DeleteMin(nil)
 	d.DeleteMin(nil)
-	if nd = d.Min(); nd != nil {
-		t.Errorf("expected nil")
+	if d.Min(nil) == true {
+		t.Errorf("expected false")
 	}
-	if nd = d.Max(); nd != nil {
-		t.Errorf("expected nil")
+	if d.Max(nil) == true {
+		t.Errorf("expected false")
 	}
 	d.DeleteMin(func(_ api.Index, nd api.Node) {
 		if k, v := nd.Key(), nd.Value(); k != nil || v != nil {
@@ -535,9 +561,15 @@ func TestDictRsnapshot(t *testing.T) {
 	rd := <-snapch
 
 	d.Upsert(inserts[1][0], []byte("newvalue"), nil)
-	nd := rd.Get(inserts[1][0])
-	if v := nd.Value(); bytes.Compare(v, inserts[1][1]) != 0 {
-		t.Errorf("expected %v, got %v", inserts[1][1], v)
+	rc := rd.Get(inserts[1][0], func(nd api.Node) bool {
+		if v := nd.Value(); bytes.Compare(v, inserts[1][1]) != 0 {
+			t.Errorf("expected %v, got %v", inserts[1][1], v)
+			return false
+		}
+		return true
+	})
+	if rc == false {
+		t.Errorf("missing key %v", string(inserts[1][0]))
 	}
 }
 

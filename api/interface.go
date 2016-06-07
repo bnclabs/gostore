@@ -14,6 +14,9 @@ type DeleteCallback func(index Index, deleted Node)
 //   * newnd can be read or updated.
 type UpsertCallback func(index Index, offset int64, newnd, oldnd Node)
 
+// NodeCallb callback from Get,Min,Max API.
+type NodeCallb func(nd Node) bool
+
 // RangeCallb callback from Range API.
 type RangeCallb func(nd Node) bool
 
@@ -142,13 +145,13 @@ type IndexReader interface {
 	Has(key []byte) bool
 
 	// Get entry for key.
-	Get(key []byte) Node
+	Get(key []byte, callb NodeCallb) bool
 
 	// Min get entry that sort before every other entries in the index.
-	Min() Node
+	Min(callb NodeCallb) bool
 
 	// Max get entry that sort after every other entries in the index.
-	Max() Node
+	Max(callb NodeCallb) bool
 
 	// Range iterate over entries between lowkey and highkey
 	// incl,

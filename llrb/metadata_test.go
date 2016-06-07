@@ -108,10 +108,10 @@ func TestFposMetadata(t *testing.T) {
 			md.setfpos(level, offset)
 			lvl, off := md.setfpos(level, offset).fpos()
 			if md.isfpos() {
-				if offset != off {
-					t.Errorf("expected %v, for %v", offset, off)
+				if int64(offset) != off {
+					t.Errorf("expected %v, got %v", offset, off)
 				} else if level != lvl {
-					t.Errorf("expected %v, for %v", level, lvl)
+					t.Errorf("expected %v, got %v", level, lvl)
 				}
 			} else {
 				t.Errorf("expected fpos to be enabled")
