@@ -4,19 +4,36 @@ import "fmt"
 import "os"
 import "bytes"
 import "encoding/binary"
+import "sync"
 
 import "github.com/prataprc/storage.go/api"
 
+var readmu sync.Mutex
+var openstores map[string]*Bubtstore
+
 func OpenBubtstore(name, indexfile, datafile string, zblocksize int64) (f *Bubtstore, err error) {
+	var ok bool
+
+	readmu.Lock()
+	defer readmu.Unlock()
+
+	if f, ok = openstores[name]; ok {
+		return f
+	}
+
 	f = &Bubtstore{
 		name:       name,
 		indexfile:  indexfile,
+		datafile:   datafile,
 		zblocksize: zblocksize,
 	}
 
 	block := make([]byte, markerBlocksize)
 	f.logprefix = fmt.Sprintf("[BUBT-%s]", name)
 
+	if f.datafd, err = os.Open(f.datafile); err != nil {
+		panic(err)
+	}
 	if f.indexfd, err = os.Open(f.indexfile); err != nil {
 		panic(err)
 	}
@@ -86,7 +103,7 @@ func OpenBubtstore(name, indexfile, datafile string, zblocksize int64) (f *Bubts
 		f.mnodepool <- make([]byte, f.mblocksize)
 	}
 
-	f.state = "active"
+	f.state, openstores[f.name] = "active", f
 	return f, nil
 }
 
