@@ -76,6 +76,7 @@ func (z *zblock) insert(nd api.Node) (ok bool) {
 		copy(z.firstkey, key)
 	}
 
+	z.f.n_count++
 	z.entries = append(z.entries, uint32(len(z.kbuffer)))
 	z.f.a_keysize.Add(int64(len(key)))
 	z.f.a_valsize.Add(int64(len(value)))

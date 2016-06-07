@@ -10,6 +10,7 @@ import "github.com/prataprc/storage.go/log"
 // full-table scan over another data-store.
 func (f *Bubtstore) Build(iter api.IndexIterator) {
 	log.Infof("%v build started ...", f.logprefix)
+	f.state = "build"
 
 	f.iterator = iter
 	var block blocker
@@ -66,7 +67,10 @@ func (f *Bubtstore) Build(iter api.IndexIterator) {
 
 	// close and wait for datafile to be sealed.
 	f.flusher.close()
+	log.Infof("%v closing the iterator", f.logprefix)
+	f.iterator.Close()
 	log.Infof("%v ... build completed", f.logprefix)
+	f.state = "ready"
 }
 
 func (f *Bubtstore) buildm(ms []*mblock, fpos [2]int64) ([]*mblock, blocker, [2]int64) {

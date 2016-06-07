@@ -86,6 +86,7 @@ func OpenBubtstore(name, indexfile, datafile string, zblocksize int64) (f *Bubts
 		f.mnodepool <- make([]byte, f.mblocksize)
 	}
 
+	f.state = "active"
 	return f, nil
 }
 

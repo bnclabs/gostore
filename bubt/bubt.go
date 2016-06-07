@@ -2,6 +2,7 @@ package bubt
 
 import "os"
 import "fmt"
+import "errors"
 import "encoding/json"
 
 import "github.com/prataprc/storage.go/api"
@@ -11,10 +12,14 @@ import "github.com/prataprc/storage.go/lib"
 // Bubtstore manages sorted key,value entries in persisted, immutable btree
 // built bottoms up and not updated there after.
 type Bubtstore struct {
+	// reader statisitcs, need to be 8 byte aligned.
+	n_snapshots int64
+
 	// builder statistics, need to be 8 byte aligned, these statisitcs will be
 	// flushed to the tip of indexfile.
 	rootblock  int64
 	rootreduce int64
+	n_count    int64
 	mnodes     int64
 	znodes     int64
 	dcount     int64
@@ -25,6 +30,7 @@ type Bubtstore struct {
 	a_redsize  *lib.AverageInt64
 	h_depth    *lib.HistogramInt64
 
+	state     string
 	indexfile string
 	datafile  string
 	indexfd   *os.File
@@ -65,6 +71,7 @@ func NewBubtstore(name, indexfile, datafile string, config lib.Config) *Bubtstor
 
 	f := &Bubtstore{
 		name:       name,
+		state:      "create",
 		zpool:      make(chan *zblock, zpoolSize),
 		mpool:      make(chan *mblock, mpoolSize),
 		nodes:      make([]api.Node, 0),
@@ -112,6 +119,91 @@ func NewBubtstore(name, indexfile, datafile string, config lib.Config) *Bubtstor
 // Setlevel will set the storage level.
 func (f *Bubtstore) Setlevel(level byte) {
 	f.level = level
+}
+
+//---- Index{} interface.
+
+// ID implement Index{} interface.
+func (f *Bubtstore) ID() string {
+	return f.name
+}
+
+// Count implement Index{} interface.
+func (f *Bubtstore) Count() int64 {
+	return f.n_count
+}
+
+// Isactive implement Index{} interface.
+func (f *Bubtstore) Isactive() bool {
+	return f.state == "active"
+}
+
+// RSnapshot implement Index{} interface.
+func (f *Bubtstore) RSnapshot(snapch chan IndexSnapshot) error {
+	f.Refer()
+	go func() { snapch <- f }()
+	return nil
+}
+
+// Stats implement Index{} interface.
+func (f *Bubtstore) Stats() (map[string]interface{}, error) {
+	panic("TBD")
+}
+
+// Fullstats implement Index{} interface.
+func (f *Bubtstore) Fullstats() (map[string]interface{}, error) {
+	panic("TBD")
+}
+
+// Log implement Index{} interface.
+func (f *Bubtstore) Log(involved int, humanize bool) {
+	if f.state == "active" || f.state == "ready" {
+		panic("TBD")
+	}
+	panic("not in active or ready state")
+}
+
+// Validate implement Index{} interface.
+func (f *Bubtstore) Validate() {
+	if f.state == "active" || f.state == "ready" {
+		panic("TBD")
+	}
+	panic("not in active or ready state")
+}
+
+// Destroy implement Index{} interface.
+func (f *Bubtstore) Destroy() error {
+	if atomic.LoadInt64(&f.n_snapshots) > 0 {
+		panic("active snapshots")
+	}
+
+	var errs string
+	if err := f.indexfd.Close(); err != nil {
+		errs += err.Error()
+	}
+	if err := f.datafd.Close(); err != nil {
+		errs += "; " + err.Error()
+	}
+	if err := os.Remove(f.indexfile); err != nil {
+		errs += "; " + err.Error()
+	}
+	if err := os.Remove(f.datafile); err != nil {
+		errs += "; " + err.Error()
+	}
+	if errs != "" {
+		return errors.New(errs)
+	}
+	return nil
+}
+
+//---- IndexSnapshot interface.
+
+func (f *Bubtstore) Refer() {
+	atomic.AddInt64(&f.n_snapshots, 1)
+}
+
+func (f *Bubtstore) Release() {
+	atomic.AddInt64(&f.n_snapshots, -1)
 }
 
 //---- IndexWriter interface{}
@@ -186,6 +278,7 @@ func (f *Bubtstore) stats2json() []byte {
 	stats := map[string]interface{}{
 		"rootblock":  f.rootblock,
 		"rootreduce": f.rootreduce,
+		"n_count":    f.z.n_count,
 		"mnodes":     f.mnodes,
 		"znodes":     f.znodes,
 		"a_zentries": f.a_zentries.Stats(),
@@ -206,5 +299,6 @@ func (f *Bubtstore) json2stats(data []byte) error {
 	if err := json.Unmarshal(data, &f.builderstats); err != nil {
 		return err
 	}
+	f.n_count = int64(f.builderstats["n_count"].(float64))
 	return nil
 }
