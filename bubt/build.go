@@ -144,7 +144,10 @@ func (f *Bubt) Build(iter api.IndexIterator) {
 
 	// root-block and its reduced value.
 	block = ms[0]
-	f.rootblock, f.rootreduce = block.backref(), block.roffset()
+	f.rootblock, f.rootreduce = -1, -1
+	if f.n_count > 0 {
+		f.rootblock, f.rootreduce = block.backref(), block.roffset()
+	}
 
 	// flush statistics
 	finblock := make([]byte, markerBlocksize)

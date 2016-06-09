@@ -9,55 +9,110 @@ import "github.com/prataprc/storage.go/api"
 
 type znode []byte
 
-func (z znode) rangekey(
+func (z znode) rangeforward(
 	ss *Snapshot,
-	key []byte, fpos int64, cmp [2]int, callb api.RangeCallb) bool {
+	lkey, hkey []byte, fpos int64, cmp [2]int, callb api.RangeCallb) bool {
 
 	var nd node
 
 	entries := z.entryslice()
-	from := z.searchkey(key, entries, cmp[0])
+	from := z.searchforward(lkey, entries, cmp[0])
 	for x := from; x < int32(len(entries)/4); x++ {
 		ekey := z.getentry(uint32(x), entries).key()
-		ge := bytes.Compare(key, ekey) >= cmp[0]
-		le := bytes.Compare(key, ekey) >= cmp[1]
-		if ge && le {
+		if hkey == nil || bytes.Compare(ekey, hkey) <= cmp[1] {
 			koff := x * 4
-			offset := fpos + int64(binary.BigEndian.Uint32(entries[koff:koff+4]))
-			ss.newznode(&nd, []byte(z), offset)
+			entryoff := int64(binary.BigEndian.Uint32(entries[koff : koff+4]))
+			ss.newznode(&nd, []byte(z[entryoff:]), fpos+entryoff)
 			if callb(&nd) == false {
 				return false
 			}
-
-		} else if le == false {
-			return false
+			continue
 		}
+		return false
 	}
 	return true
+}
+
+func (z znode) searchforward(lkey []byte, entries []byte, cmp int) int32 {
+	if (len(entries) % 4) != 0 {
+		panic("unaligned entries slice, call the programmer!")
+	} else if lkey == nil {
+		return 0
+	}
+
+	switch count := len(entries) / 4; count {
+	case 0:
+		panic("impossible code path, call the programmer!")
+
+	case 1:
+		if bytes.Compare(z.getentry(0, entries).key(), lkey) < cmp {
+			return 1
+		}
+		return 0
+
+	default:
+		mid := int32(count / 2)
+		if bytes.Compare(z.getentry(uint32(mid), entries).key(), lkey) < cmp {
+			return mid + z.searchforward(lkey, entries[mid*4:], cmp)
+		}
+		return z.searchforward(lkey, entries[:mid*4], cmp)
+	}
+}
+
+func (z znode) rangebackward(
+	ss *Snapshot,
+	lkey, hkey []byte, fpos int64, cmp [2]int, callb api.RangeCallb) bool {
+
+	var nd node
+
+	entries := z.entryslice()
+	from := z.searchbackward(hkey, entries, cmp[0])
+	for x := from; x >= 0; x-- {
+		ekey := z.getentry(uint32(x), entries).key()
+		if lkey == nil || bytes.Compare(ekey, lkey) >= cmp[1] {
+			koff := x * 4
+			entryoff := int64(binary.BigEndian.Uint32(entries[koff : koff+4]))
+			ss.newznode(&nd, []byte(z[entryoff:]), fpos+entryoff)
+			if callb(&nd) == false {
+				return false
+			}
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func (z znode) searchbackward(hkey []byte, entries []byte, cmp int) int32 {
+	if (len(entries) % 4) != 0 {
+		panic("unaligned entries slice, call the programmer!")
+	} else if hkey == nil {
+		return int32(len(entries)/4) - 1
+	}
+
+	switch count := len(entries) / 4; count {
+	case 0:
+		panic("impossible code path, call the programmer!")
+
+	case 1:
+		if bytes.Compare(z.getentry(0, entries).key(), hkey) > cmp {
+			return -1
+		}
+		return 0
+
+	default:
+		mid := int32(count / 2)
+		if bytes.Compare(z.getentry(uint32(mid), entries).key(), hkey) > cmp {
+			return z.searchbackward(hkey, entries[:mid*4], cmp)
+		}
+		return mid + z.searchbackward(hkey, entries[mid*4:], cmp)
+	}
 }
 
 func (z znode) getentry(n uint32, entries []byte) zentry {
 	off := n * 4
 	koff := binary.BigEndian.Uint32(entries[off : off+4])
 	return zentry(entries[koff:len(entries)])
-}
-
-func (z znode) searchkey(key []byte, entries []byte, cmp int) int32 {
-	if (len(entries) % 4) != 0 {
-		panic("unaligned entries slice")
-	}
-
-	switch count := len(entries) / 4; count {
-	case 1:
-		return 0
-
-	default:
-		mid := int32(count / 2)
-		if bytes.Compare(key, z.getentry(uint32(mid), entries).key()) >= cmp {
-			return mid + z.searchkey(key, entries[mid*4:], cmp)
-		}
-		return z.searchkey(key, entries[:mid*4], cmp)
-	}
 }
 
 func (z znode) entryslice() []byte {

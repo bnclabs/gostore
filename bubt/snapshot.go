@@ -226,25 +226,79 @@ func (ss *Snapshot) Release() {
 //---- IndexReader{} interface.
 
 func (ss *Snapshot) Has(key []byte) bool {
-	if ss.Get(key) == nil {
+	return ss.Get(key, nil)
+}
+
+func (ss *Snapshot) Get(key []byte, callb api.NodeCallb) bool {
+	if ss.n_count == 0 {
 		return false
 	}
-	return true
+
+	var rc bool
+	ss.rangeforward(key, key, ss.rootblock, [2]int{0, 0}, func(nd api.Node) bool {
+		rc = callb(nd)
+		return false
+	})
+	return rc
 }
 
-func (ss *Snapshot) Get(key []byte) api.Node {
-	return nil
+func (ss *Snapshot) Min(callb api.NodeCallb) bool {
+	if ss.n_count == 0 {
+		return false
+	}
+
+	var rc bool
+	ss.rangeforward(nil, nil, ss.rootblock, [2]int{0, 0}, func(nd api.Node) bool {
+		rc = callb(nd)
+		return false
+	})
+	return rc
 }
 
-func (ss *Snapshot) Min() api.Node {
-	return nil
+func (ss *Snapshot) Max(callb api.NodeCallb) bool {
+	if ss.n_count == 0 {
+		return false
+	}
+
+	var rc bool
+	ss.rangebackward(nil, nil, ss.rootblock, [2]int{0, 0}, func(nd api.Node) bool {
+		rc = callb(nd)
+		return false
+	})
+	return rc
 }
 
-func (ss *Snapshot) Max() api.Node {
-	return nil
-}
+func (ss *Snapshot) Range(lkey, hkey []byte, incl string, reverse bool, callb api.RangeCallb) {
+	if ss.rootblock < 0 {
+		return
+	}
 
-func (ss *Snapshot) Range(lowkey, highkey []byte, incl string, reverse bool, iter api.RangeCallb) {
+	var cmp [2]int
+	if reverse == false {
+		switch incl {
+		case "low":
+			cmp = [2]int{0, -1}
+		case "high":
+			cmp = [2]int{1, 0}
+		case "both":
+			cmp = [2]int{0, 0}
+		case "none":
+			cmp = [2]int{1, -1}
+		}
+		return
+		ss.rangeforward(lkey, hkey, ss.rootblock, cmp, callb)
+	}
+	switch incl {
+	case "low":
+		cmp = [2]int{0, -1}
+	case "high":
+		cmp = [2]int{1, 0}
+	case "both":
+		cmp = [2]int{0, 0}
+	case "none":
+		cmp = [2]int{1, -1}
+	}
+	ss.rangebackward(lkey, hkey, ss.rootblock, cmp, callb)
 }
 
 func (ss *Snapshot) Iterate(lowkey, highkey []byte, incl string, reverse bool) api.IndexIterator {
@@ -312,15 +366,34 @@ func (ss *Snapshot) json2stats(data []byte) error {
 	return nil
 }
 
-func (ss *Snapshot) rangekey(key []byte, fpos int64, cmp [2]int, callb api.RangeCallb) bool {
+func (ss *Snapshot) rangeforward(
+	lkey, hkey []byte, fpos int64, cmp [2]int, callb api.RangeCallb) bool {
+
 	switch ndblk := ss.readat(fpos).(type) {
 	case mnode:
-		rc := ndblk.rangekey(ss, key, cmp, callb)
+		rc := ndblk.rangeforward(ss, lkey, hkey, cmp, callb)
 		ss.mnodepool <- []byte(ndblk)
 		return rc
 
 	case znode:
-		rc := ndblk.rangekey(ss, key, fpos, cmp, callb)
+		rc := ndblk.rangeforward(ss, lkey, hkey, fpos, cmp, callb)
+		ss.znodepool <- []byte(ndblk)
+		return rc
+	}
+	return true
+}
+
+func (ss *Snapshot) rangebackward(
+	lkey, hkey []byte, fpos int64, cmp [2]int, callb api.RangeCallb) bool {
+
+	switch ndblk := ss.readat(fpos).(type) {
+	case mnode:
+		rc := ndblk.rangebackward(ss, lkey, hkey, cmp, callb)
+		ss.mnodepool <- []byte(ndblk)
+		return rc
+
+	case znode:
+		rc := ndblk.rangebackward(ss, lkey, hkey, fpos, cmp, callb)
 		ss.znodepool <- []byte(ndblk)
 		return rc
 	}
