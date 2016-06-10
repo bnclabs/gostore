@@ -80,6 +80,6 @@ def graph_pausetimes(stats) :
     print(py.plot(data, filename='gc-pause-time-graph'))
 
 if len(args.kind) == 0 :
-    print("please provide --kind")
+    print("provide --kind")
 elif args.kind[0] == "memstats" :
     kind_memstats(args.logfile[0])

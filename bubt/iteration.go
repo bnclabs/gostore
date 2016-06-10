@@ -1,4 +1,4 @@
-package llrb
+package bubt
 
 import "sync/atomic"
 
@@ -6,7 +6,7 @@ import "github.com/prataprc/storage.go/api"
 
 type iterator struct {
 	tree       api.IndexReader
-	llrb       *LLRB
+	snapshot   *Snapshot
 	continuate bool
 	nodes      []api.Node
 	index      int
@@ -48,20 +48,16 @@ func (iter *iterator) Close() {
 	iter.nodes = iter.nodes[:0]
 
 	// give it back to the pool if not overflowing.
-	llrb := iter.llrb
-	if len(llrb.iterpool) < cap(llrb.iterpool) {
-		llrb.iterpool <- iter
+	snapshot := iter.snapshot
+	if len(snapshot.iterpool) < cap(snapshot.iterpool) {
+		snapshot.iterpool <- iter
 	}
 	atomic.AddInt64(iter.activeiter, -1)
-
-	if llrb.mvcc.enabled == false {
-		// NOTE: remember to see this reader unlock
-		llrb.rw.RUnlock()
-	}
 }
 
 func (iter *iterator) rangefill() {
 	var breakkey []byte
+
 	iter.nodes, iter.index, iter.continuate = iter.nodes[:0], 0, false
 	count := 0
 	iter.tree.Range(iter.startkey, iter.endkey, iter.incl, iter.reverse,

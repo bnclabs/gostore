@@ -100,7 +100,7 @@ MVCC statistics:
     to the writer version of the tree.
 
 following statistics are computed on the fly when Stat() API is called with
-`involved` level 9, please note that level > 0 might invoke a full table
+`involved` level 9, note that level > 0 might invoke a full table
 scan the tree.
 
 `n_blacks`

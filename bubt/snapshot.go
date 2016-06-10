@@ -2,6 +2,7 @@ package bubt
 
 import "os"
 import "fmt"
+import "bytes"
 import "errors"
 import "sync"
 import "sync/atomic"
@@ -22,6 +23,8 @@ type Snapshot struct {
 	rootblock   int64
 	rootreduce  int64
 	n_count     int64
+	n_lookups   int64
+	n_ranges    int64
 
 	indexfile string
 	datafile  string
@@ -33,13 +36,16 @@ type Snapshot struct {
 	builderstats map[string]interface{}
 	znodepool    chan []byte
 	mnodepool    chan []byte
+	iterpool     chan *iterator
+	activeiter   int64
 
 	// configuration, will be flushed to the tip of indexfile.
-	name       string
-	mblocksize int64
-	zblocksize int64
-	mreduce    bool
-	level      byte
+	name         string
+	mblocksize   int64
+	zblocksize   int64
+	mreduce      bool
+	iterpoolsize int64
+	level        byte
 }
 
 func OpenBubtstore(name, indexfile, datafile string, zblocksize int64) (ss *Snapshot, err error) {
@@ -133,6 +139,7 @@ func OpenBubtstore(name, indexfile, datafile string, zblocksize int64) (ss *Snap
 	for i := 0; i < cap(ss.mnodepool); i++ {
 		ss.mnodepool <- make([]byte, ss.mblocksize)
 	}
+	ss.iterpool = make(chan *iterator, ss.iterpoolsize)
 
 	openstores[ss.name] = ss
 	return ss, nil
@@ -192,6 +199,8 @@ func (ss *Snapshot) Validate() {
 func (ss *Snapshot) Destroy() error {
 	if atomic.LoadInt64(&ss.n_snapshots) > 0 {
 		panic("active snapshots")
+	} else if atomic.LoadInt64(&ss.activeiter) > 0 {
+		panic("close iterators before destorying the snapshot")
 	}
 
 	var errs string
@@ -239,6 +248,7 @@ func (ss *Snapshot) Get(key []byte, callb api.NodeCallb) bool {
 		rc = callb(nd)
 		return false
 	})
+	atomic.AddInt64(&ss.n_lookups, 1)
 	return rc
 }
 
@@ -252,6 +262,7 @@ func (ss *Snapshot) Min(callb api.NodeCallb) bool {
 		rc = callb(nd)
 		return false
 	})
+	atomic.AddInt64(&ss.n_lookups, 1)
 	return rc
 }
 
@@ -265,6 +276,7 @@ func (ss *Snapshot) Max(callb api.NodeCallb) bool {
 		rc = callb(nd)
 		return false
 	})
+	atomic.AddInt64(&ss.n_lookups, 1)
 	return rc
 }
 
@@ -274,6 +286,7 @@ func (ss *Snapshot) Range(lkey, hkey []byte, incl string, reverse bool, callb ap
 	}
 
 	var cmp [2]int
+
 	if reverse == false {
 		switch incl {
 		case "low":
@@ -285,24 +298,72 @@ func (ss *Snapshot) Range(lkey, hkey []byte, incl string, reverse bool, callb ap
 		case "none":
 			cmp = [2]int{1, -1}
 		}
-		return
 		ss.rangeforward(lkey, hkey, ss.rootblock, cmp, callb)
+	} else {
+		switch incl {
+		case "low":
+			cmp = [2]int{0, -1}
+		case "high":
+			cmp = [2]int{1, 0}
+		case "both":
+			cmp = [2]int{0, 0}
+		case "none":
+			cmp = [2]int{1, -1}
+		}
+		ss.rangebackward(lkey, hkey, ss.rootblock, cmp, callb)
 	}
-	switch incl {
-	case "low":
-		cmp = [2]int{0, -1}
-	case "high":
-		cmp = [2]int{1, 0}
-	case "both":
-		cmp = [2]int{0, 0}
-	case "none":
-		cmp = [2]int{1, -1}
-	}
-	ss.rangebackward(lkey, hkey, ss.rootblock, cmp, callb)
+	atomic.AddInt64(&ss.n_lookups, 1)
+	return
 }
 
-func (ss *Snapshot) Iterate(lowkey, highkey []byte, incl string, reverse bool) api.IndexIterator {
-	panic("TBD")
+func (ss *Snapshot) Iterate(lkey, hkey []byte, incl string, r bool) api.IndexIterator {
+
+	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
+		if incl == "none" {
+			return nil
+		} else if incl == "low" || incl == "high" {
+			incl = "both"
+		}
+	}
+
+	var iter *iterator
+	select {
+	case <-ss.iterpool:
+	default:
+		iter = &iterator{}
+	}
+
+	// NOTE: always re-initialize, because we are getting it back from pool.
+	iter.tree, iter.snapshot = ss, ss
+	iter.nodes, iter.index, iter.limit = iter.nodes[:0], 0, 5
+	iter.continuate = false
+	iter.startkey, iter.endkey, iter.incl, iter.reverse = lkey, hkey, incl, r
+	iter.closed, iter.activeiter = false, &ss.activeiter
+
+	if iter.nodes == nil {
+		iter.nodes = make([]api.Node, 0)
+	}
+
+	iter.rangefill()
+	if r {
+		switch iter.incl {
+		case "none":
+			iter.incl = "high"
+		case "low":
+			iter.incl = "both"
+		}
+	} else {
+		switch iter.incl {
+		case "none":
+			iter.incl = "low"
+		case "high":
+			iter.incl = "both"
+		}
+	}
+
+	atomic.AddInt64(&ss.n_ranges, 1)
+	atomic.AddInt64(&ss.activeiter, 1)
+	return iter
 }
 
 //---- IndexWriter interface{}
@@ -354,6 +415,7 @@ func (ss *Snapshot) json2config(data []byte) error {
 	ss.zblocksize = config.Int64("zblocksize")
 	ss.mblocksize = config.Int64("mblocksize")
 	ss.mreduce = config.Bool("mreduce")
+	ss.iterpoolsize = config.Int64("iterpool.size")
 	ss.level = byte(config.Int64("level"))
 	return nil
 }
