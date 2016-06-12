@@ -6,8 +6,6 @@ import "github.com/prataprc/storage.go/malloc"
 func defaultconfig() lib.Config {
 	config := lib.Config{
 		"maxvb":                   int64(1024),
-		"log.level":               "info",
-		"log.file":                "",
 		"iterpool.size":           int64(100),
 		"metadata.bornseqno":      true,
 		"metadata.deadseqno":      true,

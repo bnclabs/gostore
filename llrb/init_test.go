@@ -74,7 +74,6 @@ func makellrbconfig() lib.Config {
 		"valarena.maxpools":       malloc.Maxpools,
 		"valarena.maxchunks":      malloc.Maxchunks,
 		"valarena.allocator":      "flist",
-		"log.level":               "ignore",
 	}
 	return config
 }
