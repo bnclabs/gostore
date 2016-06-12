@@ -1,6 +1,7 @@
 package bubt
 
 import "encoding/binary"
+import "fmt"
 
 import "github.com/prataprc/storage.go/api"
 

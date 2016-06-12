@@ -14,6 +14,7 @@ import "github.com/prataprc/storage.go/log"
 type Bubt struct {
 	rootblock  int64
 	rootreduce int64
+
 	// statistics, need to be 8 byte aligned, these statisitcs will be
 	// flushed to the tip of indexfile.
 	n_count    int64
@@ -41,11 +42,12 @@ type Bubt struct {
 	flusher  *bubtflusher
 
 	// configuration, will be flushed to the tip of indexfile.
-	name       string
-	mblocksize int64
-	zblocksize int64
-	mreduce    bool
-	level      byte
+	name         string
+	mblocksize   int64
+	zblocksize   int64
+	mreduce      bool
+	iterpoolsize int64
+	level        byte
 }
 
 type blocker interface {
@@ -100,6 +102,8 @@ func NewBubt(name, indexfile, datafile string, config lib.Config) *Bubt {
 	if f.hasdatafile() == false && f.mreduce == true {
 		panic("cannot mreduce without datafile")
 	}
+	f.iterpoolsize = config.Int64("iterpool.size")
+	f.level = byte(config.Int64("level"))
 
 	f.flusher = f.startflusher()
 	log.Infof("%v started ...", f.logprefix)
@@ -260,7 +264,7 @@ func (f *Bubt) flush(block blocker, fpos [2]int64) (blocker, [2]int64) {
 
 	case *mblock:
 		if len(blk.entries) > 0 {
-			f.a_zentries.Add(int64(len(blk.entries)))
+			f.a_mentries.Add(int64(len(blk.entries)))
 			blk.finalize()
 			// reduce
 			blk.fpos, blk.rpos = fpos, fpos[1]

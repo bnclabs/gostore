@@ -18,10 +18,11 @@ var openstores map[string]*Snapshot
 // Snapshot manages sorted key,value entries in persisted, immutable btree
 // built bottoms up and not updated there after.
 type Snapshot struct {
+	rootblock  int64
+	rootreduce int64
+
 	// statisitcs, need to be 8 byte aligned.
 	n_snapshots int64
-	rootblock   int64
-	rootreduce  int64
 	n_count     int64
 	n_lookups   int64
 	n_ranges    int64
@@ -85,7 +86,8 @@ func OpenBubtstore(name, indexfile, datafile string, zblocksize int64) (ss *Snap
 	if err != nil {
 		panic(err)
 	} else if int64(n) != markerBlocksize {
-		panic("%v partial read: %v != %v", ss.logprefix, n, markerBlocksize)
+		fmsg := "%v partial read: %v != %v"
+		panic(fmt.Errorf(fmsg, ss.logprefix, n, markerBlocksize))
 	} else {
 		for _, byt := range block {
 			if byt != 0xAB { // TODO: not magic numbers
@@ -100,7 +102,8 @@ func OpenBubtstore(name, indexfile, datafile string, zblocksize int64) (ss *Snap
 	if err != nil {
 		panic(err)
 	} else if int64(n) != markerBlocksize {
-		panic("%v partial read: %v != %v", ss.logprefix, n, markerBlocksize)
+		fmsg := "%v partial read: %v != %v"
+		panic(fmt.Errorf(fmsg, ss.logprefix, n, markerBlocksize))
 	} else {
 		ss.rootblock = int64(binary.BigEndian.Uint64(block[:8]))
 		ss.rootreduce = int64(binary.BigEndian.Uint64(block[8:16]))
@@ -123,7 +126,8 @@ func OpenBubtstore(name, indexfile, datafile string, zblocksize int64) (ss *Snap
 	if err != nil {
 		panic(err)
 	} else if int64(n) != zblocksize {
-		panic("%v partial read: %v != %v", ss.logprefix, n, zblocksize)
+		fmsg := "%v partial read: %v != %v"
+		panic(fmt.Errorf(fmsg, ss.logprefix, n, zblocksize))
 	} else {
 		ln := binary.BigEndian.Uint16(block[:2])
 		if err := ss.json2stats(block[2 : 2+ln]); err != nil {
@@ -464,14 +468,15 @@ func (ss *Snapshot) rangebackward(
 
 func (ss *Snapshot) readat(fpos int64) (nd interface{}) {
 	var data []byte
-	if vpos, mok := ss.ismvpos(fpos); mok {
+	vpos, mok := ss.ismvpos(fpos)
+	if mok {
 		data = <-ss.mnodepool
 		nd = mnode(data)
 	} else {
 		data = <-ss.znodepool
 		nd = znode(data)
 	}
-	if n, err := ss.indexfd.ReadAt(data, fpos); err != nil {
+	if n, err := ss.indexfd.ReadAt(data, vpos); err != nil {
 		panic(err)
 	} else if n != len(data) {
 		panic("partial read")
