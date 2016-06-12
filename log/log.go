@@ -8,6 +8,14 @@ import "fmt"
 import "time"
 import "strings"
 
+func init() {
+	config := map[string]interface{}{
+		"log.level": "info",
+		"log.file":  "",
+	}
+	SetLogger(nil, config)
+}
+
 // Logger interface for gofast logging, applications can
 // supply a logger object implementing this interface or
 // gofast will fall back to the defaultLogger{}.
@@ -40,6 +48,8 @@ const (
 var log Logger // object used by gofast component for logging.
 
 // SetLogger to integrate storage logging with application logging.
+// importing this package will initialize the logger with info level
+// logging to console.
 func SetLogger(logger Logger, config map[string]interface{}) Logger {
 	if logger != nil {
 		log = logger
@@ -62,7 +72,7 @@ func SetLogger(logger Logger, config map[string]interface{}) Logger {
 }
 
 // defaultLogger with default log-file as os.Stdout and,
-// default log-level as LogLevelInfo. Applications can
+// default log-level as logLevelInfo. Applications can
 // supply a Logger{} object when instantiating the
 // Transport.
 type defaultLogger struct {
