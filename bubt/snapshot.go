@@ -69,10 +69,12 @@ func OpenBubtstore(name, indexfile, datafile string, zblocksize int64) (ss *Snap
 	block := make([]byte, markerBlocksize)
 	ss.logprefix = fmt.Sprintf("[BUBT-%s]", name)
 
-	if ss.datafd, err = os.Open(ss.datafile); err != nil {
+	ss.datafd, err = os.OpenFile(ss.datafile, os.O_RDONLY, 0666)
+	if err != nil {
 		panic(err)
 	}
-	if ss.indexfd, err = os.Open(ss.indexfile); err != nil {
+	ss.indexfd, err = os.OpenFile(ss.indexfile, os.O_RDONLY, 0666)
+	if err != nil {
 		panic(err)
 	}
 	fi, err := ss.indexfd.Stat()

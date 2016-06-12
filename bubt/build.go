@@ -77,12 +77,12 @@ func NewBubt(name, indexfile, datafile string, config lib.Config) *Bubt {
 	f.logprefix = fmt.Sprintf("[BUBT-%s]", name)
 
 	f.indexfile = indexfile
-	if f.indexfd, err = os.Create(f.indexfile); err != nil {
+	if f.indexfd, err = createfile(f.indexfile); err != nil {
 		panic(err)
 	}
 
 	f.datafile = datafile
-	if f.datafd, err = os.Create(f.datafile); err != nil {
+	if f.datafd, err = createfile(f.datafile); err != nil {
 		panic(err)
 	}
 
@@ -348,4 +348,16 @@ func (f *Bubt) stats2json() []byte {
 		panic(err)
 	}
 	return data
+}
+
+func createfile(name string) (fd *os.File, err error) {
+	err = os.Remove(name)
+	if err != nil {
+		return nil, fmt.Errorf("error removing file: %v", err)
+	}
+	fd, err = os.OpenFile(name, os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		return nil, fmt.Errorf("error creating file: %v", err)
+	}
+	return fd, nil
 }
