@@ -256,7 +256,7 @@ loop:
 			id, ln := msg[1].(string), len(writer.waiters)
 			writer.purgesnapshot(llrb)
 			if ln > 0 {
-				snapshot := llrb.NewSnapshot(id)
+				snapshot := llrb.newsnapshot(id)
 				for _, waiter := range writer.waiters {
 					snapshot.Refer()
 					waiter <- snapshot

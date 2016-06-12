@@ -87,8 +87,8 @@ type LLRBSnapshot struct {
 	logprefix string
 }
 
-// NewSnapshot mvcc version for LLRB tree.
-func (llrb *LLRB) NewSnapshot(id string) *LLRBSnapshot {
+// newsnapshot mvcc version for LLRB tree.
+func (llrb *LLRB) newsnapshot(id string) *LLRBSnapshot {
 	snapshot := &LLRBSnapshot{
 		llrb:  llrb,
 		id:    id,

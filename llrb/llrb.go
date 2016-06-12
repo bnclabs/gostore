@@ -149,11 +149,6 @@ func (llrb *LLRB) Count() int64 {
 	return atomic.LoadInt64(&llrb.n_count)
 }
 
-// Setaccess implement Index{} interface.
-func (llrb *LLRB) Setaccess(nd api.Node) {
-	nd.Setaccess(uint64(time.Now().UnixNano() >> 30))
-}
-
 // Isactive implement Index{} interface.
 func (llrb *LLRB) Isactive() bool {
 	return llrb.dead == false
@@ -352,7 +347,6 @@ func (llrb *LLRB) max() api.Node {
 
 // Range from lkey to hkey, incl can be "both", "low", "high", "none"
 func (llrb *LLRB) Range(lkey, hkey []byte, incl string, reverse bool, iter api.RangeCallb) {
-
 	if llrb.mvcc.enabled {
 		panic("Range(): mvcc enabled, use snapshots for reading")
 	}
@@ -398,7 +392,6 @@ func (llrb *LLRB) Range(lkey, hkey []byte, incl string, reverse bool, iter api.R
 
 // Iterate implement IndexReader{} interface.
 func (llrb *LLRB) Iterate(lkey, hkey []byte, incl string, r bool) api.IndexIterator {
-
 	if llrb.mvcc.enabled {
 		panic("Iterate(): mvcc enabled, use snapshots for reading")
 	}
