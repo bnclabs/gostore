@@ -15,7 +15,7 @@ import "github.com/prataprc/storage.go/lib"
 var _ = fmt.Sprintf("dummy")
 
 func TestNewLLRB(t *testing.T) {
-	config := makellrbconfig()
+	config := Defaultconfig()
 
 	llrb := NewLLRB("test", config)
 	if llrb == nil {
@@ -61,7 +61,7 @@ func TestNewLLRB(t *testing.T) {
 }
 
 func TestNewLLRBNode(t *testing.T) {
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["metadata.bornseqno"] = true
 	config["metadata.deadseqno"] = true
 	config["metadata.mvalue"] = true
@@ -97,7 +97,7 @@ func TestNewLLRBNode(t *testing.T) {
 }
 
 func TestNewLLRBNodePanic(t *testing.T) {
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["metadata.mvalue"] = false
 	llrb := NewLLRB("test", config)
 	key, value := makekeyvalue(make([]byte, 128), make([]byte, 1024))
@@ -114,7 +114,7 @@ func TestNewLLRBNodePanic(t *testing.T) {
 }
 
 func TestCloneLLRBNode(t *testing.T) {
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["metadata.mvalue"] = true
 	llrb := NewLLRB("test", config)
 
@@ -143,7 +143,7 @@ func TestLLRBBasicLookup(t *testing.T) {
 		[2][]byte{[]byte("key5"), []byte("value5")},
 	}
 
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
@@ -209,7 +209,7 @@ func TestLLRBBasicUpdates(t *testing.T) {
 		[2][]byte{[]byte("key5"), []byte("value5")},
 	}
 
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
@@ -323,7 +323,7 @@ func TestLLRBBasicUpdates(t *testing.T) {
 }
 
 func TestLLRBBasicRange(t *testing.T) {
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["metadata.mvalue"] = true
 	config["metadata.fpos"] = true
 	config["metadata.bornseqno"] = true
@@ -450,7 +450,7 @@ func TestLLRBBasicRange(t *testing.T) {
 }
 
 func TestLLRBRange(t *testing.T) {
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
@@ -543,7 +543,7 @@ func TestLLRBRange(t *testing.T) {
 }
 
 func TestLLRBIteratePool(t *testing.T) {
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
@@ -567,7 +567,7 @@ func TestLLRBIteratePool(t *testing.T) {
 }
 
 func TestLLRBBasicIterate(t *testing.T) {
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
@@ -677,7 +677,7 @@ func TestLLRBBasicIterate(t *testing.T) {
 }
 
 func TestLLRBIterate(t *testing.T) {
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
@@ -792,7 +792,7 @@ func TestLLRBIterate(t *testing.T) {
 }
 
 func TestLLRBInsert(t *testing.T) {
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.deadseqno"] = false
@@ -838,7 +838,7 @@ func TestLLRBInsert(t *testing.T) {
 		t.Errorf("expected %v, got %v", avail, x)
 	}
 	useful = int64(8388608)
-	allocated, avail = int64(1280000), int64(10736138240)
+	allocated, avail = int64(1280000), int64(1099510347776)
 	if x := stats["value.useful"].(int64); x != useful {
 		t.Errorf("expected %v, got %v", useful, x)
 	}
@@ -884,7 +884,7 @@ func TestLLRBInsert(t *testing.T) {
 }
 
 func TestLLRBUpsert(t *testing.T) {
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.deadseqno"] = false
@@ -952,8 +952,8 @@ func TestLLRBUpsert(t *testing.T) {
 	if useful := stats["node.useful"].(int64); useful != 2096640 {
 		t.Errorf("expected %v, got %v", 2096640, useful)
 	}
-	if useful := stats["value.useful"].(int64); useful != 23068672 {
-		t.Errorf("expected %v, got %v", 23068672, useful)
+	if useful := stats["value.useful"].(int64); useful != 18873600 {
+		t.Errorf("expected %v, got %v", 18873600, useful)
 	}
 	x, y := int64(1920000), stats["node.allocated"].(int64)
 	if x != y {
@@ -967,7 +967,7 @@ func TestLLRBUpsert(t *testing.T) {
 	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
-	x, y = int64(10735178240), stats["value.available"].(int64)
+	x, y = int64(1099509387776), stats["value.available"].(int64)
 	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	} else if x, y = int64(1000000), stats["keymemory"].(int64); x != y {
@@ -980,7 +980,7 @@ func TestLLRBUpsert(t *testing.T) {
 }
 
 func TestLLRBDelete(t *testing.T) {
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
@@ -1085,7 +1085,7 @@ func TestLLRBDelete(t *testing.T) {
 	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
-	x, y = int64(10737418240), stats["value.available"].(int64)
+	x, y = int64(1099511627776), stats["value.available"].(int64)
 	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	} else if x, y = int64(0), stats["keymemory"].(int64); x != y {
@@ -1098,7 +1098,7 @@ func TestLLRBDelete(t *testing.T) {
 }
 
 func BenchmarkLLRBCloneKey(b *testing.B) {
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
@@ -1114,7 +1114,7 @@ func BenchmarkLLRBCloneKey(b *testing.B) {
 }
 
 func BenchmarkLLRBCloneSmall(b *testing.B) {
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true
@@ -1130,7 +1130,7 @@ func BenchmarkLLRBCloneSmall(b *testing.B) {
 }
 
 func BenchmarkLLRBCloneLarge(b *testing.B) {
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
 	config["metadata.vbuuid"] = true

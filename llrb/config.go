@@ -14,6 +14,9 @@ func Defaultconfig() lib.Config {
 		"metadata.mvalue":         true,
 		"metadata.vbuuid":         false,
 		"metadata.fpos":           false,
+		"mvcc.enable":             false,
+		"mvcc.snapshot.tick":      int64(5), // 5 millisecond
+		"mvcc.writer.chanbuffer":  int64(1000),
 		"nodearena.minblock":      int64(96),
 		"nodearena.maxblock":      int64(1024),
 		"nodearena.capacity":      int64(1024 * 1024 * 1024),
@@ -28,9 +31,6 @@ func Defaultconfig() lib.Config {
 		"valarena.maxpools":       malloc.Maxpools,
 		"valarena.maxchunks":      malloc.Maxchunks,
 		"valarena.allocator":      "flist",
-		"mvcc.enable":             false,
-		"mvcc.snapshot.tick":      int64(5), // 5 millisecond
-		"mvcc.writer.chanbuffer":  int64(1000),
 	}
 	return config
 }

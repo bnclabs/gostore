@@ -14,7 +14,7 @@ import "github.com/prataprc/storage.go/dict"
 var _ = fmt.Sprintf("dummy")
 
 func TestNewLLRBMvcc(t *testing.T) {
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["mvcc.enable"] = true
 
 	llrb := NewLLRB("test", config)
@@ -66,7 +66,7 @@ func TestLLRBMvccBasicSnapshot(t *testing.T) {
 		[2][]byte{[]byte("key5"), []byte("value5")},
 	}
 
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["mvcc.enable"] = true
 	config["metadata.mvalue"] = true
 	config["metadata.fpos"] = true
@@ -104,7 +104,7 @@ func TestLLRBMvcclBasicLookup(t *testing.T) {
 		[2][]byte{[]byte("key5"), []byte("value5")},
 	}
 
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["mvcc.enable"] = true
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
@@ -192,7 +192,7 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 		[2][]byte{[]byte("key5"), []byte("value5")},
 	}
 
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["mvcc.enable"] = true
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
@@ -395,7 +395,7 @@ func TestLLRBMvccBasicRange(t *testing.T) {
 		[2][]byte{[]byte("key5"), []byte("value5")},
 	}
 
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["mvcc.enable"] = true
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
@@ -474,7 +474,7 @@ func TestLLRBMvccBasicRange(t *testing.T) {
 }
 
 func TestLLRBMvccRange(t *testing.T) {
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["mvcc.enable"] = true
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
@@ -586,7 +586,7 @@ func TestLLRBMvccBasicIterate(t *testing.T) {
 		[2][]byte{[]byte("key5"), []byte("value5")},
 	}
 
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["mvcc.enable"] = true
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
@@ -683,7 +683,7 @@ func TestLLRBMvccBasicIterate(t *testing.T) {
 }
 
 func TestLLRBMvccIterate(t *testing.T) {
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["mvcc.enable"] = true
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
@@ -809,7 +809,7 @@ func TestLLRBMvccIterate(t *testing.T) {
 }
 
 func TestLLRBMvccInsert(t *testing.T) {
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["mvcc.enable"] = true
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
@@ -851,7 +851,7 @@ func TestLLRBMvccInsert(t *testing.T) {
 		t.Errorf("expected %v, got %v", avail, x)
 	}
 	useful := int64(8388608)
-	allocated, avail = int64(1280000), int64(10736138240)
+	allocated, avail = int64(1280000), int64(1099510347776)
 	if x := stats["value.useful"].(int64); x != useful {
 		t.Errorf("expected %v, got %v", useful, x)
 	}
@@ -896,7 +896,7 @@ func TestLLRBMvccInsert(t *testing.T) {
 }
 
 func TestLLRBMvccUpsert(t *testing.T) {
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["mvcc.enable"] = true
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
@@ -969,8 +969,8 @@ func TestLLRBMvccUpsert(t *testing.T) {
 	//if useful := stats["node.useful"].(int64); useful != 2096640 {
 	//	t.Errorf("expected %v, got %v", 2096640, useful)
 	//}
-	if useful := stats["value.useful"].(int64); useful != 23068672 {
-		t.Errorf("expected %v, got %v", 23068672, useful)
+	if useful := stats["value.useful"].(int64); useful != 18873600 {
+		t.Errorf("expected %v, got %v", 18873600, useful)
 	}
 
 	// TODO: these number keep changing for every run,
@@ -1003,7 +1003,7 @@ func TestLLRBMvccUpsert(t *testing.T) {
 }
 
 func TestLLRBMvccDeleteMin(t *testing.T) {
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["mvcc.enable"] = true
 	config["metadata.mvalue"] = true
 	config["metadata.fpos"] = true
@@ -1050,7 +1050,7 @@ func TestLLRBMvccDeleteMin(t *testing.T) {
 }
 
 func TestLLRBMvccDelete(t *testing.T) {
-	config := makellrbconfig()
+	config := Defaultconfig()
 	config["mvcc.enable"] = true
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
@@ -1170,7 +1170,7 @@ func TestLLRBMvccDelete(t *testing.T) {
 	} else if x, y = int64(0), stats["value.allocated"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
-	x, y = int64(10737418240), stats["value.available"].(int64)
+	x, y = int64(1099511627776), stats["value.available"].(int64)
 	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	} else if x, y = int64(0), stats["keymemory"].(int64); x != y {
