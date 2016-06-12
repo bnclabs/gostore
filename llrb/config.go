@@ -3,15 +3,17 @@ package llrb
 import "github.com/prataprc/storage.go/lib"
 import "github.com/prataprc/storage.go/malloc"
 
-func defaultconfig() lib.Config {
+// Defaultconfig provides an initial set of configuration tuned for in-memory
+// key,value of 1TB storage.
+func Defaultconfig() lib.Config {
 	config := lib.Config{
 		"maxvb":                   int64(1024),
 		"iterpool.size":           int64(100),
-		"metadata.bornseqno":      true,
-		"metadata.deadseqno":      true,
+		"metadata.bornseqno":      false,
+		"metadata.deadseqno":      false,
 		"metadata.mvalue":         true,
 		"metadata.vbuuid":         false,
-		"metadata.fpos":           true,
+		"metadata.fpos":           false,
 		"nodearena.minblock":      int64(96),
 		"nodearena.maxblock":      int64(1024),
 		"nodearena.capacity":      int64(1024 * 1024 * 1024),
@@ -21,8 +23,8 @@ func defaultconfig() lib.Config {
 		"nodearena.allocator":     "flist",
 		"valarena.minblock":       int64(96),
 		"valarena.maxblock":       int64(1024 * 1024),
-		"valarena.capacity":       int64(10 * 1024 * 1024 * 1024),
-		"valarena.pool.capacity":  int64(10 * 2 * 1024 * 1024),
+		"valarena.capacity":       int64(1024 * 1024 * 1024 * 1024),
+		"valarena.pool.capacity":  int64(10 * 1024 * 1024),
 		"valarena.maxpools":       malloc.Maxpools,
 		"valarena.maxchunks":      malloc.Maxchunks,
 		"valarena.allocator":      "flist",
