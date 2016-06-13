@@ -88,15 +88,15 @@ func NewBubt(name, indexfile, datafile string, config lib.Config) *Bubt {
 
 	f.zblocksize = config.Int64("zblocksize")
 	if f.zblocksize > maxBlock { // 1 TB
-		log.Errorf("zblocksize %v > %v", f.zblocksize, maxBlock)
+		panic(fmt.Errorf("zblocksize %v > %v\n", f.zblocksize, maxBlock))
 	} else if f.zblocksize < minBlock { // 512 byte, HDD sector size.
-		log.Errorf("zblocksize %v < %v", f.zblocksize, minBlock)
+		panic(fmt.Errorf("zblocksize %v < %v\n", f.zblocksize, minBlock))
 	}
 	f.mblocksize = config.Int64("mblocksize")
 	if f.mblocksize > maxBlock {
-		log.Errorf("mblocksize %v > %v", f.mblocksize, maxBlock)
+		panic(fmt.Errorf("mblocksize %v > %v\n", f.mblocksize, maxBlock))
 	} else if f.mblocksize < minBlock {
-		log.Errorf("mblocksize %v < %v", f.mblocksize, minBlock)
+		panic(fmt.Errorf("mblocksize %v < %v\n", f.mblocksize, minBlock))
 	}
 	f.mreduce = config.Bool("mreduce")
 	if f.hasdatafile() == false && f.mreduce == true {
@@ -106,7 +106,6 @@ func NewBubt(name, indexfile, datafile string, config lib.Config) *Bubt {
 	f.level = byte(config.Int64("level"))
 
 	f.flusher = f.startflusher()
-	log.Infof("%v started ...", f.logprefix)
 	return f
 }
 
@@ -118,7 +117,7 @@ func (f *Bubt) Setlevel(level byte) {
 // Build starts building the tree from iterator, iterator is expected to be a
 // full-table scan over another data-store.
 func (f *Bubt) Build(iter api.IndexIterator) {
-	log.Infof("%v build started ...", f.logprefix)
+	log.Infof("%v builder started ...\n", f.logprefix)
 
 	f.iterator = iter
 	var block blocker
@@ -141,8 +140,8 @@ func (f *Bubt) Build(iter api.IndexIterator) {
 		ms, block, fpos = f.buildm(prependlevel(ms, mblock), fpos)
 	}
 
-	if len(ms) == 0 {
-		log.Infof("%v empty iterator", f.logprefix)
+	if block == nil && len(ms) == 0 {
+		log.Infof("%v builder finds empty iterator\n", f.logprefix)
 		return
 	}
 
@@ -158,33 +157,37 @@ func (f *Bubt) Build(iter api.IndexIterator) {
 	if stats := f.stats2json(); len(stats) <= len(finblock) {
 		binary.BigEndian.PutUint16(finblock[:2], uint16(len(stats)))
 		copy(finblock[2:], stats)
-		f.flusher.writeidx(finblock)
+		if err := f.flusher.writeidx(finblock); err != nil {
+			panic(err)
+		}
 	} else {
 		panic(fmt.Errorf("stats %v > %v", len(stats), len(finblock)))
 	}
-	log.Infof("%v wrote stat block\n", f.logprefix)
+	log.Infof("%v builder writing stat block\n", f.logprefix)
 
 	// flush configuration
+	finblock = make([]byte, markerBlocksize)
 	binary.BigEndian.PutUint64(finblock[:8], uint64(f.rootblock))
 	binary.BigEndian.PutUint64(finblock[8:16], uint64(f.rootreduce))
 	if config := f.config2json(); len(config) <= len(finblock) {
 		binary.BigEndian.PutUint16(finblock[16:18], uint16(len(config)))
 		copy(finblock[18:], config)
-		f.flusher.writeidx(finblock)
+		if err := f.flusher.writeidx(finblock); err != nil {
+			panic(err)
+		}
 	} else {
 		panic(fmt.Errorf("config %v > %v", len(config), len(finblock)))
 	}
-	log.Infof("%v wrote config block\n", f.logprefix)
+	log.Infof("%v builder writing config block\n", f.logprefix)
 
 	// close and wait for datafile to be sealed.
 	f.flusher.close()
-	log.Infof("%v closing the iterator", f.logprefix)
-	f.iterator.Close()
-	log.Infof("%v ... build completed", f.logprefix)
+	log.Infof("%v ... build completed\n", f.logprefix)
 }
 
 func (f *Bubt) buildm(ms []*mblock, fpos [2]int64) ([]*mblock, blocker, [2]int64) {
 	var block blocker
+	var childms []*mblock
 
 	if len(ms) == 0 {
 		block, fpos = f.buildz(fpos)
@@ -195,9 +198,9 @@ func (f *Bubt) buildm(ms []*mblock, fpos [2]int64) ([]*mblock, blocker, [2]int64
 	f.dcount++
 	defer func() { f.dcount-- }()
 
-	ms, block, fpos = f.buildm(ms[1:], fpos)
+	childms, block, fpos = f.buildm(ms[1:], fpos)
 	for ok := mblock.insert(block); ok; {
-		if ms, block, fpos = f.buildm(ms[1:], fpos); block != nil {
+		if childms, block, fpos = f.buildm(childms, fpos); block != nil {
 			ok = mblock.insert(block)
 			continue
 		}
@@ -215,16 +218,15 @@ func (f *Bubt) buildm(ms []*mblock, fpos [2]int64) ([]*mblock, blocker, [2]int64
 }
 
 func (f *Bubt) buildz(fpos [2]int64) (blocker, [2]int64) {
-	var nd api.Node
-	var ok bool
-
 	z := f.newz(fpos)
 
 	f.dcount++
 	defer func() { f.dcount-- }()
 	defer func() { f.h_depth.Add(f.dcount) }()
 
-	for nd, ok = f.pop(), z.insert(nd); ok; {
+	nd := f.pop()
+	ok := z.insert(nd)
+	for ok {
 		nd = f.pop()
 		ok = z.insert(nd)
 	}
@@ -235,9 +237,13 @@ func (f *Bubt) buildz(fpos [2]int64) (blocker, [2]int64) {
 }
 
 func (f *Bubt) flush(block blocker, fpos [2]int64) (blocker, [2]int64) {
+	logprefix := f.logprefix
 	switch blk := block.(type) {
 	case *zblock:
 		if len(blk.entries) > 0 {
+			fmsg := "%v flush zblock %v entries\n"
+			log.Debugf(fmsg, logprefix, len(blk.entries))
+
 			f.a_zentries.Add(int64(len(blk.entries)))
 			blk.finalize()
 			// reduce
@@ -260,10 +266,15 @@ func (f *Bubt) flush(block blocker, fpos [2]int64) (blocker, [2]int64) {
 			f.zpool <- blk
 			return blk, [2]int64{kpos, vpos}
 		}
+		fmsg := "%v flush skipping zblock %v entries\n"
+		log.Debugf(fmsg, logprefix, len(blk.entries))
 		return nil, fpos
 
 	case *mblock:
 		if len(blk.entries) > 0 {
+			fmsg := "%v flush mblock %v entries\n"
+			log.Debugf(fmsg, logprefix, len(blk.entries))
+
 			f.a_mentries.Add(int64(len(blk.entries)))
 			blk.finalize()
 			// reduce
@@ -285,6 +296,8 @@ func (f *Bubt) flush(block blocker, fpos [2]int64) (blocker, [2]int64) {
 			f.mpool <- blk
 			return blk, [2]int64{kpos, vpos}
 		}
+		fmsg := "%v flush skipping mblock %v entries\n"
+		log.Debugf(fmsg, logprefix, len(blk.entries))
 		return nil, fpos
 	}
 	panic("unreachable code")
@@ -351,13 +364,10 @@ func (f *Bubt) stats2json() []byte {
 }
 
 func createfile(name string) (fd *os.File, err error) {
-	err = os.Remove(name)
+	os.Remove(name)
+	fd, err = os.OpenFile(name, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
-		return nil, fmt.Errorf("error removing file: %v", err)
-	}
-	fd, err = os.OpenFile(name, os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		return nil, fmt.Errorf("error creating file: %v", err)
+		return nil, fmt.Errorf("O_APPEND file: %v", err)
 	}
 	return fd, nil
 }
