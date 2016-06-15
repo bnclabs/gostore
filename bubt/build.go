@@ -71,7 +71,10 @@ func NewBubt(name, indexfile, datafile string, config lib.Config) *Bubt {
 	f.logprefix = fmt.Sprintf("[BUBT-%s]", name)
 
 	f.indexfile, f.indexfd = indexfile, createfile(indexfile)
-	f.datafile, f.datafd = datafile, createfile(datafile)
+	f.datafile = datafile
+	if f.datafile != "" {
+		f.datafd = createfile(f.datafile)
+	}
 
 	f.zblocksize = config.Int64("zblocksize")
 	if f.zblocksize > maxBlock { // 1 TB

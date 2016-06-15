@@ -68,31 +68,36 @@ func OpenBubtstore(name, indexfile, datafile string, zblocksize int64) (ss *Snap
 	block := make([]byte, markerBlocksize)
 	ss.logprefix = fmt.Sprintf("[BUBT-%s]", name)
 
-	ss.datafd, err = os.OpenFile(ss.datafile, os.O_RDONLY, 0666)
-	if err != nil {
-		panic(err)
+	if err := ss.openfiles(); err != nil {
+		return nil, err
 	}
-	ss.indexfd, err = os.OpenFile(ss.indexfile, os.O_RDONLY, 0666)
-	if err != nil {
-		panic(err)
-	}
+
 	fi, err := ss.indexfd.Stat()
 	if err != nil {
-		panic(err)
+		fmsg := "%v unable to stat %q: %v\n"
+		log.Errorf(fmsg, ss.logprefix, ss.indexfile, err)
+		return nil, err
 	}
 	eof := fi.Size()
 
 	markerat := eof - markerBlocksize
 	n, err := ss.indexfd.ReadAt(block, markerat)
 	if err != nil {
-		panic(err)
+		fmsg := "%v reading %q marker-block: %v\n"
+		log.Errorf(fmsg, ss.logprefix, ss.indexfile, err)
+		return nil, err
+
 	} else if int64(n) != markerBlocksize {
-		fmsg := "%v partial read: %v != %v"
-		panic(fmt.Errorf(fmsg, ss.logprefix, n, markerBlocksize))
+		err := fmt.Errorf("partial read: %v != %v\n", n, markerBlocksize)
+		log.Errorf("%v %v\n", ss.logprefix, err)
+		return nil, err
+
 	} else {
 		for _, byt := range block {
 			if byt != 0xAB { // TODO: not magic numbers
-				panic("invalid marker")
+				err := fmt.Errorf("invalid marker")
+				log.Errorf("%v %v\n", ss.logprefix, err)
+				return nil, err
 			}
 		}
 	}
@@ -200,6 +205,9 @@ func (ss *Snapshot) Destroy() error {
 		panic("close iterators before destorying the snapshot")
 	}
 
+	readmu.Lock()
+	defer readmu.Unlock()
+
 	var errs string
 	if err := ss.indexfd.Close(); err != nil {
 		errs += err.Error()
@@ -208,18 +216,20 @@ func (ss *Snapshot) Destroy() error {
 		errs += "; " + err.Error()
 	}
 
-	log.Infof("%v removing %q", ss.logprefix, ss.indexfile)
+	log.Infof("%v removing %q\n", ss.logprefix, ss.indexfile)
 	if err := os.Remove(ss.indexfile); err != nil {
 		errs += "; " + err.Error()
 	}
 
-	log.Infof("%v removing %q", ss.logprefix, ss.datafile)
+	log.Infof("%v removing %q\n", ss.logprefix, ss.datafile)
 	if err := os.Remove(ss.datafile); err != nil {
 		errs += "; " + err.Error()
 	}
 	if errs != "" {
 		return errors.New(errs)
 	}
+
+	delete(openstores, ss.name)
 	return nil
 }
 
@@ -263,7 +273,10 @@ func (ss *Snapshot) Min(callb api.NodeCallb) bool {
 
 	var rc bool
 	ss.rangeforward(nil, nil, ss.rootblock, [2]int{0, 0}, func(nd api.Node) bool {
-		rc = callb(nd)
+		rc = true
+		if callb != nil {
+			rc = callb(nd)
+		}
 		return false
 	})
 	atomic.AddInt64(&ss.n_lookups, 1)
@@ -277,7 +290,10 @@ func (ss *Snapshot) Max(callb api.NodeCallb) bool {
 
 	var rc bool
 	ss.rangebackward(nil, nil, ss.rootblock, [2]int{0, 0}, func(nd api.Node) bool {
-		rc = callb(nd)
+		rc = true
+		if callb != nil {
+			rc = callb(nd)
+		}
 		return false
 	})
 	atomic.AddInt64(&ss.n_lookups, 1)
@@ -487,4 +503,31 @@ func (ss *Snapshot) dumpkeys(fpos int64, prefix string) {
 	case znode:
 		ndblk.dumpkeys(ss, prefix)
 	}
+}
+
+func (ss *Snapshot) openfiles() (err error) {
+	if ss.datafile != "" {
+		if _, err := os.Stat(ss.datafile); os.IsNotExist(err) {
+			log.Errorf("%v file %q not present\n", ss.logprefix, ss.datafile)
+			return err
+		}
+	}
+	if _, err := os.Stat(ss.indexfile); os.IsNotExist(err) {
+		log.Errorf("%v file %q not present\n", ss.logprefix, ss.indexfile)
+		return err
+	}
+
+	ss.datafd, err = os.OpenFile(ss.datafile, os.O_RDONLY, 0666)
+	if err != nil {
+		fmsg := "%v datafile %q (os.O_RDONLY, 0666): %v\n"
+		log.Errorf(fmsg, ss.logprefix, ss.datafile, err)
+		return err
+	}
+	ss.indexfd, err = os.OpenFile(ss.indexfile, os.O_RDONLY, 0666)
+	if err != nil {
+		fmsg := "%v datafile %q (os.O_RDONLY, 0666): %v\n"
+		log.Errorf(fmsg, ss.logprefix, ss.datafile, err)
+		return err
+	}
+	return nil
 }

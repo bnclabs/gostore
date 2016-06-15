@@ -14,67 +14,137 @@ var _ = fmt.Sprintf("dummy")
 
 func init() {
 	config := map[string]interface{}{
-		"log.level": "warn",
+		"log.level": "error",
 		"log.file":  "",
 	}
 	log.SetLogger(nil, config)
 }
 
-// TODO:
-// 1. add test case with empty iterator.
-// 2. add test case with 1 element iterator.
-// 3. add test case with 1 element iterator,
-//    2 element iterator upto N element iterator.
-// 4. test case for Stats and Fullstats
-// 5. test case for snapshots, Refer() and Release()
-
-func TestBubtLookup(t *testing.T) {
-	indexfile := filepath.Join(os.TempDir(), "ut_indexfile_lookup.bubt")
-	datafile := filepath.Join(os.TempDir(), "ut_datafile_lookup.bubt")
+func TestEmpty(t *testing.T) {
+	indexfile := filepath.Join(os.TempDir(), "ut_indexfile_empty.bubt")
+	datafile := filepath.Join(os.TempDir(), "ut_datafile_empty.bubt")
 	os.Remove(indexfile)
 	os.Remove(datafile)
 	defer os.Remove(indexfile)
 	defer os.Remove(datafile)
 
-	for i := 1; i <= 2000; i++ {
-		//t.Logf("trying %v", i)
-		llrb := refllrb(i)
+	llrb := refllrb(0)
 
-		bconfig := Defaultconfig()
-		name := fmt.Sprintf("unittest-lookup-%v", i)
-		bubt := NewBubt(name, indexfile, datafile, bconfig)
-		llrbiter := llrb.Iterate(nil, nil, "both", false)
-		bubt.Build(llrbiter)
-		llrbiter.Close()
+	bconfig := Defaultconfig()
+	name := fmt.Sprintf("unittest-empty-%v", 0)
+	bubt := NewBubt(name, indexfile, datafile, bconfig)
+	llrbiter := llrb.Iterate(nil, nil, "both", false)
+	bubt.Build(llrbiter)
+	llrbiter.Close()
 
-		// gather reference list of keys and values
-		keys, vals := make([][]byte, 0), make([][]byte, 0)
-		llrb.Range(nil, nil, "both", false, func(nd api.Node) bool {
-			keys, vals = append(keys, nd.Key()), append(vals, nd.Value())
-			return true
-		})
-		if llrb.Count() != int64(i) {
-			t.Fatalf("expected %v, got %v", i, llrb.Count())
-		} else if len(keys) != i {
-			t.Fatalf("expected %v, got %v", i, len(keys))
-		}
+	zblocksize := bconfig.Int64("zblocksize")
+	_, err := OpenBubtstore(name, indexfile, datafile, zblocksize)
+	if err == nil {
+		t.Fatalf("expected error")
+	}
 
-		zblocksize := bconfig.Int64("zblocksize")
-		store, err := OpenBubtstore(name, indexfile, datafile, zblocksize)
+	llrb.Destroy()
+}
+
+func TestMissing(t *testing.T) {
+	indexfile := filepath.Join(os.TempDir(), "ut_indexfile_empty.bubt")
+	datafile := filepath.Join(os.TempDir(), "ut_datafile_empty.bubt")
+	os.Remove(indexfile)
+	os.Remove(datafile)
+	defer os.Remove(indexfile)
+	defer os.Remove(datafile)
+
+	count := 1
+	llrb := refllrb(count)
+
+	bconfig := Defaultconfig()
+	name := fmt.Sprintf("unittest-empty-%v", count)
+	bubt := NewBubt(name, indexfile, datafile, bconfig)
+	llrbiter := llrb.Iterate(nil, nil, "both", false)
+	bubt.Build(llrbiter)
+	llrbiter.Close()
+
+	// gather reference list of keys and values
+	keys, vals := make([][]byte, 0), make([][]byte, 0)
+	llrb.Range(nil, nil, "both", false, func(nd api.Node) bool {
+		keys, vals = append(keys, nd.Key()), append(vals, nd.Value())
+		return true
+	})
+	if llrb.Count() != int64(count) {
+		t.Fatalf("expected %v, got %v", count, llrb.Count())
+	} else if len(keys) != count {
+		t.Fatalf("expected %v, got %v", count, len(keys))
+	}
+
+	zblocksize := bconfig.Int64("zblocksize")
+	store, err := OpenBubtstore(name, indexfile, datafile, zblocksize)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	snapch := make(chan api.IndexSnapshot, 1)
+	if err := store.RSnapshot(snapch); err != nil {
+		t.Fatalf("acquiring snapshot: %v", err)
+	}
+	s := <-snapch
+
+	if err != nil {
+		t.Fatalf("opening bubtstore %v: %v", name, err)
+	} else if s.ID() != name {
+		t.Fatalf("expected %v, got %v", name, s.ID())
+	} else if s.Isactive() == false {
+		t.Fatalf("%v inactive", name)
+	} else if s.Count() != int64(count) {
+		t.Fatalf("expected %v, got %v", 0, s.Count())
+	}
+
+	missingkey := []byte("not found")
+	if s.Has(missingkey) == true {
+		t.Fatalf("expected missing key %v")
+	} else if s.Get(missingkey, nil) == true {
+		t.Fatalf("expected missing key %v")
+	} else if s.Min(nil) == false {
+		t.Fatalf("expected minimum key")
+	} else if s.Max(nil) == false {
+		t.Fatalf("expected maximum key")
+	}
+
+	s.Release()
+
+	store.Destroy()
+	if _, err := os.Stat(indexfile); err == nil {
+		t.Fatalf("expected %v to be removed", indexfile)
+	} else if _, err := os.Stat(datafile); err == nil {
+		t.Fatalf("expected %v to be removed", datafile)
+	}
+
+	llrb.Destroy()
+}
+
+func TestLookup(t *testing.T) {
+	indexfile := filepath.Join(os.TempDir(), "ut_indexfile_lookup.bubt")
+	datafile := filepath.Join(os.TempDir(), "ut_datafile_lookup.bubt")
+	name := "unittest-lookup"
+
+	os.Remove(indexfile)
+	os.Remove(datafile)
+	defer os.Remove(indexfile)
+	defer os.Remove(datafile)
+
+	do := func(count int, store *Snapshot, keys, vals [][]byte) {
 		snapch := make(chan api.IndexSnapshot, 1)
-		if err := store.RSnapshot(snapch); err != nil {
+		err := store.RSnapshot(snapch)
+		if err != nil {
 			t.Fatalf("acquiring snapshot: %v", err)
 		}
 		s := <-snapch
 
-		if err != nil {
-			t.Fatalf("opening bubtstore %v: %v", name, err)
-		} else if s.ID() != name {
+		if s.ID() != name {
 			t.Fatalf("expected %v, got %v", name, s.ID())
 		} else if s.Isactive() == false {
 			t.Fatalf("%v inactive", name)
-		} else if s.Count() != int64(i) {
-			t.Fatalf("expected %v, got %v", i, s.Count())
+		} else if s.Count() != int64(count) {
+			t.Fatalf("expected %v, got %v", count, s.Count())
 		}
 
 		for j := 0; j < len(keys); j++ {
@@ -108,31 +178,13 @@ func TestBubtLookup(t *testing.T) {
 		})
 
 		s.Release()
-		store.Destroy()
-		if _, err := os.Stat(indexfile); err == nil {
-			t.Fatalf("expected %v to be removed", indexfile)
-		} else if _, err := os.Stat(datafile); err == nil {
-			t.Fatalf("expected %v to be removed", datafile)
-		}
-
-		llrb.Destroy()
 	}
-}
 
-func TestBubtRange(t *testing.T) {
-	indexfile := filepath.Join(os.TempDir(), "ut_indexfile_range.bubt")
-	datafile := filepath.Join(os.TempDir(), "ut_datafile_range.bubt")
-	os.Remove(indexfile)
-	os.Remove(datafile)
-	defer os.Remove(indexfile)
-	defer os.Remove(datafile)
-
-	for i := 1000; i <= 2000; i++ {
+	for i := 1; i <= 2000; i++ {
 		//t.Logf("trying %v", i)
 		llrb := refllrb(i)
 
 		bconfig := Defaultconfig()
-		name := fmt.Sprintf("unittest-range-%v", i)
 		bubt := NewBubt(name, indexfile, datafile, bconfig)
 		llrbiter := llrb.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter)
@@ -150,17 +202,52 @@ func TestBubtRange(t *testing.T) {
 			t.Fatalf("expected %v, got %v", i, len(keys))
 		}
 
+		// with data file
 		zblocksize := bconfig.Int64("zblocksize")
 		store, err := OpenBubtstore(name, indexfile, datafile, zblocksize)
+		if err != nil {
+			t.Fatal(err)
+		}
+		do(i, store, keys, vals)
+		store.Destroy()
+
+		// without data file
+		bubt = NewBubt(name, indexfile, "", bconfig)
+		llrbiter = llrb.Iterate(nil, nil, "both", false)
+		bubt.Build(llrbiter)
+		llrbiter.Close()
+		store, err = OpenBubtstore(name, indexfile, "", zblocksize)
+		if err != nil {
+			t.Fatal(err)
+		}
+		do(i, store, keys, vals)
+		store.Destroy()
+
+		if _, err := os.Stat(indexfile); err == nil {
+			t.Fatalf("expected %v to be removed", indexfile)
+		} else if _, err := os.Stat(datafile); err == nil {
+			t.Fatalf("expected %v to be removed", datafile)
+		}
+		llrb.Destroy()
+	}
+}
+
+func TestRange(t *testing.T) {
+	indexfile := filepath.Join(os.TempDir(), "ut_indexfile_range.bubt")
+	datafile := filepath.Join(os.TempDir(), "ut_datafile_range.bubt")
+	name := "unittest-range"
+
+	os.Remove(indexfile)
+	os.Remove(datafile)
+	defer os.Remove(indexfile)
+	defer os.Remove(datafile)
+
+	do := func(count int, store *Snapshot, keys, vals [][]byte) {
 		snapch := make(chan api.IndexSnapshot, 1)
 		if err := store.RSnapshot(snapch); err != nil {
 			t.Fatalf("acquiring snapshot: %v", err)
 		}
 		s := <-snapch
-
-		if err != nil {
-			t.Fatalf("opening bubtstore %v: %v", name, err)
-		}
 
 		// forward range
 		off := 0
@@ -174,7 +261,7 @@ func TestBubtRange(t *testing.T) {
 			return true
 		})
 		// backward range
-		off = i - 1
+		off = count - 1
 		s.Range(nil, nil, "both", true, func(nd api.Node) bool {
 			if x, y := string(nd.Key()), string(keys[off]); x != y {
 				t.Fatalf("expected %v, got %v", y, x)
@@ -186,7 +273,43 @@ func TestBubtRange(t *testing.T) {
 		})
 
 		s.Release()
+	}
+
+	for i := 1; i <= 2000; i++ {
+		//t.Logf("trying %v", i)
+		llrb := refllrb(i)
+		keys, vals := make([][]byte, 0), make([][]byte, 0)
+		llrb.Range(nil, nil, "both", false, func(nd api.Node) bool {
+			keys, vals = append(keys, nd.Key()), append(vals, nd.Value())
+			return true
+		})
+
+		bconfig := Defaultconfig()
+		zblocksize := bconfig.Int64("zblocksize")
+
+		// with datafile
+		bubt := NewBubt(name, indexfile, datafile, bconfig)
+		llrbiter := llrb.Iterate(nil, nil, "both", false)
+		bubt.Build(llrbiter)
+		llrbiter.Close()
+		store, err := OpenBubtstore(name, indexfile, datafile, zblocksize)
+		if err != nil {
+			t.Fatal(err)
+		}
+		do(i, store, keys, vals)
 		store.Destroy()
+		// without data file
+		bubt = NewBubt(name, indexfile, "", bconfig)
+		llrbiter = llrb.Iterate(nil, nil, "both", false)
+		bubt.Build(llrbiter)
+		llrbiter.Close()
+		store, err = OpenBubtstore(name, indexfile, "", zblocksize)
+		if err != nil {
+			t.Fatal(err)
+		}
+		do(i, store, keys, vals)
+		store.Destroy()
+
 		if _, err := os.Stat(indexfile); err == nil {
 			t.Fatalf("expected %v to be removed", indexfile)
 		} else if _, err := os.Stat(datafile); err == nil {
@@ -197,48 +320,21 @@ func TestBubtRange(t *testing.T) {
 	}
 }
 
-func TestBubtIterate(t *testing.T) {
+func TestIterate(t *testing.T) {
 	indexfile := filepath.Join(os.TempDir(), "ut_indexfile_iterate.bubt")
 	datafile := filepath.Join(os.TempDir(), "ut_datafile_iterate.bubt")
+	name := "unittest-iteration"
 	os.Remove(indexfile)
 	os.Remove(datafile)
 	defer os.Remove(indexfile)
 	defer os.Remove(datafile)
 
-	for i := 1000; i <= 2000; i++ {
-		//t.Logf("trying %v", i)
-		llrb := refllrb(i)
-
-		bconfig := Defaultconfig()
-		name := fmt.Sprintf("unittest-iteration-%v", i)
-		bubt := NewBubt(name, indexfile, datafile, bconfig)
-		llrbiter := llrb.Iterate(nil, nil, "both", false)
-		bubt.Build(llrbiter)
-		llrbiter.Close()
-
-		// gather reference list of keys and values
-		keys, vals := make([][]byte, 0), make([][]byte, 0)
-		llrb.Range(nil, nil, "both", false, func(nd api.Node) bool {
-			keys, vals = append(keys, nd.Key()), append(vals, nd.Value())
-			return true
-		})
-		if llrb.Count() != int64(i) {
-			t.Fatalf("expected %v, got %v", i, llrb.Count())
-		} else if len(keys) != i {
-			t.Fatalf("expected %v, got %v", i, len(keys))
-		}
-
-		zblocksize := bconfig.Int64("zblocksize")
-		store, err := OpenBubtstore(name, indexfile, datafile, zblocksize)
+	do := func(count int, store *Snapshot, keys, vals [][]byte) {
 		snapch := make(chan api.IndexSnapshot, 1)
 		if err := store.RSnapshot(snapch); err != nil {
 			t.Fatalf("acquiring snapshot: %v", err)
 		}
 		s := <-snapch
-
-		if err != nil {
-			t.Fatalf("opening bubtstore %v: %v", name, err)
-		}
 
 		// forward iteration
 		siter := s.Iterate(nil, nil, "both", false)
@@ -255,7 +351,7 @@ func TestBubtIterate(t *testing.T) {
 		siter.Close()
 		// backward iteration
 		siter = s.Iterate(nil, nil, "both", true)
-		off, nd = i-1, siter.Next()
+		off, nd = count-1, siter.Next()
 		for nd != nil {
 			if x, y := string(nd.Key()), string(keys[off]); x != y {
 				t.Fatalf("expected %v, got %v", y, x)
@@ -268,7 +364,43 @@ func TestBubtIterate(t *testing.T) {
 		siter.Close()
 
 		s.Release()
+	}
+
+	for i := 1; i <= 2000; i++ {
+		//t.Logf("trying %v", i)
+		llrb := refllrb(i)
+		keys, vals := make([][]byte, 0), make([][]byte, 0)
+		llrb.Range(nil, nil, "both", false, func(nd api.Node) bool {
+			keys, vals = append(keys, nd.Key()), append(vals, nd.Value())
+			return true
+		})
+
+		bconfig := Defaultconfig()
+		zblocksize := bconfig.Int64("zblocksize")
+
+		// with datafile
+		bubt := NewBubt(name, indexfile, datafile, bconfig)
+		llrbiter := llrb.Iterate(nil, nil, "both", false)
+		bubt.Build(llrbiter)
+		llrbiter.Close()
+		store, err := OpenBubtstore(name, indexfile, datafile, zblocksize)
+		if err != nil {
+			t.Fatal(err)
+		}
+		do(i, store, keys, vals)
 		store.Destroy()
+		// without datafile
+		bubt = NewBubt(name, indexfile, "", bconfig)
+		llrbiter = llrb.Iterate(nil, nil, "both", false)
+		bubt.Build(llrbiter)
+		llrbiter.Close()
+		store, err = OpenBubtstore(name, indexfile, datafile, zblocksize)
+		if err != nil {
+			t.Fatal(err)
+		}
+		do(i, store, keys, vals)
+		store.Destroy()
+
 		if _, err := os.Stat(indexfile); err == nil {
 			t.Fatalf("expected %v to be removed", indexfile)
 		} else if _, err := os.Stat(datafile); err == nil {
