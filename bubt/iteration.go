@@ -1,8 +1,11 @@
 package bubt
 
 import "sync/atomic"
+import "fmt"
 
 import "github.com/prataprc/storage.go/api"
+
+var _ = fmt.Sprintf("dummy")
 
 type iterator struct {
 	tree       api.IndexReader
@@ -69,7 +72,7 @@ func (iter *iterator) rangefill() {
 				return true
 			}
 			if iter.limit < 100 { // TODO: avoid magic numbers
-				iter.limit *= 2
+				iter.limit *= iter.limit
 			}
 			iter.continuate = true
 			return false

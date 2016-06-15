@@ -5,6 +5,8 @@ import "fmt"
 
 import "github.com/prataprc/storage.go/log"
 
+var indexname, dataname = "index", "data"
+
 type bubtflusher struct {
 	f                *Bubt
 	idxch, datach    chan []byte
@@ -20,9 +22,9 @@ func (f *Bubt) startflusher() *bubtflusher {
 		dquitch: make(chan struct{}),
 	}
 
-	go flusher.run(f.indexfd, flusher.idxch, flusher.iquitch)
+	go flusher.run(indexname, f.indexfd, flusher.idxch, flusher.iquitch)
 	if f.hasdatafile() {
-		go flusher.run(f.datafd, flusher.datach, flusher.dquitch)
+		go flusher.run(dataname, f.datafd, flusher.datach, flusher.dquitch)
 	}
 	return flusher
 }
@@ -50,29 +52,36 @@ func (flusher *bubtflusher) writedata(data []byte) error {
 }
 
 func (flusher *bubtflusher) close() {
+	log.Infof("%v closing %q flusher ...\n", flusher.f.logprefix, dataname)
 	close(flusher.datach)
 	<-flusher.dquitch
-	// close and wait for index file to be sealed.
+	flusher.f.datafd.Close()
+
+	log.Infof("%v closing %q flusher ...\n", flusher.f.logprefix, indexname)
 	close(flusher.idxch)
 	<-flusher.iquitch
+	flusher.f.indexfd.Close()
 }
 
-func (flusher *bubtflusher) run(fd *os.File, ch chan []byte, quitch chan struct{}) {
-	logprefix := flusher.f.logprefix
-	log.Infof("%v starting flusher for %v ...", logprefix, fd.Name())
+func (flusher *bubtflusher) run(
+	name string, fd *os.File, ch chan []byte, quitch chan struct{}) {
 
-	defer close(quitch)
+	logprefix := flusher.f.logprefix
+	log.Infof("%v starting %q flusher for %v ...\n", logprefix, name, fd.Name())
+
 	defer func() {
-		log.Infof("%v exiting flusher for %v\n", logprefix, fd.Name())
+		log.Infof("%v exiting %q flusher for %v\n", logprefix, name, fd.Name())
+		close(quitch)
 	}()
 
 	write := func(data []byte) bool {
 		if n, err := fd.Write(data); err != nil {
-			log.Errorf("%v write %v: %v", logprefix, fd.Name(), err)
+			fmsg := "%v %q write %v: %v\n"
+			log.Errorf(fmsg, logprefix, name, fd.Name(), err)
 			return false
 		} else if n != len(data) {
-			fmsg := "%v partial write %v: %v<%v)"
-			log.Errorf(fmsg, logprefix, fd.Name(), n, len(data))
+			fmsg := "%v partial %q write %v: %v<%v\n"
+			log.Errorf(fmsg, logprefix, name, fd.Name(), n, len(data))
 			return false
 		}
 		return true
@@ -80,7 +89,10 @@ func (flusher *bubtflusher) run(fd *os.File, ch chan []byte, quitch chan struct{
 
 	// read byte blocks.
 	for block := range ch {
-		if write(block) == false {
+		fmsg := "%v %q flusher writing block of len %v\n"
+		log.Debugf(fmsg, logprefix, name, len(block))
+		rc := write(block)
+		if rc == false {
 			return
 		}
 	}
@@ -90,7 +102,7 @@ func (flusher *bubtflusher) run(fd *os.File, ch chan []byte, quitch chan struct{
 	for i := 0; i < len(markerblock); i++ {
 		markerblock[i] = markerByte
 	}
-	if write(markerblock) {
-		log.Infof("%v wrote marker block for %v\n", logprefix, fd.Name())
-	}
+	fmsg := "%v %q flusher writing marker block for %v\n"
+	log.Infof(fmsg, logprefix, name, fd.Name())
+	write(markerblock)
 }

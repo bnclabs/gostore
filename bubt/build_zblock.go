@@ -5,6 +5,8 @@ import "fmt"
 
 import "github.com/prataprc/storage.go/api"
 
+var _ = fmt.Sprintf("dummy")
+
 type zblock struct {
 	f        *Bubt
 	fpos     [2]int64 // kpos, vpos
@@ -19,29 +21,17 @@ type zblock struct {
 }
 
 func (f *Bubt) newz(fpos [2]int64) (z *zblock) {
-	select {
-	case z = <-f.zpool:
-		z.f, z.fpos = f, fpos
-		z.firstkey = z.firstkey[:0]
-		z.entries = z.entries[:0]
-		z.keys = z.keys[:0]
-		z.values = z.values[:0]
-		z.kbuffer, z.dbuffer = z.kbuffer[:0], z.dbuffer[:0]
-
-	default:
-		z = &zblock{
-			f:        f,
-			fpos:     fpos,
-			firstkey: make([]byte, 0, api.MaxKeymem),
-			entries:  make([]uint32, 0, 16),
-			keys:     make([][]byte, 0, 16),
-			values:   make([][]byte, 0, 16),
-			kbuffer:  make([]byte, 0, f.zblocksize),
-			dbuffer:  make([]byte, 0, f.zblocksize),
-		}
+	z = &zblock{
+		f:        f,
+		fpos:     fpos,
+		firstkey: make([]byte, 0, api.MaxKeymem),
+		entries:  make([]uint32, 0, 16),
+		keys:     make([][]byte, 0, 16),
+		values:   make([][]byte, 0, 16),
+		kbuffer:  make([]byte, 0, f.zblocksize),
+		dbuffer:  make([]byte, 0, f.zblocksize),
 	}
-	f.znodes++
-	return
+	return z
 }
 
 func (z *zblock) insert(nd api.Node) (ok bool) {
@@ -51,9 +41,9 @@ func (z *zblock) insert(nd api.Node) (ok bool) {
 	if nd == nil {
 		return false
 	} else if key, value = nd.Key(), nd.Value(); int64(len(key)) > api.MaxKeymem {
-		panic(fmt.Errorf("key cannot exceed %v", api.MaxKeymem))
+		panicerr("key cannot exceed %v", api.MaxKeymem)
 	} else if int64(len(value)) > api.MaxValmem {
-		panic(fmt.Errorf("value cannot exceed %v", api.MaxValmem))
+		panicerr("value cannot exceed %v", api.MaxValmem)
 	}
 
 	// check whether enough space available in the block.
@@ -109,9 +99,8 @@ func (z *zblock) insert(nd api.Node) (ok bool) {
 func (z *zblock) finalize() {
 	arrayblock := 4 + (len(z.entries) * 4)
 	sz, ln := arrayblock+len(z.kbuffer), len(z.kbuffer)
-	if int64(sz) > z.f.zblocksize {
-		fmsg := "zblock buffer overflow %v > %v, call the programmer!"
-		panic(fmt.Sprintf(fmsg, sz, z.f.zblocksize))
+	if zblksize := z.f.zblocksize; int64(sz) > zblksize {
+		panicerr("zblock overflow %v > %v, call the programmer!", sz, zblksize)
 	}
 
 	z.kbuffer = z.kbuffer[:z.f.zblocksize] // first increase slice length
@@ -127,16 +116,16 @@ func (z *zblock) finalize() {
 }
 
 func (z *zblock) reduce() []byte {
-	doreduce := func(rereduce bool, keys, values [][]byte) []byte {
+	if z.f.mreduce == false {
 		return nil
-	}
-	if z.f.mreduce && z.f.hasdatafile() == false {
-		panic("enable datafile for mreduce")
-	} else if z.f.mreduce == false {
-		panic("mreduce not configured")
 	} else if z.reduced != nil {
 		return z.reduced
 	}
+
+	doreduce := func(rereduce bool, keys, values [][]byte) []byte {
+		return nil
+	}
+
 	z.reduced = doreduce(false /*rereduce*/, z.keys, z.values)
 	return z.reduced
 }

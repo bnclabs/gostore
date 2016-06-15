@@ -11,9 +11,10 @@ import "encoding/binary"
 
 import "github.com/prataprc/storage.go/api"
 import "github.com/prataprc/storage.go/lib"
+import "github.com/prataprc/storage.go/log"
 
 var readmu sync.Mutex
-var openstores map[string]*Snapshot
+var openstores = make(map[string]*Snapshot)
 
 // Snapshot manages sorted key,value entries in persisted, immutable btree
 // built bottoms up and not updated there after.
@@ -35,8 +36,6 @@ type Snapshot struct {
 
 	// reader data
 	builderstats map[string]interface{}
-	znodepool    chan []byte
-	mnodepool    chan []byte
 	iterpool     chan *iterator
 	activeiter   int64
 
@@ -137,14 +136,6 @@ func OpenBubtstore(name, indexfile, datafile string, zblocksize int64) (ss *Snap
 		}
 	}
 
-	ss.znodepool = make(chan []byte, zpoolSize)
-	for i := 0; i < cap(ss.znodepool); i++ {
-		ss.znodepool <- make([]byte, ss.zblocksize)
-	}
-	ss.mnodepool = make(chan []byte, mpoolSize)
-	for i := 0; i < cap(ss.mnodepool); i++ {
-		ss.mnodepool <- make([]byte, ss.mblocksize)
-	}
 	ss.iterpool = make(chan *iterator, ss.iterpoolsize)
 
 	openstores[ss.name] = ss
@@ -216,9 +207,13 @@ func (ss *Snapshot) Destroy() error {
 	if err := ss.datafd.Close(); err != nil {
 		errs += "; " + err.Error()
 	}
+
+	log.Infof("%v removing %q", ss.logprefix, ss.indexfile)
 	if err := os.Remove(ss.indexfile); err != nil {
 		errs += "; " + err.Error()
 	}
+
+	log.Infof("%v removing %q", ss.logprefix, ss.datafile)
 	if err := os.Remove(ss.datafile); err != nil {
 		errs += "; " + err.Error()
 	}
@@ -251,7 +246,10 @@ func (ss *Snapshot) Get(key []byte, callb api.NodeCallb) bool {
 
 	var rc bool
 	ss.rangeforward(key, key, ss.rootblock, [2]int{0, 0}, func(nd api.Node) bool {
-		rc = callb(nd)
+		rc = true
+		if callb != nil {
+			rc = callb(nd)
+		}
 		return false
 	})
 	atomic.AddInt64(&ss.n_lookups, 1)
@@ -334,7 +332,7 @@ func (ss *Snapshot) Iterate(lkey, hkey []byte, incl string, r bool) api.IndexIte
 
 	var iter *iterator
 	select {
-	case <-ss.iterpool:
+	case iter = <-ss.iterpool:
 	default:
 		iter = &iterator{}
 	}
@@ -417,7 +415,6 @@ func (ss *Snapshot) json2config(data []byte) error {
 	if err := json.Unmarshal(data, &config); err != nil {
 		return err
 	}
-	ss.name = config.String("name")
 	ss.zblocksize = config.Int64("zblocksize")
 	ss.mblocksize = config.Int64("mblocksize")
 	ss.mreduce = config.Bool("mreduce")
@@ -440,12 +437,10 @@ func (ss *Snapshot) rangeforward(
 	switch ndblk := ss.readat(fpos).(type) {
 	case mnode:
 		rc := ndblk.rangeforward(ss, lkey, hkey, cmp, callb)
-		ss.mnodepool <- []byte(ndblk)
 		return rc
 
 	case znode:
 		rc := ndblk.rangeforward(ss, lkey, hkey, fpos, cmp, callb)
-		ss.znodepool <- []byte(ndblk)
 		return rc
 	}
 	return true
@@ -457,12 +452,10 @@ func (ss *Snapshot) rangebackward(
 	switch ndblk := ss.readat(fpos).(type) {
 	case mnode:
 		rc := ndblk.rangebackward(ss, lkey, hkey, cmp, callb)
-		ss.mnodepool <- []byte(ndblk)
 		return rc
 
 	case znode:
 		rc := ndblk.rangebackward(ss, lkey, hkey, fpos, cmp, callb)
-		ss.znodepool <- []byte(ndblk)
 		return rc
 	}
 	return true
@@ -472,10 +465,10 @@ func (ss *Snapshot) readat(fpos int64) (nd interface{}) {
 	var data []byte
 	vpos, mok := ss.ismvpos(fpos)
 	if mok {
-		data = <-ss.mnodepool
+		data = make([]byte, ss.mblocksize)
 		nd = mnode(data)
 	} else {
-		data = <-ss.znodepool
+		data = make([]byte, ss.zblocksize)
 		nd = znode(data)
 	}
 	if n, err := ss.indexfd.ReadAt(data, vpos); err != nil {
@@ -484,4 +477,14 @@ func (ss *Snapshot) readat(fpos int64) (nd interface{}) {
 		panic("partial read")
 	}
 	return
+}
+
+func (ss *Snapshot) dumpkeys(fpos int64, prefix string) {
+	switch ndblk := ss.readat(fpos).(type) {
+	case mnode:
+		ndblk.dumpkeys(ss, prefix)
+
+	case znode:
+		ndblk.dumpkeys(ss, prefix)
+	}
 }

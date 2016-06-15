@@ -1,8 +1,11 @@
 package bubt
 
-// import "github.com/prataprc/storage.go/
-import "fmt"
 import "encoding/binary"
+import "fmt"
+
+import "github.com/prataprc/storage.go/api"
+
+var _ = fmt.Sprintf("dummy")
 
 type mblock struct {
 	f        *Bubt
@@ -16,24 +19,14 @@ type mblock struct {
 }
 
 func (f *Bubt) newmblock() (m *mblock) {
-	select {
-	case m = <-f.mpool:
-		m.f = f
-		m.firstkey = m.firstkey[:0]
-		m.entries = m.entries[:0]
-		m.values = m.values[:0]
-		m.kbuffer = m.kbuffer[:0]
-
-	default:
-		m = &mblock{
-			f:       f,
-			entries: make([]uint32, 0, 16),
-			values:  make([][]byte, 0, 16),
-			kbuffer: make([]byte, 0, f.mblocksize),
-		}
+	m = &mblock{
+		f:        f,
+		firstkey: make([]byte, 0, api.MaxKeymem),
+		entries:  make([]uint32, 0, 16),
+		values:   make([][]byte, 0, 16),
+		kbuffer:  make([]byte, 0, f.mblocksize),
 	}
-	f.mnodes++
-	return
+	return m
 }
 
 func (m *mblock) insert(block blocker) (ok bool) {
@@ -81,9 +74,8 @@ func (m *mblock) insert(block blocker) (ok bool) {
 func (m *mblock) finalize() {
 	arrayblock := 4 + (len(m.entries) * 4)
 	sz, ln := arrayblock+len(m.kbuffer), len(m.kbuffer)
-	if int64(sz) > m.f.mblocksize {
-		fmsg := "mblock buffer overflow %v > %v"
-		panic(fmt.Sprintf(fmsg, sz, m.f.mblocksize))
+	if mblksize := m.f.mblocksize; int64(sz) > m.f.mblocksize {
+		panicerr("mblock overflow %v > %v, call the programmer!", sz, mblksize)
 	}
 
 	m.kbuffer = m.kbuffer[:m.f.mblocksize] // first increase slice length
@@ -99,15 +91,14 @@ func (m *mblock) finalize() {
 }
 
 func (m *mblock) reduce() []byte {
-	doreduce := func(rereduce bool, keys, values [][]byte) []byte {
+	if m.f.mreduce == false {
 		return nil
-	}
-	if m.f.mreduce && m.f.hasdatafile() == false {
-		panic("enable datafile for mreduce")
-	} else if m.f.mreduce == false {
-		panic("mreduce not configured")
 	} else if m.reduced != nil {
 		return m.reduced
+	}
+
+	doreduce := func(rereduce bool, keys, values [][]byte) []byte {
+		return nil
 	}
 	m.reduced = doreduce(true /*rereduce*/, nil, m.values)
 	return m.reduced

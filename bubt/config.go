@@ -6,10 +6,10 @@ import "github.com/prataprc/storage.go/lib"
 // SSD without map-reduce.
 func Defaultconfig() lib.Config {
 	return lib.Config{
-		"zblocksize":   4096,
-		"mblocksize":   4086,
-		"mreduce":      false,
-		"iterpoolsize": 8,
-		"level":        1,
+		"zblocksize":    4096,
+		"mblocksize":    4096,
+		"mreduce":       false,
+		"iterpool.size": 8,
+		"level":         1,
 	}
 }

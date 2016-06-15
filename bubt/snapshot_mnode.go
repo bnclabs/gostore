@@ -1,9 +1,12 @@
 package bubt
 
 import "bytes"
+import "fmt"
 import "encoding/binary"
 
 import "github.com/prataprc/storage.go/api"
+
+var _ = fmt.Sprintf("dummy")
 
 type mnode []byte
 
@@ -18,7 +21,7 @@ func (m mnode) rangeforward(
 		panic("impossible code path, call the programmer !")
 
 	default:
-		from = 1 + m.searchforward(lkey, entries, cmp[0])
+		from = m.searchforward(lkey, entries, cmp[0])
 	}
 
 	for x := from; x < int32(len(entries)/4); x++ {
@@ -34,7 +37,7 @@ func (m mnode) searchforward(lkey []byte, entries []byte, cmp int) int32 {
 	if (len(entries) % 4) != 0 {
 		panic("unaligned entries slice, call the programmer!")
 	} else if lkey == nil {
-		return -1
+		return 0
 	}
 
 	switch count := len(entries) / 4; count {
@@ -42,9 +45,6 @@ func (m mnode) searchforward(lkey []byte, entries []byte, cmp int) int32 {
 		panic("impossible code path, call the programmer!")
 
 	case 1:
-		if bytes.Compare(m.getentry(0, entries).key(), lkey) < cmp {
-			return -1
-		}
 		return 0
 
 	default:
@@ -110,12 +110,22 @@ func (m mnode) searchbackward(hkey []byte, entries []byte, cmp int) int32 {
 func (m mnode) getentry(n uint32, entries []byte) mentry {
 	off := n * 4
 	koff := binary.BigEndian.Uint32(entries[off : off+4])
-	return mentry(entries[koff:len(entries)])
+	return mentry(m[koff:])
 }
 
 func (m mnode) entryslice() []byte {
 	count := binary.BigEndian.Uint32(m[:4])
 	return m[4 : 4+(count*4)]
+}
+
+func (m mnode) dumpkeys(ss *Snapshot, prefix string) {
+	entries := m.entryslice()
+	for x, off := 0, 0; off < len(entries); x, off = x+1, off+4 {
+		koff := binary.BigEndian.Uint32(entries[off : off+4])
+		klen := uint32(binary.BigEndian.Uint16(m[koff:]))
+		fmt.Println(prefix, string(m[koff+2:koff+2+klen]))
+		ss.dumpkeys(m.getentry(uint32(x), entries).vpos(), prefix+"  ")
+	}
 }
 
 type mentry []byte
