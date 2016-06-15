@@ -3,7 +3,6 @@ package bubt
 import "os"
 import "fmt"
 import "bytes"
-import "errors"
 import "sync"
 import "sync/atomic"
 import "encoding/json"
@@ -198,7 +197,7 @@ func (ss *Snapshot) Validate() {
 }
 
 // Destroy implement Index{} interface.
-func (ss *Snapshot) Destroy() error {
+func (ss *Snapshot) Destroy() {
 	if atomic.LoadInt64(&ss.n_snapshots) > 0 {
 		panic("active snapshots")
 	} else if atomic.LoadInt64(&ss.activeiter) > 0 {
@@ -208,29 +207,30 @@ func (ss *Snapshot) Destroy() error {
 	readmu.Lock()
 	defer readmu.Unlock()
 
-	var errs string
 	if err := ss.indexfd.Close(); err != nil {
-		errs += err.Error()
+		log.Errorf("%v closing %q: %v\n", ss.logprefix, ss.indexfile, err)
 	}
-	if err := ss.datafd.Close(); err != nil {
-		errs += "; " + err.Error()
+	if ss.datafd != nil {
+		if err := ss.datafd.Close(); err != nil {
+			log.Errorf("%v closing %q %v\n", ss.logprefix, ss.datafile, err)
+		}
 	}
 
-	log.Infof("%v removing %q\n", ss.logprefix, ss.indexfile)
 	if err := os.Remove(ss.indexfile); err != nil {
-		errs += "; " + err.Error()
+		log.Errorf("%v while removing %q: %v\n", ss.logprefix, ss.indexfile, err)
+	} else {
+		log.Infof("%v removing %q\n", ss.logprefix, ss.indexfile)
 	}
 
-	log.Infof("%v removing %q\n", ss.logprefix, ss.datafile)
-	if err := os.Remove(ss.datafile); err != nil {
-		errs += "; " + err.Error()
-	}
-	if errs != "" {
-		return errors.New(errs)
+	if ss.datafile != "" {
+		if err := os.Remove(ss.datafile); err != nil {
+			log.Infof("%v while removing %q: %v\n", ss.logprefix, ss.datafile, err)
+		} else {
+			log.Infof("%v removing %q\n", ss.logprefix, ss.datafile)
+		}
 	}
 
 	delete(openstores, ss.name)
-	return nil
 }
 
 //---- IndexSnapshot interface.
@@ -517,11 +517,13 @@ func (ss *Snapshot) openfiles() (err error) {
 		return err
 	}
 
-	ss.datafd, err = os.OpenFile(ss.datafile, os.O_RDONLY, 0666)
-	if err != nil {
-		fmsg := "%v datafile %q (os.O_RDONLY, 0666): %v\n"
-		log.Errorf(fmsg, ss.logprefix, ss.datafile, err)
-		return err
+	if ss.datafile != "" {
+		ss.datafd, err = os.OpenFile(ss.datafile, os.O_RDONLY, 0666)
+		if err != nil {
+			fmsg := "%v datafile %q (os.O_RDONLY, 0666): %v\n"
+			log.Errorf(fmsg, ss.logprefix, ss.datafile, err)
+			return err
+		}
 	}
 	ss.indexfd, err = os.OpenFile(ss.indexfile, os.O_RDONLY, 0666)
 	if err != nil {

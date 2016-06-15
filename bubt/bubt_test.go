@@ -14,7 +14,7 @@ var _ = fmt.Sprintf("dummy")
 
 func init() {
 	config := map[string]interface{}{
-		"log.level": "error",
+		"log.level": "ignore",
 		"log.file":  "",
 	}
 	log.SetLogger(nil, config)
@@ -184,12 +184,6 @@ func TestLookup(t *testing.T) {
 		//t.Logf("trying %v", i)
 		llrb := refllrb(i)
 
-		bconfig := Defaultconfig()
-		bubt := NewBubt(name, indexfile, datafile, bconfig)
-		llrbiter := llrb.Iterate(nil, nil, "both", false)
-		bubt.Build(llrbiter)
-		llrbiter.Close()
-
 		// gather reference list of keys and values
 		keys, vals := make([][]byte, 0), make([][]byte, 0)
 		llrb.Range(nil, nil, "both", false, func(nd api.Node) bool {
@@ -202,8 +196,14 @@ func TestLookup(t *testing.T) {
 			t.Fatalf("expected %v, got %v", i, len(keys))
 		}
 
-		// with data file
+		bconfig := Defaultconfig()
 		zblocksize := bconfig.Int64("zblocksize")
+
+		// with data file
+		bubt := NewBubt(name, indexfile, datafile, bconfig)
+		llrbiter := llrb.Iterate(nil, nil, "both", false)
+		bubt.Build(llrbiter)
+		llrbiter.Close()
 		store, err := OpenBubtstore(name, indexfile, datafile, zblocksize)
 		if err != nil {
 			t.Fatal(err)
@@ -394,7 +394,7 @@ func TestIterate(t *testing.T) {
 		llrbiter = llrb.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter)
 		llrbiter.Close()
-		store, err = OpenBubtstore(name, indexfile, datafile, zblocksize)
+		store, err = OpenBubtstore(name, indexfile, "", zblocksize)
 		if err != nil {
 			t.Fatal(err)
 		}

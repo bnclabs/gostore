@@ -52,10 +52,12 @@ func (flusher *bubtflusher) writedata(data []byte) error {
 }
 
 func (flusher *bubtflusher) close() {
-	log.Infof("%v closing %q flusher ...\n", flusher.f.logprefix, dataname)
-	close(flusher.datach)
-	<-flusher.dquitch
-	flusher.f.datafd.Close()
+	if flusher.f.hasdatafile() {
+		log.Infof("%v closing %q flusher ...\n", flusher.f.logprefix, dataname)
+		close(flusher.datach)
+		<-flusher.dquitch
+		flusher.f.datafd.Close()
+	}
 
 	log.Infof("%v closing %q flusher ...\n", flusher.f.logprefix, indexname)
 	close(flusher.idxch)
