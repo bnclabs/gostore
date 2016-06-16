@@ -57,7 +57,9 @@ func TestNewLLRB(t *testing.T) {
 		t.Errorf("expected %v, got %v", x, y)
 	}
 
-	llrb.Destroy()
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestNewLLRBNode(t *testing.T) {
@@ -93,7 +95,9 @@ func TestNewLLRBNode(t *testing.T) {
 	}
 	llrb.freenode(nd)
 
-	llrb.Destroy()
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestNewLLRBNodePanic(t *testing.T) {
@@ -110,7 +114,9 @@ func TestNewLLRBNodePanic(t *testing.T) {
 		llrb.newnode(key, value)
 	}()
 
-	llrb.Destroy()
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestCloneLLRBNode(t *testing.T) {
@@ -131,7 +137,9 @@ func TestCloneLLRBNode(t *testing.T) {
 		t.Errorf("expected %v, got %v", nd.repr(), newnd.repr())
 	}
 
-	llrb.Destroy()
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLLRBBasicLookup(t *testing.T) {
@@ -197,7 +205,9 @@ func TestLLRBBasicLookup(t *testing.T) {
 		t.Errorf("expected %v, got %v", "value5", string(v))
 	}
 
-	llrb.Destroy()
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLLRBBasicUpdates(t *testing.T) {
@@ -319,7 +329,10 @@ func TestLLRBBasicUpdates(t *testing.T) {
 	}
 
 	llrb.Validate()
-	llrb.Destroy()
+
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLLRBBasicRange(t *testing.T) {
@@ -446,7 +459,10 @@ func TestLLRBBasicRange(t *testing.T) {
 
 	llrb.SetMemratio(0.04)
 	llrb.Validate()
-	llrb.Destroy()
+
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLLRBRange(t *testing.T) {
@@ -539,7 +555,10 @@ func TestLLRBRange(t *testing.T) {
 	}
 
 	llrb.Validate()
-	llrb.Destroy()
+
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLLRBIteratePool(t *testing.T) {
@@ -563,7 +582,9 @@ func TestLLRBIteratePool(t *testing.T) {
 		t.Fatalf("unexpected iterpool size %v", len(llrb.iterpool))
 	}
 
-	llrb.Destroy()
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLLRBBasicIterate(t *testing.T) {
@@ -673,7 +694,10 @@ func TestLLRBBasicIterate(t *testing.T) {
 
 	llrb.SetMemratio(0.04)
 	llrb.Validate()
-	llrb.Destroy()
+
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLLRBIterate(t *testing.T) {
@@ -788,7 +812,10 @@ func TestLLRBIterate(t *testing.T) {
 
 	llrb.SetMemratio(0.04)
 	llrb.Validate()
-	llrb.Destroy()
+
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLLRBInsert(t *testing.T) {
@@ -880,7 +907,9 @@ func TestLLRBInsert(t *testing.T) {
 		seqno++
 	}
 
-	llrb.Destroy()
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLLRBUpsert(t *testing.T) {
@@ -976,7 +1005,9 @@ func TestLLRBUpsert(t *testing.T) {
 		t.Errorf("expected %v, got %v", x, y)
 	}
 
-	llrb.Destroy()
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLLRBDelete(t *testing.T) {
@@ -1094,7 +1125,9 @@ func TestLLRBDelete(t *testing.T) {
 		t.Errorf("expected %v, got %v", x, y)
 	}
 
-	llrb.Destroy()
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func BenchmarkLLRBCloneKey(b *testing.B) {

@@ -92,7 +92,9 @@ func TestLLRBMvccBasicSnapshot(t *testing.T) {
 	}
 	snapshot.Release()
 
-	llrb.Destroy()
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLLRBMvcclBasicLookup(t *testing.T) {
@@ -180,7 +182,10 @@ func TestLLRBMvcclBasicLookup(t *testing.T) {
 	}
 
 	snapshot.Release()
-	llrb.Destroy()
+
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLLRBMvccBasicUpdates(t *testing.T) {
@@ -383,7 +388,9 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 	}
 	snapshot.Release()
 
-	llrb.Destroy()
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLLRBMvccBasicRange(t *testing.T) {
@@ -470,7 +477,10 @@ func TestLLRBMvccBasicRange(t *testing.T) {
 	}
 
 	snapshot.Release()
-	llrb.Destroy()
+
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLLRBMvccRange(t *testing.T) {
@@ -573,7 +583,10 @@ func TestLLRBMvccRange(t *testing.T) {
 	}
 
 	snapshot.Release()
-	llrb.Destroy()
+
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLLRBMvccBasicIterate(t *testing.T) {
@@ -679,7 +692,10 @@ func TestLLRBMvccBasicIterate(t *testing.T) {
 	snapshot.Release()
 	llrb.SetMemratio(0.04)
 	llrb.Validate()
-	llrb.Destroy()
+
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLLRBMvccIterate(t *testing.T) {
@@ -805,7 +821,10 @@ func TestLLRBMvccIterate(t *testing.T) {
 
 	snapshot.Release()
 	llrb.Validate()
-	llrb.Destroy()
+
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLLRBMvccInsert(t *testing.T) {
@@ -892,7 +911,10 @@ func TestLLRBMvccInsert(t *testing.T) {
 	}
 
 	snapshot.Release()
-	llrb.Destroy()
+
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLLRBMvccUpsert(t *testing.T) {
@@ -999,7 +1021,9 @@ func TestLLRBMvccUpsert(t *testing.T) {
 		t.Errorf("expected %v, got %v", x, y)
 	}
 
-	llrb.Destroy()
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLLRBMvccDeleteMin(t *testing.T) {
@@ -1046,7 +1070,9 @@ func TestLLRBMvccDeleteMin(t *testing.T) {
 	if x, y := int64(0), stats["node.allocated"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
-	llrb.Destroy()
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLLRBMvccDelete(t *testing.T) {
@@ -1179,7 +1205,9 @@ func TestLLRBMvccDelete(t *testing.T) {
 		t.Errorf("expected %v, got %v", x, y)
 	}
 
-	llrb.Destroy()
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func makellrbmvcc(
