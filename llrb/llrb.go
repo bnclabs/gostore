@@ -881,7 +881,9 @@ func (llrb *LLRB) upsertcounts(key, value []byte, oldnd *Llrbnode) {
 	} else {
 		llrb.keymemory -= int64(len(oldnd.key(llrb.mdsize)))
 		if oldnd.metadata().ismvalue() {
-			llrb.valmemory -= int64(len(oldnd.nodevalue().value()))
+			if nv := oldnd.nodevalue(); nv != nil {
+				llrb.valmemory -= int64(len(nv.value()))
+			}
 		}
 		llrb.n_updates++
 	}

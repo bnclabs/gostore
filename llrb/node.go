@@ -128,7 +128,9 @@ func (nd *Llrbnode) Fpos() (level byte, offset int64) {
 // Value implement NodeGetter{}
 func (nd *Llrbnode) Value() []byte {
 	if nd != nil && nd.metadata().ismvalue() {
-		return nd.nodevalue().value()
+		if nv := nd.nodevalue(); nv != nil {
+			return nv.value()
+		}
 	}
 	return nil
 }
