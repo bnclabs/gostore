@@ -43,7 +43,9 @@ func TestEmpty(t *testing.T) {
 		t.Fatalf("expected error")
 	}
 
-	llrb.Destroy()
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestMissing(t *testing.T) {
@@ -64,16 +66,16 @@ func TestMissing(t *testing.T) {
 	bubt.Build(llrbiter)
 	llrbiter.Close()
 
-	// gather reference list of keys and values
-	keys, vals := make([][]byte, 0), make([][]byte, 0)
+	// gather reference list of nodes
+	refnds := make([]api.Node, 0)
 	llrb.Range(nil, nil, "both", false, func(nd api.Node) bool {
-		keys, vals = append(keys, nd.Key()), append(vals, nd.Value())
+		refnds = append(refnds, nd)
 		return true
 	})
 	if llrb.Count() != int64(count) {
 		t.Fatalf("expected %v, got %v", count, llrb.Count())
-	} else if len(keys) != count {
-		t.Fatalf("expected %v, got %v", count, len(keys))
+	} else if len(refnds) != count {
+		t.Fatalf("expected %v, got %v", count, len(refnds))
 	}
 
 	zblocksize := bconfig.Int64("zblocksize")
@@ -111,14 +113,17 @@ func TestMissing(t *testing.T) {
 
 	s.Release()
 
-	store.Destroy()
-	if _, err := os.Stat(indexfile); err == nil {
+	if err := store.Destroy(); err != nil {
+		t.Fatal(err)
+	} else if _, err := os.Stat(indexfile); err == nil {
 		t.Fatalf("expected %v to be removed", indexfile)
 	} else if _, err := os.Stat(datafile); err == nil {
 		t.Fatalf("expected %v to be removed", datafile)
 	}
 
-	llrb.Destroy()
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLookup(t *testing.T) {
@@ -131,7 +136,7 @@ func TestLookup(t *testing.T) {
 	defer os.Remove(indexfile)
 	defer os.Remove(datafile)
 
-	do := func(count int, store *Snapshot, keys, vals [][]byte) {
+	do := func(count int, llrb *llrb.LLRB, store *Snapshot, refnds []api.Node) {
 		snapch := make(chan api.IndexSnapshot, 1)
 		err := store.RSnapshot(snapch)
 		if err != nil {
@@ -147,33 +152,23 @@ func TestLookup(t *testing.T) {
 			t.Fatalf("expected %v, got %v", count, s.Count())
 		}
 
-		for j := 0; j < len(keys); j++ {
-			//t.Logf("%v %s", j, string(keys[j]))
-			if s.Has(keys[j]) == false {
-				t.Fatalf("missing key %v", string(keys[j]))
+		for j := 0; j < len(refnds); j++ {
+			key := refnds[j].Key()
+			if s.Has(key) == false {
+				t.Fatalf("missing key %v", string(key))
 			}
-			s.Get(keys[j], func(nd api.Node) bool {
-				if x, y := string(vals[j]), string(nd.Value()); x != y {
-					t.Fatalf("expected %v, got %v", y, x)
-				}
+			s.Get(key, func(nd api.Node) bool {
+				verifynode(t, refnds[j], nd)
 				return true
 			})
 		}
 		s.Min(func(nd api.Node) bool {
-			if x, y := string(keys[0]), string(nd.Key()); x != y {
-				t.Fatalf("expected %v, got %v", y, x)
-			} else if x, y := string(vals[0]), string(nd.Value()); x != y {
-				t.Fatalf("expected %v, got %v", y, x)
-			}
+			verifynode(t, refnds[0], nd)
 			return true
 		})
-		last := len(keys) - 1
+		last := len(refnds) - 1
 		s.Max(func(nd api.Node) bool {
-			if x, y := string(keys[last]), string(nd.Key()); x != y {
-				t.Fatalf("expected %v, got %v", y, x)
-			} else if x, y := string(vals[last]), string(nd.Value()); x != y {
-				t.Fatalf("expected %v, got %v", y, x)
-			}
+			verifynode(t, refnds[last], nd)
 			return true
 		})
 
@@ -184,16 +179,16 @@ func TestLookup(t *testing.T) {
 		//t.Logf("trying %v", i)
 		llrb := refllrb(i)
 
-		// gather reference list of keys and values
-		keys, vals := make([][]byte, 0), make([][]byte, 0)
+		// gather reference list of nodes
+		refnds := make([]api.Node, 0)
 		llrb.Range(nil, nil, "both", false, func(nd api.Node) bool {
-			keys, vals = append(keys, nd.Key()), append(vals, nd.Value())
+			refnds = append(refnds, nd)
 			return true
 		})
 		if llrb.Count() != int64(i) {
 			t.Fatalf("expected %v, got %v", i, llrb.Count())
-		} else if len(keys) != i {
-			t.Fatalf("expected %v, got %v", i, len(keys))
+		} else if len(refnds) != i {
+			t.Fatalf("expected %v, got %v", i, len(refnds))
 		}
 
 		bconfig := Defaultconfig()
@@ -208,8 +203,10 @@ func TestLookup(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		do(i, store, keys, vals)
-		store.Destroy()
+		do(i, llrb, store, refnds)
+		if err := store.Destroy(); err != nil {
+			t.Fatal(err)
+		}
 
 		// without data file
 		bubt = NewBubt(name, indexfile, "", bconfig)
@@ -220,15 +217,19 @@ func TestLookup(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		do(i, store, keys, vals)
-		store.Destroy()
+		do(i, llrb, store, refnds)
+		if err := store.Destroy(); err != nil {
+			t.Fatal(err)
+		}
 
 		if _, err := os.Stat(indexfile); err == nil {
 			t.Fatalf("expected %v to be removed", indexfile)
 		} else if _, err := os.Stat(datafile); err == nil {
 			t.Fatalf("expected %v to be removed", datafile)
 		}
-		llrb.Destroy()
+		if err := llrb.Destroy(); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
@@ -242,7 +243,7 @@ func TestRange(t *testing.T) {
 	defer os.Remove(indexfile)
 	defer os.Remove(datafile)
 
-	do := func(count int, store *Snapshot, keys, vals [][]byte) {
+	do := func(count int, llrb *llrb.LLRB, store *Snapshot, refnds []api.Node) {
 		snapch := make(chan api.IndexSnapshot, 1)
 		if err := store.RSnapshot(snapch); err != nil {
 			t.Fatalf("acquiring snapshot: %v", err)
@@ -252,22 +253,14 @@ func TestRange(t *testing.T) {
 		// forward range
 		off := 0
 		s.Range(nil, nil, "both", false, func(nd api.Node) bool {
-			if x, y := string(nd.Key()), string(keys[off]); x != y {
-				t.Fatalf("expected %v, got %v", y, x)
-			} else if x, y = string(nd.Value()), string(vals[off]); x != y {
-				t.Fatalf("expected %v, got %v", y, x)
-			}
+			verifynode(t, refnds[off], nd)
 			off++
 			return true
 		})
 		// backward range
 		off = count - 1
 		s.Range(nil, nil, "both", true, func(nd api.Node) bool {
-			if x, y := string(nd.Key()), string(keys[off]); x != y {
-				t.Fatalf("expected %v, got %v", y, x)
-			} else if x, y = string(nd.Value()), string(vals[off]); x != y {
-				t.Fatalf("expected %v, got %v", y, x)
-			}
+			verifynode(t, refnds[off], nd)
 			off--
 			return true
 		})
@@ -278,9 +271,9 @@ func TestRange(t *testing.T) {
 	for i := 1; i <= 2000; i++ {
 		//t.Logf("trying %v", i)
 		llrb := refllrb(i)
-		keys, vals := make([][]byte, 0), make([][]byte, 0)
+		refnds := make([]api.Node, 0)
 		llrb.Range(nil, nil, "both", false, func(nd api.Node) bool {
-			keys, vals = append(keys, nd.Key()), append(vals, nd.Value())
+			refnds = append(refnds, nd)
 			return true
 		})
 
@@ -296,8 +289,10 @@ func TestRange(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		do(i, store, keys, vals)
-		store.Destroy()
+		do(i, llrb, store, refnds)
+		if err := store.Destroy(); err != nil {
+			t.Fatal(err)
+		}
 		// without data file
 		bubt = NewBubt(name, indexfile, "", bconfig)
 		llrbiter = llrb.Iterate(nil, nil, "both", false)
@@ -307,8 +302,10 @@ func TestRange(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		do(i, store, keys, vals)
-		store.Destroy()
+		do(i, llrb, store, refnds)
+		if err := store.Destroy(); err != nil {
+			t.Fatal(err)
+		}
 
 		if _, err := os.Stat(indexfile); err == nil {
 			t.Fatalf("expected %v to be removed", indexfile)
@@ -316,7 +313,9 @@ func TestRange(t *testing.T) {
 			t.Fatalf("expected %v to be removed", datafile)
 		}
 
-		llrb.Destroy()
+		if err := llrb.Destroy(); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
@@ -329,7 +328,7 @@ func TestIterate(t *testing.T) {
 	defer os.Remove(indexfile)
 	defer os.Remove(datafile)
 
-	do := func(count int, store *Snapshot, keys, vals [][]byte) {
+	do := func(count int, llrb *llrb.LLRB, store *Snapshot, refnds []api.Node) {
 		snapch := make(chan api.IndexSnapshot, 1)
 		if err := store.RSnapshot(snapch); err != nil {
 			t.Fatalf("acquiring snapshot: %v", err)
@@ -340,11 +339,7 @@ func TestIterate(t *testing.T) {
 		siter := s.Iterate(nil, nil, "both", false)
 		off, nd := 0, siter.Next()
 		for nd != nil {
-			if x, y := string(nd.Key()), string(keys[off]); x != y {
-				t.Fatalf("expected %v, got %v", y, x)
-			} else if x, y = string(nd.Value()), string(vals[off]); x != y {
-				t.Fatalf("expected %v, got %v", y, x)
-			}
+			verifynode(t, refnds[off], nd)
 			nd = siter.Next()
 			off++
 		}
@@ -353,11 +348,7 @@ func TestIterate(t *testing.T) {
 		siter = s.Iterate(nil, nil, "both", true)
 		off, nd = count-1, siter.Next()
 		for nd != nil {
-			if x, y := string(nd.Key()), string(keys[off]); x != y {
-				t.Fatalf("expected %v, got %v", y, x)
-			} else if x, y = string(nd.Value()), string(vals[off]); x != y {
-				t.Fatalf("expected %v, got %v", y, x)
-			}
+			verifynode(t, refnds[off], nd)
 			nd = siter.Next()
 			off--
 		}
@@ -369,9 +360,9 @@ func TestIterate(t *testing.T) {
 	for i := 1; i <= 2000; i++ {
 		//t.Logf("trying %v", i)
 		llrb := refllrb(i)
-		keys, vals := make([][]byte, 0), make([][]byte, 0)
+		refnds := make([]api.Node, 0)
 		llrb.Range(nil, nil, "both", false, func(nd api.Node) bool {
-			keys, vals = append(keys, nd.Key()), append(vals, nd.Value())
+			refnds = append(refnds, nd)
 			return true
 		})
 
@@ -387,8 +378,10 @@ func TestIterate(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		do(i, store, keys, vals)
-		store.Destroy()
+		do(i, llrb, store, refnds)
+		if err := store.Destroy(); err != nil {
+			t.Fatal(err)
+		}
 		// without datafile
 		bubt = NewBubt(name, indexfile, "", bconfig)
 		llrbiter = llrb.Iterate(nil, nil, "both", false)
@@ -398,8 +391,10 @@ func TestIterate(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		do(i, store, keys, vals)
-		store.Destroy()
+		do(i, llrb, store, refnds)
+		if err := store.Destroy(); err != nil {
+			t.Fatal(err)
+		}
 
 		if _, err := os.Stat(indexfile); err == nil {
 			t.Fatalf("expected %v to be removed", indexfile)
@@ -407,7 +402,9 @@ func TestIterate(t *testing.T) {
 			t.Fatalf("expected %v to be removed", datafile)
 		}
 
-		llrb.Destroy()
+		if err := llrb.Destroy(); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
@@ -457,4 +454,28 @@ func refllrb(count int) *llrb.LLRB {
 		seqno++
 	}
 	return llrb
+}
+
+func verifynode(t *testing.T, refnd, nd api.Node) {
+	if refvbno, vbno := refnd.Vbno(), nd.Vbno(); refvbno != vbno {
+		t.Fatalf("expected %v, got %v", refvbno, vbno)
+	} else if refid, id := refnd.Vbuuid(), nd.Vbuuid(); refid != id {
+		t.Fatalf("expected %v, got %v", refid, id)
+	}
+	refseqno, seqno := refnd.Bornseqno(), nd.Bornseqno()
+	if refseqno != seqno {
+		t.Fatalf("expected %v, got %v", refseqno, seqno)
+	}
+	refseqno, seqno = refnd.Deadseqno(), nd.Deadseqno()
+	if refseqno != seqno {
+		t.Fatalf("expected %v, got %v", refseqno, seqno)
+	}
+	refkey, key := string(refnd.Key()), string(nd.Key())
+	if refkey != key {
+		t.Fatalf("expected %v, got %v", refkey, key)
+	}
+	refval, val := string(refnd.Value()), string(nd.Value())
+	if refval != val {
+		t.Fatalf("expected %v, got %v", refval, val)
+	}
 }

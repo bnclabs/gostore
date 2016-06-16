@@ -73,6 +73,7 @@ func OpenBubtstore(name, indexfile, datafile string, zblocksize int64) (ss *Snap
 
 	fi, err := ss.indexfd.Stat()
 	if err != nil {
+		fmt.Println("debug", err)
 		fmsg := "%v unable to stat %q: %v\n"
 		log.Errorf(fmsg, ss.logprefix, ss.indexfile, err)
 		return nil, err
@@ -105,38 +106,35 @@ func OpenBubtstore(name, indexfile, datafile string, zblocksize int64) (ss *Snap
 	configat := markerat - markerBlocksize
 	n, err = ss.indexfd.ReadAt(block, configat)
 	if err != nil {
-		panic(err)
+		panicerr("config ReadAt: %v", err)
 	} else if int64(n) != markerBlocksize {
-		fmsg := "%v partial read: %v != %v"
-		panic(fmt.Errorf(fmsg, ss.logprefix, n, markerBlocksize))
+		panicerr("%v partial read: %v != %v", ss.logprefix, n, markerBlocksize)
 	} else {
 		ss.rootblock = int64(binary.BigEndian.Uint64(block[:8]))
 		ss.rootreduce = int64(binary.BigEndian.Uint64(block[8:16]))
 		ln := binary.BigEndian.Uint16(block[16:18])
 		if err := ss.json2config(block[18 : 18+ln]); err != nil {
-			panic(err)
+			panicerr("json2config: %v", err)
 		}
 	}
 	// validate config block
 	if ss.name != name {
-		panic(fmt.Errorf("expected name %v, got %v", ss.name, name))
+		panicerr("expected name %v, got %v", ss.name, name)
 	} else if ss.zblocksize != zblocksize {
-		fmsg := "expected zblocksize %v, got %v"
-		panic(fmt.Errorf(fmsg, ss.zblocksize, zblocksize))
+		panicerr("expected zblocksize %v, got %v", ss.zblocksize, zblocksize)
 	}
 
 	// load stats block
 	statat := configat - zblocksize
 	n, err = ss.indexfd.ReadAt(block, statat)
 	if err != nil {
-		panic(err)
+		panicerr("stats ReadAt: %v", err)
 	} else if int64(n) != zblocksize {
-		fmsg := "%v partial read: %v != %v"
-		panic(fmt.Errorf(fmsg, ss.logprefix, n, zblocksize))
+		panicerr("%v partial read: %v != %v", ss.logprefix, n, zblocksize)
 	} else {
 		ln := binary.BigEndian.Uint16(block[:2])
 		if err := ss.json2stats(block[2 : 2+ln]); err != nil {
-			panic(err)
+			panicerr("json2stats: %v", err)
 		}
 	}
 
@@ -197,11 +195,11 @@ func (ss *Snapshot) Validate() {
 }
 
 // Destroy implement Index{} interface.
-func (ss *Snapshot) Destroy() {
+func (ss *Snapshot) Destroy() error {
 	if atomic.LoadInt64(&ss.n_snapshots) > 0 {
-		panic("active snapshots")
+		panic("Destory(): active snapshots")
 	} else if atomic.LoadInt64(&ss.activeiter) > 0 {
-		panic("close iterators before destorying the snapshot")
+		panic("Destroy(): active iterators")
 	}
 
 	readmu.Lock()
@@ -209,28 +207,33 @@ func (ss *Snapshot) Destroy() {
 
 	if err := ss.indexfd.Close(); err != nil {
 		log.Errorf("%v closing %q: %v\n", ss.logprefix, ss.indexfile, err)
+		return err
 	}
 	if ss.datafd != nil {
 		if err := ss.datafd.Close(); err != nil {
 			log.Errorf("%v closing %q %v\n", ss.logprefix, ss.datafile, err)
+			return err
 		}
 	}
 
 	if err := os.Remove(ss.indexfile); err != nil {
 		log.Errorf("%v while removing %q: %v\n", ss.logprefix, ss.indexfile, err)
+		return err
 	} else {
 		log.Infof("%v removing %q\n", ss.logprefix, ss.indexfile)
 	}
 
 	if ss.datafile != "" {
 		if err := os.Remove(ss.datafile); err != nil {
-			log.Infof("%v while removing %q: %v\n", ss.logprefix, ss.datafile, err)
+			log.Errorf("%v while removing %q: %v\n", ss.logprefix, ss.datafile, err)
+			return err
 		} else {
 			log.Infof("%v removing %q\n", ss.logprefix, ss.datafile)
 		}
 	}
 
 	delete(openstores, ss.name)
+	return nil
 }
 
 //---- IndexSnapshot interface.
@@ -488,9 +491,9 @@ func (ss *Snapshot) readat(fpos int64) (nd interface{}) {
 		nd = znode(data)
 	}
 	if n, err := ss.indexfd.ReadAt(data, vpos); err != nil {
-		panic(err)
+		panicerr("ReadAt %q: %v", ss.indexfile, err)
 	} else if n != len(data) {
-		panic("partial read")
+		panicerr("ReadAt %q : partial read", ss.indexfile)
 	}
 	return
 }

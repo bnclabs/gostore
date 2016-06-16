@@ -56,13 +56,11 @@ func (flusher *bubtflusher) close() {
 		log.Infof("%v closing %q flusher ...\n", flusher.f.logprefix, dataname)
 		close(flusher.datach)
 		<-flusher.dquitch
-		flusher.f.datafd.Close()
 	}
 
 	log.Infof("%v closing %q flusher ...\n", flusher.f.logprefix, indexname)
 	close(flusher.idxch)
 	<-flusher.iquitch
-	flusher.f.indexfd.Close()
 }
 
 func (flusher *bubtflusher) run(
@@ -73,6 +71,8 @@ func (flusher *bubtflusher) run(
 
 	defer func() {
 		log.Infof("%v exiting %q flusher for %v\n", logprefix, name, fd.Name())
+		fd.Sync()
+		fd.Close()
 		close(quitch)
 	}()
 

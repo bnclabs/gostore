@@ -90,7 +90,7 @@ func NewBubt(name, indexfile, datafile string, config lib.Config) *Bubt {
 	}
 	f.mreduce = config.Bool("mreduce")
 	if f.hasdatafile() == false && f.mreduce == true {
-		panicerr("cannot mreduce without datafile")
+		panic("cannot mreduce without datafile")
 	}
 	f.iterpoolsize = config.Int64("iterpool.size")
 	f.level = byte(config.Int64("level"))
@@ -221,7 +221,7 @@ func (f *Bubt) buildm(ms []*mblock, fpos [2]int64) ([]*mblock, blocker, [2]int64
 	if block != nil {
 		ms[0] = f.newmblock()
 		if ms[0].insert(block) == false {
-			panicerr("inserting first entry into mblock")
+			panic("inserting first entry into mblock")
 		}
 		return ms, mblock, fpos
 	}

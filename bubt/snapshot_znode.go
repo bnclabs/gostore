@@ -35,14 +35,14 @@ func (z znode) rangeforward(
 
 func (z znode) searchforward(lkey []byte, entries []byte, cmp int) int32 {
 	if (len(entries) % 4) != 0 {
-		panic("unaligned entries slice, call the programmer!")
+		panicerr("unaligned entries slice, call the programmer!")
 	} else if lkey == nil {
 		return 0
 	}
 
 	switch count := len(entries) / 4; count {
 	case 0:
-		panic("impossible code path, call the programmer!")
+		panicerr("impossible code path, call the programmer!")
 
 	case 1:
 		if bytes.Compare(z.getentry(0, entries).key(), lkey) < cmp {
@@ -57,6 +57,7 @@ func (z znode) searchforward(lkey []byte, entries []byte, cmp int) int32 {
 		}
 		return z.searchforward(lkey, entries[:mid*4], cmp)
 	}
+	panic("unreachable code")
 }
 
 func (z znode) rangebackward(
@@ -84,14 +85,14 @@ func (z znode) rangebackward(
 
 func (z znode) searchbackward(hkey []byte, entries []byte, cmp int) int32 {
 	if (len(entries) % 4) != 0 {
-		panic("unaligned entries slice, call the programmer!")
+		panicerr("unaligned entries slice, call the programmer!")
 	} else if hkey == nil {
 		return int32(len(entries)/4) - 1
 	}
 
 	switch count := len(entries) / 4; count {
 	case 0:
-		panic("impossible code path, call the programmer!")
+		panicerr("impossible code path, call the programmer!")
 
 	case 1:
 		if bytes.Compare(z.getentry(0, entries).key(), hkey) > cmp {
@@ -106,6 +107,7 @@ func (z znode) searchbackward(hkey []byte, entries []byte, cmp int) int32 {
 		}
 		return mid + z.searchbackward(hkey, entries[mid*4:], cmp)
 	}
+	panic("unreachable code")
 }
 
 func (z znode) getentry(n uint32, entries []byte) zentry {
