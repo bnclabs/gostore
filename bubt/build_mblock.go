@@ -42,7 +42,7 @@ func (m *mblock) insert(block blocker) (ok bool) {
 
 	// check whether enough space available in the block.
 	entrysz := 2 + len(key) + 8 /*vpos*/ + 8 /*rpos*/
-	arrayblock := 4 + (len(m.entries) * 4)
+	arrayblock := 4 + ((len(m.entries) + 1) * 4)
 	if (arrayblock + len(m.kbuffer) + entrysz) > int(m.f.mblocksize) {
 		return false
 	}
@@ -63,10 +63,8 @@ func (m *mblock) insert(block blocker) (ok bool) {
 	binary.BigEndian.PutUint64(scratch[:8], uint64(coffset))
 	m.kbuffer = append(m.kbuffer, scratch[:8]...)
 	// encode reduce-value
-	if m.f.mreduce {
-		binary.BigEndian.PutUint64(scratch[:8], uint64(rpos))
-		m.kbuffer = append(m.kbuffer, scratch[:8]...)
-	}
+	binary.BigEndian.PutUint64(scratch[:8], uint64(rpos))
+	m.kbuffer = append(m.kbuffer, scratch[:8]...)
 
 	return true
 }

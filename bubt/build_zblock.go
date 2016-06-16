@@ -53,7 +53,7 @@ func (z *zblock) insert(nd api.Node) (ok bool) {
 	} else {
 		entrysz += 2 + len(value) // TODO: avoid magic numbers
 	}
-	arrayblock := 4 + (len(z.entries) * 4)
+	arrayblock := 4 + ((len(z.entries) + 1) * 4)
 	if int64(arrayblock+len(z.kbuffer)+entrysz) > z.f.zblocksize {
 		return false
 	}
