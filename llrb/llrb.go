@@ -533,7 +533,7 @@ func (llrb *LLRB) upsert(
 				nd, dirty = nd.setnodevalue(nil), true
 			}
 		}
-		if nd.metadata().ismvalue() && value != nil { // add new value if req.
+		if nd.metadata().ismvalue() && len(value) > 0 { // add new value if req.
 			ptr, mpool := llrb.valarena.Alloc(int64(nvaluesize + len(value)))
 			nv := (*nodevalue)(ptr)
 			nv.pool = mpool
