@@ -110,7 +110,6 @@ func (f *Bubt) Build(iter api.IndexIterator) {
 	log.Infof("%v builder started ...\n", f.logprefix)
 
 	f.iterator = iter
-	var block blocker
 
 	// add a new level to the btree.
 	prependlevel := func(ms []*mblock, mblock *mblock) []*mblock {
@@ -156,23 +155,25 @@ func (f *Bubt) Build(iter api.IndexIterator) {
 		log.Infof("%v builder writing config block\n", f.logprefix)
 	}
 
+	var block blocker
+	var fin bool
+
 	// build
 	ms, fpos := []*mblock{}, [2]int64{0, 0}
-	for ms, block, fpos = f.buildm(ms, fpos); block != nil; {
+	for ms, block, fpos, fin = f.buildm(ms, fpos); fin == false; {
 		mblock := f.newmblock()
 		if mblock.insert(block) == false {
 			panicerr("inserting first entry into mblock")
 		}
-		ms, block, fpos = f.buildm(prependlevel(ms, mblock), fpos)
+		ms, block, fpos, fin = f.buildm(prependlevel(ms, mblock), fpos)
 	}
 
-	if block == nil && len(ms) == 0 {
+	if f.n_count == 0 {
 		log.Infof("%v builder finds empty iterator\n", f.logprefix)
 		return
 	}
 
 	// root-block and its reduced value.
-	block = ms[0]
 	f.rootblock, f.rootreduce = -1, -1
 	if f.n_count > 0 {
 		f.rootblock = block.backref()
@@ -189,46 +190,44 @@ func (f *Bubt) Build(iter api.IndexIterator) {
 	log.Infof("%v ... build completed\n", f.logprefix)
 }
 
-func (f *Bubt) buildm(ms []*mblock, fpos [2]int64) ([]*mblock, blocker, [2]int64) {
+func (f *Bubt) buildm(ms []*mblock, fpos [2]int64) ([]*mblock, blocker, [2]int64, bool) {
 	var block blocker
+	var fin bool
 	var childms []*mblock
 
 	if len(ms) == 0 {
-		block, fpos = f.buildz(fpos)
-		return ms, block, fpos
+		block, fpos, fin = f.buildz(fpos)
+		return ms, block, fpos, fin
 	}
 
-	mblock := ms[0]
 	f.dcount++
 	defer func() { f.dcount-- }()
 
-	childms, block, fpos = f.buildm(ms[1:], fpos)
-	ok := mblock.insert(block)
-	for ok {
-		if childms, block, fpos = f.buildm(childms, fpos); block != nil {
-			ok = mblock.insert(block)
-			continue
-		}
-		break
+	mblock := ms[0]
+	if mblock == nil {
+		return ms, nil, fpos, true
 	}
-	if len(childms) > 0 {
-		if ok = mblock.insert(childms[0]); !ok {
-			block = childms[0]
-		}
+
+	childms, block, fpos, fin = f.buildm(ms[1:], fpos)
+	ok := mblock.insert(block)
+	for ok && fin == false {
+		childms, block, fpos, fin = f.buildm(childms, fpos)
+		ok = mblock.insert(block)
 	}
 
 	_, fpos = f.flush(mblock, fpos)
-	if block != nil {
+	ms[0] = nil
+	if block != nil && ok == false {
 		ms[0] = f.newmblock()
-		if ms[0].insert(block) == false {
-			panic("inserting first entry into mblock")
+		if block != nil && ms[0].insert(block) == false {
+			panic("first insert to mblock, check whether key > mblocksize")
 		}
-		return ms, mblock, fpos
+		return ms, mblock, fpos, false
 	}
-	return ms, nil, fpos
+	return ms, mblock, fpos, true
 }
 
-func (f *Bubt) buildz(fpos [2]int64) (blocker, [2]int64) {
+func (f *Bubt) buildz(fpos [2]int64) (blocker, [2]int64, bool) {
 	z := f.newz(fpos)
 
 	f.dcount++
@@ -236,15 +235,19 @@ func (f *Bubt) buildz(fpos [2]int64) (blocker, [2]int64) {
 	defer func() { f.h_depth.Add(f.dcount) }()
 
 	nd := f.pop()
-	ok := z.insert(nd)
-	for ok {
+	ok, fin := z.insert(nd)
+	if nd != nil && ok == false {
+		panic("first insert to zblock, check whether key > zblocksize")
+	}
+	for ok { // if ok == true, fin shall be false
 		nd = f.pop()
-		ok = z.insert(nd)
+		ok, fin = z.insert(nd)
 	}
 	if nd != nil {
 		f.push(nd)
 	}
-	return f.flush(z, fpos)
+	block, newfpos := f.flush(z, fpos)
+	return block, newfpos, fin
 }
 
 func (f *Bubt) flush(block blocker, fpos [2]int64) (blocker, [2]int64) {

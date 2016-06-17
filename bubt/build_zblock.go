@@ -34,12 +34,12 @@ func (f *Bubt) newz(fpos [2]int64) (z *zblock) {
 	return z
 }
 
-func (z *zblock) insert(nd api.Node) (ok bool) {
+func (z *zblock) insert(nd api.Node) (ok, fin bool) {
 	var key, value []byte
 	var scratch [26]byte
 
 	if nd == nil {
-		return false
+		return false, true
 	} else if key, value = nd.Key(), nd.Value(); int64(len(key)) > api.MaxKeymem {
 		panicerr("key cannot exceed %v", api.MaxKeymem)
 	} else if int64(len(value)) > api.MaxValmem {
@@ -55,7 +55,7 @@ func (z *zblock) insert(nd api.Node) (ok bool) {
 	}
 	arrayblock := 4 + ((len(z.entries) + 1) * 4)
 	if int64(arrayblock+len(z.kbuffer)+entrysz) > z.f.zblocksize {
-		return false
+		return false, false
 	}
 
 	z.keys, z.values = append(z.keys, key), append(z.values, value)
@@ -93,7 +93,7 @@ func (z *zblock) insert(nd api.Node) (ok bool) {
 		z.kbuffer = append(z.kbuffer, scratch[:2]...)
 		z.kbuffer = append(z.kbuffer, value...)
 	}
-	return true
+	return true, false
 }
 
 func (z *zblock) finalize() {
@@ -103,9 +103,8 @@ func (z *zblock) finalize() {
 		panicerr("zblock overflow %v > %v, call the programmer!", sz, zblksize)
 	}
 
-	z.kbuffer = z.kbuffer[:z.f.zblocksize] // first increase slice length
+	z.kbuffer = makespace(z.kbuffer[:z.f.zblocksize], arrayblock, ln)
 
-	copy(z.kbuffer[arrayblock:], z.kbuffer[:ln])
 	n := 0
 	binary.BigEndian.PutUint32(z.kbuffer[n:], uint32(len(z.entries)))
 	n += 4

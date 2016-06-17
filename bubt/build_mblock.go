@@ -30,7 +30,7 @@ func (f *Bubt) newmblock() (m *mblock) {
 }
 
 func (m *mblock) insert(block blocker) (ok bool) {
-	var scratch [16]byte // 2 + 8
+	var scratch [16]byte
 
 	if block == nil {
 		return false
@@ -72,13 +72,12 @@ func (m *mblock) insert(block blocker) (ok bool) {
 func (m *mblock) finalize() {
 	arrayblock := 4 + (len(m.entries) * 4)
 	sz, ln := arrayblock+len(m.kbuffer), len(m.kbuffer)
-	if mblksize := m.f.mblocksize; int64(sz) > m.f.mblocksize {
+	if mblksize := m.f.mblocksize; int64(sz) > mblksize {
 		panicerr("mblock overflow %v > %v, call the programmer!", sz, mblksize)
 	}
 
-	m.kbuffer = m.kbuffer[:m.f.mblocksize] // first increase slice length
+	m.kbuffer = makespace(m.kbuffer[:m.f.mblocksize], arrayblock, ln)
 
-	copy(m.kbuffer[arrayblock:], m.kbuffer[:ln])
 	n := 0
 	binary.BigEndian.PutUint32(m.kbuffer[n:], uint32(len(m.entries)))
 	n += 4

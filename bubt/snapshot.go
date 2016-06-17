@@ -73,7 +73,6 @@ func OpenBubtstore(name, indexfile, datafile string, zblocksize int64) (ss *Snap
 
 	fi, err := ss.indexfd.Stat()
 	if err != nil {
-		fmt.Println("debug", err)
 		fmsg := "%v unable to stat %q: %v\n"
 		log.Errorf(fmsg, ss.logprefix, ss.indexfile, err)
 		return nil, err
@@ -496,6 +495,10 @@ func (ss *Snapshot) readat(fpos int64) (nd interface{}) {
 		panicerr("ReadAt %q : partial read", ss.indexfile)
 	}
 	return
+}
+
+func (ss *Snapshot) Dumpkeys() {
+	ss.dumpkeys(ss.rootblock, "")
 }
 
 func (ss *Snapshot) dumpkeys(fpos int64, prefix string) {
