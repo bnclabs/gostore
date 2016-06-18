@@ -260,6 +260,112 @@ func TestDictBasicRange(t *testing.T) {
 	}
 }
 
+func TestPartialRange(t *testing.T) {
+	d := NewDict()
+	if d.Count() != 0 {
+		t.Fatalf("expected an empty dict")
+	}
+
+	// inserts
+	inserts, n := make([][2][]byte, 0), 100
+	for i := 0; i < n; i += 2 {
+		key, value := fmt.Sprintf("key%v", i), fmt.Sprintf("value%v", i)
+		inserts = append(inserts, [2][]byte{[]byte(key), []byte(value)})
+	}
+
+	for _, kv := range inserts {
+		d.Upsert(kv[0], kv[1], func(_ api.Index, _ int64, newnd, oldnd api.Node) {
+			if oldnd != nil {
+				t.Errorf("expected nil")
+			}
+		})
+	}
+
+	// forward range
+	keys := make([]string, 0)
+	d.Range([]byte("key1"), []byte("key2"), "none", false, func(nd api.Node) bool {
+		keys = append(keys, string(nd.Key()))
+		return true
+	})
+	if len(keys) > 0 {
+		t.Fatalf("expected empty result %v", keys)
+	}
+
+	keys = make([]string, 0)
+	d.Range([]byte("key1"), []byte("key2"), "low", false, func(nd api.Node) bool {
+		keys = append(keys, string(nd.Key()))
+		return true
+	})
+	refkeys := []string{"key10", "key12", "key14", "key16", "key18"}
+	if !reflect.DeepEqual(refkeys, keys) {
+		t.Fatalf("expected %v, got %v", refkeys, keys)
+	}
+
+	keys = make([]string, 0)
+	d.Range([]byte("key1"), []byte("key2"), "high", false, func(nd api.Node) bool {
+		keys = append(keys, string(nd.Key()))
+		return true
+	})
+	refkeys = []string{"key2", "key20", "key22", "key24", "key26", "key28"}
+	if !reflect.DeepEqual(refkeys, keys) {
+		t.Fatalf("expected %v, got %v", refkeys, keys)
+	}
+
+	keys = make([]string, 0)
+	d.Range([]byte("key1"), []byte("key2"), "both", false, func(nd api.Node) bool {
+		keys = append(keys, string(nd.Key()))
+		return true
+	})
+	refkeys = []string{
+		"key10", "key12", "key14", "key16", "key18",
+		"key2", "key20", "key22", "key24", "key26", "key28"}
+	if !reflect.DeepEqual(refkeys, keys) {
+		t.Fatalf("expected %v, got %v", refkeys, keys)
+	}
+
+	// backward range
+	keys = make([]string, 0)
+	d.Range([]byte("key1"), []byte("key2"), "none", true, func(nd api.Node) bool {
+		keys = append(keys, string(nd.Key()))
+		return true
+	})
+	if len(keys) > 0 {
+		t.Fatalf("expected empty result %v", keys)
+	}
+
+	keys = make([]string, 0)
+	d.Range([]byte("key1"), []byte("key2"), "low", true, func(nd api.Node) bool {
+		keys = append(keys, string(nd.Key()))
+		return true
+	})
+	refkeys = []string{"key18", "key16", "key14", "key12", "key10"}
+	if !reflect.DeepEqual(refkeys, keys) {
+		t.Fatalf("expected %v, got %v", refkeys, keys)
+	}
+
+	keys = make([]string, 0)
+	d.Range([]byte("key1"), []byte("key2"), "high", true, func(nd api.Node) bool {
+		keys = append(keys, string(nd.Key()))
+		return true
+	})
+	refkeys = []string{"key28", "key26", "key24", "key22", "key20", "key2"}
+	if !reflect.DeepEqual(refkeys, keys) {
+		t.Fatalf("expected %v, got %v", refkeys, keys)
+	}
+
+	keys = make([]string, 0)
+	d.Range([]byte("key1"), []byte("key2"), "both", true, func(nd api.Node) bool {
+		keys = append(keys, string(nd.Key()))
+		return true
+	})
+	refkeys = []string{
+		"key28", "key26", "key24", "key22", "key20",
+		"key2", "key18", "key16", "key14", "key12", "key10"}
+	if !reflect.DeepEqual(refkeys, keys) {
+		t.Fatalf("expected %v, got %v", refkeys, keys)
+	}
+}
+
 func TestDictRange(t *testing.T) {
 	d := NewDict()
 	if d.Count() != 0 {
@@ -293,25 +399,28 @@ func TestDictRange(t *testing.T) {
 	}
 
 	verify := func(lkey, hkey []byte, incl string, nd api.Node) {
-		lowcmp, highcmp := 0, 0
-		switch incl {
-		case "none":
-			lowcmp, highcmp = 1, -1
-		case "low":
-			highcmp = -1
-		case "high":
-			lowcmp = 1
+		lowcmp, highcmp := 1, -1
+		if bytes.Compare(lkey, hkey) == 0 && incl != "none" {
+			incl = "both"
 		}
-		if bytes.Compare(lkey, hkey) == 0 {
+		switch incl {
+		case "low":
+			lowcmp = 0
+		case "high":
+			highcmp = 0
+		case "both":
 			lowcmp, highcmp = 0, 0
 		}
-		if bytes.Compare(nd.Key(), lkey) < lowcmp {
+		lpartial := incl == "low" || incl == "both"
+		hpartial := incl == "high" || incl == "both"
+		lk, hk := string(lkey), string(hkey)
+		if api.Binarycmp(nd.Key(), lkey, lpartial) < lowcmp {
 			fmsg := "failed for %v (%v,%v,%v)"
-			t.Fatalf(fmsg, string(nd.Key()), string(lkey), string(hkey), incl)
+			t.Fatalf(fmsg, string(nd.Key()), lk, hk, incl)
 		}
-		if bytes.Compare(nd.Key(), hkey) > highcmp {
+		if api.Binarycmp(nd.Key(), hkey, hpartial) > highcmp {
 			fmsg := "failed for %v (%v,%v,%v)"
-			t.Fatalf(fmsg, string(nd.Key()), string(lkey), string(hkey), incl)
+			t.Fatalf(fmsg, string(nd.Key()), lk, hk, incl)
 		}
 	}
 
@@ -332,10 +441,6 @@ func TestDictRange(t *testing.T) {
 			prev = key
 			return true
 		})
-		if bytes.Compare(lkey, hkey) == 0 && count > 1 {
-			fmsg := "failed count %v (%v,%v,%v)"
-			t.Fatalf(fmsg, count, string(lkey), string(hkey), incl)
-		}
 		// forward range, return false
 		count = 0
 		d.Range(lkey, hkey, incl, false, func(nd api.Node) bool {
@@ -361,10 +466,6 @@ func TestDictRange(t *testing.T) {
 			prev = key
 			return true
 		})
-		if bytes.Compare(lkey, hkey) == 0 && count > 1 {
-			fmsg := "failed count %v (%v,%v,%v)"
-			t.Fatalf(fmsg, count, string(lkey), string(hkey), incl)
-		}
 		// backward range, return false
 		count = 0
 		d.Range(lkey, hkey, incl, true, func(nd api.Node) bool {
@@ -440,14 +541,18 @@ func TestDictBasicIterate(t *testing.T) {
 			return true
 		})
 		iter := d.Iterate(lowkey, highkey, incl, false)
-		outs := make([][2][]byte, 0)
-		for nd := iter.Next(); nd != nil; nd = iter.Next() {
-			outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
+		if iter != nil {
+			outs := make([][2][]byte, 0)
+			for nd := iter.Next(); nd != nil; nd = iter.Next() {
+				outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
+			}
+			if !reflect.DeepEqual(outs, refs) {
+				t.Fatalf("failed %v", casenum)
+			}
+			iter.Close()
+		} else if len(refs) > 0 {
+			t.Fatalf("unexpected nil iterator")
 		}
-		if !reflect.DeepEqual(outs, refs) {
-			t.Fatalf("failed %v", casenum)
-		}
-		iter.Close()
 		// backward iteration
 		refs = make([][2][]byte, 0)
 		d.Range(lowkey, highkey, incl, true, func(nd api.Node) bool {
@@ -455,14 +560,140 @@ func TestDictBasicIterate(t *testing.T) {
 			return true
 		})
 		iter = d.Iterate(lowkey, highkey, incl, true)
-		outs = make([][2][]byte, 0)
-		for nd := iter.Next(); nd != nil; nd = iter.Next() {
-			outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
+		if iter != nil {
+			outs := make([][2][]byte, 0)
+			for nd := iter.Next(); nd != nil; nd = iter.Next() {
+				outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
+			}
+			if !reflect.DeepEqual(outs, refs) {
+				t.Fatalf("failed %v", casenum)
+			}
+			iter.Close()
+		} else if len(refs) > 0 {
+			t.Fatalf("unexpected nil iterator")
 		}
-		if !reflect.DeepEqual(outs, refs) {
-			t.Fatalf("failed %v", casenum)
-		}
-		iter.Close()
+	}
+}
+
+func TestPartialIterate(t *testing.T) {
+	d := NewDict()
+	if d.Count() != 0 {
+		t.Fatalf("expected an empty dict")
+	}
+
+	// inserts
+	inserts, n := make([][2][]byte, 0), 100
+	for i := 0; i < n; i += 2 {
+		key, value := fmt.Sprintf("key%v", i), fmt.Sprintf("value%v", i)
+		inserts = append(inserts, [2][]byte{[]byte(key), []byte(value)})
+	}
+
+	for _, kv := range inserts {
+		d.Upsert(kv[0], kv[1], func(_ api.Index, _ int64, newnd, oldnd api.Node) {
+			if oldnd != nil {
+				t.Errorf("expected nil")
+			}
+		})
+	}
+
+	// forward range
+	keys := make([]string, 0)
+	iter := d.Iterate([]byte("key1"), []byte("key2"), "none", false)
+	nd := iter.Next()
+	for nd != nil {
+		keys = append(keys, string(nd.Key()))
+		nd = iter.Next()
+	}
+	if len(keys) > 0 {
+		t.Fatalf("expected empty result %v", keys)
+	}
+
+	keys = make([]string, 0)
+	iter = d.Iterate([]byte("key1"), []byte("key2"), "low", false)
+	nd = iter.Next()
+	for nd != nil {
+		keys = append(keys, string(nd.Key()))
+		nd = iter.Next()
+	}
+	refkeys := []string{"key10", "key12", "key14", "key16", "key18"}
+	if !reflect.DeepEqual(refkeys, keys) {
+		t.Fatalf("expected %v, got %v", refkeys, keys)
+	}
+
+	keys = make([]string, 0)
+	iter = d.Iterate([]byte("key1"), []byte("key2"), "high", false)
+	nd = iter.Next()
+	for nd != nil {
+		keys = append(keys, string(nd.Key()))
+		nd = iter.Next()
+	}
+	refkeys = []string{"key2", "key20", "key22", "key24", "key26", "key28"}
+	if !reflect.DeepEqual(refkeys, keys) {
+		t.Fatalf("expected %v, got %v", refkeys, keys)
+	}
+
+	keys = make([]string, 0)
+	iter = d.Iterate([]byte("key1"), []byte("key2"), "both", false)
+	nd = iter.Next()
+	for nd != nil {
+		keys = append(keys, string(nd.Key()))
+		nd = iter.Next()
+	}
+	refkeys = []string{
+		"key10", "key12", "key14", "key16", "key18",
+		"key2", "key20", "key22", "key24", "key26", "key28"}
+	if !reflect.DeepEqual(refkeys, keys) {
+		t.Fatalf("expected %v, got %v", refkeys, keys)
+	}
+
+	// backward range
+	keys = make([]string, 0)
+	iter = d.Iterate([]byte("key1"), []byte("key2"), "none", true)
+	nd = iter.Next()
+	for nd != nil {
+		keys = append(keys, string(nd.Key()))
+		nd = iter.Next()
+	}
+	if len(keys) > 0 {
+		t.Fatalf("expected empty result %v", keys)
+	}
+
+	keys = make([]string, 0)
+	iter = d.Iterate([]byte("key1"), []byte("key2"), "low", true)
+	nd = iter.Next()
+	for nd != nil {
+		keys = append(keys, string(nd.Key()))
+		nd = iter.Next()
+	}
+	refkeys = []string{"key18", "key16", "key14", "key12", "key10"}
+	if !reflect.DeepEqual(refkeys, keys) {
+		t.Fatalf("expected %v, got %v", refkeys, keys)
+	}
+
+	keys = make([]string, 0)
+	iter = d.Iterate([]byte("key1"), []byte("key2"), "high", true)
+	nd = iter.Next()
+	for nd != nil {
+		keys = append(keys, string(nd.Key()))
+		nd = iter.Next()
+	}
+	refkeys = []string{"key28", "key26", "key24", "key22", "key20", "key2"}
+	if !reflect.DeepEqual(refkeys, keys) {
+		t.Fatalf("expected %v, got %v", refkeys, keys)
+	}
+
+	keys = make([]string, 0)
+	iter = d.Iterate([]byte("key1"), []byte("key2"), "both", true)
+	nd = iter.Next()
+	for nd != nil {
+		keys = append(keys, string(nd.Key()))
+		nd = iter.Next()
+	}
+	refkeys = []string{
+		"key28", "key26", "key24", "key22", "key20",
+		"key2", "key18", "key16", "key14", "key12", "key10"}
+	if !reflect.DeepEqual(refkeys, keys) {
+		t.Fatalf("expected %v, got %v", refkeys, keys)
 	}
 }
 
@@ -508,15 +739,17 @@ func TestDictIterate(t *testing.T) {
 			refs = append(refs, [2][]byte{nd.Key(), nd.Value()})
 			return true
 		})
-		iter := d.Iterate(lowkey, highkey, incl, false)
 		outs := make([][2][]byte, 0)
-		for nd := iter.Next(); nd != nil; nd = iter.Next() {
-			outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
+		iter := d.Iterate(lowkey, highkey, incl, false)
+		if iter != nil {
+			for nd := iter.Next(); nd != nil; nd = iter.Next() {
+				outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
+			}
+			iter.Close()
 		}
 		if !reflect.DeepEqual(outs, refs) {
 			t.Fatalf("failed %v", casenum)
 		}
-		iter.Close()
 
 		// backward iteration
 		refs = make([][2][]byte, 0)
@@ -524,15 +757,17 @@ func TestDictIterate(t *testing.T) {
 			refs = append(refs, [2][]byte{nd.Key(), nd.Value()})
 			return true
 		})
-		iter = d.Iterate(lowkey, highkey, incl, true)
 		outs = make([][2][]byte, 0)
-		for nd := iter.Next(); nd != nil; nd = iter.Next() {
-			outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
+		iter = d.Iterate(lowkey, highkey, incl, true)
+		if iter != nil {
+			for nd := iter.Next(); nd != nil; nd = iter.Next() {
+				outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
+			}
+			iter.Close()
 		}
 		if !reflect.DeepEqual(outs, refs) {
 			t.Fatalf("failed %v", casenum)
 		}
-		iter.Close()
 	}
 }
 

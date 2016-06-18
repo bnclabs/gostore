@@ -178,7 +178,7 @@ func (d *Dict) rangeforward(lk, hk []byte, incl string, iter api.RangeCallb) {
 		}
 		for start = 0; start < len(hashks); start++ {
 			nd = d.dict[hashks[start]]
-			if bytes.Compare(nd.key, lk) >= cmp {
+			if api.Binarycmp(nd.key, lk, cmp == 1) >= cmp {
 				break
 			}
 		}
@@ -190,7 +190,7 @@ func (d *Dict) rangeforward(lk, hk []byte, incl string, iter api.RangeCallb) {
 	}
 	for ; start < len(hashks); start++ {
 		nd = d.dict[hashks[start]]
-		if hk == nil || (bytes.Compare(nd.key, hk) < cmp) {
+		if hk == nil || (api.Binarycmp(nd.key, hk, cmp == 1) < cmp) {
 			if iter(nd) == false {
 				break
 			}
@@ -222,7 +222,7 @@ func (d *Dict) rangebackward(lk, hk []byte, incl string, iter api.RangeCallb) {
 		}
 		for start = len(hashks) - 1; start >= 0; start-- {
 			nd = d.dict[hashks[start]]
-			if bytes.Compare(nd.key, hk) <= cmp {
+			if api.Binarycmp(nd.key, hk, cmp == 0) <= cmp {
 				break
 			}
 		}
@@ -234,7 +234,7 @@ func (d *Dict) rangebackward(lk, hk []byte, incl string, iter api.RangeCallb) {
 	}
 	for ; start >= 0; start-- {
 		nd = d.dict[hashks[start]]
-		if lk == nil || (bytes.Compare(nd.key, lk) > cmp) {
+		if lk == nil || (api.Binarycmp(nd.key, lk, cmp == 0) > cmp) {
 			if iter(nd) == false {
 				break
 			}
@@ -251,49 +251,45 @@ func (d *Dict) Iterate(lkey, hkey []byte, incl string, r bool) api.IndexIterator
 }
 
 func (d *Dict) iterate(lkey, hkey []byte, incl string, r bool) api.IndexIterator {
-	iter := &dictIterator{
-		dict: d.dict, hashks: d.hashks, activeiter: &d.activeiter, reverse: r,
-	}
 
-	// parameter rewrite for lookup
 	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
 		if incl == "none" {
-			iter.index = len(iter.hashks)
-			if r {
-				iter.index = -1
-			}
-			return iter
-
+			return nil
 		} else if incl == "low" || incl == "high" {
 			incl = "both"
 		}
 	}
 
-	startkey, startincl, endincl, cmp := lkey, "low", "high", 1
-	iter.endkey, iter.cmp, iter.index = hkey, 0, 0
+	iter := &iterator{}
+
+	// NOTE: always re-initialize, because we are getting it back from pool.
+	iter.tree, iter.dict = d, d
+	iter.nodes, iter.index, iter.limit = iter.nodes[:0], 0, 5
+	iter.continuate = false
+	iter.startkey, iter.endkey, iter.incl, iter.reverse = lkey, hkey, incl, r
+	iter.closed, iter.activeiter = false, &d.activeiter
+
+	if iter.nodes == nil {
+		iter.nodes = make([]api.Node, 0)
+	}
+
+	iter.rangefill()
 	if r {
-		startkey, startincl, endincl, cmp = hkey, "high", "low", 0
-		iter.endkey, iter.cmp, iter.index = lkey, 1, len(iter.hashks)-1
-	}
-
-	if startkey != nil {
-		if incl == startincl || incl == "both" {
-			cmp = 1 - cmp
+		switch iter.incl {
+		case "none":
+			iter.incl = "high"
+		case "low":
+			iter.incl = "both"
 		}
-		for iter.index = 0; iter.index < len(iter.hashks); iter.index++ {
-			nd := d.dict[iter.hashks[iter.index]]
-			if bytes.Compare(nd.key, startkey) >= cmp {
-				break
-			}
-		}
-		if r {
-			iter.index--
+	} else {
+		switch iter.incl {
+		case "none":
+			iter.incl = "low"
+		case "high":
+			iter.incl = "both"
 		}
 	}
 
-	if incl == endincl || incl == "both" {
-		iter.cmp = 1 - iter.cmp
-	}
 	atomic.AddInt64(&d.activeiter, 1)
 	return iter
 }
