@@ -274,9 +274,9 @@ func (llrb *LLRB) Get(key []byte, callb api.NodeCallb) bool {
 func (llrb *LLRB) get(key []byte) api.Node {
 	nd := llrb.root
 	for nd != nil {
-		if nd.gtkey(llrb.mdsize, key) {
+		if nd.gtkey(llrb.mdsize, key, false) {
 			nd = nd.left
-		} else if nd.ltkey(llrb.mdsize, key) {
+		} else if nd.ltkey(llrb.mdsize, key, false) {
 			nd = nd.right
 		} else {
 			return nd
@@ -521,9 +521,9 @@ func (llrb *LLRB) upsert(
 
 	nd = llrb.walkdownrot23(nd)
 
-	if nd.gtkey(llrb.mdsize, key) {
+	if nd.gtkey(llrb.mdsize, key, false) {
 		nd.left, newnd, oldnd = llrb.upsert(nd.left, depth+1, key, value)
-	} else if nd.ltkey(llrb.mdsize, key) {
+	} else if nd.ltkey(llrb.mdsize, key, false) {
 		nd.right, newnd, oldnd = llrb.upsert(nd.right, depth+1, key, value)
 	} else {
 		oldnd, dirty = llrb.clone(nd), false
@@ -662,7 +662,7 @@ func (llrb *LLRB) delete(nd *Llrbnode, key []byte) (newnd, deleted *Llrbnode) {
 		return nil, nil
 	}
 
-	if nd.gtkey(llrb.mdsize, key) {
+	if nd.gtkey(llrb.mdsize, key, false) {
 		if nd.left == nil { // key not present. Nothing to delete
 			return nd, nil
 		}
@@ -676,14 +676,14 @@ func (llrb *LLRB) delete(nd *Llrbnode, key []byte) (newnd, deleted *Llrbnode) {
 			nd = llrb.rotateright(nd)
 		}
 		// If @key equals @h.Item and no right children at @h
-		if !nd.ltkey(llrb.mdsize, key) && nd.right == nil {
+		if !nd.ltkey(llrb.mdsize, key, false) && nd.right == nil {
 			return nil, nd
 		}
 		if nd.right != nil && !isred(nd.right) && !isred(nd.right.left) {
 			nd = llrb.moveredright(nd)
 		}
 		// If @key equals @h.Item, and (from above) 'h.Right != nil'
-		if !nd.ltkey(llrb.mdsize, key) {
+		if !nd.ltkey(llrb.mdsize, key, false) {
 			var subdeleted *Llrbnode
 			nd.right, subdeleted = llrb.deletemin(nd.right)
 			if subdeleted == nil {

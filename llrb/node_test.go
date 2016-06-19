@@ -188,20 +188,20 @@ func TestLtkey(t *testing.T) {
 	nd.metadata().initMetadata(0x1234, 0)
 	mdsize := nd.metadata().sizeof()
 	nd.setkey(mdsize, []byte(""))
-	if nd.ltkey(mdsize, []byte("a")) != true {
+	if nd.ltkey(mdsize, []byte("a"), false) != true {
 		t.Errorf("expected true")
-	} else if nd.ltkey(mdsize, []byte("")) != false {
+	} else if nd.ltkey(mdsize, []byte(""), false) != false {
 		t.Errorf("expected false")
 	}
 	// check with valid key
 	nd.setkey(nd.metadata().sizeof(), key)
-	if nd.ltkey(mdsize, []byte("a")) != false {
+	if nd.ltkey(mdsize, []byte("a"), false) != false {
 		t.Errorf("expected false")
-	} else if nd.ltkey(mdsize, []byte("")) != false {
+	} else if nd.ltkey(mdsize, []byte(""), false) != false {
 		t.Errorf("expected false")
-	} else if nd.ltkey(mdsize, []byte("b")) != true {
+	} else if nd.ltkey(mdsize, []byte("b"), false) != true {
 		t.Errorf("expected true")
-	} else if nd.ltkey(mdsize, []byte("abcdef")) != false {
+	} else if nd.ltkey(mdsize, []byte("abcdef"), false) != false {
 		t.Errorf("expected false")
 	}
 	mpool.Free(ptr)
@@ -228,20 +228,20 @@ func TestLekey(t *testing.T) {
 	nd.metadata().initMetadata(vbno, fmask)
 	mdsize := nd.metadata().sizeof()
 	nd.setkey(mdsize, []byte(""))
-	if nd.lekey(mdsize, []byte("a")) != true {
+	if nd.lekey(mdsize, []byte("a"), false) != true {
 		t.Errorf("expected true")
-	} else if nd.lekey(mdsize, []byte("")) != true {
+	} else if nd.lekey(mdsize, []byte(""), false) != true {
 		t.Errorf("expected true")
 	}
 	// check with valid key
 	nd.setkey(mdsize, key)
-	if nd.lekey(mdsize, []byte("a")) != false {
+	if nd.lekey(mdsize, []byte("a"), false) != false {
 		t.Errorf("expected false")
-	} else if nd.lekey(mdsize, []byte("")) != false {
+	} else if nd.lekey(mdsize, []byte(""), false) != false {
 		t.Errorf("expected false")
-	} else if nd.lekey(mdsize, []byte("b")) != true {
+	} else if nd.lekey(mdsize, []byte("b"), false) != true {
 		t.Errorf("expected true")
-	} else if nd.lekey(mdsize, []byte("abcdef")) != true {
+	} else if nd.lekey(mdsize, []byte("abcdef"), false) != true {
 		t.Errorf("expected true")
 	}
 
@@ -269,20 +269,20 @@ func TestGtkey(t *testing.T) {
 	nd.metadata().initMetadata(vbno, fmask)
 	mdsize := nd.metadata().sizeof()
 	nd.setkey(mdsize, []byte(""))
-	if nd.gtkey(mdsize, []byte("a")) != false {
+	if nd.gtkey(mdsize, []byte("a"), false) != false {
 		t.Errorf("expected false")
-	} else if nd.gtkey(mdsize, []byte("")) != false {
+	} else if nd.gtkey(mdsize, []byte(""), false) != false {
 		t.Errorf("expected false")
 	}
 	// check with valid key
 	nd.setkey(mdsize, key)
-	if nd.gtkey(mdsize, []byte("a")) != true {
+	if nd.gtkey(mdsize, []byte("a"), false) != true {
 		t.Errorf("expected true")
-	} else if nd.gtkey(mdsize, []byte("")) != true {
+	} else if nd.gtkey(mdsize, []byte(""), false) != true {
 		t.Errorf("expected true")
-	} else if nd.gtkey(mdsize, []byte("b")) != false {
+	} else if nd.gtkey(mdsize, []byte("b"), false) != false {
 		t.Errorf("expected false")
-	} else if nd.gtkey(mdsize, []byte("abcdef")) != false {
+	} else if nd.gtkey(mdsize, []byte("abcdef"), false) != false {
 		t.Errorf("expected false")
 	}
 
@@ -310,20 +310,20 @@ func TestGekey(t *testing.T) {
 	nd.metadata().initMetadata(vbno, fmask)
 	mdsize := nd.metadata().sizeof()
 	nd.setkey(mdsize, []byte(""))
-	if nd.gekey(mdsize, []byte("a")) != false {
+	if nd.gekey(mdsize, []byte("a"), false) != false {
 		t.Errorf("expected false")
-	} else if nd.gekey(mdsize, []byte("")) != true {
+	} else if nd.gekey(mdsize, []byte(""), false) != true {
 		t.Errorf("expected true")
 	}
 	// check with valid key
 	nd.setkey(mdsize, key)
-	if nd.gekey(mdsize, []byte("a")) != true {
+	if nd.gekey(mdsize, []byte("a"), false) != true {
 		t.Errorf("expected true")
-	} else if nd.gekey(mdsize, []byte("")) != true {
+	} else if nd.gekey(mdsize, []byte(""), false) != true {
 		t.Errorf("expected true")
-	} else if nd.gekey(mdsize, []byte("b")) != false {
+	} else if nd.gekey(mdsize, []byte("b"), false) != false {
 		t.Errorf("expected false")
-	} else if nd.gekey(mdsize, []byte("abcdef")) != true {
+	} else if nd.gekey(mdsize, []byte("abcdef"), false) != true {
 		t.Errorf("expected true")
 	}
 
@@ -439,7 +439,7 @@ func BenchmarkCompareLtkey(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		nd.ltkey(mdsize, otherkey)
+		nd.ltkey(mdsize, otherkey, false)
 	}
 
 	mpool.Free(ptr)
@@ -467,7 +467,7 @@ func BenchmarkCompareLekey(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		nd.lekey(mdsize, otherkey)
+		nd.lekey(mdsize, otherkey, false)
 	}
 
 	mpool.Free(ptr)
@@ -495,7 +495,7 @@ func BenchmarkCompareGtkey(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		nd.gtkey(mdsize, otherkey)
+		nd.gtkey(mdsize, otherkey, false)
 	}
 
 	mpool.Free(ptr)
@@ -523,7 +523,7 @@ func BenchmarkCompareGekey(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		nd.gekey(mdsize, otherkey)
+		nd.gekey(mdsize, otherkey, false)
 	}
 
 	mpool.Free(ptr)

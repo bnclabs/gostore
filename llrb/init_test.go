@@ -6,7 +6,6 @@ import "testing"
 import "github.com/prataprc/storage.go/lib"
 import "github.com/prataprc/storage.go/api"
 import "github.com/prataprc/storage.go/log"
-import "github.com/prataprc/storage.go/malloc"
 
 var _ = fmt.Sprintf("dummy")
 

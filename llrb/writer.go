@@ -383,10 +383,10 @@ func (writer *LLRBWriter) upsert(
 
 	ndmvcc = writer.walkdownrot23(ndmvcc)
 
-	if ndmvcc.gtkey(llrb.mdsize, key) {
+	if ndmvcc.gtkey(llrb.mdsize, key, false) {
 		ndmvcc.left, newnd, oldnd, reclaim =
 			writer.upsert(ndmvcc.left, depth+1, key, value, reclaim)
-	} else if ndmvcc.ltkey(llrb.mdsize, key) {
+	} else if ndmvcc.ltkey(llrb.mdsize, key, false) {
 		ndmvcc.right, newnd, oldnd, reclaim =
 			writer.upsert(ndmvcc.right, depth+1, key, value, reclaim)
 	} else {
@@ -555,7 +555,7 @@ func (writer *LLRBWriter) delete(
 	reclaim = append(reclaim, nd)
 	ndmvcc := llrb.clone(nd)
 
-	if ndmvcc.gtkey(llrb.mdsize, key) {
+	if ndmvcc.gtkey(llrb.mdsize, key, false) {
 		if ndmvcc.left == nil { // key not present. Nothing to delete
 			return ndmvcc, nil, reclaim
 		}
@@ -570,7 +570,7 @@ func (writer *LLRBWriter) delete(
 		}
 
 		// If @key equals @h.Item and no right children at @h
-		if !ndmvcc.ltkey(llrb.mdsize, key) && ndmvcc.right == nil {
+		if !ndmvcc.ltkey(llrb.mdsize, key, false) && ndmvcc.right == nil {
 			reclaim = append(reclaim, ndmvcc)
 			return nil, ndmvcc, reclaim
 		}
@@ -582,7 +582,7 @@ func (writer *LLRBWriter) delete(
 		}
 
 		// If @key equals @h.Item, and (from above) 'h.Right != nil'
-		if !ndmvcc.ltkey(llrb.mdsize, key) {
+		if !ndmvcc.ltkey(llrb.mdsize, key, false) {
 			var subd *Llrbnode
 			ndmvcc.right, subd, reclaim = writer.deletemin(ndmvcc.right, reclaim)
 			if subd == nil {

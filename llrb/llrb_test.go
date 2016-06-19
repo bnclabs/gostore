@@ -465,6 +465,117 @@ func TestLLRBBasicRange(t *testing.T) {
 	}
 }
 
+func TestPartialRange(t *testing.T) {
+	config := Defaultconfig()
+	config["metadata.mvalue"] = true
+	config["metadata.bornseqno"] = true
+	config["metadata.vbuuid"] = true
+	llrb := NewLLRB("test", config)
+
+	if llrb.Count() != 0 {
+		t.Fatalf("expected an empty dict")
+	}
+
+	// inserts
+	inserts, n := make([][2][]byte, 0), 100
+	for i := 0; i < n; i += 2 {
+		key, value := fmt.Sprintf("key%v", i), fmt.Sprintf("value%v", i)
+		inserts = append(inserts, [2][]byte{[]byte(key), []byte(value)})
+	}
+
+	for _, kv := range inserts {
+		llrb.Upsert(kv[0], kv[1], func(_ api.Index, _ int64, newnd, oldnd api.Node) {
+			if oldnd != nil {
+				t.Errorf("expected nil")
+			}
+		})
+	}
+
+	// forward range
+	keys := make([]string, 0)
+	llrb.Range([]byte("key1"), []byte("key2"), "none", false, func(nd api.Node) bool {
+		keys = append(keys, string(nd.Key()))
+		return true
+	})
+	if len(keys) > 0 {
+		t.Fatalf("expected empty result %v", keys)
+	}
+
+	keys = make([]string, 0)
+	llrb.Range([]byte("key1"), []byte("key2"), "low", false, func(nd api.Node) bool {
+		keys = append(keys, string(nd.Key()))
+		return true
+	})
+	refkeys := []string{"key10", "key12", "key14", "key16", "key18"}
+	if !reflect.DeepEqual(refkeys, keys) {
+		t.Fatalf("expected %v, got %v", refkeys, keys)
+	}
+
+	keys = make([]string, 0)
+	llrb.Range([]byte("key1"), []byte("key2"), "high", false, func(nd api.Node) bool {
+		keys = append(keys, string(nd.Key()))
+		return true
+	})
+	refkeys = []string{"key2", "key20", "key22", "key24", "key26", "key28"}
+	if !reflect.DeepEqual(refkeys, keys) {
+		t.Fatalf("expected %v, got %v", refkeys, keys)
+	}
+
+	keys = make([]string, 0)
+	llrb.Range([]byte("key1"), []byte("key2"), "both", false, func(nd api.Node) bool {
+		keys = append(keys, string(nd.Key()))
+		return true
+	})
+	refkeys = []string{
+		"key10", "key12", "key14", "key16", "key18",
+		"key2", "key20", "key22", "key24", "key26", "key28"}
+	if !reflect.DeepEqual(refkeys, keys) {
+		t.Fatalf("expected %v, got %v", refkeys, keys)
+	}
+
+	// backward range
+	keys = make([]string, 0)
+	llrb.Range([]byte("key1"), []byte("key2"), "none", true, func(nd api.Node) bool {
+		keys = append(keys, string(nd.Key()))
+		return true
+	})
+	if len(keys) > 0 {
+		t.Fatalf("expected empty result %v", keys)
+	}
+
+	keys = make([]string, 0)
+	llrb.Range([]byte("key1"), []byte("key2"), "low", true, func(nd api.Node) bool {
+		keys = append(keys, string(nd.Key()))
+		return true
+	})
+	refkeys = []string{"key18", "key16", "key14", "key12", "key10"}
+	if !reflect.DeepEqual(refkeys, keys) {
+		t.Fatalf("expected %v, got %v", refkeys, keys)
+	}
+
+	keys = make([]string, 0)
+	llrb.Range([]byte("key1"), []byte("key2"), "high", true, func(nd api.Node) bool {
+		keys = append(keys, string(nd.Key()))
+		return true
+	})
+	refkeys = []string{"key28", "key26", "key24", "key22", "key20", "key2"}
+	if !reflect.DeepEqual(refkeys, keys) {
+		t.Fatalf("expected %v, got %v", refkeys, keys)
+	}
+
+	keys = make([]string, 0)
+	llrb.Range([]byte("key1"), []byte("key2"), "both", true, func(nd api.Node) bool {
+		keys = append(keys, string(nd.Key()))
+		return true
+	})
+	refkeys = []string{
+		"key28", "key26", "key24", "key22", "key20",
+		"key2", "key18", "key16", "key14", "key12", "key10"}
+	if !reflect.DeepEqual(refkeys, keys) {
+		t.Fatalf("expected %v, got %v", refkeys, keys)
+	}
+}
+
 func TestLLRBRange(t *testing.T) {
 	config := Defaultconfig()
 	config["metadata.mvalue"] = true
@@ -697,6 +808,133 @@ func TestLLRBBasicIterate(t *testing.T) {
 
 	if err := llrb.Destroy(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestPartialIterate(t *testing.T) {
+	config := Defaultconfig()
+	config["metadata.mvalue"] = true
+	config["metadata.bornseqno"] = true
+	config["metadata.vbuuid"] = true
+	llrb := NewLLRB("test", config)
+
+	if llrb.Count() != 0 {
+		t.Fatalf("expected an empty dict")
+	}
+
+	// inserts
+	inserts, n := make([][2][]byte, 0), 100
+	for i := 0; i < n; i += 2 {
+		key, value := fmt.Sprintf("key%v", i), fmt.Sprintf("value%v", i)
+		inserts = append(inserts, [2][]byte{[]byte(key), []byte(value)})
+	}
+
+	for _, kv := range inserts {
+		llrb.Upsert(kv[0], kv[1], func(_ api.Index, _ int64, newnd, oldnd api.Node) {
+			if oldnd != nil {
+				t.Errorf("expected nil")
+			}
+		})
+	}
+
+	// forward range
+	keys := make([]string, 0)
+	iter := llrb.Iterate([]byte("key1"), []byte("key2"), "none", false)
+	nd := iter.Next()
+	for nd != nil {
+		keys = append(keys, string(nd.Key()))
+		nd = iter.Next()
+	}
+	if len(keys) > 0 {
+		t.Fatalf("expected empty result %v", keys)
+	}
+
+	keys = make([]string, 0)
+	iter = llrb.Iterate([]byte("key1"), []byte("key2"), "low", false)
+	nd = iter.Next()
+	for nd != nil {
+		keys = append(keys, string(nd.Key()))
+		nd = iter.Next()
+	}
+	refkeys := []string{"key10", "key12", "key14", "key16", "key18"}
+	if !reflect.DeepEqual(refkeys, keys) {
+		t.Fatalf("expected %v, got %v", refkeys, keys)
+	}
+
+	keys = make([]string, 0)
+	iter = llrb.Iterate([]byte("key1"), []byte("key2"), "high", false)
+	nd = iter.Next()
+	for nd != nil {
+		keys = append(keys, string(nd.Key()))
+		nd = iter.Next()
+	}
+	refkeys = []string{"key2", "key20", "key22", "key24", "key26", "key28"}
+	if !reflect.DeepEqual(refkeys, keys) {
+		t.Fatalf("expected %v, got %v", refkeys, keys)
+	}
+
+	keys = make([]string, 0)
+	iter = llrb.Iterate([]byte("key1"), []byte("key2"), "both", false)
+	nd = iter.Next()
+	for nd != nil {
+		keys = append(keys, string(nd.Key()))
+		nd = iter.Next()
+	}
+	refkeys = []string{
+		"key10", "key12", "key14", "key16", "key18",
+		"key2", "key20", "key22", "key24", "key26", "key28"}
+	if !reflect.DeepEqual(refkeys, keys) {
+		t.Fatalf("expected %v, got %v", refkeys, keys)
+	}
+
+	// backward range
+	keys = make([]string, 0)
+	iter = llrb.Iterate([]byte("key1"), []byte("key2"), "none", true)
+	nd = iter.Next()
+	for nd != nil {
+		keys = append(keys, string(nd.Key()))
+		nd = iter.Next()
+	}
+	if len(keys) > 0 {
+		t.Fatalf("expected empty result %v", keys)
+	}
+
+	keys = make([]string, 0)
+	iter = llrb.Iterate([]byte("key1"), []byte("key2"), "low", true)
+	nd = iter.Next()
+	for nd != nil {
+		keys = append(keys, string(nd.Key()))
+		nd = iter.Next()
+	}
+	refkeys = []string{"key18", "key16", "key14", "key12", "key10"}
+	if !reflect.DeepEqual(refkeys, keys) {
+		t.Fatalf("expected %v, got %v", refkeys, keys)
+	}
+
+	keys = make([]string, 0)
+	iter = llrb.Iterate([]byte("key1"), []byte("key2"), "high", true)
+	nd = iter.Next()
+	for nd != nil {
+		keys = append(keys, string(nd.Key()))
+		nd = iter.Next()
+	}
+	refkeys = []string{"key28", "key26", "key24", "key22", "key20", "key2"}
+	if !reflect.DeepEqual(refkeys, keys) {
+		t.Fatalf("expected %v, got %v", refkeys, keys)
+	}
+
+	keys = make([]string, 0)
+	iter = llrb.Iterate([]byte("key1"), []byte("key2"), "both", true)
+	nd = iter.Next()
+	for nd != nil {
+		keys = append(keys, string(nd.Key()))
+		nd = iter.Next()
+	}
+	refkeys = []string{
+		"key28", "key26", "key24", "key22", "key20",
+		"key2", "key18", "key16", "key14", "key12", "key10"}
+	if !reflect.DeepEqual(refkeys, keys) {
+		t.Fatalf("expected %v, got %v", refkeys, keys)
 	}
 }
 

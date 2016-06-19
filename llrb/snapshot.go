@@ -213,9 +213,9 @@ func (snapshot *LLRBSnapshot) Get(key []byte, callb api.NodeCallb) bool {
 func (snapshot *LLRBSnapshot) get(key []byte) api.Node {
 	mdsize, nd := snapshot.llrb.mdsize, snapshot.root
 	for nd != nil {
-		if nd.gtkey(mdsize, key) {
+		if nd.gtkey(mdsize, key, false) {
 			nd = nd.left
-		} else if nd.ltkey(mdsize, key) {
+		} else if nd.ltkey(mdsize, key, false) {
 			nd = nd.right
 		} else {
 			return nd

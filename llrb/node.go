@@ -1,7 +1,6 @@
 package llrb
 
 import "unsafe"
-import "bytes"
 import "reflect"
 import "strings"
 import "fmt"
@@ -251,47 +250,46 @@ func (nd *Llrbnode) dotdump(buffer io.Writer) {
 
 //---- indexer api
 
-func (nd *Llrbnode) ltkey(mdsize int, other []byte) bool {
+func (nd *Llrbnode) ltkey(mdsize int, other []byte, partial bool) bool {
 	var key []byte
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&key))
 	sl.Len = nd.keysize()
 	sl.Cap = sl.Len
 	baseptr := (uintptr)(unsafe.Pointer(&nd.mdmarker))
 	sl.Data = baseptr + uintptr(mdsize)
-	cmp := bytes.Compare(key, other)
-	return cmp == -1
+	return api.Binarycmp(key, other, partial) == -1
 }
 
-func (nd *Llrbnode) lekey(mdsize int, other []byte) bool {
+func (nd *Llrbnode) lekey(mdsize int, other []byte, partial bool) bool {
 	var key []byte
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&key))
 	sl.Len = nd.keysize()
 	sl.Cap = sl.Len
 	baseptr := (uintptr)(unsafe.Pointer(&nd.mdmarker))
 	sl.Data = baseptr + uintptr(mdsize)
-	cmp := bytes.Compare(key, other)
+	cmp := api.Binarycmp(key, other, partial)
 	return cmp == -1 || cmp == 0
 }
 
-func (nd *Llrbnode) gtkey(mdsize int, other []byte) bool {
+func (nd *Llrbnode) gtkey(mdsize int, other []byte, partial bool) bool {
 	var key []byte
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&key))
 	sl.Len = nd.keysize()
 	sl.Cap = sl.Len
 	baseptr := (uintptr)(unsafe.Pointer(&nd.mdmarker))
 	sl.Data = baseptr + uintptr(mdsize)
-	cmp := bytes.Compare(key, other)
+	cmp := api.Binarycmp(key, other, partial)
 	return cmp == 1
 }
 
-func (nd *Llrbnode) gekey(mdsize int, other []byte) bool {
+func (nd *Llrbnode) gekey(mdsize int, other []byte, partial bool) bool {
 	var key []byte
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&key))
 	sl.Len = nd.keysize()
 	sl.Cap = sl.Len
 	baseptr := (uintptr)(unsafe.Pointer(&nd.mdmarker))
 	sl.Data = baseptr + uintptr(mdsize)
-	cmp := bytes.Compare(key, other)
+	cmp := api.Binarycmp(key, other, partial)
 	return cmp == 0 || cmp == 1
 }
 

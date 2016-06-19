@@ -15,10 +15,10 @@ func (llrb *LLRB) rangehele(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) bo
 	if nd == nil {
 		return true
 	}
-	if hk != nil && nd.gtkey(llrb.mdsize, hk) {
+	if hk != nil && nd.gtkey(llrb.mdsize, hk, true) {
 		return llrb.rangehele(nd.left, lk, hk, iter)
 	}
-	if lk != nil && nd.ltkey(llrb.mdsize, lk) {
+	if lk != nil && nd.ltkey(llrb.mdsize, lk, true) {
 		return llrb.rangehele(nd.right, lk, hk, iter)
 	}
 	if !llrb.rangehele(nd.left, lk, hk, iter) {
@@ -35,10 +35,10 @@ func (llrb *LLRB) rangehelt(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) bo
 	if nd == nil {
 		return true
 	}
-	if hk != nil && !nd.ltkey(llrb.mdsize, hk) {
+	if hk != nil && nd.gekey(llrb.mdsize, hk, true) {
 		return llrb.rangehelt(nd.left, lk, hk, iter)
 	}
-	if lk != nil && nd.ltkey(llrb.mdsize, lk) {
+	if lk != nil && nd.ltkey(llrb.mdsize, lk, true) {
 		return llrb.rangehelt(nd.right, lk, hk, iter)
 	}
 	if !llrb.rangehelt(nd.left, lk, hk, iter) {
@@ -55,10 +55,10 @@ func (llrb *LLRB) rangehtle(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) bo
 	if nd == nil {
 		return true
 	}
-	if hk != nil && nd.gtkey(llrb.mdsize, hk) {
+	if hk != nil && nd.gtkey(llrb.mdsize, hk, true) {
 		return llrb.rangehtle(nd.left, lk, hk, iter)
 	}
-	if lk != nil && !nd.gtkey(llrb.mdsize, lk) {
+	if lk != nil && nd.lekey(llrb.mdsize, lk, true) {
 		return llrb.rangehtle(nd.right, lk, hk, iter)
 	}
 	if !llrb.rangehtle(nd.left, lk, hk, iter) {
@@ -75,10 +75,10 @@ func (llrb *LLRB) rangehtlt(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) bo
 	if nd == nil {
 		return true
 	}
-	if hk != nil && !nd.ltkey(llrb.mdsize, hk) {
+	if hk != nil && nd.gekey(llrb.mdsize, hk, true) {
 		return llrb.rangehtlt(nd.left, lk, hk, iter)
 	}
-	if lk != nil && !nd.gtkey(llrb.mdsize, lk) {
+	if lk != nil && nd.lekey(llrb.mdsize, lk, true) {
 		return llrb.rangehtlt(nd.right, lk, hk, iter)
 	}
 	if !llrb.rangehtlt(nd.left, lk, hk, iter) {
@@ -95,10 +95,10 @@ func (llrb *LLRB) rvrslehe(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) boo
 	if nd == nil {
 		return true
 	}
-	if hk != nil && nd.gtkey(llrb.mdsize, hk) {
+	if hk != nil && nd.gtkey(llrb.mdsize, hk, true) {
 		return llrb.rvrslehe(nd.left, lk, hk, iter)
 	}
-	if lk != nil && nd.ltkey(llrb.mdsize, lk) {
+	if lk != nil && nd.ltkey(llrb.mdsize, lk, true) {
 		return llrb.rvrslehe(nd.right, lk, hk, iter)
 	}
 	if !llrb.rvrslehe(nd.right, lk, hk, iter) {
@@ -115,10 +115,10 @@ func (llrb *LLRB) rvrsleht(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) boo
 	if nd == nil {
 		return true
 	}
-	if hk != nil && !nd.lekey(llrb.mdsize, hk) {
+	if hk != nil && nd.gtkey(llrb.mdsize, hk, true) {
 		return llrb.rvrsleht(nd.left, lk, hk, iter)
 	}
-	if lk != nil && nd.lekey(llrb.mdsize, lk) {
+	if lk != nil && nd.lekey(llrb.mdsize, lk, true) {
 		return llrb.rvrsleht(nd.right, lk, hk, iter)
 	}
 	if !llrb.rvrsleht(nd.right, lk, hk, iter) {
@@ -135,10 +135,10 @@ func (llrb *LLRB) rvrslthe(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) boo
 	if nd == nil {
 		return true
 	}
-	if hk != nil && nd.gekey(llrb.mdsize, hk) {
+	if hk != nil && nd.gekey(llrb.mdsize, hk, true) {
 		return llrb.rvrslthe(nd.left, lk, hk, iter)
 	}
-	if lk != nil && !nd.gekey(llrb.mdsize, lk) {
+	if lk != nil && nd.ltkey(llrb.mdsize, lk, true) {
 		return llrb.rvrslthe(nd.right, lk, hk, iter)
 	}
 	if !llrb.rvrslthe(nd.right, lk, hk, iter) {
@@ -155,10 +155,10 @@ func (llrb *LLRB) rvrsltht(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) boo
 	if nd == nil {
 		return true
 	}
-	if hk != nil && !nd.ltkey(llrb.mdsize, hk) {
+	if hk != nil && nd.gekey(llrb.mdsize, hk, true) {
 		return llrb.rvrsltht(nd.left, lk, hk, iter)
 	}
-	if lk != nil && !nd.gtkey(llrb.mdsize, lk) {
+	if lk != nil && nd.lekey(llrb.mdsize, lk, true) {
 		return llrb.rvrsltht(nd.right, lk, hk, iter)
 	}
 	if !llrb.rvrsltht(nd.right, lk, hk, iter) {
