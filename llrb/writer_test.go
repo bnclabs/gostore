@@ -483,6 +483,113 @@ func TestLLRBMvccBasicRange(t *testing.T) {
 	}
 }
 
+func TestPartialMvccRange(t *testing.T) {
+	config := Defaultconfig()
+	config["mvcc.enable"] = true
+	config["metadata.mvalue"] = true
+	config["metadata.bornseqno"] = true
+	config["metadata.vbuuid"] = true
+
+	llrb := makellrbmvcc(t, "mvccrange", nil, config)
+	writer := llrb.mvcc.writer
+
+	d := dict.NewDict()
+
+	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(0x12345678)
+	keys, values := make([][]byte, 0), make([][]byte, 0)
+	// insert 10K items
+	count := 10 * 1000
+	for i := 0; i < count; i++ {
+		key, value := make([]byte, 10), make([]byte, 100)
+		key, value = makekeyvalue(key, value)
+		llrb.Upsert(
+			key, value,
+			func(index api.Index, _ int64, newnd, oldnd api.Node) {
+				if oldnd != nil {
+					t.Errorf("expected nil")
+				} else if x := llrb.Count(); x != int64(i+1) {
+					t.Errorf("expected %v, got %v", i, x)
+				}
+				newnd.Setvbno(vbno).SetVbuuid(vbuuid).SetBornseqno(seqno)
+			})
+		d.Upsert(key, value, nil)
+		keys, values = append(keys, key), append(values, value)
+		seqno++
+	}
+
+	snapshot, err := validatesnapshot(100 /*mS*/, writer)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// random ranges
+	repeat := 100
+	incls := []string{"both", "low", "high", "none"}
+	for i := 0; i < repeat; i++ {
+		incl := incls[rand.Intn(len(incls))]
+		x := rand.Intn(len(keys))
+		y := rand.Intn(len(keys))
+		lowkey, highkey := keys[x], keys[y]
+		lowkey, highkey = lowkey[:len(lowkey)/2], highkey[:len(highkey)/2]
+
+		// foward range
+		llrbks, llrbvs := make([][]byte, 0), make([][]byte, 0)
+		snapshot.Range(lowkey, highkey, incl, false, func(nd api.Node) bool {
+			llrbks = append(llrbks, nd.Key())
+			llrbvs = append(llrbvs, nd.Value())
+			return true
+		})
+		dks, dvs := make([][]byte, 0), make([][]byte, 0)
+		d.Range(lowkey, highkey, incl, false, func(nd api.Node) bool {
+			dks, dvs = append(dks, nd.Key()), append(dvs, nd.Value())
+			return true
+		})
+		if len(llrbks) != len(dks) {
+			t.Errorf("expected %v, got %v", len(llrbks), len(dks))
+		} else {
+			for j, llrbk := range llrbks {
+				if bytes.Compare(llrbk, dks[j]) != 0 {
+					t.Errorf("expected %v, got %v", llrbk, dks[j])
+				}
+				if bytes.Compare(llrbvs[j], dvs[j]) != 0 {
+					t.Errorf("expected %v, got %v", llrbvs[j], dvs[j])
+				}
+			}
+		}
+
+		// backward range
+		llrbks, llrbvs = make([][]byte, 0), make([][]byte, 0)
+		snapshot.Range(lowkey, highkey, incl, true, func(nd api.Node) bool {
+			llrbks = append(llrbks, nd.Key())
+			llrbvs = append(llrbvs, nd.Value())
+			return true
+		})
+		dks, dvs = make([][]byte, 0), make([][]byte, 0)
+		d.Range(lowkey, highkey, incl, true, func(nd api.Node) bool {
+			dks, dvs = append(dks, nd.Key()), append(dvs, nd.Value())
+			return true
+		})
+		if len(llrbks) != len(dks) {
+			t.Errorf("expected %v, got %v", len(llrbks), len(dks))
+		} else {
+			for j, llrbk := range llrbks {
+				if bytes.Compare(llrbk, dks[j]) != 0 {
+					t.Errorf("expected %v, got %v", llrbk, dks[j])
+				}
+				if bytes.Compare(llrbvs[j], dvs[j]) != 0 {
+					t.Errorf("expected %v, got %v", llrbvs[j], dvs[j])
+				}
+			}
+		}
+	}
+
+	snapshot.Release()
+
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestLLRBMvccRange(t *testing.T) {
 	config := Defaultconfig()
 	config["mvcc.enable"] = true
@@ -691,6 +798,136 @@ func TestLLRBMvccBasicIterate(t *testing.T) {
 
 	snapshot.Release()
 	llrb.SetMemratio(0.04)
+	llrb.Validate()
+
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPartialMvccIterate(t *testing.T) {
+	config := Defaultconfig()
+	config["mvcc.enable"] = true
+	config["metadata.mvalue"] = true
+	config["metadata.bornseqno"] = true
+	config["metadata.vbuuid"] = true
+
+	llrb := makellrbmvcc(t, "mvcciterate", nil, config)
+	writer := llrb.mvcc.writer
+
+	d := dict.NewDict()
+
+	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
+	keys, values := make([][]byte, 0), make([][]byte, 0)
+	// insert 10K items
+	count := 10 * 1000
+	for i := 0; i < count; i++ {
+		key, value := make([]byte, 10), make([]byte, 100)
+		key, value = makekeyvalue(key, value)
+		llrb.Upsert(
+			key, value,
+			func(index api.Index, _ int64, newnd, oldnd api.Node) {
+				if oldnd != nil {
+					t.Errorf("expected nil")
+				} else if x := index.Count(); x != int64(i+1) {
+					t.Errorf("expected %v, got %v", i, x)
+				}
+				newnd.Setvbno(vbno).SetVbuuid(vbuuid).SetBornseqno(seqno)
+			})
+		d.Upsert(key, value, nil)
+		keys, values = append(keys, key), append(values, value)
+		seqno++
+	}
+
+	snapshot, err := validatesnapshot(100 /*mS*/, writer)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// random iterate
+	repeat := 100
+	incls := []string{"both", "low", "high", "none"}
+	for i := 0; i < repeat; i++ {
+		incl := incls[rand.Intn(len(incls))]
+		x := rand.Intn(len(keys))
+		y := rand.Intn(len(keys))
+		lowkey, highkey := keys[x], keys[y]
+		lowkey, highkey = lowkey[:len(lowkey)/2], highkey[:len(highkey)/2]
+
+		// forward iterate
+		llrbks, llrbvs := make([][]byte, 0), make([][]byte, 0)
+		iter := snapshot.Iterate(lowkey, highkey, incl, false)
+		if iter != nil {
+			nd := iter.Next()
+			for nd != nil {
+				llrbks = append(llrbks, nd.Key())
+				llrbvs = append(llrbvs, nd.Value())
+				nd = iter.Next()
+			}
+			iter.Close()
+		}
+		dks, dvs := make([][]byte, 0), make([][]byte, 0)
+		iter = d.Iterate(lowkey, highkey, incl, false)
+		if iter != nil {
+			nd := iter.Next()
+			for nd != nil {
+				dks, dvs = append(dks, nd.Key()), append(dvs, nd.Value())
+				nd = iter.Next()
+			}
+			iter.Close()
+		}
+		if len(dks) != len(llrbks) {
+			t.Fatalf("expected %v, got %v", len(dks), len(llrbks))
+		}
+		for j, dk := range dks {
+			if bytes.Compare(dk, llrbks[j]) != 0 {
+				fmsg := "expected %v, got %v"
+				t.Fatalf(fmsg, string(dk), string(llrbks[j]))
+			}
+			if bytes.Compare(dvs[j], llrbvs[j]) != 0 {
+				fmsg := "expected %v, got %v"
+				t.Fatalf(fmsg, string(dvs[j]), string(llrbvs[j]))
+			}
+		}
+
+		// backward iterate
+		llrbks, llrbvs = make([][]byte, 0), make([][]byte, 0)
+		iter = snapshot.Iterate(lowkey, highkey, incl, true)
+		if iter != nil {
+			nd := iter.Next()
+			for nd != nil {
+				llrbks = append(llrbks, nd.Key())
+				llrbvs = append(llrbvs, nd.Value())
+				nd = iter.Next()
+			}
+			iter.Close()
+		}
+		dks, dvs = make([][]byte, 0), make([][]byte, 0)
+		iter = snapshot.Iterate(lowkey, highkey, incl, true)
+		if iter != nil {
+			nd := iter.Next()
+			for nd != nil {
+				dks, dvs = append(dks, nd.Key()), append(dvs, nd.Value())
+				nd = iter.Next()
+			}
+			iter.Close()
+		}
+		if len(dks) != len(llrbks) {
+			t.Fatalf("expected %v, got %v", len(dks), len(llrbks))
+		}
+		for j, dk := range dks {
+			if bytes.Compare(dk, llrbks[j]) != 0 {
+				fmsg := "expected %v, got %v"
+				t.Fatalf(fmsg, string(dk), string(llrbks[j]))
+			}
+			if bytes.Compare(dvs[j], llrbvs[j]) != 0 {
+				fmsg := "expected %v, got %v"
+				t.Fatalf(fmsg, string(dvs[j]), string(llrbvs[j]))
+			}
+		}
+	}
+
+	snapshot.Release()
 	llrb.Validate()
 
 	if err := llrb.Destroy(); err != nil {
