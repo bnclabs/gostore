@@ -62,7 +62,7 @@ func (iter *iterator) rangefill() {
 		func(nd api.Node) bool {
 			breakkey = nd.Key()
 			if count < iter.limit || api.Binarycmp(breakkey, prev, true) == 0 {
-				prev = nd.Key()
+				prev = breakkey
 				iter.nodes = append(iter.nodes, nd)
 				count++
 				return true
