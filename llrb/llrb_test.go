@@ -466,6 +466,8 @@ func TestLLRBBasicRange(t *testing.T) {
 }
 
 func TestPartialRange(t *testing.T) {
+	d := dict.NewDict()
+
 	config := Defaultconfig()
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
@@ -477,9 +479,10 @@ func TestPartialRange(t *testing.T) {
 	}
 
 	// inserts
-	inserts, n := make([][2][]byte, 0), 100
-	for i := 0; i < n; i += 2 {
-		key, value := fmt.Sprintf("key%v", i), fmt.Sprintf("value%v", i)
+	inserts, n, keys := make([][2][]byte, 0), 100000, []string{}
+	for i := 0; i < n; i += 100 {
+		key, value := fmt.Sprintf("%v", i), fmt.Sprintf("value%v", i)
+		keys = append(keys, key)
 		inserts = append(inserts, [2][]byte{[]byte(key), []byte(value)})
 	}
 
@@ -489,90 +492,58 @@ func TestPartialRange(t *testing.T) {
 				t.Errorf("expected nil")
 			}
 		})
+		d.Upsert(kv[0], kv[1], func(_ api.Index, _ int64, newnd, oldnd api.Node) {
+			if oldnd != nil {
+				t.Errorf("expected nil")
+			}
+		})
 	}
 
 	// forward range
-	keys := make([]string, 0)
-	llrb.Range([]byte("key1"), []byte("key2"), "none", false, func(nd api.Node) bool {
-		keys = append(keys, string(nd.Key()))
-		return true
-	})
-	if len(keys) > 0 {
-		t.Fatalf("expected empty result %v", keys)
-	}
-
-	keys = make([]string, 0)
-	llrb.Range([]byte("key1"), []byte("key2"), "low", false, func(nd api.Node) bool {
-		keys = append(keys, string(nd.Key()))
-		return true
-	})
-	refkeys := []string{"key10", "key12", "key14", "key16", "key18"}
-	if !reflect.DeepEqual(refkeys, keys) {
-		t.Fatalf("expected %v, got %v", refkeys, keys)
-	}
-
-	keys = make([]string, 0)
-	llrb.Range([]byte("key1"), []byte("key2"), "high", false, func(nd api.Node) bool {
-		keys = append(keys, string(nd.Key()))
-		return true
-	})
-	refkeys = []string{"key2", "key20", "key22", "key24", "key26", "key28"}
-	if !reflect.DeepEqual(refkeys, keys) {
-		t.Fatalf("expected %v, got %v", refkeys, keys)
-	}
-
-	keys = make([]string, 0)
-	llrb.Range([]byte("key1"), []byte("key2"), "both", false, func(nd api.Node) bool {
-		keys = append(keys, string(nd.Key()))
-		return true
-	})
-	refkeys = []string{
-		"key10", "key12", "key14", "key16", "key18",
-		"key2", "key20", "key22", "key24", "key26", "key28"}
-	if !reflect.DeepEqual(refkeys, keys) {
-		t.Fatalf("expected %v, got %v", refkeys, keys)
+	incls := []string{"none", "low", "high", "both"}
+	for i := int64(0); i < llrb.Count()-1; i = i + 10 {
+		for j := int64(i); j < llrb.Count(); j = j + 10 {
+			for _, incl := range incls {
+				refkeys, outkeys := []string{}, []string{}
+				lkey, hkey := []byte(keys[i]), []byte(keys[j])
+				lkey, hkey = lkey[:len(lkey)/2], hkey[:len(hkey)/2]
+				d.Range(lkey, hkey, incl, false, func(nd api.Node) bool {
+					refkeys = append(refkeys, string(nd.Key()))
+					return true
+				})
+				llrb.Range(lkey, hkey, incl, false, func(nd api.Node) bool {
+					outkeys = append(outkeys, string(nd.Key()))
+					return true
+				})
+				lks, hks := string(lkey), string(hkey)
+				if !reflect.DeepEqual(refkeys, outkeys) {
+					t.Fatalf("failed for %v %v %v", lks, hks, incl)
+				}
+			}
+		}
 	}
 
 	// backward range
-	keys = make([]string, 0)
-	llrb.Range([]byte("key1"), []byte("key2"), "none", true, func(nd api.Node) bool {
-		keys = append(keys, string(nd.Key()))
-		return true
-	})
-	if len(keys) > 0 {
-		t.Fatalf("expected empty result %v", keys)
-	}
-
-	keys = make([]string, 0)
-	llrb.Range([]byte("key1"), []byte("key2"), "low", true, func(nd api.Node) bool {
-		keys = append(keys, string(nd.Key()))
-		return true
-	})
-	refkeys = []string{"key18", "key16", "key14", "key12", "key10"}
-	if !reflect.DeepEqual(refkeys, keys) {
-		t.Fatalf("expected %v, got %v", refkeys, keys)
-	}
-
-	keys = make([]string, 0)
-	llrb.Range([]byte("key1"), []byte("key2"), "high", true, func(nd api.Node) bool {
-		keys = append(keys, string(nd.Key()))
-		return true
-	})
-	refkeys = []string{"key28", "key26", "key24", "key22", "key20", "key2"}
-	if !reflect.DeepEqual(refkeys, keys) {
-		t.Fatalf("expected %v, got %v", refkeys, keys)
-	}
-
-	keys = make([]string, 0)
-	llrb.Range([]byte("key1"), []byte("key2"), "both", true, func(nd api.Node) bool {
-		keys = append(keys, string(nd.Key()))
-		return true
-	})
-	refkeys = []string{
-		"key28", "key26", "key24", "key22", "key20",
-		"key2", "key18", "key16", "key14", "key12", "key10"}
-	if !reflect.DeepEqual(refkeys, keys) {
-		t.Fatalf("expected %v, got %v", refkeys, keys)
+	for i := int64(0); i < llrb.Count()-1; i = i + 10 {
+		for j := int64(i); j < llrb.Count(); j = j + 10 {
+			for _, incl := range incls {
+				refkeys, outkeys := []string{}, []string{}
+				lkey, hkey := []byte(keys[i]), []byte(keys[j])
+				lkey, hkey = lkey[:len(lkey)/2], hkey[:len(hkey)/2]
+				d.Range(lkey, hkey, incl, true, func(nd api.Node) bool {
+					refkeys = append(refkeys, string(nd.Key()))
+					return true
+				})
+				llrb.Range(lkey, hkey, incl, true, func(nd api.Node) bool {
+					outkeys = append(outkeys, string(nd.Key()))
+					return true
+				})
+				lks, hks := string(lkey), string(hkey)
+				if !reflect.DeepEqual(refkeys, outkeys) {
+					t.Fatalf("failed for %v %v %v", lks, hks, incl)
+				}
+			}
+		}
 	}
 }
 
@@ -812,6 +783,8 @@ func TestLLRBBasicIterate(t *testing.T) {
 }
 
 func TestPartialIterate(t *testing.T) {
+	d := dict.NewDict()
+
 	config := Defaultconfig()
 	config["metadata.mvalue"] = true
 	config["metadata.bornseqno"] = true
@@ -823,9 +796,10 @@ func TestPartialIterate(t *testing.T) {
 	}
 
 	// inserts
-	inserts, n := make([][2][]byte, 0), 100
-	for i := 0; i < n; i += 2 {
-		key, value := fmt.Sprintf("key%v", i), fmt.Sprintf("value%v", i)
+	inserts, n, keys := make([][2][]byte, 0), 100000, []string{}
+	for i := 0; i < n; i += 100 {
+		key, value := fmt.Sprintf("%v", i), fmt.Sprintf("value%v", i)
+		keys = append(keys, key)
 		inserts = append(inserts, [2][]byte{[]byte(key), []byte(value)})
 	}
 
@@ -835,106 +809,64 @@ func TestPartialIterate(t *testing.T) {
 				t.Errorf("expected nil")
 			}
 		})
+		d.Upsert(kv[0], kv[1], func(_ api.Index, _ int64, newnd, oldnd api.Node) {
+			if oldnd != nil {
+				t.Errorf("expected nil")
+			}
+		})
 	}
 
 	// forward range
-	keys := make([]string, 0)
-	iter := llrb.Iterate([]byte("key1"), []byte("key2"), "none", false)
-	nd := iter.Next()
-	for nd != nil {
-		keys = append(keys, string(nd.Key()))
-		nd = iter.Next()
-	}
-	if len(keys) > 0 {
-		t.Fatalf("expected empty result %v", keys)
-	}
-
-	keys = make([]string, 0)
-	iter = llrb.Iterate([]byte("key1"), []byte("key2"), "low", false)
-	nd = iter.Next()
-	for nd != nil {
-		keys = append(keys, string(nd.Key()))
-		nd = iter.Next()
-	}
-	refkeys := []string{"key10", "key12", "key14", "key16", "key18"}
-	if !reflect.DeepEqual(refkeys, keys) {
-		t.Fatalf("expected %v, got %v", refkeys, keys)
-	}
-
-	keys = make([]string, 0)
-	iter = llrb.Iterate([]byte("key1"), []byte("key2"), "high", false)
-	nd = iter.Next()
-	for nd != nil {
-		keys = append(keys, string(nd.Key()))
-		nd = iter.Next()
-	}
-	refkeys = []string{"key2", "key20", "key22", "key24", "key26", "key28"}
-	if !reflect.DeepEqual(refkeys, keys) {
-		t.Fatalf("expected %v, got %v", refkeys, keys)
-	}
-
-	keys = make([]string, 0)
-	iter = llrb.Iterate([]byte("key1"), []byte("key2"), "both", false)
-	nd = iter.Next()
-	for nd != nil {
-		keys = append(keys, string(nd.Key()))
-		nd = iter.Next()
-	}
-	refkeys = []string{
-		"key10", "key12", "key14", "key16", "key18",
-		"key2", "key20", "key22", "key24", "key26", "key28"}
-	if !reflect.DeepEqual(refkeys, keys) {
-		t.Fatalf("expected %v, got %v", refkeys, keys)
+	incls := []string{"none", "low", "high", "both"}
+	for i := int64(0); i < llrb.Count()-1; i = i + 10 {
+		for j := int64(i + 1); j < llrb.Count(); j = j + 10 {
+			for _, incl := range incls {
+				refkeys, outkeys := []string{}, []string{}
+				lkey, hkey := []byte(keys[i]), []byte(keys[j])
+				lkey, hkey = lkey[:len(lkey)/2], hkey[:len(hkey)/2]
+				if iter := d.Iterate(lkey, hkey, incl, false); iter == nil {
+					continue
+				} else {
+					for nd := iter.Next(); nd != nil; nd = iter.Next() {
+						refkeys = append(refkeys, string(nd.Key()))
+					}
+					iter = llrb.Iterate(lkey, hkey, incl, false)
+					for nd := iter.Next(); nd != nil; nd = iter.Next() {
+						outkeys = append(outkeys, string(nd.Key()))
+					}
+					lks, hks := string(lkey), string(hkey)
+					if !reflect.DeepEqual(refkeys, outkeys) {
+						t.Fatalf("failed for %v %v %v", lks, hks, incl)
+					}
+				}
+			}
+		}
 	}
 
 	// backward range
-	keys = make([]string, 0)
-	iter = llrb.Iterate([]byte("key1"), []byte("key2"), "none", true)
-	nd = iter.Next()
-	for nd != nil {
-		keys = append(keys, string(nd.Key()))
-		nd = iter.Next()
-	}
-	if len(keys) > 0 {
-		t.Fatalf("expected empty result %v", keys)
-	}
-
-	keys = make([]string, 0)
-	iter = llrb.Iterate([]byte("key1"), []byte("key2"), "low", true)
-	nd = iter.Next()
-	for nd != nil {
-		keys = append(keys, string(nd.Key()))
-		nd = iter.Next()
-	}
-	refkeys = []string{"key18", "key16", "key14", "key12", "key10"}
-	if !reflect.DeepEqual(refkeys, keys) {
-		t.Fatalf("expected %v, got %v", refkeys, keys)
-	}
-
-	keys = make([]string, 0)
-	iter = llrb.Iterate([]byte("key1"), []byte("key2"), "high", true)
-	nd = iter.Next()
-	for nd != nil {
-		keys = append(keys, string(nd.Key()))
-		nd = iter.Next()
-	}
-	refkeys = []string{"key28", "key26", "key24", "key22", "key20", "key2"}
-	if !reflect.DeepEqual(refkeys, keys) {
-		t.Fatalf("expected %v, got %v", refkeys, keys)
-	}
-
-	keys = make([]string, 0)
-	iter = llrb.Iterate([]byte("key1"), []byte("key2"), "both", true)
-	nd = iter.Next()
-	for nd != nil {
-		keys = append(keys, string(nd.Key()))
-		nd = iter.Next()
-	}
-	refkeys = []string{
-		"key28", "key26", "key24", "key22", "key20",
-		"key2", "key18", "key16", "key14", "key12", "key10"}
-	if !reflect.DeepEqual(refkeys, keys) {
-		t.Fatalf("expected %v, got %v", refkeys, keys)
+	for i := int64(0); i < llrb.Count()-1; i = i + 10 {
+		for j := int64(i + 1); j < llrb.Count(); j = j + 10 {
+			for _, incl := range incls {
+				refkeys, outkeys := []string{}, []string{}
+				lkey, hkey := []byte(keys[i]), []byte(keys[j])
+				lkey, hkey = lkey[:len(lkey)/2], hkey[:len(hkey)/2]
+				if iter := d.Iterate(lkey, hkey, incl, true); iter == nil {
+					continue
+				} else {
+					for nd := iter.Next(); nd != nil; nd = iter.Next() {
+						refkeys = append(refkeys, string(nd.Key()))
+					}
+					iter = llrb.Iterate(lkey, hkey, incl, true)
+					for nd := iter.Next(); nd != nil; nd = iter.Next() {
+						outkeys = append(outkeys, string(nd.Key()))
+					}
+					lks, hks := string(lkey), string(hkey)
+					if !reflect.DeepEqual(refkeys, outkeys) {
+						t.Fatalf("failed for %v %v %v", lks, hks, incl)
+					}
+				}
+			}
+		}
 	}
 }
 
