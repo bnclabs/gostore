@@ -2,6 +2,7 @@ package bubt
 
 import "testing"
 import "math/rand"
+import "reflect"
 import "fmt"
 import "os"
 import "path/filepath"
@@ -9,6 +10,7 @@ import "path/filepath"
 import "github.com/prataprc/storage.go/api"
 import "github.com/prataprc/storage.go/log"
 import "github.com/prataprc/storage.go/llrb"
+import "github.com/prataprc/storage.go/dict"
 
 var _ = fmt.Sprintf("dummy")
 
@@ -233,6 +235,135 @@ func TestLookup(t *testing.T) {
 	}
 }
 
+func TestPartialRange(t *testing.T) {
+	lconfig := llrb.Defaultconfig()
+	lconfig["metadata.bornseqno"] = true
+	lconfig["metadata.deadseqno"] = true
+	lconfig["metadata.vbuuid"] = true
+	lconfig["metadata.fpos"] = true
+	llrb := llrb.NewLLRB("bubttest", lconfig)
+	d := dict.NewDict()
+	// inserts
+	inserts, n, keys := make([][2][]byte, 0), 100000, []string{}
+	for i := 0; i < n; i += 2 {
+		key, value := fmt.Sprintf("%v", i), fmt.Sprintf("value%v", i)
+		keys = append(keys, key)
+		inserts = append(inserts, [2][]byte{[]byte(key), []byte(value)})
+	}
+	for _, kv := range inserts {
+		llrb.Upsert(kv[0], kv[1], func(_ api.Index, _ int64, newnd, oldnd api.Node) {
+			if oldnd != nil {
+				t.Errorf("expected nil")
+			}
+		})
+		d.Upsert(kv[0], kv[1], func(_ api.Index, _ int64, newnd, oldnd api.Node) {
+			if oldnd != nil {
+				t.Errorf("expected nil")
+			}
+		})
+	}
+
+	indexfile := filepath.Join(os.TempDir(), "ut_indexfile_partial_range.bubt")
+	datafile := filepath.Join(os.TempDir(), "ut_datafile_partial_range.bubt")
+	os.Remove(indexfile)
+	os.Remove(datafile)
+
+	name := "unittest-range"
+	bconfig := Defaultconfig()
+	bconfig["mblocksize"] = 512
+	bconfig["zblocksize"] = 512
+	zblocksize := bconfig.Int64("zblocksize")
+
+	// with datafile
+	bubt := NewBubt(name, indexfile, datafile, bconfig)
+	llrbiter := llrb.Iterate(nil, nil, "both", false)
+	bubt.Build(llrbiter)
+	llrbiter.Close()
+
+	store, err := OpenBubtstore(name, indexfile, datafile, zblocksize)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// forward range
+	incls := []string{"none", "low", "high", "both"}
+	for i := int64(0); i < store.Count()-1; i = i + 10000 {
+		for j := int64(i); j < store.Count(); j = j + 10000 {
+			for _, incl := range incls {
+				refkeys, outkeys := []string{}, []string{}
+				lkey, hkey := []byte(keys[i]), []byte(keys[j])
+				lkey, hkey = lkey[:len(lkey)/2], hkey[:len(hkey)/2]
+				//lkey, hkey, incl = []byte("20"), []byte("40"), "none"
+				d.Range(lkey, hkey, incl, false, func(nd api.Node) bool {
+					refkeys = append(refkeys, string(nd.Key()))
+					return true
+				})
+				store.Range(lkey, hkey, incl, false, func(nd api.Node) bool {
+					outkeys = append(outkeys, string(nd.Key()))
+					return true
+				})
+				lks, hks := string(lkey), string(hkey)
+				if !reflect.DeepEqual(refkeys, outkeys) {
+					x, y := len(refkeys), len(outkeys)
+					t.Fatalf("failed %q %q %v - %v %v", lks, hks, incl, x, y)
+				}
+
+				refkeys, outkeys = refkeys[:0], outkeys[:0]
+				llrb.Range(lkey, hkey, incl, false, func(nd api.Node) bool {
+					refkeys = append(refkeys, string(nd.Key()))
+					return true
+				})
+				store.Range(lkey, hkey, incl, false, func(nd api.Node) bool {
+					outkeys = append(outkeys, string(nd.Key()))
+					return true
+				})
+				if !reflect.DeepEqual(refkeys, outkeys) {
+					x, y := len(refkeys), len(outkeys)
+					t.Fatalf("failed %q %q %v - %v %v", lks, hks, incl, x, y)
+				}
+			}
+		}
+	}
+
+	// backward range
+	for i := int64(0); i < store.Count()-1; i = i + 10000 {
+		for j := int64(i); j < store.Count(); j = j + 10000 {
+			for _, incl := range incls {
+				refkeys, outkeys := []string{}, []string{}
+				lkey, hkey := []byte(keys[i]), []byte(keys[j])
+				lkey, hkey = lkey[:len(lkey)/2], hkey[:len(hkey)/2]
+				d.Range(lkey, hkey, incl, true, func(nd api.Node) bool {
+					refkeys = append(refkeys, string(nd.Key()))
+					return true
+				})
+				store.Range(lkey, hkey, incl, true, func(nd api.Node) bool {
+					outkeys = append(outkeys, string(nd.Key()))
+					return true
+				})
+				lks, hks := string(lkey), string(hkey)
+				if !reflect.DeepEqual(refkeys, outkeys) {
+					x, y := len(refkeys), len(outkeys)
+					t.Fatalf("failed %q %q %v - %v %v", lks, hks, incl, x, y)
+				}
+
+				refkeys, outkeys = refkeys[:0], outkeys[:0]
+				llrb.Range(lkey, hkey, incl, true, func(nd api.Node) bool {
+					refkeys = append(refkeys, string(nd.Key()))
+					return true
+				})
+				store.Range(lkey, hkey, incl, true, func(nd api.Node) bool {
+					outkeys = append(outkeys, string(nd.Key()))
+					return true
+				})
+				if !reflect.DeepEqual(refkeys, outkeys) {
+					x, y := len(refkeys), len(outkeys)
+					t.Fatalf("failed %q %q %v - %v %v", lks, hks, incl, x, y)
+				}
+			}
+		}
+	}
+}
+
 func TestRange(t *testing.T) {
 	indexfile := filepath.Join(os.TempDir(), "ut_indexfile_range.bubt")
 	datafile := filepath.Join(os.TempDir(), "ut_datafile_range.bubt")
@@ -315,6 +446,157 @@ func TestRange(t *testing.T) {
 
 		if err := llrb.Destroy(); err != nil {
 			t.Fatal(err)
+		}
+	}
+}
+
+func TestPartialIterate(t *testing.T) {
+	lconfig := llrb.Defaultconfig()
+	lconfig["metadata.bornseqno"] = true
+	lconfig["metadata.deadseqno"] = true
+	lconfig["metadata.vbuuid"] = true
+	lconfig["metadata.fpos"] = true
+	llrb := llrb.NewLLRB("bubttest", lconfig)
+	d := dict.NewDict()
+	// inserts
+	inserts, n, keys := make([][2][]byte, 0), 100000, []string{}
+	for i := 0; i < n; i += 2 {
+		key, value := fmt.Sprintf("%v", i), fmt.Sprintf("value%v", i)
+		keys = append(keys, key)
+		inserts = append(inserts, [2][]byte{[]byte(key), []byte(value)})
+	}
+	for _, kv := range inserts {
+		llrb.Upsert(kv[0], kv[1], func(_ api.Index, _ int64, newnd, oldnd api.Node) {
+			if oldnd != nil {
+				t.Errorf("expected nil")
+			}
+		})
+		d.Upsert(kv[0], kv[1], func(_ api.Index, _ int64, newnd, oldnd api.Node) {
+			if oldnd != nil {
+				t.Errorf("expected nil")
+			}
+		})
+	}
+
+	indexfile := filepath.Join(os.TempDir(), "ut_indexfile_partial_range.bubt")
+	datafile := filepath.Join(os.TempDir(), "ut_datafile_partial_range.bubt")
+	os.Remove(indexfile)
+	os.Remove(datafile)
+
+	name := "unittest-range"
+	bconfig := Defaultconfig()
+	bconfig["mblocksize"] = 512
+	bconfig["zblocksize"] = 512
+	zblocksize := bconfig.Int64("zblocksize")
+
+	// with datafile
+	bubt := NewBubt(name, indexfile, datafile, bconfig)
+	llrbiter := llrb.Iterate(nil, nil, "both", false)
+	bubt.Build(llrbiter)
+	llrbiter.Close()
+
+	store, err := OpenBubtstore(name, indexfile, datafile, zblocksize)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// forward range
+	incls := []string{"none", "low", "high", "both"}
+	for i := int64(0); i < store.Count()-1; i = i + 30000 {
+		for j := int64(i); j < store.Count(); j = j + 30000 {
+			for _, incl := range incls {
+				refkeys, outkeys := []string{}, []string{}
+				lkey, hkey := []byte(keys[i]), []byte(keys[j])
+				lkey, hkey = lkey[:len(lkey)/2], hkey[:len(hkey)/2]
+				//lkey, hkey, incl = []byte("20"), []byte("40"), "none"
+				fmt.Println("---", string(lkey), string(hkey), incl)
+				iter := d.Iterate(lkey, hkey, incl, false)
+				if iter == nil {
+					continue
+				} else {
+					for nd := iter.Next(); nd != nil; nd = iter.Next() {
+						refkeys = append(refkeys, string(nd.Key()))
+					}
+					iter.Close()
+					fmt.Println("got refkeys", len(refkeys))
+					iter = store.Iterate(lkey, hkey, incl, false)
+					for nd := iter.Next(); nd != nil; nd = iter.Next() {
+						outkeys = append(outkeys, string(nd.Key()))
+					}
+					iter.Close()
+					lks, hks := string(lkey), string(hkey)
+					if !reflect.DeepEqual(refkeys, outkeys) {
+						x, y := len(refkeys), len(outkeys)
+						t.Fatalf("failed %q %q %v - %v %v", lks, hks, incl, x, y)
+					}
+					fmt.Println("got outkeys", len(outkeys))
+
+					refkeys, outkeys = refkeys[:0], outkeys[:0]
+					iter = llrb.Iterate(lkey, hkey, incl, false)
+					for nd := iter.Next(); nd != nil; nd = iter.Next() {
+						refkeys = append(refkeys, string(nd.Key()))
+					}
+					iter.Close()
+					iter = store.Iterate(lkey, hkey, incl, false)
+					for nd := iter.Next(); nd != nil; nd = iter.Next() {
+						outkeys = append(outkeys, string(nd.Key()))
+					}
+					fmt.Println("got outkeys", len(outkeys))
+					iter.Close()
+					if !reflect.DeepEqual(refkeys, outkeys) {
+						x, y := len(refkeys), len(outkeys)
+						t.Fatalf("failed %q %q %v-%v %v", lks, hks, incl, x, y)
+					}
+				}
+			}
+		}
+	}
+
+	// backward range
+	for i := int64(0); i < store.Count()-1; i = i + 30000 {
+		for j := int64(i); j < store.Count(); j = j + 30000 {
+			for _, incl := range incls {
+				refkeys, outkeys := []string{}, []string{}
+				lkey, hkey := []byte(keys[i]), []byte(keys[j])
+				lkey, hkey = lkey[:len(lkey)/2], hkey[:len(hkey)/2]
+				fmt.Println("---", string(lkey), string(hkey), incl)
+				iter := d.Iterate(lkey, hkey, incl, true)
+				if iter == nil {
+					continue
+				} else {
+					for nd := iter.Next(); nd != nil; nd = iter.Next() {
+						refkeys = append(refkeys, string(nd.Key()))
+					}
+					iter.Close()
+					iter = store.Iterate(lkey, hkey, incl, true)
+					for nd := iter.Next(); nd != nil; nd = iter.Next() {
+						outkeys = append(outkeys, string(nd.Key()))
+					}
+					iter.Close()
+					lks, hks := string(lkey), string(hkey)
+					if !reflect.DeepEqual(refkeys, outkeys) {
+						x, y := len(refkeys), len(outkeys)
+						t.Fatalf("failed %q %q %v - %v %v", lks, hks, incl, x, y)
+					}
+					fmt.Println("got", len(refkeys), len(outkeys))
+
+					refkeys, outkeys = refkeys[:0], outkeys[:0]
+					iter = llrb.Iterate(lkey, hkey, incl, true)
+					for nd := iter.Next(); nd != nil; nd = iter.Next() {
+						refkeys = append(refkeys, string(nd.Key()))
+					}
+					iter.Close()
+					iter = store.Iterate(lkey, hkey, incl, true)
+					for nd := iter.Next(); nd != nil; nd = iter.Next() {
+						outkeys = append(outkeys, string(nd.Key()))
+					}
+					iter.Close()
+					if !reflect.DeepEqual(refkeys, outkeys) {
+						x, y := len(refkeys), len(outkeys)
+						t.Fatalf("failed %q %q %v - %v %v", lks, hks, incl, x, y)
+					}
+				}
+			}
 		}
 	}
 }

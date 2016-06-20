@@ -124,12 +124,12 @@ func OpenBubtstore(name, indexfile, datafile string, zblocksize int64) (ss *Snap
 	}
 
 	// load stats block
-	statat := configat - zblocksize
+	statat := configat - markerBlocksize
 	n, err = ss.indexfd.ReadAt(block, statat)
 	if err != nil {
 		panicerr("stats ReadAt: %v", err)
-	} else if int64(n) != zblocksize {
-		panicerr("%v partial read: %v != %v", ss.logprefix, n, zblocksize)
+	} else if int64(n) != markerBlocksize {
+		panicerr("%v partial read: %v != %v", ss.logprefix, n, markerBlocksize)
 	} else {
 		ln := binary.BigEndian.Uint16(block[:2])
 		if err := ss.json2stats(block[2 : 2+ln]); err != nil {
@@ -306,22 +306,18 @@ func (ss *Snapshot) Range(lkey, hkey []byte, incl string, reverse bool, callb ap
 	if ss.rootblock < 0 {
 		return
 	}
+	lkey, hkey = ss.fixrangeargs(lkey, hkey)
+	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
+		if incl == "none" {
+			return
+		} else if incl == "low" || incl == "high" {
+			incl = "both"
+		}
+	}
 
 	var cmp [2]int
 
-	if reverse == false {
-		switch incl {
-		case "low":
-			cmp = [2]int{0, -1}
-		case "high":
-			cmp = [2]int{1, 0}
-		case "both":
-			cmp = [2]int{0, 0}
-		case "none":
-			cmp = [2]int{1, -1}
-		}
-		ss.rangeforward(lkey, hkey, ss.rootblock, cmp, callb)
-	} else {
+	if reverse {
 		switch incl {
 		case "low":
 			cmp = [2]int{0, -1}
@@ -333,13 +329,26 @@ func (ss *Snapshot) Range(lkey, hkey []byte, incl string, reverse bool, callb ap
 			cmp = [2]int{1, -1}
 		}
 		ss.rangebackward(lkey, hkey, ss.rootblock, cmp, callb)
+
+	} else {
+		switch incl {
+		case "low":
+			cmp = [2]int{0, -1}
+		case "high":
+			cmp = [2]int{1, 0}
+		case "both":
+			cmp = [2]int{0, 0}
+		case "none":
+			cmp = [2]int{1, -1}
+		}
+		ss.rangeforward(lkey, hkey, ss.rootblock, cmp, callb)
 	}
 	atomic.AddInt64(&ss.n_lookups, 1)
 	return
 }
 
 func (ss *Snapshot) Iterate(lkey, hkey []byte, incl string, r bool) api.IndexIterator {
-
+	lkey, hkey = ss.fixrangeargs(lkey, hkey)
 	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
 		if incl == "none" {
 			return nil
@@ -538,4 +547,15 @@ func (ss *Snapshot) openfiles() (err error) {
 		return err
 	}
 	return nil
+}
+
+func (ss *Snapshot) fixrangeargs(lk, hk []byte) ([]byte, []byte) {
+	l, h := lk, hk
+	if len(lk) == 0 {
+		l = nil
+	}
+	if len(hk) == 0 {
+		h = nil
+	}
+	return l, h
 }

@@ -1,6 +1,5 @@
 package bubt
 
-import "bytes"
 import "fmt"
 import "encoding/binary"
 
@@ -50,7 +49,7 @@ func (m mnode) searchforward(lkey []byte, entries []byte, cmp int) int32 {
 	default:
 		mid := int32(count / 2)
 		ekey := m.getentry(uint32(mid), entries).key()
-		if bytes.Compare(ekey, lkey) < cmp {
+		if api.Binarycmp(ekey, lkey, cmp == 1) < cmp {
 			return mid + m.searchforward(lkey, entries[mid*4:], cmp)
 		}
 		return m.searchforward(lkey, entries[:mid*4], cmp)
@@ -69,7 +68,7 @@ func (m mnode) rangebackward(
 		panicerr("impossible code path, call the programmer !")
 
 	default:
-		from = m.searchbackward(hkey, entries, cmp[0])
+		from = m.searchbackward(hkey, entries, cmp[1])
 	}
 
 	for x := from; x >= 0; x-- {
@@ -93,7 +92,8 @@ func (m mnode) searchbackward(hkey []byte, entries []byte, cmp int) int32 {
 		panicerr("impossible code path, call the programmer!")
 
 	case 1:
-		if bytes.Compare(m.getentry(0, entries).key(), hkey) > cmp {
+		ekey := m.getentry(0, entries).key()
+		if api.Binarycmp(ekey, hkey, cmp == 0) > cmp {
 			return -1
 		}
 		return 0
@@ -101,7 +101,7 @@ func (m mnode) searchbackward(hkey []byte, entries []byte, cmp int) int32 {
 	default:
 		mid := int32(count / 2)
 		ekey := m.getentry(uint32(mid), entries).key()
-		if bytes.Compare(ekey, hkey) > cmp {
+		if api.Binarycmp(ekey, hkey, cmp == 0) > cmp {
 			return m.searchbackward(hkey, entries[:mid*4], cmp)
 		}
 		return mid + m.searchbackward(hkey, entries[mid*4:], cmp)

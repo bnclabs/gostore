@@ -2,7 +2,6 @@ package bubt
 
 import "encoding/binary"
 import "fmt"
-import "bytes"
 
 import "github.com/prataprc/storage.go/api"
 
@@ -18,7 +17,7 @@ func (z znode) rangeforward(
 	from := z.searchforward(lkey, entries, cmp[0])
 	for x := from; x < int32(len(entries)/4); x++ {
 		ekey := z.getentry(uint32(x), entries).key()
-		if hkey == nil || bytes.Compare(ekey, hkey) <= cmp[1] {
+		if hkey == nil || api.Binarycmp(ekey, hkey, cmp[1] == 0) <= cmp[1] {
 			koff := x * 4
 			entryoff := int64(binary.BigEndian.Uint32(entries[koff : koff+4]))
 			nd := new(node)
@@ -45,17 +44,19 @@ func (z znode) searchforward(lkey []byte, entries []byte, cmp int) int32 {
 		panicerr("impossible code path, call the programmer!")
 
 	case 1:
-		if bytes.Compare(z.getentry(0, entries).key(), lkey) < cmp {
-			return 1
+		ekey := z.getentry(0, entries).key()
+		if api.Binarycmp(ekey, lkey, cmp == 1) >= cmp {
+			return 0
 		}
-		return 0
+		return 1
 
 	default:
 		mid := int32(count / 2)
-		if bytes.Compare(z.getentry(uint32(mid), entries).key(), lkey) < cmp {
-			return mid + z.searchforward(lkey, entries[mid*4:], cmp)
+		ekey := z.getentry(uint32(mid), entries).key()
+		if api.Binarycmp(ekey, lkey, cmp == 1) >= cmp {
+			return z.searchforward(lkey, entries[:mid*4], cmp)
 		}
-		return z.searchforward(lkey, entries[:mid*4], cmp)
+		return mid + z.searchforward(lkey, entries[mid*4:], cmp)
 	}
 	panic("unreachable code")
 }
@@ -65,10 +66,10 @@ func (z znode) rangebackward(
 	lkey, hkey []byte, fpos int64, cmp [2]int, callb api.RangeCallb) bool {
 
 	entries := z.entryslice()
-	from := z.searchbackward(hkey, entries, cmp[0])
+	from := z.searchbackward(hkey, entries, cmp[1])
 	for x := from; x >= 0; x-- {
 		ekey := z.getentry(uint32(x), entries).key()
-		if lkey == nil || bytes.Compare(ekey, lkey) >= cmp[1] {
+		if lkey == nil || api.Binarycmp(ekey, lkey, cmp[0] == 1) >= cmp[0] {
 			koff := x * 4
 			entryoff := int64(binary.BigEndian.Uint32(entries[koff : koff+4]))
 			nd := new(node)
@@ -95,14 +96,16 @@ func (z znode) searchbackward(hkey []byte, entries []byte, cmp int) int32 {
 		panicerr("impossible code path, call the programmer!")
 
 	case 1:
-		if bytes.Compare(z.getentry(0, entries).key(), hkey) > cmp {
+		ekey := z.getentry(0, entries).key()
+		if api.Binarycmp(ekey, hkey, cmp == 0) > cmp {
 			return -1
 		}
 		return 0
 
 	default:
 		mid := int32(count / 2)
-		if bytes.Compare(z.getentry(uint32(mid), entries).key(), hkey) > cmp {
+		ekey := z.getentry(uint32(mid), entries).key()
+		if api.Binarycmp(ekey, hkey, cmp == 0) > cmp {
 			return z.searchbackward(hkey, entries[:mid*4], cmp)
 		}
 		return mid + z.searchbackward(hkey, entries[mid*4:], cmp)

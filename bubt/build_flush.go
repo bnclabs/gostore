@@ -100,7 +100,7 @@ func (flusher *bubtflusher) run(
 	}
 
 	// flush marker block
-	markerblock := make([]byte, flusher.f.zblocksize)
+	markerblock := make([]byte, markerBlocksize)
 	for i := 0; i < len(markerblock); i++ {
 		markerblock[i] = markerByte
 	}
