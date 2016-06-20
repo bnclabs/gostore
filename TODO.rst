@@ -1,3 +1,5 @@
+- cleanup panic messages, log messages, and dummy-imports
+
 clock:
 
 * exhaust all possible combination of clock comparision TestVectorclockOrder.
