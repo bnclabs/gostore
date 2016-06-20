@@ -286,6 +286,7 @@ func (snapshot *LLRBSnapshot) max() api.Node {
 
 // Range implement IndexReader{} interface.
 func (snapshot *LLRBSnapshot) Range(lkey, hkey []byte, incl string, reverse bool, iter api.RangeCallb) {
+	lkey, hkey = snapshot.llrb.fixrangeargs(lkey, hkey)
 	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
 		if incl == "none" {
 			return
@@ -328,7 +329,7 @@ func (snapshot *LLRBSnapshot) Range(lkey, hkey []byte, incl string, reverse bool
 
 // Iterate implement IndexReader{} interface.
 func (snapshot *LLRBSnapshot) Iterate(lkey, hkey []byte, incl string, r bool) api.IndexIterator {
-
+	lkey, hkey = snapshot.llrb.fixrangeargs(lkey, hkey)
 	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
 		if incl == "none" {
 			return nil

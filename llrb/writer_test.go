@@ -928,7 +928,6 @@ func TestPartialMvccIterate(t *testing.T) {
 	}
 
 	snapshot.Release()
-	llrb.Validate()
 
 	if err := llrb.Destroy(); err != nil {
 		t.Fatal(err)

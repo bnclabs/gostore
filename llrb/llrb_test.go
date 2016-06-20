@@ -501,8 +501,8 @@ func TestPartialRange(t *testing.T) {
 
 	// forward range
 	incls := []string{"none", "low", "high", "both"}
-	for i := int64(0); i < llrb.Count()-1; i = i + 10 {
-		for j := int64(i); j < llrb.Count(); j = j + 10 {
+	for i := int64(0); i < llrb.Count()-1; i = i + 100 {
+		for j := int64(i); j < llrb.Count(); j = j + 100 {
 			for _, incl := range incls {
 				refkeys, outkeys := []string{}, []string{}
 				lkey, hkey := []byte(keys[i]), []byte(keys[j])
@@ -524,8 +524,8 @@ func TestPartialRange(t *testing.T) {
 	}
 
 	// backward range
-	for i := int64(0); i < llrb.Count()-1; i = i + 10 {
-		for j := int64(i); j < llrb.Count(); j = j + 10 {
+	for i := int64(0); i < llrb.Count()-1; i = i + 100 {
+		for j := int64(i); j < llrb.Count(); j = j + 100 {
 			for _, incl := range incls {
 				refkeys, outkeys := []string{}, []string{}
 				lkey, hkey := []byte(keys[i]), []byte(keys[j])
@@ -816,10 +816,10 @@ func TestPartialIterate(t *testing.T) {
 		})
 	}
 
-	// forward range
+	// forward iterate
 	incls := []string{"none", "low", "high", "both"}
-	for i := int64(0); i < llrb.Count()-1; i = i + 10 {
-		for j := int64(i + 1); j < llrb.Count(); j = j + 10 {
+	for i := int64(0); i < llrb.Count()-1; i = i + 100 {
+		for j := int64(i + 1); j < llrb.Count(); j = j + 100 {
 			for _, incl := range incls {
 				refkeys, outkeys := []string{}, []string{}
 				lkey, hkey := []byte(keys[i]), []byte(keys[j])
@@ -843,9 +843,9 @@ func TestPartialIterate(t *testing.T) {
 		}
 	}
 
-	// backward range
-	for i := int64(0); i < llrb.Count()-1; i = i + 10 {
-		for j := int64(i + 1); j < llrb.Count(); j = j + 10 {
+	// backward iterate
+	for i := int64(0); i < llrb.Count()-1; i = i + 100 {
+		for j := int64(i + 1); j < llrb.Count(); j = j + 100 {
 			for _, incl := range incls {
 				refkeys, outkeys := []string{}, []string{}
 				lkey, hkey := []byte(keys[i]), []byte(keys[j])

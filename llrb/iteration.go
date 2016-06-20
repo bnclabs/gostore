@@ -1,8 +1,11 @@
 package llrb
 
 import "sync/atomic"
+import "fmt"
 
 import "github.com/prataprc/storage.go/api"
+
+var _ = fmt.Sprintf("dummy")
 
 type iterator struct {
 	tree       api.IndexReader
@@ -67,7 +70,7 @@ func (iter *iterator) rangefill() {
 	iter.tree.Range(iter.startkey, iter.endkey, iter.incl, iter.reverse,
 		func(nd api.Node) bool {
 			breakkey = nd.Key()
-			if count < iter.limit || api.Binarycmp(breakkey, prev, true) == 0 {
+			if count < iter.limit || api.Binarycmp(prev, breakkey, true) == 0 {
 				prev = breakkey
 				iter.nodes = append(iter.nodes, nd)
 				count++

@@ -12,6 +12,7 @@ import "github.com/prataprc/storage.go/lib"
 
 // low <= (keys) <= high
 func (llrb *LLRB) rangehele(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) bool {
+
 	if nd == nil {
 		return true
 	}
@@ -32,6 +33,7 @@ func (llrb *LLRB) rangehele(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) bo
 
 // low <= (keys) < hk
 func (llrb *LLRB) rangehelt(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) bool {
+
 	if nd == nil {
 		return true
 	}
@@ -95,11 +97,11 @@ func (llrb *LLRB) rvrslehe(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) boo
 	if nd == nil {
 		return true
 	}
-	if hk != nil && nd.gtkey(llrb.mdsize, hk, true) {
-		return llrb.rvrslehe(nd.left, lk, hk, iter)
-	}
 	if lk != nil && nd.ltkey(llrb.mdsize, lk, true) {
 		return llrb.rvrslehe(nd.right, lk, hk, iter)
+	}
+	if hk != nil && nd.gtkey(llrb.mdsize, hk, true) {
+		return llrb.rvrslehe(nd.left, lk, hk, iter)
 	}
 	if !llrb.rvrslehe(nd.right, lk, hk, iter) {
 		return false
@@ -115,11 +117,11 @@ func (llrb *LLRB) rvrsleht(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) boo
 	if nd == nil {
 		return true
 	}
-	if hk != nil && nd.gtkey(llrb.mdsize, hk, true) {
-		return llrb.rvrsleht(nd.left, lk, hk, iter)
-	}
 	if lk != nil && nd.lekey(llrb.mdsize, lk, true) {
 		return llrb.rvrsleht(nd.right, lk, hk, iter)
+	}
+	if hk != nil && nd.gtkey(llrb.mdsize, hk, true) {
+		return llrb.rvrsleht(nd.left, lk, hk, iter)
 	}
 	if !llrb.rvrsleht(nd.right, lk, hk, iter) {
 		return false
@@ -135,11 +137,11 @@ func (llrb *LLRB) rvrslthe(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) boo
 	if nd == nil {
 		return true
 	}
-	if hk != nil && nd.gekey(llrb.mdsize, hk, true) {
-		return llrb.rvrslthe(nd.left, lk, hk, iter)
-	}
 	if lk != nil && nd.ltkey(llrb.mdsize, lk, true) {
 		return llrb.rvrslthe(nd.right, lk, hk, iter)
+	}
+	if hk != nil && nd.gekey(llrb.mdsize, hk, true) {
+		return llrb.rvrslthe(nd.left, lk, hk, iter)
 	}
 	if !llrb.rvrslthe(nd.right, lk, hk, iter) {
 		return false
@@ -155,11 +157,11 @@ func (llrb *LLRB) rvrsltht(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) boo
 	if nd == nil {
 		return true
 	}
-	if hk != nil && nd.gekey(llrb.mdsize, hk, true) {
-		return llrb.rvrsltht(nd.left, lk, hk, iter)
-	}
 	if lk != nil && nd.lekey(llrb.mdsize, lk, true) {
 		return llrb.rvrsltht(nd.right, lk, hk, iter)
+	}
+	if hk != nil && nd.gekey(llrb.mdsize, hk, true) {
+		return llrb.rvrsltht(nd.left, lk, hk, iter)
 	}
 	if !llrb.rvrsltht(nd.right, lk, hk, iter) {
 		return false

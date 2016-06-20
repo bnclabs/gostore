@@ -351,6 +351,7 @@ func (llrb *LLRB) Range(lkey, hkey []byte, incl string, reverse bool, iter api.R
 		panic("Range(): mvcc enabled, use snapshots for reading")
 	}
 
+	lkey, hkey = llrb.fixrangeargs(lkey, hkey)
 	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
 		if incl == "none" {
 			return
@@ -396,6 +397,7 @@ func (llrb *LLRB) Iterate(lkey, hkey []byte, incl string, r bool) api.IndexItera
 		panic("Iterate(): mvcc enabled, use snapshots for reading")
 	}
 
+	lkey, hkey = llrb.fixrangeargs(lkey, hkey)
 	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
 		if incl == "none" {
 			return nil
@@ -900,6 +902,17 @@ func (llrb *LLRB) delcount(nd *Llrbnode) {
 		llrb.n_count--
 		llrb.n_deletes++
 	}
+}
+
+func (llrb *LLRB) fixrangeargs(lk, hk []byte) ([]byte, []byte) {
+	l, h := lk, hk
+	if len(lk) == 0 {
+		l = nil
+	}
+	if len(hk) == 0 {
+		h = nil
+	}
+	return l, h
 }
 
 func (llrb *LLRB) equivalent(n1, n2 *Llrbnode) bool {
