@@ -61,14 +61,14 @@ func (iter *iterator) rangefill() {
 	iter.tree.Range(iter.startkey, iter.endkey, iter.incl, iter.reverse,
 		func(nd api.Node) bool {
 			breakkey = nd.Key()
-			if count < iter.limit || api.Binarycmp(breakkey, prev, true) == 0 {
+			if count < iter.limit || api.Binarycmp(prev, breakkey, true) == 0 {
 				prev = breakkey
 				iter.nodes = append(iter.nodes, nd)
 				count++
 				return true
 			}
 			iter.limit = count
-			if iter.limit < 100 { // TODO: avoid magic numbers
+			if iter.limit < 10000 { // TODO: avoid magic numbers
 				iter.limit *= 2
 			}
 			iter.continuate = true
