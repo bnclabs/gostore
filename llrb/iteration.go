@@ -49,13 +49,13 @@ func (iter *iterator) Close() {
 		iter.nodes[i] = nil
 	}
 	iter.nodes = iter.nodes[:0]
+	atomic.AddInt64(iter.activeiter, -1)
 
 	// give it back to the pool if not overflowing.
 	llrb := iter.llrb
 	if len(llrb.iterpool) < cap(llrb.iterpool) {
 		llrb.iterpool <- iter
 	}
-	atomic.AddInt64(iter.activeiter, -1)
 
 	if llrb.mvcc.enabled == false {
 		// NOTE: remember to see this reader unlock

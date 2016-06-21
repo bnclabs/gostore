@@ -897,7 +897,9 @@ func (llrb *LLRB) delcount(nd *Llrbnode) {
 	if nd != nil {
 		llrb.keymemory -= int64(len(nd.key(llrb.mdsize)))
 		if nd.metadata().ismvalue() {
-			llrb.valmemory -= int64(len(nd.nodevalue().value()))
+			if nv := nd.nodevalue(); nv != nil {
+				llrb.valmemory -= int64(len(nv.value()))
+			}
 		}
 		llrb.n_count--
 		llrb.n_deletes++
