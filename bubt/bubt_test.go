@@ -40,9 +40,12 @@ func TestEmpty(t *testing.T) {
 	llrbiter.Close()
 
 	zblocksize := bconfig.Int64("zblocksize")
-	_, err := OpenBubtstore(name, indexfile, datafile, zblocksize)
+	store, err := OpenBubtstore(name, indexfile, datafile, zblocksize)
 	if err == nil {
 		t.Fatalf("expected error")
+	}
+	if err := store.Destroy(); err != nil {
+		t.Fatal(err)
 	}
 
 	if err := llrb.Destroy(); err != nil {
@@ -160,24 +163,24 @@ func TestLookup(t *testing.T) {
 				t.Fatalf("missing key %v", string(key))
 			}
 			s.Get(key, func(nd api.Node) bool {
-				verifynode(t, refnds[j], nd)
+				verifynode(refnds[j], nd)
 				return true
 			})
 		}
 		s.Min(func(nd api.Node) bool {
-			verifynode(t, refnds[0], nd)
+			verifynode(refnds[0], nd)
 			return true
 		})
 		last := len(refnds) - 1
 		s.Max(func(nd api.Node) bool {
-			verifynode(t, refnds[last], nd)
+			verifynode(refnds[last], nd)
 			return true
 		})
 
 		s.Release()
 	}
 
-	for i := 1; i <= 2000; i++ {
+	for i := 1; i <= 2000; i += 7 {
 		//t.Logf("trying %v", i)
 		llrb := refllrb(i)
 
@@ -251,12 +254,12 @@ func TestPartialRange(t *testing.T) {
 		inserts = append(inserts, [2][]byte{[]byte(key), []byte(value)})
 	}
 	for _, kv := range inserts {
-		llrb.Upsert(kv[0], kv[1], func(_ api.Index, _ int64, newnd, oldnd api.Node) {
+		llrb.Upsert(kv[0], kv[1], func(_ api.Index, _ int64, _, oldnd api.Node) {
 			if oldnd != nil {
 				t.Errorf("expected nil")
 			}
 		})
-		d.Upsert(kv[0], kv[1], func(_ api.Index, _ int64, newnd, oldnd api.Node) {
+		d.Upsert(kv[0], kv[1], func(_ api.Index, _ int64, _, oldnd api.Node) {
 			if oldnd != nil {
 				t.Errorf("expected nil")
 			}
@@ -362,6 +365,9 @@ func TestPartialRange(t *testing.T) {
 			}
 		}
 	}
+	if err := store.Destroy(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestRange(t *testing.T) {
@@ -384,14 +390,14 @@ func TestRange(t *testing.T) {
 		// forward range
 		off := 0
 		s.Range(nil, nil, "both", false, func(nd api.Node) bool {
-			verifynode(t, refnds[off], nd)
+			verifynode(refnds[off], nd)
 			off++
 			return true
 		})
 		// backward range
 		off = count - 1
 		s.Range(nil, nil, "both", true, func(nd api.Node) bool {
-			verifynode(t, refnds[off], nd)
+			verifynode(refnds[off], nd)
 			off--
 			return true
 		})
@@ -399,7 +405,7 @@ func TestRange(t *testing.T) {
 		s.Release()
 	}
 
-	for i := 1; i <= 2000; i++ {
+	for i := 1; i <= 2000; i += 7 {
 		//t.Logf("trying %v", i)
 		llrb := refllrb(i)
 		refnds := make([]api.Node, 0)
@@ -466,12 +472,12 @@ func TestPartialIterate(t *testing.T) {
 		inserts = append(inserts, [2][]byte{[]byte(key), []byte(value)})
 	}
 	for _, kv := range inserts {
-		llrb.Upsert(kv[0], kv[1], func(_ api.Index, _ int64, newnd, oldnd api.Node) {
+		llrb.Upsert(kv[0], kv[1], func(_ api.Index, _ int64, _, oldnd api.Node) {
 			if oldnd != nil {
 				t.Errorf("expected nil")
 			}
 		})
-		d.Upsert(kv[0], kv[1], func(_ api.Index, _ int64, newnd, oldnd api.Node) {
+		d.Upsert(kv[0], kv[1], func(_ api.Index, _ int64, _, oldnd api.Node) {
 			if oldnd != nil {
 				t.Errorf("expected nil")
 			}
@@ -509,7 +515,6 @@ func TestPartialIterate(t *testing.T) {
 				lkey, hkey := []byte(keys[i]), []byte(keys[j])
 				lkey, hkey = lkey[:len(lkey)/2], hkey[:len(hkey)/2]
 				//lkey, hkey, incl = []byte("20"), []byte("40"), "none"
-				fmt.Println("---", string(lkey), string(hkey), incl)
 				iter := d.Iterate(lkey, hkey, incl, false)
 				if iter == nil {
 					continue
@@ -518,7 +523,6 @@ func TestPartialIterate(t *testing.T) {
 						refkeys = append(refkeys, string(nd.Key()))
 					}
 					iter.Close()
-					fmt.Println("got refkeys", len(refkeys))
 					iter = store.Iterate(lkey, hkey, incl, false)
 					for nd := iter.Next(); nd != nil; nd = iter.Next() {
 						outkeys = append(outkeys, string(nd.Key()))
@@ -529,7 +533,6 @@ func TestPartialIterate(t *testing.T) {
 						x, y := len(refkeys), len(outkeys)
 						t.Fatalf("failed %q %q %v - %v %v", lks, hks, incl, x, y)
 					}
-					fmt.Println("got outkeys", len(outkeys))
 
 					refkeys, outkeys = refkeys[:0], outkeys[:0]
 					iter = llrb.Iterate(lkey, hkey, incl, false)
@@ -541,7 +544,6 @@ func TestPartialIterate(t *testing.T) {
 					for nd := iter.Next(); nd != nil; nd = iter.Next() {
 						outkeys = append(outkeys, string(nd.Key()))
 					}
-					fmt.Println("got outkeys", len(outkeys))
 					iter.Close()
 					if !reflect.DeepEqual(refkeys, outkeys) {
 						x, y := len(refkeys), len(outkeys)
@@ -559,7 +561,6 @@ func TestPartialIterate(t *testing.T) {
 				refkeys, outkeys := []string{}, []string{}
 				lkey, hkey := []byte(keys[i]), []byte(keys[j])
 				lkey, hkey = lkey[:len(lkey)/2], hkey[:len(hkey)/2]
-				fmt.Println("---", string(lkey), string(hkey), incl)
 				iter := d.Iterate(lkey, hkey, incl, true)
 				if iter == nil {
 					continue
@@ -578,7 +579,6 @@ func TestPartialIterate(t *testing.T) {
 						x, y := len(refkeys), len(outkeys)
 						t.Fatalf("failed %q %q %v - %v %v", lks, hks, incl, x, y)
 					}
-					fmt.Println("got", len(refkeys), len(outkeys))
 
 					refkeys, outkeys = refkeys[:0], outkeys[:0]
 					iter = llrb.Iterate(lkey, hkey, incl, true)
@@ -598,6 +598,9 @@ func TestPartialIterate(t *testing.T) {
 				}
 			}
 		}
+	}
+	if err := store.Destroy(); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -621,7 +624,7 @@ func TestIterate(t *testing.T) {
 		siter := s.Iterate(nil, nil, "both", false)
 		off, nd := 0, siter.Next()
 		for nd != nil {
-			verifynode(t, refnds[off], nd)
+			verifynode(refnds[off], nd)
 			nd = siter.Next()
 			off++
 		}
@@ -630,7 +633,7 @@ func TestIterate(t *testing.T) {
 		siter = s.Iterate(nil, nil, "both", true)
 		off, nd = count-1, siter.Next()
 		for nd != nil {
-			verifynode(t, refnds[off], nd)
+			verifynode(refnds[off], nd)
 			nd = siter.Next()
 			off--
 		}
@@ -639,7 +642,7 @@ func TestIterate(t *testing.T) {
 		s.Release()
 	}
 
-	for i := 1; i <= 2000; i++ {
+	for i := 1; i <= 2000; i += 7 {
 		//t.Logf("trying %v", i)
 		llrb := refllrb(i)
 		refnds := make([]api.Node, 0)
@@ -738,26 +741,26 @@ func refllrb(count int) *llrb.LLRB {
 	return llrb
 }
 
-func verifynode(t *testing.T, refnd, nd api.Node) {
+func verifynode(refnd, nd api.Node) {
 	if refvbno, vbno := refnd.Vbno(), nd.Vbno(); refvbno != vbno {
-		t.Fatalf("expected %v, got %v", refvbno, vbno)
+		panic(fmt.Errorf("expected %v, got %v", refvbno, vbno))
 	} else if refid, id := refnd.Vbuuid(), nd.Vbuuid(); refid != id {
-		t.Fatalf("expected %v, got %v", refid, id)
+		panic(fmt.Errorf("expected %v, got %v", refid, id))
 	}
 	refseqno, seqno := refnd.Bornseqno(), nd.Bornseqno()
 	if refseqno != seqno {
-		t.Fatalf("expected %v, got %v", refseqno, seqno)
+		panic(fmt.Errorf("expected %v, got %v", refseqno, seqno))
 	}
 	refseqno, seqno = refnd.Deadseqno(), nd.Deadseqno()
 	if refseqno != seqno {
-		t.Fatalf("expected %v, got %v", refseqno, seqno)
+		panic(fmt.Errorf("expected %v, got %v", refseqno, seqno))
 	}
 	refkey, key := string(refnd.Key()), string(nd.Key())
 	if refkey != key {
-		t.Fatalf("expected %v, got %v", refkey, key)
+		panic(fmt.Errorf("expected %v, got %v", refkey, key))
 	}
 	refval, val := string(refnd.Value()), string(nd.Value())
 	if refval != val {
-		t.Fatalf("expected %v, got %v", refval, val)
+		panic(fmt.Errorf("expected %v, got %v", refval, val))
 	}
 }
