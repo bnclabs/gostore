@@ -58,7 +58,7 @@ func (iter *iterator) rangefill() {
 	var breakkey, prev []byte
 	iter.nodes, iter.index, iter.continuate = iter.nodes[:0], 0, false
 	count := 0
-	iter.tree.Range(iter.startkey, iter.endkey, iter.incl, iter.reverse,
+	iter.dict.rangeover(iter.startkey, iter.endkey, iter.incl, iter.reverse,
 		func(nd api.Node) bool {
 			breakkey = nd.Key()
 			if count < iter.limit || api.Binarycmp(prev, breakkey, true) == 0 {

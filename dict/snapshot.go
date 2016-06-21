@@ -83,6 +83,7 @@ func (d *DictSnapshot) Max(callb api.NodeCallb) bool {
 
 // Range implement IndexReader{} interface.
 func (d *DictSnapshot) Range(lk, hk []byte, incl string, reverse bool, iter api.RangeCallb) {
+	lk, hk = d.fixrangeargs(lk, hk)
 	if reverse {
 		d.rangebackward(lk, hk, incl, iter)
 		return
@@ -92,6 +93,7 @@ func (d *DictSnapshot) Range(lk, hk []byte, incl string, reverse bool, iter api.
 
 // Iterate implement IndexReader{} interface.
 func (d *DictSnapshot) Iterate(lkey, hkey []byte, incl string, r bool) api.IndexIterator {
+	lkey, hkey = d.fixrangeargs(lkey, hkey)
 	return d.iterate(lkey, hkey, incl, r)
 }
 

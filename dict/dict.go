@@ -151,6 +151,10 @@ func (d *Dict) Max(callb api.NodeCallb) bool {
 func (d *Dict) Range(lk, hk []byte, incl string, reverse bool, iter api.RangeCallb) {
 	lk, hk = d.fixrangeargs(lk, hk)
 	d.sorted()
+	d.rangeover(lk, hk, incl, reverse, iter)
+}
+
+func (d *Dict) rangeover(lk, hk []byte, incl string, reverse bool, iter api.RangeCallb) {
 	if reverse {
 		d.rangebackward(lk, hk, incl, iter)
 		return
@@ -258,7 +262,7 @@ func (d *Dict) iterate(lkey, hkey []byte, incl string, r bool) api.IndexIterator
 		}
 	}
 
-	iter := &iterator{}
+	iter := &iterator{nodes: make([]api.Node, 0)}
 
 	// NOTE: always re-initialize, because we are getting it back from pool.
 	iter.tree, iter.dict = d, d
@@ -266,10 +270,6 @@ func (d *Dict) iterate(lkey, hkey []byte, incl string, r bool) api.IndexIterator
 	iter.continuate = false
 	iter.startkey, iter.endkey, iter.incl, iter.reverse = lkey, hkey, incl, r
 	iter.closed, iter.activeiter = false, &d.activeiter
-
-	if iter.nodes == nil {
-		iter.nodes = make([]api.Node, 0)
-	}
 
 	iter.rangefill()
 	if r {
