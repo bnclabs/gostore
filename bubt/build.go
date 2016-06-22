@@ -190,6 +190,10 @@ func (f *Bubt) Build(iter api.IndexIterator) {
 	log.Infof("%v ... build completed\n", f.logprefix)
 }
 
+func (f *Bubt) Count() int64 {
+	return f.n_count
+}
+
 func (f *Bubt) buildm(ms []*mblock, fpos [2]int64) ([]*mblock, blocker, [2]int64, bool) {
 	var block blocker
 	var fin bool
