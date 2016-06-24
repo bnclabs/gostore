@@ -5,10 +5,8 @@ import "errors"
 
 var ErrorOutofMemory = errors.New("llrb.outofmemory")
 
-const MEMUtilization = float64(0.95)
-
-// SuitableSize for size, pick the optimal block-size among the
-// list of blocksizes to acheive MEMUtilization.
+// SuitableSize picks an optimal block-size for given size,
+// to achieve MEMUtilization.
 func SuitableSize(blocksizes []int64, size int64) int64 {
 	for {
 		switch len(blocksizes) {
@@ -34,9 +32,8 @@ func SuitableSize(blocksizes []int64, size int64) int64 {
 	}
 }
 
-// Blocksizes for allocation size that can range between minblock
-// to maxblock, compute the minimum number of block sizes to manage
-// without degrading below MEMUtilization.
+// Blocksizes generate suitable block-sizes between minblock-size and
+// maxblock-size, to acheive MEMUtilization.
 func Blocksizes(minblock, maxblock int64) []int64 {
 	if maxblock < minblock { // validate and cure the input params
 		panic("minblock < maxblock")

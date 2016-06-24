@@ -1,5 +1,20 @@
-// Functions and methods are not thread safe.
-
+// Package malloc supplies custom memory management for in-memory data
+// structures. Note that Types and Functions exported by this package are not
+// necessarily thread safe.
+//
+// Arena is a single block of memory that will be utilized by the
+// algorithm/data-structure during its existence. To improve memory
+// utilization arenas are divided into pools of fixed sized blocks, where each
+// pool will supply memory blocks of same size. Arenas can be created with
+// following parameters:
+//
+//   capacity  : size of arena in bytes.
+//   minblock  : blocks less than minblock sizes cannot be allocated.
+//   maxblock  : blocks greater than maxblock sizes cannot be allocated.
+//   pcapacity : pool's capacity, in this arena, cannot exceed this limit.
+//   maxpools  : maximum number of pool-sizes allowed.
+//   maxchunks : maximum number of block-chunks allowed in a pool.
+//   allocator : allocator algorithm to use supports `flist` or `fbit`.
 package malloc
 
 import "unsafe"
@@ -8,29 +23,34 @@ import "sort"
 import "github.com/prataprc/storage.go/lib"
 import "github.com/prataprc/storage.go/api"
 
+// MEMUtilization expected in an arenas.
+const MEMUtilization = float64(0.95)
+
 // Sizeinterval minblock and maxblocks should be multiples of Sizeinterval.
 const Sizeinterval = int64(32)
 
-// Maxarenasize maximum size of a memory arena.
+// Maxarenasize maximum size of a memory arena. Can be used as default for
+// config-parameter `capacity`.
 const Maxarenasize = int64(1024 * 1024 * 1024 * 1024) // 1TB
 
-// Maxpools maximum number of pools allowed in an arena.
+// Maxpools maximum number of pools allowed in an arena. Can be used as
+// default for config-parameter `maxpools`.
 const Maxpools = int64(256)
 
-// Maxchunks maximum number of chunks allowed in a pool.
+// Maxchunks maximum number of chunks allowed in a pool. Can be used as
+// default for config-parameter `maxchunks`.
 const Maxchunks = int64(65536)
 
-// Arena defines a large memory block that can divided into different pool
-// size.
+// Arena defines a large memory block that can be divided into memory pools.
 type Arena struct {
 	blocksizes []int64            // sorted list of block-sizes in this arena
 	mpools     map[int64]Mpoolers // size -> list of Mpooler
 	poolmaker  func(size, numblocks int64) Mpooler
 
 	// configuration
+	capacity  int64  // memory capacity to be managed by this arena
 	minblock  int64  // minimum block size allocatable by arena
 	maxblock  int64  // maximum block size allocatable by arena
-	capacity  int64  // memory capacity to be managed by this arena
 	pcapacity int64  // maximum capacity for a single pool
 	maxpools  int64  // maximum number of pools
 	maxchunks int64  // maximum number of chunks allowed in a pool
