@@ -3,11 +3,11 @@
 //
 //   * index key, value (value is optional).
 //   * each key shall be unique within the index sample-set.
-//   * custom memory management
+//   * custom memory management.
 //   * configurable metadata - vbno, access-time, bornseqno, deadseqno, vbuuid.
 //   * in single-threaded configuration, reads and writes are serialized.
 //   * supports multi-version-concurrency-control, where writes are
-//     serialized, even if there are concurrent writers, and there can be
+//     serialized even if there are concurrent writers, and there can be
 //     zero or more concurrent readers.
 //
 // metadata fields are part of index entry, and describes them with:
@@ -29,7 +29,7 @@
 //
 //   * value can be kept in memory or backed by disk.
 //   * if value is kept in memory, mvalue refers to the memory offset for
-//     fetch the entry value.
+//     fetching the entry value.
 //   * if value is backed by disk then,
 //     fpos[64:59], specifies file-id, ranging from 0-31.
 //     fpos[59:], specifies the offset into the identified file.

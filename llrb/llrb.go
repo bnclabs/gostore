@@ -123,7 +123,7 @@ func NewLLRB(name string, config lib.Config) *LLRB {
 			"delete": lib.NewhistorgramInt64(4, 1024, 4),
 		}
 		llrb.mvcc.h_versions = lib.NewhistorgramInt64(0, 32, 1)
-		llrb.MVCCWriter()
+		llrb.spawnwriter()
 	}
 
 	log.Infof("%v started ...\n", llrb.logprefix)

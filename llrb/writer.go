@@ -18,13 +18,12 @@ type LLRBWriter struct {
 	finch   chan bool
 }
 
-// MVCCWriter spawns a new writer. Only one writer routine is allowed for each
-// LLRB instance.
-func (llrb *LLRB) MVCCWriter() *LLRBWriter {
+// Only one writer routine is allowed for each LLRB instance.
+func (llrb *LLRB) spawnwriter() *LLRBWriter {
 	if llrb.mvcc.enabled == false {
-		panic(fmt.Errorf("MVCCWriter(): mvcc not enabled"))
+		panic(fmt.Errorf("spawnwriter(): mvcc not enabled"))
 	} else if llrb.mvcc.writer != nil {
-		panic(fmt.Errorf("MVCCWriter(): concurrent writers are not allowed"))
+		panic(fmt.Errorf("spawnwriter(): concurrent writers are not allowed"))
 	}
 
 	chansize := llrb.config.Int64("mvcc.writer.chanbuffer")
