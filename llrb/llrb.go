@@ -154,12 +154,14 @@ func (llrb *LLRB) Isactive() bool {
 	return llrb.dead == false
 }
 
-// Refer implement Snapshot{} interface.
+// Refer implement Snapshot{} interface. Call this method on llrb-snapshot,
+// calling on this type will cause panic.
 func (llrb *LLRB) Refer() {
 	panic("Refer(): only allowed on snapshot")
 }
 
-// Release implement Snapshot{} interface.
+// Release implement Snapshot{} interface. Call this method on llrb-snapshot,
+// calling on this type will cause panic.
 func (llrb *LLRB) Release() {
 	panic("Release(): only allowed on snapshot")
 }
