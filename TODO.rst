@@ -1,4 +1,5 @@
 - cleanup panic messages, log messages, and dummy-imports
+- replace panicerr() with panic()
 
 clock:
 
