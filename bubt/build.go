@@ -385,7 +385,7 @@ func createfile(name string) *os.File {
 	os.Remove(name)
 	fd, err := os.OpenFile(name, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
-		panicerr("append file: %v", err)
+		panicerr("create append file: %v", err)
 	}
 	return fd
 }

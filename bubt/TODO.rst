@@ -1,5 +1,7 @@
 * catch all panic and gracefully recover.
 * is 2 byte enough for vlen ?
+* if value is nil, should we store value-length as ZERO ? Is there a way to
+  optimize that ?
 * test bubt for empty list of key,value pairs.
 * instead of repeating the key-content in the intermediate nodes,
   just refer them to znodes and cache all the references for future
