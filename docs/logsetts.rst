@@ -1,7 +1,5 @@
-Log configuration:
-------------------
-
-configure log using SetLogger() API, an apply them on storage objects.
+Log settings:
+-------------
 
 `log.level`
     as string, can be "ignore", "fatal", "error", "warn", "info", "verbose",

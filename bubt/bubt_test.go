@@ -11,15 +11,16 @@ import "github.com/prataprc/storage.go/api"
 import "github.com/prataprc/storage.go/log"
 import "github.com/prataprc/storage.go/llrb"
 import "github.com/prataprc/storage.go/dict"
+import "github.com/prataprc/storage.go/lib"
 
 var _ = fmt.Sprintf("dummy")
 
 func init() {
-	config := map[string]interface{}{
-		"log.level": "ignore",
+	setts := lib.Settings{
+		"log.level": "error",
 		"log.file":  "",
 	}
-	log.SetLogger(nil, config)
+	log.SetLogger(nil, setts)
 }
 
 func TestEmpty(t *testing.T) {
@@ -32,19 +33,18 @@ func TestEmpty(t *testing.T) {
 
 	llrb := refllrb(0)
 
-	bconfig := Defaultconfig()
+	bsetts := DefaultSettings()
 	name := fmt.Sprintf("unittest-empty-%v", 0)
-	bubt := NewBubt(name, indexfile, datafile, bconfig)
+	bubt := NewBubt(name, indexfile, datafile, bsetts)
 	llrbiter := llrb.Iterate(nil, nil, "both", false)
 	bubt.Build(llrbiter)
 	llrbiter.Close()
 
-	zblocksize := bconfig.Int64("zblocksize")
+	zblocksize := bsetts.Int64("zblocksize")
 	store, err := OpenBubtstore(name, indexfile, datafile, zblocksize)
-	if err == nil {
-		t.Fatalf("expected error")
-	}
-	if err := store.Destroy(); err != nil {
+	if err != nil {
+		t.Fatal(err)
+	} else if err := store.Destroy(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -64,9 +64,9 @@ func TestMissing(t *testing.T) {
 	count := 1
 	llrb := refllrb(count)
 
-	bconfig := Defaultconfig()
+	bsetts := DefaultSettings()
 	name := fmt.Sprintf("unittest-empty-%v", count)
-	bubt := NewBubt(name, indexfile, datafile, bconfig)
+	bubt := NewBubt(name, indexfile, datafile, bsetts)
 	llrbiter := llrb.Iterate(nil, nil, "both", false)
 	bubt.Build(llrbiter)
 	llrbiter.Close()
@@ -83,7 +83,7 @@ func TestMissing(t *testing.T) {
 		t.Fatalf("expected %v, got %v", count, len(refnds))
 	}
 
-	zblocksize := bconfig.Int64("zblocksize")
+	zblocksize := bsetts.Int64("zblocksize")
 	store, err := OpenBubtstore(name, indexfile, datafile, zblocksize)
 	if err != nil {
 		t.Fatal(err)
@@ -196,11 +196,11 @@ func TestLookup(t *testing.T) {
 			t.Fatalf("expected %v, got %v", i, len(refnds))
 		}
 
-		bconfig := Defaultconfig()
-		zblocksize := bconfig.Int64("zblocksize")
+		bsetts := DefaultSettings()
+		zblocksize := bsetts.Int64("zblocksize")
 
 		// with data file
-		bubt := NewBubt(name, indexfile, datafile, bconfig)
+		bubt := NewBubt(name, indexfile, datafile, bsetts)
 		llrbiter := llrb.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter)
 		llrbiter.Close()
@@ -214,7 +214,7 @@ func TestLookup(t *testing.T) {
 		}
 
 		// without data file
-		bubt = NewBubt(name, indexfile, "", bconfig)
+		bubt = NewBubt(name, indexfile, "", bsetts)
 		llrbiter = llrb.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter)
 		llrbiter.Close()
@@ -239,12 +239,12 @@ func TestLookup(t *testing.T) {
 }
 
 func TestPartialRange(t *testing.T) {
-	lconfig := llrb.Defaultconfig()
-	lconfig["metadata.bornseqno"] = true
-	lconfig["metadata.deadseqno"] = true
-	lconfig["metadata.vbuuid"] = true
-	lconfig["metadata.fpos"] = true
-	llrb := llrb.NewLLRB("bubttest", lconfig)
+	lsetts := llrb.DefaultSettings()
+	lsetts["metadata.bornseqno"] = true
+	lsetts["metadata.deadseqno"] = true
+	lsetts["metadata.vbuuid"] = true
+	lsetts["metadata.fpos"] = true
+	llrb := llrb.NewLLRB("bubttest", lsetts)
 	d := dict.NewDict()
 	// inserts
 	inserts, n, keys := make([][2][]byte, 0), 100000, []string{}
@@ -272,13 +272,13 @@ func TestPartialRange(t *testing.T) {
 	os.Remove(datafile)
 
 	name := "unittest-range"
-	bconfig := Defaultconfig()
-	bconfig["mblocksize"] = 512
-	bconfig["zblocksize"] = 512
-	zblocksize := bconfig.Int64("zblocksize")
+	bsetts := DefaultSettings()
+	bsetts["mblocksize"] = 512
+	bsetts["zblocksize"] = 512
+	zblocksize := bsetts.Int64("zblocksize")
 
 	// with datafile
-	bubt := NewBubt(name, indexfile, datafile, bconfig)
+	bubt := NewBubt(name, indexfile, datafile, bsetts)
 	llrbiter := llrb.Iterate(nil, nil, "both", false)
 	bubt.Build(llrbiter)
 	llrbiter.Close()
@@ -414,11 +414,11 @@ func TestRange(t *testing.T) {
 			return true
 		})
 
-		bconfig := Defaultconfig()
-		zblocksize := bconfig.Int64("zblocksize")
+		bsetts := DefaultSettings()
+		zblocksize := bsetts.Int64("zblocksize")
 
 		// with datafile
-		bubt := NewBubt(name, indexfile, datafile, bconfig)
+		bubt := NewBubt(name, indexfile, datafile, bsetts)
 		llrbiter := llrb.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter)
 		llrbiter.Close()
@@ -431,7 +431,7 @@ func TestRange(t *testing.T) {
 			t.Fatal(err)
 		}
 		// without data file
-		bubt = NewBubt(name, indexfile, "", bconfig)
+		bubt = NewBubt(name, indexfile, "", bsetts)
 		llrbiter = llrb.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter)
 		llrbiter.Close()
@@ -457,12 +457,12 @@ func TestRange(t *testing.T) {
 }
 
 func TestPartialIterate(t *testing.T) {
-	lconfig := llrb.Defaultconfig()
-	lconfig["metadata.bornseqno"] = true
-	lconfig["metadata.deadseqno"] = true
-	lconfig["metadata.vbuuid"] = true
-	lconfig["metadata.fpos"] = true
-	llrb := llrb.NewLLRB("bubttest", lconfig)
+	lsetts := llrb.DefaultSettings()
+	lsetts["metadata.bornseqno"] = true
+	lsetts["metadata.deadseqno"] = true
+	lsetts["metadata.vbuuid"] = true
+	lsetts["metadata.fpos"] = true
+	llrb := llrb.NewLLRB("bubttest", lsetts)
 	d := dict.NewDict()
 	// inserts
 	inserts, n, keys := make([][2][]byte, 0), 100000, []string{}
@@ -490,13 +490,13 @@ func TestPartialIterate(t *testing.T) {
 	os.Remove(datafile)
 
 	name := "unittest-range"
-	bconfig := Defaultconfig()
-	bconfig["mblocksize"] = 512
-	bconfig["zblocksize"] = 512
-	zblocksize := bconfig.Int64("zblocksize")
+	bsetts := DefaultSettings()
+	bsetts["mblocksize"] = 512
+	bsetts["zblocksize"] = 512
+	zblocksize := bsetts.Int64("zblocksize")
 
 	// with datafile
-	bubt := NewBubt(name, indexfile, datafile, bconfig)
+	bubt := NewBubt(name, indexfile, datafile, bsetts)
 	llrbiter := llrb.Iterate(nil, nil, "both", false)
 	bubt.Build(llrbiter)
 	llrbiter.Close()
@@ -651,11 +651,11 @@ func TestIterate(t *testing.T) {
 			return true
 		})
 
-		bconfig := Defaultconfig()
-		zblocksize := bconfig.Int64("zblocksize")
+		bsetts := DefaultSettings()
+		zblocksize := bsetts.Int64("zblocksize")
 
 		// with datafile
-		bubt := NewBubt(name, indexfile, datafile, bconfig)
+		bubt := NewBubt(name, indexfile, datafile, bsetts)
 		llrbiter := llrb.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter)
 		llrbiter.Close()
@@ -668,7 +668,7 @@ func TestIterate(t *testing.T) {
 			t.Fatal(err)
 		}
 		// without datafile
-		bubt = NewBubt(name, indexfile, "", bconfig)
+		bubt = NewBubt(name, indexfile, "", bsetts)
 		llrbiter = llrb.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter)
 		llrbiter.Close()
@@ -710,12 +710,12 @@ func makekeyvalue(key, value []byte) ([]byte, []byte) {
 }
 
 func refllrb(count int) *llrb.LLRB {
-	lconfig := llrb.Defaultconfig()
-	lconfig["metadata.bornseqno"] = true
-	lconfig["metadata.deadseqno"] = true
-	lconfig["metadata.vbuuid"] = true
-	lconfig["metadata.fpos"] = true
-	llrb := llrb.NewLLRB("bubttest", lconfig)
+	lsetts := llrb.DefaultSettings()
+	lsetts["metadata.bornseqno"] = true
+	lsetts["metadata.deadseqno"] = true
+	lsetts["metadata.vbuuid"] = true
+	lsetts["metadata.fpos"] = true
+	llrb := llrb.NewLLRB("bubttest", lsetts)
 
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
 	// insert 1 items

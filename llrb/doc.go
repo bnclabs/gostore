@@ -4,8 +4,8 @@
 //   * index key, value (value is optional).
 //   * each key shall be unique within the index sample-set.
 //   * custom memory management.
-//   * configurable metadata - vbno, access-time, bornseqno, deadseqno, vbuuid.
-//   * in single-threaded configuration, reads and writes are serialized.
+//   * settings metadata - vbno, access-time, bornseqno, deadseqno, vbuuid.
+//   * in single-threaded settings, reads and writes are serialized.
 //   * supports multi-version-concurrency-control, where writes are
 //     serialized even if there are concurrent writers, and there can be
 //     zero or more concurrent readers.
@@ -15,7 +15,7 @@
 //   a. 16 bit vbucket-number virtual bucket for the key.
 //   b. 20 bit access time bits time.Now()[50:30].
 //
-//   and upto 12 optional fields that are configurable.
+//   and upto 12 optional fields that are settings.
 //
 //   1. 64 bit unique vbucket id for the vbucket number.
 //   2. 64 bit born-seqno vbucket seqno in which this entry was upserted.

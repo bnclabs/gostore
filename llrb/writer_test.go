@@ -14,15 +14,15 @@ import "github.com/prataprc/storage.go/dict"
 var _ = fmt.Sprintf("dummy")
 
 func TestNewLLRBMvcc(t *testing.T) {
-	config := Defaultconfig()
-	config["mvcc.enable"] = true
+	setts := DefaultSettings()
+	setts["mvcc.enable"] = true
 
-	llrb := NewLLRB("test", config)
+	llrb := NewLLRB("test", setts)
 	if llrb == nil {
 		t.Errorf("unexpected nil")
 	}
-	nodavail := config.Int64("nodearena.capacity")
-	valavail := config.Int64("valarena.capacity")
+	nodavail := setts.Int64("nodearena.capacity")
+	valavail := setts.Int64("valarena.capacity")
 
 	stats, err := llrb.Fullstats()
 	if err != nil {
@@ -66,13 +66,13 @@ func TestLLRBMvccBasicSnapshot(t *testing.T) {
 		[2][]byte{[]byte("key5"), []byte("value5")},
 	}
 
-	config := Defaultconfig()
-	config["mvcc.enable"] = true
-	config["metadata.mvalue"] = true
-	config["metadata.fpos"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
-	llrb := makellrbmvcc(t, "bmvccsnapshot", inserts, config)
+	setts := DefaultSettings()
+	setts["mvcc.enable"] = true
+	setts["metadata.mvalue"] = true
+	setts["metadata.fpos"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
+	llrb := makellrbmvcc(t, "bmvccsnapshot", inserts, setts)
 	writer := llrb.mvcc.writer
 
 	snapch := make(chan api.IndexSnapshot, 1)
@@ -106,12 +106,12 @@ func TestLLRBMvcclBasicLookup(t *testing.T) {
 		[2][]byte{[]byte("key5"), []byte("value5")},
 	}
 
-	config := Defaultconfig()
-	config["mvcc.enable"] = true
-	config["metadata.mvalue"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
-	llrb := makellrbmvcc(t, "bmvcclookup", inserts, config)
+	setts := DefaultSettings()
+	setts["mvcc.enable"] = true
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
+	llrb := makellrbmvcc(t, "bmvcclookup", inserts, setts)
 	writer := llrb.mvcc.writer
 
 	snapch := make(chan api.IndexSnapshot, 1)
@@ -197,12 +197,12 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 		[2][]byte{[]byte("key5"), []byte("value5")},
 	}
 
-	config := Defaultconfig()
-	config["mvcc.enable"] = true
-	config["metadata.mvalue"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
-	llrb := makellrbmvcc(t, "bmvccupdates", inserts, config)
+	setts := DefaultSettings()
+	setts["mvcc.enable"] = true
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
+	llrb := makellrbmvcc(t, "bmvccupdates", inserts, setts)
 	writer := llrb.mvcc.writer
 
 	// update
@@ -402,12 +402,12 @@ func TestLLRBMvccBasicRange(t *testing.T) {
 		[2][]byte{[]byte("key5"), []byte("value5")},
 	}
 
-	config := Defaultconfig()
-	config["mvcc.enable"] = true
-	config["metadata.mvalue"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
-	llrb := makellrbmvcc(t, "bmvccrange", inserts, config)
+	setts := DefaultSettings()
+	setts["mvcc.enable"] = true
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
+	llrb := makellrbmvcc(t, "bmvccrange", inserts, setts)
 	writer := llrb.mvcc.writer
 
 	// snapshot
@@ -484,13 +484,13 @@ func TestLLRBMvccBasicRange(t *testing.T) {
 }
 
 func TestPartialMvccRange(t *testing.T) {
-	config := Defaultconfig()
-	config["mvcc.enable"] = true
-	config["metadata.mvalue"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
+	setts := DefaultSettings()
+	setts["mvcc.enable"] = true
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
 
-	llrb := makellrbmvcc(t, "mvccrange", nil, config)
+	llrb := makellrbmvcc(t, "mvccrange", nil, setts)
 	writer := llrb.mvcc.writer
 
 	d := dict.NewDict()
@@ -591,13 +591,13 @@ func TestPartialMvccRange(t *testing.T) {
 }
 
 func TestLLRBMvccRange(t *testing.T) {
-	config := Defaultconfig()
-	config["mvcc.enable"] = true
-	config["metadata.mvalue"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
+	setts := DefaultSettings()
+	setts["mvcc.enable"] = true
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
 
-	llrb := makellrbmvcc(t, "mvccrange", nil, config)
+	llrb := makellrbmvcc(t, "mvccrange", nil, setts)
 	writer := llrb.mvcc.writer
 
 	d := dict.NewDict()
@@ -706,12 +706,12 @@ func TestLLRBMvccBasicIterate(t *testing.T) {
 		[2][]byte{[]byte("key5"), []byte("value5")},
 	}
 
-	config := Defaultconfig()
-	config["mvcc.enable"] = true
-	config["metadata.mvalue"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
-	llrb := makellrbmvcc(t, "bmvccrange", inserts, config)
+	setts := DefaultSettings()
+	setts["mvcc.enable"] = true
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
+	llrb := makellrbmvcc(t, "bmvccrange", inserts, setts)
 	writer := llrb.mvcc.writer
 
 	// snapshot
@@ -806,13 +806,13 @@ func TestLLRBMvccBasicIterate(t *testing.T) {
 }
 
 func TestPartialMvccIterate(t *testing.T) {
-	config := Defaultconfig()
-	config["mvcc.enable"] = true
-	config["metadata.mvalue"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
+	setts := DefaultSettings()
+	setts["mvcc.enable"] = true
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
 
-	llrb := makellrbmvcc(t, "mvcciterate", nil, config)
+	llrb := makellrbmvcc(t, "mvcciterate", nil, setts)
 	writer := llrb.mvcc.writer
 
 	d := dict.NewDict()
@@ -935,13 +935,13 @@ func TestPartialMvccIterate(t *testing.T) {
 }
 
 func TestLLRBMvccIterate(t *testing.T) {
-	config := Defaultconfig()
-	config["mvcc.enable"] = true
-	config["metadata.mvalue"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
+	setts := DefaultSettings()
+	setts["mvcc.enable"] = true
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
 
-	llrb := makellrbmvcc(t, "mvcciterate", nil, config)
+	llrb := makellrbmvcc(t, "mvcciterate", nil, setts)
 	writer := llrb.mvcc.writer
 
 	d := dict.NewDict()
@@ -1064,11 +1064,11 @@ func TestLLRBMvccIterate(t *testing.T) {
 }
 
 func TestLLRBMvccInsert(t *testing.T) {
-	config := Defaultconfig()
-	config["mvcc.enable"] = true
-	config["metadata.mvalue"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
+	setts := DefaultSettings()
+	setts["mvcc.enable"] = true
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
 
 	inserts := make([][2][]byte, 0)
 	keys, values := make([][]byte, 0), make([][]byte, 0)
@@ -1080,7 +1080,7 @@ func TestLLRBMvccInsert(t *testing.T) {
 		keys, values = append(keys, key), append(values, value)
 	}
 
-	llrb := makellrbmvcc(t, "mvccinsert", inserts, config)
+	llrb := makellrbmvcc(t, "mvccinsert", inserts, setts)
 	writer := llrb.mvcc.writer
 
 	snapshot, err := validatesnapshot(100 /*mS*/, writer)
@@ -1154,11 +1154,11 @@ func TestLLRBMvccInsert(t *testing.T) {
 }
 
 func TestLLRBMvccUpsert(t *testing.T) {
-	config := Defaultconfig()
-	config["mvcc.enable"] = true
-	config["metadata.mvalue"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
+	setts := DefaultSettings()
+	setts["mvcc.enable"] = true
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
 
 	inserts := make([][2][]byte, 0)
 	keys, values := make([][]byte, 0), make([][]byte, 0)
@@ -1170,7 +1170,7 @@ func TestLLRBMvccUpsert(t *testing.T) {
 		keys, values = append(keys, key), append(values, value)
 	}
 
-	llrb := makellrbmvcc(t, "mvccupsert", inserts, config)
+	llrb := makellrbmvcc(t, "mvccupsert", inserts, setts)
 	writer := llrb.mvcc.writer
 
 	snapshot, err := validatesnapshot(100 /*mS*/, writer)
@@ -1263,12 +1263,12 @@ func TestLLRBMvccUpsert(t *testing.T) {
 }
 
 func TestLLRBMvccDeleteMin(t *testing.T) {
-	config := Defaultconfig()
-	config["mvcc.enable"] = true
-	config["metadata.mvalue"] = true
-	config["metadata.fpos"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
+	setts := DefaultSettings()
+	setts["mvcc.enable"] = true
+	setts["metadata.mvalue"] = true
+	setts["metadata.fpos"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
 
 	var inserts [][2][]byte
 	keys, values := make([][]byte, 0), make([][]byte, 0)
@@ -1280,7 +1280,7 @@ func TestLLRBMvccDeleteMin(t *testing.T) {
 		keys, values = append(keys, key), append(values, value)
 	}
 
-	llrb := makellrbmvcc(t, "mvccdelete", inserts, config)
+	llrb := makellrbmvcc(t, "mvccdelete", inserts, setts)
 
 	// delete first item
 	vbno, vbuuid := uint16(10), uint64(0xABCD)
@@ -1312,11 +1312,11 @@ func TestLLRBMvccDeleteMin(t *testing.T) {
 }
 
 func TestLLRBMvccDelete(t *testing.T) {
-	config := Defaultconfig()
-	config["mvcc.enable"] = true
-	config["metadata.mvalue"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
+	setts := DefaultSettings()
+	setts["mvcc.enable"] = true
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
 
 	var inserts [][2][]byte
 	keys, values := make([][]byte, 0), make([][]byte, 0)
@@ -1328,7 +1328,7 @@ func TestLLRBMvccDelete(t *testing.T) {
 		keys, values = append(keys, key), append(values, value)
 	}
 
-	llrb := makellrbmvcc(t, "mvccdelete", inserts, config)
+	llrb := makellrbmvcc(t, "mvccdelete", inserts, setts)
 	writer := llrb.mvcc.writer
 
 	snapshot, err := validatesnapshot(100 /*mS*/, writer)
@@ -1447,9 +1447,9 @@ func TestLLRBMvccDelete(t *testing.T) {
 }
 
 func makellrbmvcc(
-	t *testing.T, nm string, inserts [][2][]byte, config lib.Config) *LLRB {
+	t *testing.T, nm string, inserts [][2][]byte, setts lib.Settings) *LLRB {
 
-	llrb := NewLLRB(nm, config)
+	llrb := NewLLRB(nm, setts)
 	if llrb.Count() != 0 {
 		t.Fatalf("expected an empty dict")
 	}

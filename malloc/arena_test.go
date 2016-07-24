@@ -68,7 +68,7 @@ func TestSuitableSize(t *testing.T) {
 }
 
 func TestNewmarena(t *testing.T) {
-	marena := NewArena(lib.Config{
+	marena := NewArena(lib.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 1024),
 		"capacity":      int64(1024 * 1024 * 1024 * 1024),
@@ -92,7 +92,7 @@ func TestNewmarena(t *testing.T) {
 				t.Errorf("expected panic")
 			}
 		}()
-		NewArena(lib.Config{
+		NewArena(lib.Settings{
 			"minblock":      int64(0),
 			"maxblock":      int64(0x1234567812344556),
 			"capacity":      int64(1024 * 1024 * 1024),
@@ -108,7 +108,7 @@ func TestNewmarena(t *testing.T) {
 				t.Errorf("expected panic")
 			}
 		}()
-		NewArena(lib.Config{
+		NewArena(lib.Settings{
 			"minblock":      int64(0),
 			"maxblock":      int64(359399435061660672),
 			"capacity":      int64(1024 * 1024 * 1024),
@@ -124,7 +124,7 @@ func TestNewmarena(t *testing.T) {
 				t.Errorf("expected panic")
 			}
 		}()
-		NewArena(lib.Config{
+		NewArena(lib.Settings{
 			"minblock":      int64(32),
 			"maxblock":      int64(1024),
 			"capacity":      Maxarenasize + 1,
@@ -137,7 +137,7 @@ func TestNewmarena(t *testing.T) {
 }
 
 func TestArenaAlloc(t *testing.T) {
-	marena := NewArena(lib.Config{
+	marena := NewArena(lib.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024),
 		"capacity":      int64(1024 * 1024 * 1024),
@@ -171,7 +171,7 @@ func TestArenaAlloc(t *testing.T) {
 }
 
 func TestArenaMemory(t *testing.T) {
-	marena := NewArena(lib.Config{
+	marena := NewArena(lib.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 1024),
 		"capacity":      int64(1024 * 1024 * 1024 * 1024),
@@ -212,7 +212,7 @@ func BenchmarkSuitableSize(b *testing.B) {
 }
 
 func BenchmarkNewarena(b *testing.B) {
-	config := lib.Config{
+	setts := lib.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 1024),
 		"capacity":      int64(1024 * 1024 * 1024 * 1024),
@@ -222,12 +222,12 @@ func BenchmarkNewarena(b *testing.B) {
 		"allocator":     "flist",
 	}
 	for i := 0; i < b.N; i++ {
-		NewArena(config)
+		NewArena(setts)
 	}
 }
 
 func BenchmarkArenaAlloc(b *testing.B) {
-	marena := NewArena(lib.Config{
+	marena := NewArena(lib.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 1024),
 		"capacity":      int64(1024 * 1024 * 1024 * 1024),
@@ -245,7 +245,7 @@ func BenchmarkArenaAlloc(b *testing.B) {
 }
 
 func BenchmarkArenaMemory(b *testing.B) {
-	marena := NewArena(lib.Config{
+	marena := NewArena(lib.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 1024),
 		"capacity":      int64(3 * 1024 * 1024 * 1024),
@@ -266,7 +266,7 @@ func BenchmarkArenaMemory(b *testing.B) {
 }
 
 func BenchmarkArenaAllocated(b *testing.B) {
-	marena := NewArena(lib.Config{
+	marena := NewArena(lib.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 1024),
 		"capacity":      int64(3 * 1024 * 1024 * 1024),

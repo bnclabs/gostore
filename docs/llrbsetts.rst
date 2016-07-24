@@ -1,7 +1,5 @@
-LLRB configuration:
--------------------
-
-configure LLRB based on system resources and requirements.
+LLRB settings:
+--------------
 
 `maxvb`
     as integer, maximum number of vbuckets that will used in this llrb tree.

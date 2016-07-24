@@ -15,9 +15,9 @@ import "github.com/prataprc/storage.go/lib"
 var _ = fmt.Sprintf("dummy")
 
 func TestNewLLRB(t *testing.T) {
-	config := Defaultconfig()
+	setts := DefaultSettings()
 
-	llrb := NewLLRB("test", config)
+	llrb := NewLLRB("test", setts)
 	if llrb == nil {
 		t.Errorf("unexpected nil")
 	}
@@ -28,7 +28,7 @@ func TestNewLLRB(t *testing.T) {
 	}
 
 	ovrhd, used, allc := int64(616), int64(0), int64(0)
-	nodavail := config.Int64("nodearena.capacity")
+	nodavail := setts.Int64("nodearena.capacity")
 	if x := stats["node.overhead"].(int64); x != ovrhd {
 		t.Errorf("expected %v, got %v", ovrhd, x)
 	} else if x := stats["node.useful"].(int64); x != used {
@@ -40,7 +40,7 @@ func TestNewLLRB(t *testing.T) {
 	}
 
 	ovrhd, used, allc = int64(1128), int64(0), int64(0)
-	valavail := config.Int64("valarena.capacity")
+	valavail := setts.Int64("valarena.capacity")
 	if x := stats["value.overhead"].(int64); x != ovrhd {
 		t.Errorf("expected %v, got %v", ovrhd, x)
 	} else if x := stats["value.useful"].(int64); x != used {
@@ -63,13 +63,13 @@ func TestNewLLRB(t *testing.T) {
 }
 
 func TestNewLLRBNode(t *testing.T) {
-	config := Defaultconfig()
-	config["metadata.bornseqno"] = true
-	config["metadata.deadseqno"] = true
-	config["metadata.mvalue"] = true
-	config["metadata.fpos"] = true
-	config["metadata.vbuuid"] = true
-	llrb := NewLLRB("test", config)
+	setts := DefaultSettings()
+	setts["metadata.bornseqno"] = true
+	setts["metadata.deadseqno"] = true
+	setts["metadata.mvalue"] = true
+	setts["metadata.fpos"] = true
+	setts["metadata.vbuuid"] = true
+	llrb := NewLLRB("test", setts)
 
 	key, value := makekeyvalue(make([]byte, 128), make([]byte, 1024))
 	vbno, vbuuid := uint16(10), uint64(0xABCD)
@@ -101,9 +101,9 @@ func TestNewLLRBNode(t *testing.T) {
 }
 
 func TestNewLLRBNodePanic(t *testing.T) {
-	config := Defaultconfig()
-	config["metadata.mvalue"] = false
-	llrb := NewLLRB("test", config)
+	setts := DefaultSettings()
+	setts["metadata.mvalue"] = false
+	llrb := NewLLRB("test", setts)
 	key, value := makekeyvalue(make([]byte, 128), make([]byte, 1024))
 	func() {
 		defer func() {
@@ -120,9 +120,9 @@ func TestNewLLRBNodePanic(t *testing.T) {
 }
 
 func TestCloneLLRBNode(t *testing.T) {
-	config := Defaultconfig()
-	config["metadata.mvalue"] = true
-	llrb := NewLLRB("test", config)
+	setts := DefaultSettings()
+	setts["metadata.mvalue"] = true
+	llrb := NewLLRB("test", setts)
 
 	key, value := makekeyvalue(make([]byte, 128), make([]byte, 1024))
 	nd := llrb.newnode(key, value)
@@ -151,11 +151,11 @@ func TestLLRBBasicLookup(t *testing.T) {
 		[2][]byte{[]byte("key5"), []byte("value5")},
 	}
 
-	config := Defaultconfig()
-	config["metadata.mvalue"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
-	llrb := makellrb(t, "basiclookup", inserts, config)
+	setts := DefaultSettings()
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
+	llrb := makellrb(t, "basiclookup", inserts, setts)
 
 	// get
 	if llrb.Has(inserts[1][0]) == false {
@@ -219,11 +219,11 @@ func TestLLRBBasicUpdates(t *testing.T) {
 		[2][]byte{[]byte("key5"), []byte("value5")},
 	}
 
-	config := Defaultconfig()
-	config["metadata.mvalue"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
-	llrb := makellrb(t, "basicupdates", inserts, config)
+	setts := DefaultSettings()
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
+	llrb := makellrb(t, "basicupdates", inserts, setts)
 
 	// update
 	newvalue := []byte("value11")
@@ -336,12 +336,12 @@ func TestLLRBBasicUpdates(t *testing.T) {
 }
 
 func TestLLRBBasicRange(t *testing.T) {
-	config := Defaultconfig()
-	config["metadata.mvalue"] = true
-	config["metadata.fpos"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
-	llrb := NewLLRB("test", config)
+	setts := DefaultSettings()
+	setts["metadata.mvalue"] = true
+	setts["metadata.fpos"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
+	llrb := NewLLRB("test", setts)
 
 	// inserts
 	inserts := [][2][]byte{
@@ -468,11 +468,11 @@ func TestLLRBBasicRange(t *testing.T) {
 func TestPartialRange(t *testing.T) {
 	d := dict.NewDict()
 
-	config := Defaultconfig()
-	config["metadata.mvalue"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
-	llrb := NewLLRB("test", config)
+	setts := DefaultSettings()
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
+	llrb := NewLLRB("test", setts)
 
 	if llrb.Count() != 0 {
 		t.Fatalf("expected an empty dict")
@@ -548,11 +548,11 @@ func TestPartialRange(t *testing.T) {
 }
 
 func TestLLRBRange(t *testing.T) {
-	config := Defaultconfig()
-	config["metadata.mvalue"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
-	llrb := NewLLRB("test", config)
+	setts := DefaultSettings()
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
+	llrb := NewLLRB("test", setts)
 	d := dict.NewDict()
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
 	keys, values := make([][]byte, 0), make([][]byte, 0)
@@ -644,12 +644,12 @@ func TestLLRBRange(t *testing.T) {
 }
 
 func TestLLRBIteratePool(t *testing.T) {
-	config := Defaultconfig()
-	config["metadata.mvalue"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
-	config["iterpool.size"] = 1
-	llrb := NewLLRB("test", config)
+	setts := DefaultSettings()
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
+	setts["iterpool.size"] = 1
+	llrb := NewLLRB("test", setts)
 
 	// seed the pool
 	iter1 := llrb.Iterate(nil, nil, "both", false)
@@ -670,11 +670,11 @@ func TestLLRBIteratePool(t *testing.T) {
 }
 
 func TestLLRBBasicIterate(t *testing.T) {
-	config := Defaultconfig()
-	config["metadata.mvalue"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
-	llrb := NewLLRB("test", config)
+	setts := DefaultSettings()
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
+	llrb := NewLLRB("test", setts)
 
 	// inserts
 	inserts := [][2][]byte{
@@ -785,11 +785,11 @@ func TestLLRBBasicIterate(t *testing.T) {
 func TestPartialIterate(t *testing.T) {
 	d := dict.NewDict()
 
-	config := Defaultconfig()
-	config["metadata.mvalue"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
-	llrb := NewLLRB("test", config)
+	setts := DefaultSettings()
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
+	llrb := NewLLRB("test", setts)
 
 	if llrb.Count() != 0 {
 		t.Fatalf("expected an empty dict")
@@ -871,11 +871,11 @@ func TestPartialIterate(t *testing.T) {
 }
 
 func TestLLRBIterate(t *testing.T) {
-	config := Defaultconfig()
-	config["metadata.mvalue"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
-	llrb := NewLLRB("test", config)
+	setts := DefaultSettings()
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
+	llrb := NewLLRB("test", setts)
 	d := dict.NewDict()
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
 	keys, values := make([][]byte, 0), make([][]byte, 0)
@@ -989,12 +989,12 @@ func TestLLRBIterate(t *testing.T) {
 }
 
 func TestLLRBInsert(t *testing.T) {
-	config := Defaultconfig()
-	config["metadata.mvalue"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.deadseqno"] = false
-	config["metadata.vbuuid"] = true
-	llrb := NewLLRB("test", config)
+	setts := DefaultSettings()
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.deadseqno"] = false
+	setts["metadata.vbuuid"] = true
+	llrb := NewLLRB("test", setts)
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
 	keys, values := make([][]byte, 0), make([][]byte, 0)
 	// insert 10K items
@@ -1083,12 +1083,12 @@ func TestLLRBInsert(t *testing.T) {
 }
 
 func TestLLRBUpsert(t *testing.T) {
-	config := Defaultconfig()
-	config["metadata.mvalue"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.deadseqno"] = false
-	config["metadata.vbuuid"] = true
-	llrb := NewLLRB("test", config)
+	setts := DefaultSettings()
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.deadseqno"] = false
+	setts["metadata.vbuuid"] = true
+	llrb := NewLLRB("test", setts)
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
 	keys, values := make([][]byte, 0), make([][]byte, 0)
 	// insert 10K items
@@ -1181,11 +1181,11 @@ func TestLLRBUpsert(t *testing.T) {
 }
 
 func TestLLRBDelete(t *testing.T) {
-	config := Defaultconfig()
-	config["metadata.mvalue"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
-	llrb := NewLLRB("test", config)
+	setts := DefaultSettings()
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
+	llrb := NewLLRB("test", setts)
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
 	keys, values := make([][]byte, 0), make([][]byte, 0)
 	// insert 10K items
@@ -1301,11 +1301,11 @@ func TestLLRBDelete(t *testing.T) {
 }
 
 func BenchmarkLLRBCloneKey(b *testing.B) {
-	config := Defaultconfig()
-	config["metadata.mvalue"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
-	llrb := NewLLRB("test", config)
+	setts := DefaultSettings()
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
+	llrb := NewLLRB("test", setts)
 
 	b.ResetTimer()
 
@@ -1317,11 +1317,11 @@ func BenchmarkLLRBCloneKey(b *testing.B) {
 }
 
 func BenchmarkLLRBCloneSmall(b *testing.B) {
-	config := Defaultconfig()
-	config["metadata.mvalue"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
-	llrb := NewLLRB("test", config)
+	setts := DefaultSettings()
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
+	llrb := NewLLRB("test", setts)
 
 	b.ResetTimer()
 
@@ -1333,11 +1333,11 @@ func BenchmarkLLRBCloneSmall(b *testing.B) {
 }
 
 func BenchmarkLLRBCloneLarge(b *testing.B) {
-	config := Defaultconfig()
-	config["metadata.mvalue"] = true
-	config["metadata.bornseqno"] = true
-	config["metadata.vbuuid"] = true
-	llrb := NewLLRB("test", config)
+	setts := DefaultSettings()
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
+	llrb := NewLLRB("test", setts)
 
 	b.ResetTimer()
 
@@ -1365,9 +1365,9 @@ func makekeyvalue(key, value []byte) ([]byte, []byte) {
 }
 
 func makellrb(
-	t *testing.T, nm string, inserts [][2][]byte, config lib.Config) *LLRB {
+	t *testing.T, nm string, inserts [][2][]byte, setts lib.Settings) *LLRB {
 
-	llrb := NewLLRB(nm, config)
+	llrb := NewLLRB(nm, setts)
 	if llrb.Count() != 0 {
 		t.Fatalf("expected an empty dict")
 	}

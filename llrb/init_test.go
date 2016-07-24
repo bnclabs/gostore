@@ -10,45 +10,45 @@ import "github.com/prataprc/storage.go/log"
 var _ = fmt.Sprintf("dummy")
 
 func init() {
-	config := map[string]interface{}{
+	setts := map[string]interface{}{
 		"log.level": "warn",
 		"log.file":  "",
 	}
-	log.SetLogger(nil, config)
+	log.SetLogger(nil, setts)
 }
 
 func TestLLRBValidate(t *testing.T) {
-	dotest := func(config lib.Config) {
+	dotest := func(setts lib.Settings) {
 		defer func() {
 			if r := recover(); r == nil {
 				t.Errorf("expected panic")
 			}
 		}()
-		llrb := NewLLRB("test", config)
-		llrb.validateConfig(config)
+		llrb := NewLLRB("test", setts)
+		llrb.validateSettings(setts)
 	}
 
-	config := Defaultconfig()
-	config["nodearena.minblock"] = api.MinKeymem - 1
-	dotest(config)
+	setts := DefaultSettings()
+	setts["nodearena.minblock"] = api.MinKeymem - 1
+	dotest(setts)
 
-	config = Defaultconfig()
-	config["nodearena.maxblock"] = api.MaxKeymem + 1
-	dotest(config)
+	setts = DefaultSettings()
+	setts["nodearena.maxblock"] = api.MaxKeymem + 1
+	dotest(setts)
 
-	config = Defaultconfig()
-	config["nodearena.capacity"] = 0
-	dotest(config)
+	setts = DefaultSettings()
+	setts["nodearena.capacity"] = 0
+	dotest(setts)
 
-	config = Defaultconfig()
-	config["valarena.minblock"] = api.MinValmem - 1
-	dotest(config)
+	setts = DefaultSettings()
+	setts["valarena.minblock"] = api.MinValmem - 1
+	dotest(setts)
 
-	config = Defaultconfig()
-	config["valarena.maxblock"] = api.MaxValmem + 1
-	dotest(config)
+	setts = DefaultSettings()
+	setts["valarena.maxblock"] = api.MaxValmem + 1
+	dotest(setts)
 
-	config = Defaultconfig()
-	config["valarena.capacity"] = 0
-	dotest(config)
+	setts = DefaultSettings()
+	setts["valarena.capacity"] = 0
+	dotest(setts)
 }

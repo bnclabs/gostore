@@ -2,14 +2,14 @@ package lib
 
 import "strings"
 
-// Config map of settings parameter to configuration value.
-type Config map[string]interface{}
+// Settings map of settings parameters.
+type Settings map[string]interface{}
 
-// Section will create a new config object with parameters
+// Section will create a new settings object with parameters
 // starting with `prefix`.
-func (config Config) Section(prefix string) Config {
-	section := make(Config)
-	for key, value := range config {
+func (setts Settings) Section(prefix string) Settings {
+	section := make(Settings)
+	for key, value := range setts {
 		if strings.HasPrefix(key, prefix) {
 			section[key] = value
 		}
@@ -17,50 +17,50 @@ func (config Config) Section(prefix string) Config {
 	return section
 }
 
-// Trim config parameter with `prefix` string.
-func (config Config) Trim(prefix string) Config {
-	trimmed := make(Config)
-	for key, value := range config {
+// Trim settings parameter with `prefix` string.
+func (setts Settings) Trim(prefix string) Settings {
+	trimmed := make(Settings)
+	for key, value := range setts {
 		trimmed[strings.TrimPrefix(key, prefix)] = value
 	}
 	return trimmed
 }
 
-// Filter config paramters that contain `subs`.
-func (config Config) Filter(subs string) Config {
-	subconfig := make(Config)
-	for key, value := range config {
+// Filter settings paramters that contain `subs`.
+func (setts Settings) Filter(subs string) Settings {
+	subsetts := make(Settings)
+	for key, value := range setts {
 		if strings.Contains(key, subs) {
-			subconfig[key] = value
+			subsetts[key] = value
 		}
 	}
-	return subconfig
+	return subsetts
 }
 
-// Mixin configuration to override `config` with `configs`.
-func (config Config) Mixin(configs ...interface{}) Config {
+// Mixin settings to override `setts` with `settings`.
+func (setts Settings) Mixin(settings ...interface{}) Settings {
 	update := func(arg map[string]interface{}) {
 		for key, value := range arg {
-			config[key] = value
+			setts[key] = value
 		}
 	}
-	for _, arg := range configs {
+	for _, arg := range settings {
 		switch cnf := arg.(type) {
-		case Config:
+		case Settings:
 			update(map[string]interface{}(cnf))
 		case map[string]interface{}:
 			update(cnf)
 		}
 	}
-	return config
+	return setts
 }
 
 // Bool return the boolean value for key.
-func (config Config) Bool(key string) bool {
-	if value, ok := config[key]; !ok {
-		panicerr("missing config %q", key)
+func (setts Settings) Bool(key string) bool {
+	if value, ok := setts[key]; !ok {
+		panicerr("missing settings %q", key)
 	} else if val, ok := value.(bool); !ok {
-		panicerr("config %q not a bool: %T", key, value)
+		panicerr("settings %q not a bool: %T", key, value)
 	} else {
 		return val
 	}
@@ -68,10 +68,10 @@ func (config Config) Bool(key string) bool {
 }
 
 // Int64 return the int64 value for key.
-func (config Config) Int64(key string) int64 {
-	value, ok := config[key]
+func (setts Settings) Int64(key string) int64 {
+	value, ok := setts[key]
 	if !ok {
-		panicerr("missing config %q", key)
+		panicerr("missing settings %q", key)
 	}
 	switch val := value.(type) {
 	case float64:
@@ -99,15 +99,15 @@ func (config Config) Int64(key string) int64 {
 	case int8:
 		return int64(val)
 	}
-	panicerr("config %v not a number: %T", key, value)
+	panicerr("settings %v not a number: %T", key, value)
 	return 0
 }
 
 // Uint64 return the uint64 value for key.
-func (config Config) Uint64(key string) uint64 {
-	value, ok := config[key]
+func (setts Settings) Uint64(key string) uint64 {
+	value, ok := setts[key]
 	if !ok {
-		panicerr("missing config %q", key)
+		panicerr("missing settings %q", key)
 	}
 	switch val := value.(type) {
 	case float64:
@@ -135,16 +135,16 @@ func (config Config) Uint64(key string) uint64 {
 	case int8:
 		return uint64(val)
 	}
-	panicerr("config %v not a number: %T", key, value)
+	panicerr("settings %v not a number: %T", key, value)
 	return 0
 }
 
 // String return the string value for key.
-func (config Config) String(key string) string {
-	if value, ok := config[key]; !ok {
-		panicerr("missing config %q", key)
+func (setts Settings) String(key string) string {
+	if value, ok := setts[key]; !ok {
+		panicerr("missing settings %q", key)
 	} else if val, ok := value.(string); !ok {
-		panicerr("config %v not a number: %T", key, value)
+		panicerr("settings %v not a number: %T", key, value)
 	} else {
 		return val
 	}

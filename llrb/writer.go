@@ -26,7 +26,7 @@ func (llrb *LLRB) spawnwriter() *LLRBWriter {
 		panic(fmt.Errorf("spawnwriter(): concurrent writers are not allowed"))
 	}
 
-	chansize := llrb.config.Int64("mvcc.writer.chanbuffer")
+	chansize := llrb.setts.Int64("mvcc.writer.chanbuffer")
 	llrb.mvcc.writer = &LLRBWriter{
 		llrb:    llrb,
 		waiters: make([]chan api.IndexSnapshot, 0, 128),
@@ -36,7 +36,7 @@ func (llrb *LLRB) spawnwriter() *LLRBWriter {
 	log.Infof("%v starting mvcc writer ...\n", llrb.logprefix)
 	go llrb.mvcc.writer.run()
 
-	tick := llrb.config.Int64("mvcc.snapshot.tick")
+	tick := llrb.setts.Int64("mvcc.snapshot.tick")
 	log.Infof("%v starting snapshot ticker (%v) ...\n", llrb.logprefix, tick)
 	go llrb.mvcc.writer.snapshotticker(tick, llrb.mvcc.writer.finch)
 

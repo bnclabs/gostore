@@ -82,7 +82,7 @@ type LLRBSnapshot struct {
 	next     *LLRBSnapshot
 	refcount int64
 
-	// config
+	// settings
 	fmask     metadataMask
 	logprefix string
 }

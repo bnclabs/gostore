@@ -39,7 +39,7 @@ type Bubt struct {
 	nodes    []api.Node
 	flusher  *bubtflusher
 
-	// configuration, will be flushed to the tip of indexfile.
+	// settings, will be flushed to the tip of indexfile.
 	name         string
 	mblocksize   int64
 	zblocksize   int64
@@ -57,7 +57,7 @@ type blocker interface {
 }
 
 // NewBubt create a Bubt instance to build a new bottoms-up btree.
-func NewBubt(name, indexfile, datafile string, config lib.Config) *Bubt {
+func NewBubt(name, indexfile, datafile string, setts lib.Settings) *Bubt {
 	f := &Bubt{
 		name:       name,
 		nodes:      make([]api.Node, 0),
@@ -76,24 +76,24 @@ func NewBubt(name, indexfile, datafile string, config lib.Config) *Bubt {
 		f.datafd = createfile(f.datafile)
 	}
 
-	f.zblocksize = config.Int64("zblocksize")
+	f.zblocksize = setts.Int64("zblocksize")
 	if f.zblocksize > maxBlock { // 1 TB
 		panicerr("zblocksize %v > %v\n", f.zblocksize, maxBlock)
 	} else if f.zblocksize < minBlock { // 512 byte, HDD sector size.
 		panicerr("zblocksize %v < %v\n", f.zblocksize, minBlock)
 	}
-	f.mblocksize = config.Int64("mblocksize")
+	f.mblocksize = setts.Int64("mblocksize")
 	if f.mblocksize > maxBlock {
 		panicerr("mblocksize %v > %v\n", f.mblocksize, maxBlock)
 	} else if f.mblocksize < minBlock {
 		panicerr("mblocksize %v < %v\n", f.mblocksize, minBlock)
 	}
-	f.mreduce = config.Bool("mreduce")
+	f.mreduce = setts.Bool("mreduce")
 	if f.hasdatafile() == false && f.mreduce == true {
 		panic("cannot mreduce without datafile")
 	}
-	f.iterpoolsize = config.Int64("iterpool.size")
-	f.level = byte(config.Int64("level"))
+	f.iterpoolsize = setts.Int64("iterpool.size")
+	f.level = byte(setts.Int64("level"))
 
 	f.flusher = f.startflusher()
 	return f
@@ -136,23 +136,21 @@ func (f *Bubt) Build(iter api.IndexIterator) {
 		log.Infof("%v builder writing stat block\n", f.logprefix)
 	}
 
-	flushconfig := func() {
-		// flush configuration
+	flushsettings := func() {
 		finblock := make([]byte, markerBlocksize)
 		binary.BigEndian.PutUint64(finblock[:8], uint64(f.rootblock))
 		binary.BigEndian.PutUint64(finblock[8:16], uint64(f.rootreduce))
-		if config := f.config2json(); len(config) > len(finblock) {
-			panicerr("config %v > %v", len(config), len(finblock))
+		if jsetts := f.setts2json(); len(jsetts) > len(finblock) {
+			panicerr("settings %v > %v", len(jsetts), len(finblock))
 
 		} else {
-
-			binary.BigEndian.PutUint16(finblock[16:18], uint16(len(config)))
-			copy(finblock[18:], config)
+			binary.BigEndian.PutUint16(finblock[16:18], uint16(len(jsetts)))
+			copy(finblock[18:], jsetts)
 			if err := f.flusher.writeidx(finblock); err != nil {
-				panicerr("writing config: %v", err)
+				panicerr("writing settings: %v", err)
 			}
 		}
-		log.Infof("%v builder writing config block\n", f.logprefix)
+		log.Infof("%v builder writing settings block\n", f.logprefix)
 	}
 
 	var block blocker
@@ -170,7 +168,6 @@ func (f *Bubt) Build(iter api.IndexIterator) {
 
 	if f.n_count == 0 {
 		log.Infof("%v builder finds empty iterator\n", f.logprefix)
-		return
 	}
 
 	// root-block and its reduced value.
@@ -183,7 +180,7 @@ func (f *Bubt) Build(iter api.IndexIterator) {
 	}
 
 	flushstats()
-	flushconfig()
+	flushsettings()
 
 	// close and wait for datafile to be sealed.
 	f.flusher.close()
@@ -345,17 +342,17 @@ func (f *Bubt) ismvpos(vpos int64) (int64, bool) {
 	return int64(uint64(vpos) & 0xFFFFFFFFFFFFFFF8), false
 }
 
-func (f *Bubt) config2json() []byte {
-	config := map[string]interface{}{
+func (f *Bubt) setts2json() []byte {
+	setts := lib.Settings{
 		"zblocksize":    f.zblocksize,
 		"mblocksize":    f.mblocksize,
 		"mreduce":       f.mreduce,
 		"iterpool.size": f.iterpoolsize,
 		"level":         f.level,
 	}
-	data, err := json.Marshal(config)
+	data, err := json.Marshal(setts)
 	if err != nil {
-		panicerr("marshaling config: %v", err)
+		panicerr("marshaling settings: %v", err)
 	}
 	return data
 }

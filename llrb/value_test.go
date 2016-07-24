@@ -10,7 +10,7 @@ import "github.com/prataprc/storage.go/malloc"
 var _ = fmt.Sprintf("dummy")
 
 func TestNodeValue(t *testing.T) {
-	marena := malloc.NewArena(lib.Config{
+	marena := malloc.NewArena(lib.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 10),
 		"capacity":      int64(1024 * 1024 * 1024),
@@ -33,7 +33,7 @@ func TestNodeValue(t *testing.T) {
 }
 
 func BenchmarkValueSize(b *testing.B) {
-	marena := malloc.NewArena(lib.Config{
+	marena := malloc.NewArena(lib.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 10),
 		"capacity":      int64(1024 * 1024 * 1024),
@@ -58,7 +58,7 @@ func BenchmarkValueSize(b *testing.B) {
 }
 
 func BenchmarkSetValue(b *testing.B) {
-	marena := malloc.NewArena(lib.Config{
+	marena := malloc.NewArena(lib.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 10),
 		"capacity":      int64(1024 * 1024 * 1024),
@@ -82,7 +82,7 @@ func BenchmarkSetValue(b *testing.B) {
 }
 
 func BenchmarkGetValue(b *testing.B) {
-	marena := malloc.NewArena(lib.Config{
+	marena := malloc.NewArena(lib.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 10),
 		"capacity":      int64(1024 * 1024 * 1024),

@@ -38,7 +38,7 @@ type Snapshot struct {
 	iterpool     chan *iterator
 	activeiter   int64
 
-	// configuration, will be flushed to the tip of indexfile.
+	// settings, will be flushed to the tip of indexfile.
 	name         string
 	mblocksize   int64
 	zblocksize   int64
@@ -101,22 +101,22 @@ func OpenBubtstore(name, indexfile, datafile string, zblocksize int64) (ss *Snap
 		}
 	}
 
-	// load config block
-	configat := markerat - markerBlocksize
-	n, err = ss.indexfd.ReadAt(block, configat)
+	// load settings block
+	settsat := markerat - markerBlocksize
+	n, err = ss.indexfd.ReadAt(block, settsat)
 	if err != nil {
-		panicerr("config ReadAt: %v", err)
+		panicerr("settings ReadAt: %v", err)
 	} else if int64(n) != markerBlocksize {
 		panicerr("%v partial read: %v != %v", ss.logprefix, n, markerBlocksize)
 	} else {
 		ss.rootblock = int64(binary.BigEndian.Uint64(block[:8]))
 		ss.rootreduce = int64(binary.BigEndian.Uint64(block[8:16]))
 		ln := binary.BigEndian.Uint16(block[16:18])
-		if err := ss.json2config(block[18 : 18+ln]); err != nil {
-			panicerr("json2config: %v", err)
+		if err := ss.json2setts(block[18 : 18+ln]); err != nil {
+			panicerr("json2setts: %v", err)
 		}
 	}
-	// validate config block
+	// validate settings block
 	if ss.name != name {
 		panicerr("expected name %v, got %v", ss.name, name)
 	} else if ss.zblocksize != zblocksize {
@@ -124,7 +124,7 @@ func OpenBubtstore(name, indexfile, datafile string, zblocksize int64) (ss *Snap
 	}
 
 	// load stats block
-	statat := configat - markerBlocksize
+	statat := settsat - markerBlocksize
 	n, err = ss.indexfd.ReadAt(block, statat)
 	if err != nil {
 		panicerr("stats ReadAt: %v", err)
@@ -437,16 +437,16 @@ func (ss Snapshot) ismvpos(vpos int64) (int64, bool) {
 	return int64(uint64(vpos) & 0xFFFFFFFFFFFFFFF8), false
 }
 
-func (ss *Snapshot) json2config(data []byte) error {
-	var config lib.Config
-	if err := json.Unmarshal(data, &config); err != nil {
+func (ss *Snapshot) json2setts(data []byte) error {
+	var setts lib.Settings
+	if err := json.Unmarshal(data, &setts); err != nil {
 		return err
 	}
-	ss.zblocksize = config.Int64("zblocksize")
-	ss.mblocksize = config.Int64("mblocksize")
-	ss.mreduce = config.Bool("mreduce")
-	ss.iterpoolsize = config.Int64("iterpool.size")
-	ss.level = byte(config.Int64("level"))
+	ss.zblocksize = setts.Int64("zblocksize")
+	ss.mblocksize = setts.Int64("mblocksize")
+	ss.mreduce = setts.Bool("mreduce")
+	ss.iterpoolsize = setts.Int64("iterpool.size")
+	ss.level = byte(setts.Int64("level"))
 	return nil
 }
 

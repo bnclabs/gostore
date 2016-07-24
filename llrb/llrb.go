@@ -33,8 +33,9 @@ type LLRB struct { // tree container
 
 	// mvcc
 	mvcc struct {
+		// 64-bit aligned
 		ismut int64
-		// 64-bit aligned statistics
+		// statistics
 		n_snapshots int64
 		n_purgedss  int64
 		n_activess  int64
@@ -68,11 +69,11 @@ type LLRB struct { // tree container
 	iterpool   chan *iterator
 	activeiter int64
 
-	// config
+	// settings
 	fmask     metadataMask // only 12 bits
 	mdsize    int
 	maxvb     int64
-	config    lib.Config
+	setts     lib.Settings
 	logprefix string
 	memratio  float64
 
@@ -81,27 +82,27 @@ type LLRB struct { // tree container
 }
 
 // NewLLRB a new instance of in-memory sorted index.
-func NewLLRB(name string, config lib.Config) *LLRB {
-	config = make(lib.Config).Mixin(Defaultconfig(), config)
+func NewLLRB(name string, setts lib.Settings) *LLRB {
+	setts = make(lib.Settings).Mixin(DefaultSettings(), setts)
 
 	llrb := &LLRB{name: name, borntime: time.Now()}
-	llrb.iterpool = make(chan *iterator, config.Int64("iterpool.size"))
+	llrb.iterpool = make(chan *iterator, setts.Int64("iterpool.size"))
 
-	llrb.validateConfig(config)
+	llrb.validateSettings(setts)
 
-	llrb.maxvb = config.Int64("maxvb")
+	llrb.maxvb = setts.Int64("maxvb")
 	llrb.clock = newvectorclock(llrb.maxvb)
 
 	// setup arena for nodes and node-values.
-	llrb.nodearena = llrb.newnodearena(config)
-	llrb.valarena = llrb.newvaluearena(config)
+	llrb.nodearena = llrb.newnodearena(setts)
+	llrb.valarena = llrb.newvaluearena(setts)
 
 	llrb.logprefix = fmt.Sprintf("[LLRB-%s]", name)
 
 	// set up metadata options
-	llrb.fmask = llrb.setupfmask(config)
+	llrb.fmask = llrb.setupfmask(setts)
 	llrb.mdsize = (&metadata{}).initMetadata(0, llrb.fmask).sizeof()
-	llrb.config = config
+	llrb.setts = setts
 
 	// statistics
 	llrb.h_upsertdepth = lib.NewhistorgramInt64(1, 256, 1)
@@ -111,7 +112,7 @@ func NewLLRB(name string, config lib.Config) *LLRB {
 	llrb.memratio = 0.4 // (keymemory / allocated) for each arena
 
 	// mvcc
-	llrb.mvcc.enabled = config.Bool("mvcc.enable")
+	llrb.mvcc.enabled = setts.Bool("mvcc.enable")
 	if llrb.mvcc.enabled {
 		llrb.mvcc.reclaim = make([]*Llrbnode, 0, 64)
 		llrb.mvcc.h_bulkfree = lib.NewhistorgramInt64(200000, 500000, 100000)
@@ -127,7 +128,7 @@ func NewLLRB(name string, config lib.Config) *LLRB {
 	}
 
 	log.Infof("%v started ...\n", llrb.logprefix)
-	llrb.logconfig(config)
+	llrb.logsettings(setts)
 	return llrb
 }
 
@@ -192,7 +193,7 @@ func (llrb *LLRB) Destroy() error {
 		llrb.nodearena.Release()
 		llrb.valarena.Release()
 		llrb.root, llrb.clock = nil, nil
-		llrb.config, llrb.strsl = nil, nil
+		llrb.setts, llrb.strsl = nil, nil
 		llrb.dead = true
 		return nil
 	}
@@ -837,7 +838,7 @@ func (llrb *LLRB) newnode(k, v []byte) *Llrbnode {
 		nvarg := (uintptr)(unsafe.Pointer(nv.setvalue(v)))
 		nd.metadata().setmvalue((uint64)(nvarg))
 	} else if v != nil {
-		panic("newnode(): llrb tree not configured for accepting value")
+		panic("newnode(): llrb tree not settings for accepting value")
 	}
 
 	llrb.n_nodes++
@@ -954,26 +955,26 @@ func (llrb *LLRB) equivalent(n1, n2 *Llrbnode) bool {
 	return true
 }
 
-func (llrb *LLRB) logconfig(config lib.Config) {
+func (llrb *LLRB) logsettings(setts lib.Settings) {
 	// key arena
 	stats, err := llrb.stats()
 	if err != nil {
-		panic(fmt.Errorf("logconfig(): %v", err))
+		panic(fmt.Errorf("logsettings(): %v", err))
 	}
 	kblocks := len(stats["node.blocks"].([]int64))
-	min := humanize.Bytes(uint64(llrb.config.Int64("nodearena.minblock")))
-	max := humanize.Bytes(uint64(llrb.config.Int64("nodearena.maxblock")))
-	cp := humanize.Bytes(uint64(llrb.config.Int64("nodearena.capacity")))
-	pcp := humanize.Bytes(uint64(llrb.config.Int64("nodearena.pool.capacity")))
+	min := humanize.Bytes(uint64(llrb.setts.Int64("nodearena.minblock")))
+	max := humanize.Bytes(uint64(llrb.setts.Int64("nodearena.maxblock")))
+	cp := humanize.Bytes(uint64(llrb.setts.Int64("nodearena.capacity")))
+	pcp := humanize.Bytes(uint64(llrb.setts.Int64("nodearena.pool.capacity")))
 	fmsg := "%v key arena %v blocks over {%v %v} cap %v poolcap %v\n"
 	log.Infof(fmsg, llrb.logprefix, kblocks, min, max, cp, pcp)
 
 	// value arena
 	vblocks := len(stats["value.blocks"].([]int64))
-	min = humanize.Bytes(uint64(llrb.config.Int64("valarena.minblock")))
-	max = humanize.Bytes(uint64(llrb.config.Int64("valarena.maxblock")))
-	cp = humanize.Bytes(uint64(llrb.config.Int64("valarena.capacity")))
-	pcp = humanize.Bytes(uint64(llrb.config.Int64("valarena.pool.capacity")))
+	min = humanize.Bytes(uint64(llrb.setts.Int64("valarena.minblock")))
+	max = humanize.Bytes(uint64(llrb.setts.Int64("valarena.maxblock")))
+	cp = humanize.Bytes(uint64(llrb.setts.Int64("valarena.capacity")))
+	pcp = humanize.Bytes(uint64(llrb.setts.Int64("valarena.pool.capacity")))
 	fmsg = "%v val arena %v blocks over {%v %v} cap %v poolcap %v\n"
 	log.Infof(fmsg, llrb.logprefix, vblocks, min, max, cp, pcp)
 }

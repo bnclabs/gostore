@@ -4,5 +4,5 @@ for implementing storage algorithms.
 Papers:
 
 - Sedgewick's LLRB papers and presentations.
-- llrb configuration documentation.
+- llrb settings documentation.
 - llrb stats documentation.

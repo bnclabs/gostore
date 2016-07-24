@@ -30,15 +30,15 @@ const MEMUtilization = float64(0.95)
 const Sizeinterval = int64(32)
 
 // Maxarenasize maximum size of a memory arena. Can be used as default for
-// config-parameter `capacity`.
+// settings-parameter `capacity`.
 const Maxarenasize = int64(1024 * 1024 * 1024 * 1024) // 1TB
 
 // Maxpools maximum number of pools allowed in an arena. Can be used as
-// default for config-parameter `maxpools`.
+// default for settings-parameter `maxpools`.
 const Maxpools = int64(256)
 
 // Maxchunks maximum number of chunks allowed in a pool. Can be used as
-// default for config-parameter `maxchunks`.
+// default for settings-parameter `maxchunks`.
 const Maxchunks = int64(65536)
 
 // Arena defines a large memory block that can be divided into memory pools.
@@ -47,7 +47,7 @@ type Arena struct {
 	mpools     map[int64]Mpoolers // size -> list of Mpooler
 	poolmaker  func(size, numblocks int64) Mpooler
 
-	// configuration
+	// settings
 	capacity  int64  // memory capacity to be managed by this arena
 	minblock  int64  // minimum block size allocatable by arena
 	maxblock  int64  // maximum block size allocatable by arena
@@ -58,19 +58,19 @@ type Arena struct {
 }
 
 // NewArena create a new memory arena.
-func NewArena(config lib.Config) *Arena {
-	minblock, maxblock := config.Int64("minblock"), config.Int64("maxblock")
+func NewArena(setts lib.Settings) *Arena {
+	minblock, maxblock := setts.Int64("minblock"), setts.Int64("maxblock")
 	arena := &Arena{
 		blocksizes: Blocksizes(minblock, maxblock),
 		mpools:     make(map[int64]Mpoolers),
-		// configuration
+		// settings
 		minblock:  minblock,
 		maxblock:  maxblock,
-		capacity:  config.Int64("capacity"),
-		pcapacity: config.Int64("pool.capacity"),
-		maxpools:  config.Int64("maxpools"),
-		maxchunks: config.Int64("maxchunks"),
-		allocator: config.String("allocator"),
+		capacity:  setts.Int64("capacity"),
+		pcapacity: setts.Int64("pool.capacity"),
+		maxpools:  setts.Int64("maxpools"),
+		maxchunks: setts.Int64("maxchunks"),
+		allocator: setts.String("allocator"),
 	}
 	if int64(len(arena.blocksizes)) > arena.maxpools {
 		panicerr("number of pools in arena exeeds %v", arena.maxpools)

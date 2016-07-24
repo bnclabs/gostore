@@ -9,11 +9,11 @@ import "time"
 import "strings"
 
 func init() {
-	config := map[string]interface{}{
+	setts := map[string]interface{}{
 		"log.level": "info",
 		"log.file":  "",
 	}
-	SetLogger(nil, config)
+	SetLogger(nil, setts)
 }
 
 // Logger interface for gofast logging, applications can
@@ -50,16 +50,16 @@ var log Logger // object used by gofast component for logging.
 // SetLogger to integrate storage logging with application logging.
 // importing this package will initialize the logger with info level
 // logging to console.
-func SetLogger(logger Logger, config map[string]interface{}) Logger {
+func SetLogger(logger Logger, setts map[string]interface{}) Logger {
 	if logger != nil {
 		log = logger
 		return log
 	}
 
 	var err error
-	level := string2logLevel(config["log.level"].(string))
+	level := string2logLevel(setts["log.level"].(string))
 	logfd := os.Stdout
-	if logfile := config["log.file"].(string); logfile != "" {
+	if logfile := setts["log.file"].(string); logfile != "" {
 		logfd, err = os.OpenFile(logfile, os.O_RDWR|os.O_APPEND, 0660)
 		if err != nil {
 			if logfd, err = os.Create(logfile); err != nil {
