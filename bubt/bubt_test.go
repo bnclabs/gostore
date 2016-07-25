@@ -40,8 +40,7 @@ func TestEmpty(t *testing.T) {
 	bubt.Build(llrbiter)
 	llrbiter.Close()
 
-	zblocksize := bsetts.Int64("zblocksize")
-	store, err := OpenBubtstore(name, indexfile, datafile, zblocksize)
+	store, err := OpenBubtstore(name, indexfile, datafile)
 	if err != nil {
 		t.Fatal(err)
 	} else if err := store.Destroy(); err != nil {
@@ -83,8 +82,7 @@ func TestMissing(t *testing.T) {
 		t.Fatalf("expected %v, got %v", count, len(refnds))
 	}
 
-	zblocksize := bsetts.Int64("zblocksize")
-	store, err := OpenBubtstore(name, indexfile, datafile, zblocksize)
+	store, err := OpenBubtstore(name, indexfile, datafile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,14 +195,13 @@ func TestLookup(t *testing.T) {
 		}
 
 		bsetts := DefaultSettings()
-		zblocksize := bsetts.Int64("zblocksize")
 
 		// with data file
 		bubt := NewBubt(name, indexfile, datafile, bsetts)
 		llrbiter := llrb.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter)
 		llrbiter.Close()
-		store, err := OpenBubtstore(name, indexfile, datafile, zblocksize)
+		store, err := OpenBubtstore(name, indexfile, datafile)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -218,7 +215,7 @@ func TestLookup(t *testing.T) {
 		llrbiter = llrb.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter)
 		llrbiter.Close()
-		store, err = OpenBubtstore(name, indexfile, "", zblocksize)
+		store, err = OpenBubtstore(name, indexfile, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -275,7 +272,6 @@ func TestPartialRange(t *testing.T) {
 	bsetts := DefaultSettings()
 	bsetts["mblocksize"] = 512
 	bsetts["zblocksize"] = 512
-	zblocksize := bsetts.Int64("zblocksize")
 
 	// with datafile
 	bubt := NewBubt(name, indexfile, datafile, bsetts)
@@ -283,7 +279,7 @@ func TestPartialRange(t *testing.T) {
 	bubt.Build(llrbiter)
 	llrbiter.Close()
 
-	store, err := OpenBubtstore(name, indexfile, datafile, zblocksize)
+	store, err := OpenBubtstore(name, indexfile, datafile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -415,14 +411,13 @@ func TestRange(t *testing.T) {
 		})
 
 		bsetts := DefaultSettings()
-		zblocksize := bsetts.Int64("zblocksize")
 
 		// with datafile
 		bubt := NewBubt(name, indexfile, datafile, bsetts)
 		llrbiter := llrb.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter)
 		llrbiter.Close()
-		store, err := OpenBubtstore(name, indexfile, datafile, zblocksize)
+		store, err := OpenBubtstore(name, indexfile, datafile)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -435,7 +430,7 @@ func TestRange(t *testing.T) {
 		llrbiter = llrb.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter)
 		llrbiter.Close()
-		store, err = OpenBubtstore(name, indexfile, "", zblocksize)
+		store, err = OpenBubtstore(name, indexfile, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -493,7 +488,6 @@ func TestPartialIterate(t *testing.T) {
 	bsetts := DefaultSettings()
 	bsetts["mblocksize"] = 512
 	bsetts["zblocksize"] = 512
-	zblocksize := bsetts.Int64("zblocksize")
 
 	// with datafile
 	bubt := NewBubt(name, indexfile, datafile, bsetts)
@@ -501,7 +495,7 @@ func TestPartialIterate(t *testing.T) {
 	bubt.Build(llrbiter)
 	llrbiter.Close()
 
-	store, err := OpenBubtstore(name, indexfile, datafile, zblocksize)
+	store, err := OpenBubtstore(name, indexfile, datafile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -652,14 +646,13 @@ func TestIterate(t *testing.T) {
 		})
 
 		bsetts := DefaultSettings()
-		zblocksize := bsetts.Int64("zblocksize")
 
 		// with datafile
 		bubt := NewBubt(name, indexfile, datafile, bsetts)
 		llrbiter := llrb.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter)
 		llrbiter.Close()
-		store, err := OpenBubtstore(name, indexfile, datafile, zblocksize)
+		store, err := OpenBubtstore(name, indexfile, datafile)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -672,7 +665,7 @@ func TestIterate(t *testing.T) {
 		llrbiter = llrb.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter)
 		llrbiter.Close()
-		store, err = OpenBubtstore(name, indexfile, "", zblocksize)
+		store, err = OpenBubtstore(name, indexfile, "")
 		if err != nil {
 			t.Fatal(err)
 		}

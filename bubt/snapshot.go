@@ -47,7 +47,7 @@ type Snapshot struct {
 	level        byte
 }
 
-func OpenBubtstore(name, indexfile, datafile string, zblocksize int64) (ss *Snapshot, err error) {
+func OpenBubtstore(name, indexfile, datafile string) (ss *Snapshot, err error) {
 	var ok bool
 
 	readmu.Lock()
@@ -58,10 +58,9 @@ func OpenBubtstore(name, indexfile, datafile string, zblocksize int64) (ss *Snap
 	}
 
 	ss = &Snapshot{
-		name:       name,
-		indexfile:  indexfile,
-		datafile:   datafile,
-		zblocksize: zblocksize,
+		name:      name,
+		indexfile: indexfile,
+		datafile:  datafile,
 	}
 
 	block := make([]byte, markerBlocksize)
@@ -119,8 +118,6 @@ func OpenBubtstore(name, indexfile, datafile string, zblocksize int64) (ss *Snap
 	// validate settings block
 	if ss.name != name {
 		panicerr("expected name %v, got %v", ss.name, name)
-	} else if ss.zblocksize != zblocksize {
-		panicerr("expected zblocksize %v, got %v", ss.zblocksize, zblocksize)
 	}
 
 	// load stats block
