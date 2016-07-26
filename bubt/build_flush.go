@@ -72,7 +72,6 @@ func (flusher *bubtflusher) run(
 	defer func() {
 		log.Infof("%v exiting %q flusher for %v\n", logprefix, name, fd.Name())
 		fd.Sync()
-		fd.Close()
 		close(quitch)
 	}()
 
@@ -100,7 +99,7 @@ func (flusher *bubtflusher) run(
 	}
 
 	// flush marker block
-	markerblock := make([]byte, markerBlocksize)
+	markerblock := make([]byte, MarkerBlocksize)
 	for i := 0; i < len(markerblock); i++ {
 		markerblock[i] = markerByte
 	}

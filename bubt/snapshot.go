@@ -20,6 +20,7 @@ var openstores = make(map[string]*Snapshot)
 type Snapshot struct {
 	rootblock  int64
 	rootreduce int64
+	metadata   []byte
 
 	// statisitcs, need to be 8 byte aligned.
 	n_snapshots int64
@@ -68,23 +69,23 @@ func OpenBubtstore(name, path string) (ss *Snapshot, err error) {
 	}
 	defer func() {
 		if err != nil {
-			ss.Destroy()
+			ss.destroy()
+			ss = nil
 		}
 	}()
 
-	block := make([]byte, markerBlocksize)
 	ss.logprefix = fmt.Sprintf("[BUBT-%s]", name)
 
 	// open indexfile
 	if _, err = os.Stat(ss.indexfile); os.IsNotExist(err) {
 		log.Errorf("%v file %q not present\n", ss.logprefix, ss.indexfile)
-		return nil, err
+		return ss, err
 	}
 	ss.indexfd, err = os.OpenFile(ss.indexfile, os.O_RDONLY, 0666)
 	if err != nil {
 		fmsg := "%v indexfile %q (os.O_RDONLY, 0666): %v\n"
 		log.Errorf(fmsg, ss.logprefix, ss.datafile, err)
-		return nil, err
+		return ss, err
 	}
 
 	var fi os.FileInfo
@@ -93,81 +94,64 @@ func OpenBubtstore(name, path string) (ss *Snapshot, err error) {
 	if err != nil {
 		fmsg := "%v unable to stat %q: %v\n"
 		log.Errorf(fmsg, ss.logprefix, ss.indexfile, err)
-		return nil, err
+		return ss, err
 	}
 	eof := fi.Size()
 
+	// header
+	var header [40]byte
+	var statslen, settslen, mdlen int64
 	var n int
 
-	markerat := eof - markerBlocksize
-	n, err = ss.indexfd.ReadAt(block, markerat)
+	headerat := eof - int64(len(header))
+	n, err = ss.indexfd.ReadAt(header[:], headerat)
 	if err != nil {
-		fmsg := "%v reading %q marker-block: %v\n"
+		fmsg := "%v reading %q header: %v\n"
 		log.Errorf(fmsg, ss.logprefix, ss.indexfile, err)
-		return nil, err
+		return ss, err
 
-	} else if int64(n) != markerBlocksize {
-		err = fmt.Errorf("partial read: %v != %v\n", n, markerBlocksize)
+	} else if n != len(header) {
+		err = fmt.Errorf("partial header read: %v != %v\n", n, len(header))
 		log.Errorf("%v %v\n", ss.logprefix, err)
-		return nil, err
+		return ss, err
+	}
+	statslen, n = int64(binary.BigEndian.Uint64(header[:])), 8
+	settslen, n = int64(binary.BigEndian.Uint64(header[n:])), n+8
+	mdlen, n = int64(binary.BigEndian.Uint64(header[n:])), n+8
+	ss.rootblock, n = int64(binary.BigEndian.Uint64(header[n:])), n+8
+	ss.rootreduce, n = int64(binary.BigEndian.Uint64(header[n:])), n+8
 
-	} else {
-		for _, byt := range block {
-			if byt != 0xAB { // TODO: not magic numbers
-				err = fmt.Errorf("invalid marker")
-				log.Errorf("%v %v\n", ss.logprefix, err)
-				return nil, err
-			}
-		}
+	markerat := headerat - MarkerBlocksize
+	if err = ss.validateMarker(markerat, MarkerBlocksize); err != nil {
+		return ss, err
 	}
 
-	// load settings block
-	settsat := markerat - markerBlocksize
-	n, err = ss.indexfd.ReadAt(block, settsat)
-	if err != nil {
-		panic(fmt.Errorf("settings ReadAt: %v", err))
-	} else if int64(n) != markerBlocksize {
-		fmsg := "%v partial read: %v != %v"
-		panic(fmt.Errorf(fmsg, ss.logprefix, n, markerBlocksize))
-	} else {
-		ss.rootblock = int64(binary.BigEndian.Uint64(block[:8]))
-		ss.rootreduce = int64(binary.BigEndian.Uint64(block[8:16]))
-		ln := binary.BigEndian.Uint16(block[16:18])
-		if err = ss.json2setts(block[18 : 18+ln]); err != nil {
-			panic(fmt.Errorf("json2setts: %v", err))
-		}
-	}
-	// validate settings block
-	if ss.name != name {
-		panic(fmt.Errorf("expected name %v, got %v", ss.name, name))
+	mdat := markerat - mdlen
+	if err = ss.loadMetadata(mdat, mdlen); err != nil {
+		return ss, err
 	}
 
-	// load stats block
-	statat := settsat - markerBlocksize
-	n, err = ss.indexfd.ReadAt(block, statat)
-	if err != nil {
-		panic(fmt.Errorf("stats ReadAt: %v", err))
-	} else if int64(n) != markerBlocksize {
-		fmsg := "%v partial read: %v != %v"
-		panic(fmt.Errorf(fmsg, ss.logprefix, n, markerBlocksize))
-	} else {
-		ln := binary.BigEndian.Uint16(block[:2])
-		if err = ss.json2stats(block[2 : 2+ln]); err != nil {
-			panic(fmt.Errorf("json2stats: %v", err))
-		}
+	settsat := mdat - settslen
+	if err = ss.loadSettings(settsat, settslen); err != nil {
+		return ss, err
+	}
+
+	statsat := settsat - statslen
+	if err = ss.loadStats(statsat, statslen); err != nil {
+		return ss, err
 	}
 
 	// open datafile, if present
 	if ss.datafile != "" {
 		if _, err = os.Stat(ss.datafile); os.IsNotExist(err) {
 			log.Errorf("%v file %q not present\n", ss.logprefix, ss.datafile)
-			return nil, err
+			return ss, err
 		}
 		ss.datafd, err = os.OpenFile(ss.datafile, os.O_RDONLY, 0666)
 		if err != nil {
 			fmsg := "%v datafile %q (os.O_RDONLY, 0666): %v\n"
 			log.Errorf(fmsg, ss.logprefix, ss.datafile, err)
-			return nil, err
+			return ss, err
 		}
 	}
 
@@ -242,14 +226,21 @@ func (ss *Snapshot) Validate() {
 
 // Destroy implement Index{} interface.
 func (ss *Snapshot) Destroy() error {
+	readmu.Lock()
+	defer readmu.Unlock()
+
+	if ss == nil {
+		return nil
+	}
+	return ss.destroy()
+}
+
+func (ss *Snapshot) destroy() error {
 	if atomic.LoadInt64(&ss.n_snapshots) > 0 {
 		return api.ErrorActiveSnapshots
 	} else if atomic.LoadInt64(&ss.activeiter) > 0 {
 		return api.ErrorActiveIterators
 	}
-
-	readmu.Lock()
-	defer readmu.Unlock()
 
 	if err := ss.indexfd.Close(); err != nil {
 		log.Errorf("%v closing %q: %v\n", ss.logprefix, ss.indexfile, err)
@@ -593,4 +584,84 @@ func (ss *Snapshot) fixrangeargs(lk, hk []byte) ([]byte, []byte) {
 		h = nil
 	}
 	return l, h
+}
+
+func (ss *Snapshot) validateMarker(markerat int64, markerlen int64) error {
+	block := make([]byte, markerlen)
+	n, err := ss.indexfd.ReadAt(block, markerat)
+	if err != nil {
+		fmsg := "%v reading %q marker-block: %v\n"
+		log.Errorf(fmsg, ss.logprefix, ss.indexfile, err)
+		return err
+
+	} else if int64(n) != markerlen {
+		err = fmt.Errorf("partial read: %v != %v\n", n, markerlen)
+		log.Errorf("%v %v\n", ss.logprefix, err)
+		return err
+
+	} else {
+		for _, byt := range block {
+			if byt != 0xAB { // TODO: not magic numbers
+				err = fmt.Errorf("invalid marker")
+				log.Errorf("%v %v\n", ss.logprefix, err)
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (ss *Snapshot) loadMetadata(mdat int64, mdlen int64) error {
+	metadata := make([]byte, mdlen)
+	n, err := ss.indexfd.ReadAt(ss.metadata, mdat)
+	if err != nil {
+		log.Errorf("%v settings ReadAt: %v", ss.logprefix, err)
+		return err
+	} else if int64(n) != mdlen {
+		err := fmt.Errorf("partial read: %v != %v", n, mdlen)
+		log.Errorf("%v %v", ss.logprefix, err)
+		return err
+	}
+	ss.metadata = metadata
+	return nil
+}
+
+func (ss *Snapshot) loadSettings(statsat int64, statslen int64) error {
+	block := make([]byte, statslen)
+	n, err := ss.indexfd.ReadAt(block, statsat)
+	if err != nil {
+		log.Errorf("%v settings ReadAt: %v", ss.logprefix, err)
+		return err
+	} else if int64(n) != statslen {
+		err := fmt.Errorf("partial read: %v != %v", n, statslen)
+		log.Errorf("%v %v", ss.logprefix, err)
+		return err
+	} else {
+		if err = ss.json2setts(block); err != nil {
+			err := fmt.Errorf("json2setts: %v", err)
+			log.Errorf("%v %v", ss.logprefix, err)
+			return err
+		}
+	}
+	return nil
+}
+
+func (ss *Snapshot) loadStats(settsat int64, settslen int64) error {
+	block := make([]byte, settslen)
+	n, err := ss.indexfd.ReadAt(block, settsat)
+	if err != nil {
+		log.Errorf("%v settings ReadAt: %v", ss.logprefix, err)
+		return err
+	} else if int64(n) != settslen {
+		err := fmt.Errorf("partial read: %v != %v", n, settslen)
+		log.Errorf("%v %v", ss.logprefix, err)
+		return err
+	} else {
+		if err = ss.json2stats(block); err != nil {
+			err := fmt.Errorf("json2stats: %v", err)
+			log.Errorf("%v %v", ss.logprefix, err)
+			return err
+		}
+	}
+	return nil
 }

@@ -35,16 +35,18 @@ func TestEmpty(t *testing.T) {
 	name := fmt.Sprintf("unittest-empty-%v", 0)
 	bubt := NewBubt(name, path, bsetts)
 	llrbiter := llrb.Iterate(nil, nil, "both", false)
-	bubt.Build(llrbiter)
+	bubt.Build(llrbiter, nil)
 	llrbiter.Close()
 
 	store, err := OpenBubtstore(name, path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	store.Release()
-	if err := store.Destroy(); err != nil {
-		t.Fatal(err)
+	if store == nil {
+		store.Release()
+		if err := store.Destroy(); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	if err := llrb.Destroy(); err != nil {
@@ -65,7 +67,7 @@ func TestMissing(t *testing.T) {
 	name := fmt.Sprintf("unittest-empty-%v", count)
 	bubt := NewBubt(name, path, bsetts)
 	llrbiter := llrb.Iterate(nil, nil, "both", false)
-	bubt.Build(llrbiter)
+	bubt.Build(llrbiter, nil)
 	llrbiter.Close()
 
 	// gather reference list of nodes
@@ -194,7 +196,7 @@ func TestLookup(t *testing.T) {
 		// with data file
 		bubt := NewBubt(name, path, bsetts)
 		llrbiter := llrb.Iterate(nil, nil, "both", false)
-		bubt.Build(llrbiter)
+		bubt.Build(llrbiter, nil)
 		llrbiter.Close()
 		store, err := OpenBubtstore(name, path)
 		if err != nil {
@@ -210,7 +212,7 @@ func TestLookup(t *testing.T) {
 		bsetts = DefaultSettings()
 		bubt = NewBubt(name, path, bsetts)
 		llrbiter = llrb.Iterate(nil, nil, "both", false)
-		bubt.Build(llrbiter)
+		bubt.Build(llrbiter, nil)
 		llrbiter.Close()
 		store, err = OpenBubtstore(name, path)
 		if err != nil {
@@ -271,7 +273,7 @@ func TestPartialRange(t *testing.T) {
 	// with datafile
 	bubt := NewBubt(name, path, bsetts)
 	llrbiter := llrb.Iterate(nil, nil, "both", false)
-	bubt.Build(llrbiter)
+	bubt.Build(llrbiter, nil)
 	llrbiter.Close()
 
 	store, err := OpenBubtstore(name, path)
@@ -409,7 +411,7 @@ func TestRange(t *testing.T) {
 		// with datafile
 		bubt := NewBubt(name, path, bsetts)
 		llrbiter := llrb.Iterate(nil, nil, "both", false)
-		bubt.Build(llrbiter)
+		bubt.Build(llrbiter, nil)
 		llrbiter.Close()
 		store, err := OpenBubtstore(name, path)
 		if err != nil {
@@ -424,7 +426,7 @@ func TestRange(t *testing.T) {
 		bsetts = DefaultSettings()
 		bubt = NewBubt(name, path, bsetts)
 		llrbiter = llrb.Iterate(nil, nil, "both", false)
-		bubt.Build(llrbiter)
+		bubt.Build(llrbiter, nil)
 		llrbiter.Close()
 		store, err = OpenBubtstore(name, path)
 		if err != nil {
@@ -487,7 +489,7 @@ func TestPartialIterate(t *testing.T) {
 	// with datafile
 	bubt := NewBubt(name, path, bsetts)
 	llrbiter := llrb.Iterate(nil, nil, "both", false)
-	bubt.Build(llrbiter)
+	bubt.Build(llrbiter, nil)
 	llrbiter.Close()
 
 	store, err := OpenBubtstore(name, path)
@@ -644,7 +646,7 @@ func TestIterate(t *testing.T) {
 		// with datafile
 		bubt := NewBubt(name, path, bsetts)
 		llrbiter := llrb.Iterate(nil, nil, "both", false)
-		bubt.Build(llrbiter)
+		bubt.Build(llrbiter, nil)
 		llrbiter.Close()
 		store, err := OpenBubtstore(name, path)
 		if err != nil {
@@ -659,7 +661,7 @@ func TestIterate(t *testing.T) {
 		bsetts = DefaultSettings()
 		bubt = NewBubt(name, path, bsetts)
 		llrbiter = llrb.Iterate(nil, nil, "both", false)
-		bubt.Build(llrbiter)
+		bubt.Build(llrbiter, nil)
 		llrbiter.Close()
 		store, err = OpenBubtstore(name, path)
 		if err != nil {

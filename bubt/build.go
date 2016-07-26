@@ -116,7 +116,7 @@ func (f *Bubt) Setlevel(level byte) {
 
 // Build starts building the tree from iterator, iterator is expected to be a
 // full-table scan over another data-store.
-func (f *Bubt) Build(iter api.IndexIterator) {
+func (f *Bubt) Build(iter api.IndexIterator, metadata []byte) {
 	log.Infof("%v builder started ...\n", f.logprefix)
 
 	f.iterator = iter
@@ -130,37 +130,31 @@ func (f *Bubt) Build(iter api.IndexIterator) {
 		return ms
 	}
 
-	flushstats := func() {
+	flushstats := func() int {
 		// flush statistics
-		finblock := make([]byte, markerBlocksize)
-		if stats := f.stats2json(); len(stats) > len(finblock) {
-			panic(fmt.Errorf("stats %v > %v", len(stats), len(finblock)))
-
-		} else {
-			binary.BigEndian.PutUint16(finblock[:2], uint16(len(stats)))
-			copy(finblock[2:], stats)
-			if err := f.flusher.writeidx(finblock); err != nil {
-				panic(fmt.Errorf("writing stats: %v", err))
-			}
+		stats := f.stats2json()
+		if err := f.flusher.writeidx(stats); err != nil {
+			panic(fmt.Errorf("writing stats: %v", err))
 		}
-		log.Infof("%v builder writing stat block\n", f.logprefix)
+		log.Infof("%v builder wrote stat\n", f.logprefix)
+		return len(stats)
 	}
 
-	flushsettings := func() {
-		finblock := make([]byte, markerBlocksize)
-		binary.BigEndian.PutUint64(finblock[:8], uint64(f.rootblock))
-		binary.BigEndian.PutUint64(finblock[8:16], uint64(f.rootreduce))
-		if jsetts := f.setts2json(); len(jsetts) > len(finblock) {
-			panic(fmt.Errorf("settings %v > %v", len(jsetts), len(finblock)))
-
-		} else {
-			binary.BigEndian.PutUint16(finblock[16:18], uint16(len(jsetts)))
-			copy(finblock[18:], jsetts)
-			if err := f.flusher.writeidx(finblock); err != nil {
-				panic(fmt.Errorf("writing settings: %v", err))
-			}
+	flushsettings := func() int {
+		jsetts := f.setts2json()
+		if err := f.flusher.writeidx(jsetts); err != nil {
+			panic(fmt.Errorf("writing settings: %v", err))
 		}
-		log.Infof("%v builder writing settings block\n", f.logprefix)
+		log.Infof("%v builder wrote settings\n", f.logprefix)
+		return len(jsetts)
+	}
+
+	flushmetadata := func() int {
+		if err := f.flusher.writeidx(metadata); err != nil {
+			panic(fmt.Errorf("writing settings: %v", err))
+		}
+		log.Infof("%v builder wrote metadata\n", f.logprefix)
+		return len(metadata)
 	}
 
 	var block blocker
@@ -189,11 +183,30 @@ func (f *Bubt) Build(iter api.IndexIterator) {
 		}
 	}
 
-	flushstats()
-	flushsettings()
+	statslen := flushstats()
+	settslen := flushsettings()
+	mdlen := flushmetadata()
 
-	// close and wait for datafile to be sealed.
+	// close and wait for datafile to be flushed
 	f.flusher.close()
+
+	var header [40]byte
+	binary.BigEndian.PutUint64(header[:], uint64(statslen))
+	n := 8
+	binary.BigEndian.PutUint64(header[n:], uint64(settslen))
+	n += 8
+	binary.BigEndian.PutUint64(header[n:], uint64(mdlen))
+	n += 8
+	binary.BigEndian.PutUint64(header[n:], uint64(f.rootblock))
+	n += 8
+	binary.BigEndian.PutUint64(header[n:], uint64(f.rootreduce))
+	n += 8
+	f.flushheader(header[:])
+
+	f.indexfd.Close()
+	if f.datafd != nil {
+		f.datafd.Close()
+	}
 	log.Infof("%v ... build completed\n", f.logprefix)
 }
 
@@ -389,6 +402,14 @@ func (f *Bubt) stats2json() []byte {
 		panic(fmt.Errorf("marshaling statistics: %v", err))
 	}
 	return data
+}
+
+func (f *Bubt) flushheader(header []byte) {
+	if n, err := f.indexfd.Write(header); err != nil {
+		log.Errorf("%v writing header: %v\n", f.logprefix, err)
+	} else if ln := len(header); n != ln {
+		log.Errorf("%v partial write of header %v,%v\n", f.logprefix, n, ln)
+	}
 }
 
 func mkfilenames(path string) (string, string) {
