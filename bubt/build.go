@@ -3,6 +3,7 @@ package bubt
 import "encoding/binary"
 import "encoding/json"
 import "fmt"
+import "path/filepath"
 import "os"
 
 import "github.com/prataprc/storage.go/api"
@@ -28,6 +29,7 @@ type Bubt struct {
 	a_redsize  *lib.AverageInt64
 	h_depth    *lib.HistogramInt64
 
+	path      string
 	indexfile string
 	datafile  string
 	indexfd   *os.File
@@ -57,9 +59,10 @@ type blocker interface {
 }
 
 // NewBubt create a Bubt instance to build a new bottoms-up btree.
-func NewBubt(name, indexfile, datafile string, setts lib.Settings) *Bubt {
+func NewBubt(name, path string, setts lib.Settings) *Bubt {
 	f := &Bubt{
 		name:       name,
+		path:       path,
 		nodes:      make([]api.Node, 0),
 		a_zentries: &lib.AverageInt64{},
 		a_mentries: &lib.AverageInt64{},
@@ -70,10 +73,17 @@ func NewBubt(name, indexfile, datafile string, setts lib.Settings) *Bubt {
 	}
 	f.logprefix = fmt.Sprintf("[BUBT-%s]", name)
 
+	if err := os.MkdirAll(path, 0770); err != nil {
+		log.Errorf("%v MkdirAll(%q)", f.logprefix, path)
+		return nil
+	}
+
+	indexfile, datafile := mkfilenames(path)
 	f.indexfile, f.indexfd = indexfile, createfile(indexfile)
-	f.datafile = datafile
-	if f.datafile != "" {
-		f.datafd = createfile(f.datafile)
+	if setts.Bool("datafile") {
+		f.datafile, f.datafd = datafile, createfile(datafile)
+	} else {
+		f.datafile, f.datafd = "", nil
 	}
 
 	f.zblocksize = setts.Int64("zblocksize")
@@ -349,6 +359,7 @@ func (f *Bubt) setts2json() []byte {
 		"mreduce":       f.mreduce,
 		"iterpool.size": f.iterpoolsize,
 		"level":         f.level,
+		"datafile":      f.datafile != "",
 	}
 	data, err := json.Marshal(setts)
 	if err != nil {
@@ -376,6 +387,11 @@ func (f *Bubt) stats2json() []byte {
 		panicerr("marshaling statistics: %v", err)
 	}
 	return data
+}
+
+func mkfilenames(path string) (string, string) {
+	index, data := filepath.Join(path, "index"), filepath.Join(path, "data")
+	return index, data
 }
 
 func createfile(name string) *os.File {

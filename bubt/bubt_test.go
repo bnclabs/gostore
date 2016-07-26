@@ -24,23 +24,21 @@ func init() {
 }
 
 func TestEmpty(t *testing.T) {
-	indexfile := filepath.Join(os.TempDir(), "ut_indexfile_empty.bubt")
-	datafile := filepath.Join(os.TempDir(), "ut_datafile_empty.bubt")
-	os.Remove(indexfile)
-	os.Remove(datafile)
-	defer os.Remove(indexfile)
-	defer os.Remove(datafile)
+	path := filepath.Join(os.TempDir(), "TestEmpty")
+	os.Remove(path)
+	defer os.Remove(path)
 
 	llrb := refllrb(0)
 
 	bsetts := DefaultSettings()
+	bsetts["datafile"] = true
 	name := fmt.Sprintf("unittest-empty-%v", 0)
-	bubt := NewBubt(name, indexfile, datafile, bsetts)
+	bubt := NewBubt(name, path, bsetts)
 	llrbiter := llrb.Iterate(nil, nil, "both", false)
 	bubt.Build(llrbiter)
 	llrbiter.Close()
 
-	store, err := OpenBubtstore(name, indexfile, datafile)
+	store, err := OpenBubtstore(name, path)
 	if err != nil {
 		t.Fatal(err)
 	} else if err := store.Destroy(); err != nil {
@@ -53,19 +51,17 @@ func TestEmpty(t *testing.T) {
 }
 
 func TestMissing(t *testing.T) {
-	indexfile := filepath.Join(os.TempDir(), "ut_indexfile_empty.bubt")
-	datafile := filepath.Join(os.TempDir(), "ut_datafile_empty.bubt")
-	os.Remove(indexfile)
-	os.Remove(datafile)
-	defer os.Remove(indexfile)
-	defer os.Remove(datafile)
+	path := filepath.Join(os.TempDir(), "TestMissing")
+	os.Remove(path)
+	defer os.Remove(path)
 
 	count := 1
 	llrb := refllrb(count)
 
 	bsetts := DefaultSettings()
+	bsetts["datafile"] = true
 	name := fmt.Sprintf("unittest-empty-%v", count)
-	bubt := NewBubt(name, indexfile, datafile, bsetts)
+	bubt := NewBubt(name, path, bsetts)
 	llrbiter := llrb.Iterate(nil, nil, "both", false)
 	bubt.Build(llrbiter)
 	llrbiter.Close()
@@ -82,7 +78,7 @@ func TestMissing(t *testing.T) {
 		t.Fatalf("expected %v, got %v", count, len(refnds))
 	}
 
-	store, err := OpenBubtstore(name, indexfile, datafile)
+	store, err := OpenBubtstore(name, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,10 +114,8 @@ func TestMissing(t *testing.T) {
 
 	if err := store.Destroy(); err != nil {
 		t.Fatal(err)
-	} else if _, err := os.Stat(indexfile); err == nil {
-		t.Fatalf("expected %v to be removed", indexfile)
-	} else if _, err := os.Stat(datafile); err == nil {
-		t.Fatalf("expected %v to be removed", datafile)
+	} else if _, err := os.Stat(path); err == nil {
+		t.Fatalf("expected %v to be removed", path)
 	}
 
 	if err := llrb.Destroy(); err != nil {
@@ -130,14 +124,11 @@ func TestMissing(t *testing.T) {
 }
 
 func TestLookup(t *testing.T) {
-	indexfile := filepath.Join(os.TempDir(), "ut_indexfile_lookup.bubt")
-	datafile := filepath.Join(os.TempDir(), "ut_datafile_lookup.bubt")
+	path := filepath.Join(os.TempDir(), "TestLookup")
 	name := "unittest-lookup"
 
-	os.Remove(indexfile)
-	os.Remove(datafile)
-	defer os.Remove(indexfile)
-	defer os.Remove(datafile)
+	os.Remove(path)
+	defer os.Remove(path)
 
 	do := func(count int, llrb *llrb.LLRB, store *Snapshot, refnds []api.Node) {
 		snapch := make(chan api.IndexSnapshot, 1)
@@ -195,13 +186,14 @@ func TestLookup(t *testing.T) {
 		}
 
 		bsetts := DefaultSettings()
+		bsetts["datafile"] = true
 
 		// with data file
-		bubt := NewBubt(name, indexfile, datafile, bsetts)
+		bubt := NewBubt(name, path, bsetts)
 		llrbiter := llrb.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter)
 		llrbiter.Close()
-		store, err := OpenBubtstore(name, indexfile, datafile)
+		store, err := OpenBubtstore(name, path)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -211,11 +203,12 @@ func TestLookup(t *testing.T) {
 		}
 
 		// without data file
-		bubt = NewBubt(name, indexfile, "", bsetts)
+		bsetts = DefaultSettings()
+		bubt = NewBubt(name, path, bsetts)
 		llrbiter = llrb.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter)
 		llrbiter.Close()
-		store, err = OpenBubtstore(name, indexfile, "")
+		store, err = OpenBubtstore(name, path)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -224,10 +217,8 @@ func TestLookup(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if _, err := os.Stat(indexfile); err == nil {
-			t.Fatalf("expected %v to be removed", indexfile)
-		} else if _, err := os.Stat(datafile); err == nil {
-			t.Fatalf("expected %v to be removed", datafile)
+		if _, err := os.Stat(path); err == nil {
+			t.Fatalf("expected %v to be removed", path)
 		}
 		if err := llrb.Destroy(); err != nil {
 			t.Fatal(err)
@@ -263,23 +254,22 @@ func TestPartialRange(t *testing.T) {
 		})
 	}
 
-	indexfile := filepath.Join(os.TempDir(), "ut_indexfile_partial_range.bubt")
-	datafile := filepath.Join(os.TempDir(), "ut_datafile_partial_range.bubt")
-	os.Remove(indexfile)
-	os.Remove(datafile)
+	path := filepath.Join(os.TempDir(), "TestPartialRange")
+	os.Remove(path)
 
 	name := "unittest-range"
 	bsetts := DefaultSettings()
 	bsetts["mblocksize"] = 512
 	bsetts["zblocksize"] = 512
+	bsetts["datafile"] = true
 
 	// with datafile
-	bubt := NewBubt(name, indexfile, datafile, bsetts)
+	bubt := NewBubt(name, path, bsetts)
 	llrbiter := llrb.Iterate(nil, nil, "both", false)
 	bubt.Build(llrbiter)
 	llrbiter.Close()
 
-	store, err := OpenBubtstore(name, indexfile, datafile)
+	store, err := OpenBubtstore(name, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -367,14 +357,11 @@ func TestPartialRange(t *testing.T) {
 }
 
 func TestRange(t *testing.T) {
-	indexfile := filepath.Join(os.TempDir(), "ut_indexfile_range.bubt")
-	datafile := filepath.Join(os.TempDir(), "ut_datafile_range.bubt")
+	path := filepath.Join(os.TempDir(), "TestRange")
 	name := "unittest-range"
 
-	os.Remove(indexfile)
-	os.Remove(datafile)
-	defer os.Remove(indexfile)
-	defer os.Remove(datafile)
+	os.Remove(path)
+	defer os.Remove(path)
 
 	do := func(count int, llrb *llrb.LLRB, store *Snapshot, refnds []api.Node) {
 		snapch := make(chan api.IndexSnapshot, 1)
@@ -411,13 +398,14 @@ func TestRange(t *testing.T) {
 		})
 
 		bsetts := DefaultSettings()
+		bsetts["datafile"] = true
 
 		// with datafile
-		bubt := NewBubt(name, indexfile, datafile, bsetts)
+		bubt := NewBubt(name, path, bsetts)
 		llrbiter := llrb.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter)
 		llrbiter.Close()
-		store, err := OpenBubtstore(name, indexfile, datafile)
+		store, err := OpenBubtstore(name, path)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -426,11 +414,12 @@ func TestRange(t *testing.T) {
 			t.Fatal(err)
 		}
 		// without data file
-		bubt = NewBubt(name, indexfile, "", bsetts)
+		bsetts = DefaultSettings()
+		bubt = NewBubt(name, path, bsetts)
 		llrbiter = llrb.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter)
 		llrbiter.Close()
-		store, err = OpenBubtstore(name, indexfile, "")
+		store, err = OpenBubtstore(name, path)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -439,10 +428,8 @@ func TestRange(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if _, err := os.Stat(indexfile); err == nil {
-			t.Fatalf("expected %v to be removed", indexfile)
-		} else if _, err := os.Stat(datafile); err == nil {
-			t.Fatalf("expected %v to be removed", datafile)
+		if _, err := os.Stat(path); err == nil {
+			t.Fatalf("expected %v to be removed", path)
 		}
 
 		if err := llrb.Destroy(); err != nil {
@@ -479,23 +466,23 @@ func TestPartialIterate(t *testing.T) {
 		})
 	}
 
-	indexfile := filepath.Join(os.TempDir(), "ut_indexfile_partial_range.bubt")
-	datafile := filepath.Join(os.TempDir(), "ut_datafile_partial_range.bubt")
-	os.Remove(indexfile)
-	os.Remove(datafile)
+	path := filepath.Join(os.TempDir(), "TestPartialIterate")
+	os.Remove(path)
+	defer os.Remove(path)
 
 	name := "unittest-range"
 	bsetts := DefaultSettings()
 	bsetts["mblocksize"] = 512
 	bsetts["zblocksize"] = 512
+	bsetts["datafile"] = true
 
 	// with datafile
-	bubt := NewBubt(name, indexfile, datafile, bsetts)
+	bubt := NewBubt(name, path, bsetts)
 	llrbiter := llrb.Iterate(nil, nil, "both", false)
 	bubt.Build(llrbiter)
 	llrbiter.Close()
 
-	store, err := OpenBubtstore(name, indexfile, datafile)
+	store, err := OpenBubtstore(name, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -599,13 +586,10 @@ func TestPartialIterate(t *testing.T) {
 }
 
 func TestIterate(t *testing.T) {
-	indexfile := filepath.Join(os.TempDir(), "ut_indexfile_iterate.bubt")
-	datafile := filepath.Join(os.TempDir(), "ut_datafile_iterate.bubt")
+	path := filepath.Join(os.TempDir(), "TestIterate")
 	name := "unittest-iteration"
-	os.Remove(indexfile)
-	os.Remove(datafile)
-	defer os.Remove(indexfile)
-	defer os.Remove(datafile)
+	os.Remove(path)
+	defer os.Remove(path)
 
 	do := func(count int, llrb *llrb.LLRB, store *Snapshot, refnds []api.Node) {
 		snapch := make(chan api.IndexSnapshot, 1)
@@ -646,13 +630,14 @@ func TestIterate(t *testing.T) {
 		})
 
 		bsetts := DefaultSettings()
+		bsetts["datafile"] = true
 
 		// with datafile
-		bubt := NewBubt(name, indexfile, datafile, bsetts)
+		bubt := NewBubt(name, path, bsetts)
 		llrbiter := llrb.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter)
 		llrbiter.Close()
-		store, err := OpenBubtstore(name, indexfile, datafile)
+		store, err := OpenBubtstore(name, path)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -661,11 +646,12 @@ func TestIterate(t *testing.T) {
 			t.Fatal(err)
 		}
 		// without datafile
-		bubt = NewBubt(name, indexfile, "", bsetts)
+		bsetts = DefaultSettings()
+		bubt = NewBubt(name, path, bsetts)
 		llrbiter = llrb.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter)
 		llrbiter.Close()
-		store, err = OpenBubtstore(name, indexfile, "")
+		store, err = OpenBubtstore(name, path)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -674,10 +660,8 @@ func TestIterate(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if _, err := os.Stat(indexfile); err == nil {
-			t.Fatalf("expected %v to be removed", indexfile)
-		} else if _, err := os.Stat(datafile); err == nil {
-			t.Fatalf("expected %v to be removed", datafile)
+		if _, err := os.Stat(path); err == nil {
+			t.Fatalf("expected %v to be removed", path)
 		}
 
 		if err := llrb.Destroy(); err != nil {

@@ -27,6 +27,7 @@ type Snapshot struct {
 	n_lookups   int64
 	n_ranges    int64
 
+	path      string
 	indexfile string
 	datafile  string
 	indexfd   *os.File
@@ -47,7 +48,7 @@ type Snapshot struct {
 	level        byte
 }
 
-func OpenBubtstore(name, indexfile, datafile string) (ss *Snapshot, err error) {
+func OpenBubtstore(name, path string) (ss *Snapshot, err error) {
 	var ok bool
 
 	readmu.Lock()
@@ -57,20 +58,37 @@ func OpenBubtstore(name, indexfile, datafile string) (ss *Snapshot, err error) {
 		return ss, nil
 	}
 
+	indexfile, datafile := mkfilenames(path)
 	ss = &Snapshot{
 		name:      name,
+		path:      path,
 		indexfile: indexfile,
 		datafile:  datafile,
 	}
+	defer func() {
+		if err != nil {
+			ss.Destroy()
+		}
+	}()
 
 	block := make([]byte, markerBlocksize)
 	ss.logprefix = fmt.Sprintf("[BUBT-%s]", name)
 
-	if err := ss.openfiles(); err != nil {
+	// open indexfile
+	if _, err = os.Stat(ss.indexfile); os.IsNotExist(err) {
+		log.Errorf("%v file %q not present\n", ss.logprefix, ss.indexfile)
+		return nil, err
+	}
+	ss.indexfd, err = os.OpenFile(ss.indexfile, os.O_RDONLY, 0666)
+	if err != nil {
+		fmsg := "%v indexfile %q (os.O_RDONLY, 0666): %v\n"
+		log.Errorf(fmsg, ss.logprefix, ss.datafile, err)
 		return nil, err
 	}
 
-	fi, err := ss.indexfd.Stat()
+	var fi os.FileInfo
+
+	fi, err = ss.indexfd.Stat()
 	if err != nil {
 		fmsg := "%v unable to stat %q: %v\n"
 		log.Errorf(fmsg, ss.logprefix, ss.indexfile, err)
@@ -78,22 +96,24 @@ func OpenBubtstore(name, indexfile, datafile string) (ss *Snapshot, err error) {
 	}
 	eof := fi.Size()
 
+	var n int
+
 	markerat := eof - markerBlocksize
-	n, err := ss.indexfd.ReadAt(block, markerat)
+	n, err = ss.indexfd.ReadAt(block, markerat)
 	if err != nil {
 		fmsg := "%v reading %q marker-block: %v\n"
 		log.Errorf(fmsg, ss.logprefix, ss.indexfile, err)
 		return nil, err
 
 	} else if int64(n) != markerBlocksize {
-		err := fmt.Errorf("partial read: %v != %v\n", n, markerBlocksize)
+		err = fmt.Errorf("partial read: %v != %v\n", n, markerBlocksize)
 		log.Errorf("%v %v\n", ss.logprefix, err)
 		return nil, err
 
 	} else {
 		for _, byt := range block {
 			if byt != 0xAB { // TODO: not magic numbers
-				err := fmt.Errorf("invalid marker")
+				err = fmt.Errorf("invalid marker")
 				log.Errorf("%v %v\n", ss.logprefix, err)
 				return nil, err
 			}
@@ -111,7 +131,7 @@ func OpenBubtstore(name, indexfile, datafile string) (ss *Snapshot, err error) {
 		ss.rootblock = int64(binary.BigEndian.Uint64(block[:8]))
 		ss.rootreduce = int64(binary.BigEndian.Uint64(block[8:16]))
 		ln := binary.BigEndian.Uint16(block[16:18])
-		if err := ss.json2setts(block[18 : 18+ln]); err != nil {
+		if err = ss.json2setts(block[18 : 18+ln]); err != nil {
 			panicerr("json2setts: %v", err)
 		}
 	}
@@ -129,8 +149,22 @@ func OpenBubtstore(name, indexfile, datafile string) (ss *Snapshot, err error) {
 		panicerr("%v partial read: %v != %v", ss.logprefix, n, markerBlocksize)
 	} else {
 		ln := binary.BigEndian.Uint16(block[:2])
-		if err := ss.json2stats(block[2 : 2+ln]); err != nil {
+		if err = ss.json2stats(block[2 : 2+ln]); err != nil {
 			panicerr("json2stats: %v", err)
+		}
+	}
+
+	// open datafile, if present
+	if ss.datafile != "" {
+		if _, err = os.Stat(ss.datafile); os.IsNotExist(err) {
+			log.Errorf("%v file %q not present\n", ss.logprefix, ss.datafile)
+			return nil, err
+		}
+		ss.datafd, err = os.OpenFile(ss.datafile, os.O_RDONLY, 0666)
+		if err != nil {
+			fmsg := "%v datafile %q (os.O_RDONLY, 0666): %v\n"
+			log.Errorf(fmsg, ss.logprefix, ss.datafile, err)
+			return nil, err
 		}
 	}
 
@@ -138,6 +172,14 @@ func OpenBubtstore(name, indexfile, datafile string) (ss *Snapshot, err error) {
 
 	openstores[ss.name] = ss
 	return ss, nil
+}
+
+func (ss *Snapshot) Indexfile() string {
+	return ss.indexfile
+}
+
+func (ss *Snapshot) Datafile() string {
+	return ss.datafile
 }
 
 //---- Index{} interface.
@@ -213,19 +255,27 @@ func (ss *Snapshot) Destroy() error {
 	}
 
 	if err := os.Remove(ss.indexfile); err != nil {
-		log.Errorf("%v while removing %q: %v\n", ss.logprefix, ss.indexfile, err)
+		fmsg := "%v while removing indexfile %q: %v\n"
+		log.Errorf(fmsg, ss.logprefix, ss.indexfile, err)
 		return err
 	} else {
-		log.Infof("%v removing %q\n", ss.logprefix, ss.indexfile)
+		log.Infof("%v removing indexfile %q\n", ss.logprefix, ss.indexfile)
 	}
-
 	if ss.datafile != "" {
 		if err := os.Remove(ss.datafile); err != nil {
-			log.Errorf("%v while removing %q: %v\n", ss.logprefix, ss.datafile, err)
+			fmsg := "%v while removing datafile %q: %v\n"
+			log.Errorf(fmsg, ss.logprefix, ss.datafile, err)
 			return err
 		} else {
-			log.Infof("%v removing %q\n", ss.logprefix, ss.datafile)
+			log.Infof("%v removing datafile %q\n", ss.logprefix, ss.datafile)
 		}
+	}
+	if err := os.Remove(ss.path); err != nil {
+		fmsg := "%v while removing path %q: %v\n"
+		log.Errorf(fmsg, ss.logprefix, ss.path, err)
+		return err
+	} else {
+		log.Infof("%v removing path %q\n", ss.logprefix, ss.path)
 	}
 
 	delete(openstores, ss.name)
@@ -444,6 +494,9 @@ func (ss *Snapshot) json2setts(data []byte) error {
 	ss.mreduce = setts.Bool("mreduce")
 	ss.iterpoolsize = setts.Int64("iterpool.size")
 	ss.level = byte(setts.Int64("level"))
+	if !setts.Bool("datafile") {
+		ss.datafile = ""
+	}
 	return nil
 }
 
@@ -515,35 +568,6 @@ func (ss *Snapshot) dumpkeys(fpos int64, prefix string) {
 	case znode:
 		ndblk.dumpkeys(ss, prefix)
 	}
-}
-
-func (ss *Snapshot) openfiles() (err error) {
-	if ss.datafile != "" {
-		if _, err := os.Stat(ss.datafile); os.IsNotExist(err) {
-			log.Errorf("%v file %q not present\n", ss.logprefix, ss.datafile)
-			return err
-		}
-	}
-	if _, err := os.Stat(ss.indexfile); os.IsNotExist(err) {
-		log.Errorf("%v file %q not present\n", ss.logprefix, ss.indexfile)
-		return err
-	}
-
-	if ss.datafile != "" {
-		ss.datafd, err = os.OpenFile(ss.datafile, os.O_RDONLY, 0666)
-		if err != nil {
-			fmsg := "%v datafile %q (os.O_RDONLY, 0666): %v\n"
-			log.Errorf(fmsg, ss.logprefix, ss.datafile, err)
-			return err
-		}
-	}
-	ss.indexfd, err = os.OpenFile(ss.indexfile, os.O_RDONLY, 0666)
-	if err != nil {
-		fmsg := "%v datafile %q (os.O_RDONLY, 0666): %v\n"
-		log.Errorf(fmsg, ss.logprefix, ss.datafile, err)
-		return err
-	}
-	return nil
 }
 
 func (ss *Snapshot) fixrangeargs(lk, hk []byte) ([]byte, []byte) {

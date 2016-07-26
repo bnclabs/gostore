@@ -11,5 +11,6 @@ func DefaultSettings() lib.Settings {
 		"mreduce":       false,
 		"iterpool.size": 8,
 		"level":         1,
+		"datafile":      false,
 	}
 }
