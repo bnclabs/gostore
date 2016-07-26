@@ -703,7 +703,7 @@ func refllrb(count int) *llrb.LLRB {
 			key, value,
 			func(index api.Index, _ int64, newnd, oldnd api.Node) {
 				if oldnd != nil {
-					panic(fmt.Errorf("expected nil"))
+					panic("expected nil")
 				} else if x := index.Count(); x != int64(i+1) {
 					panic(fmt.Errorf("expected %v, got %v", i, x))
 				}

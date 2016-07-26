@@ -88,15 +88,15 @@ func NewBubt(name, path string, setts lib.Settings) *Bubt {
 
 	f.zblocksize = setts.Int64("zblocksize")
 	if f.zblocksize > maxBlock { // 1 TB
-		panicerr("zblocksize %v > %v\n", f.zblocksize, maxBlock)
+		panic(fmt.Errorf("zblocksize %v > %v\n", f.zblocksize, maxBlock))
 	} else if f.zblocksize < minBlock { // 512 byte, HDD sector size.
-		panicerr("zblocksize %v < %v\n", f.zblocksize, minBlock)
+		panic(fmt.Errorf("zblocksize %v < %v\n", f.zblocksize, minBlock))
 	}
 	f.mblocksize = setts.Int64("mblocksize")
 	if f.mblocksize > maxBlock {
-		panicerr("mblocksize %v > %v\n", f.mblocksize, maxBlock)
+		panic(fmt.Errorf("mblocksize %v > %v\n", f.mblocksize, maxBlock))
 	} else if f.mblocksize < minBlock {
-		panicerr("mblocksize %v < %v\n", f.mblocksize, minBlock)
+		panic(fmt.Errorf("mblocksize %v < %v\n", f.mblocksize, minBlock))
 	}
 	f.mreduce = setts.Bool("mreduce")
 	if f.hasdatafile() == false && f.mreduce == true {
@@ -134,13 +134,13 @@ func (f *Bubt) Build(iter api.IndexIterator) {
 		// flush statistics
 		finblock := make([]byte, markerBlocksize)
 		if stats := f.stats2json(); len(stats) > len(finblock) {
-			panicerr("stats %v > %v", len(stats), len(finblock))
+			panic(fmt.Errorf("stats %v > %v", len(stats), len(finblock)))
 
 		} else {
 			binary.BigEndian.PutUint16(finblock[:2], uint16(len(stats)))
 			copy(finblock[2:], stats)
 			if err := f.flusher.writeidx(finblock); err != nil {
-				panicerr("writing stats: %v", err)
+				panic(fmt.Errorf("writing stats: %v", err))
 			}
 		}
 		log.Infof("%v builder writing stat block\n", f.logprefix)
@@ -151,13 +151,13 @@ func (f *Bubt) Build(iter api.IndexIterator) {
 		binary.BigEndian.PutUint64(finblock[:8], uint64(f.rootblock))
 		binary.BigEndian.PutUint64(finblock[8:16], uint64(f.rootreduce))
 		if jsetts := f.setts2json(); len(jsetts) > len(finblock) {
-			panicerr("settings %v > %v", len(jsetts), len(finblock))
+			panic(fmt.Errorf("settings %v > %v", len(jsetts), len(finblock)))
 
 		} else {
 			binary.BigEndian.PutUint16(finblock[16:18], uint16(len(jsetts)))
 			copy(finblock[18:], jsetts)
 			if err := f.flusher.writeidx(finblock); err != nil {
-				panicerr("writing settings: %v", err)
+				panic(fmt.Errorf("writing settings: %v", err))
 			}
 		}
 		log.Infof("%v builder writing settings block\n", f.logprefix)
@@ -171,7 +171,7 @@ func (f *Bubt) Build(iter api.IndexIterator) {
 	for ms, block, fpos, fin = f.buildm(ms, fpos); fin == false; {
 		mblock := f.newmblock()
 		if mblock.insert(block) == false {
-			panicerr("inserting first entry into mblock")
+			panic("inserting first entry into mblock")
 		}
 		ms, block, fpos, fin = f.buildm(prependlevel(ms, mblock), fpos)
 	}
@@ -281,13 +281,14 @@ func (f *Bubt) flush(block blocker, fpos [2]int64) (blocker, [2]int64) {
 			// move forward [2]fpos
 			vpos := fpos[1] + int64(len(blk.dbuffer))
 			if err := f.flusher.writedata(blk.dbuffer); err != nil {
-				panicerr("flushing zblock data: %v", err)
+				panic(fmt.Errorf("flushing zblock data: %v", err))
 			}
 			kpos := fpos[0] + int64(len(blk.kbuffer))
 			if int64(len(blk.kbuffer)) > f.zblocksize {
-				panicerr("zblock exceeds size %v", len(blk.kbuffer), f.zblocksize)
+				fmsg := "zblock exceeds size %v"
+				panic(fmt.Errorf(fmsg, len(blk.kbuffer), f.zblocksize))
 			} else if err := f.flusher.writeidx(blk.kbuffer); err != nil {
-				panicerr("flushing zblock index: %v", err)
+				panic(fmt.Errorf("flushing zblock index: %v", err))
 			}
 			return blk, [2]int64{kpos, vpos}
 		}
@@ -311,13 +312,14 @@ func (f *Bubt) flush(block blocker, fpos [2]int64) (blocker, [2]int64) {
 			// move forward [2]fpos
 			vpos := fpos[1] + int64(len(reducevalue))
 			if err := f.flusher.writedata(reducevalue); err != nil {
-				panicerr("flushing mblock data: %v", err)
+				panic(fmt.Errorf("flushing mblock data: %v", err))
 			}
 			kpos := fpos[0] + int64(len(blk.kbuffer))
 			if int64(len(blk.kbuffer)) > f.zblocksize {
-				panicerr("zblock exceeds size %v", len(blk.kbuffer), f.zblocksize)
+				fmsg := "zblock exceeds size %v"
+				panic(fmt.Errorf(fmsg, len(blk.kbuffer), f.zblocksize))
 			} else if err := f.flusher.writeidx(blk.kbuffer); err != nil {
-				panicerr("flushing mblock index: %v", err)
+				panic(fmt.Errorf("flushing mblock index: %v", err))
 			}
 			return blk, [2]int64{kpos, vpos}
 		}
@@ -363,7 +365,7 @@ func (f *Bubt) setts2json() []byte {
 	}
 	data, err := json.Marshal(setts)
 	if err != nil {
-		panicerr("marshaling settings: %v", err)
+		panic(fmt.Errorf("marshaling settings: %v", err))
 	}
 	return data
 }
@@ -384,7 +386,7 @@ func (f *Bubt) stats2json() []byte {
 	}
 	data, err := json.Marshal(stats)
 	if err != nil {
-		panicerr("marshaling statistics: %v", err)
+		panic(fmt.Errorf("marshaling statistics: %v", err))
 	}
 	return data
 }
@@ -398,7 +400,7 @@ func createfile(name string) *os.File {
 	os.Remove(name)
 	fd, err := os.OpenFile(name, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
-		panicerr("create append file: %v", err)
+		panic(fmt.Errorf("create append file: %v", err))
 	}
 	return fd
 }

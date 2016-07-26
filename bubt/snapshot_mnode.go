@@ -17,7 +17,7 @@ func (m mnode) rangeforward(
 	entries := m.entryslice()
 	switch len(entries) {
 	case 0:
-		panicerr("impossible code path, call the programmer !")
+		panic("impossible code path, call the programmer !")
 
 	default:
 		from = m.searchforward(lkey, entries, cmp[0])
@@ -41,7 +41,7 @@ func (m mnode) searchforward(lkey []byte, entries []byte, cmp int) int32 {
 
 	switch count := len(entries) / 4; count {
 	case 0:
-		panicerr("impossible code path, call the programmer!")
+		panic("impossible code path, call the programmer!")
 
 	case 1:
 		return 0
@@ -65,7 +65,7 @@ func (m mnode) rangebackward(
 	entries := m.entryslice()
 	switch len(entries) {
 	case 0:
-		panicerr("impossible code path, call the programmer !")
+		panic("impossible code path, call the programmer !")
 
 	default:
 		from = m.searchbackward(hkey, entries, cmp[1])
@@ -82,14 +82,14 @@ func (m mnode) rangebackward(
 
 func (m mnode) searchbackward(hkey []byte, entries []byte, cmp int) int32 {
 	if (len(entries) % 4) != 0 {
-		panicerr("unaligned entries slice, call the programmer!")
+		panic("unaligned entries slice, call the programmer!")
 	} else if hkey == nil {
 		return int32(len(entries)/4) - 1
 	}
 
 	switch count := len(entries) / 4; count {
 	case 0:
-		panicerr("impossible code path, call the programmer!")
+		panic("impossible code path, call the programmer!")
 
 	case 1:
 		ekey := m.getentry(0, entries).key()

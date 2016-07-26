@@ -34,14 +34,14 @@ func (z znode) rangeforward(
 
 func (z znode) searchforward(lkey []byte, entries []byte, cmp int) int32 {
 	if (len(entries) % 4) != 0 {
-		panicerr("unaligned entries slice, call the programmer!")
+		panic("unaligned entries slice, call the programmer!")
 	} else if lkey == nil {
 		return 0
 	}
 
 	switch count := len(entries) / 4; count {
 	case 0:
-		panicerr("impossible code path, call the programmer!")
+		panic("impossible code path, call the programmer!")
 
 	case 1:
 		ekey := z.getentry(0, entries).key()
@@ -86,14 +86,14 @@ func (z znode) rangebackward(
 
 func (z znode) searchbackward(hkey []byte, entries []byte, cmp int) int32 {
 	if (len(entries) % 4) != 0 {
-		panicerr("unaligned entries slice, call the programmer!")
+		panic("unaligned entries slice, call the programmer!")
 	} else if hkey == nil {
 		return int32(len(entries)/4) - 1
 	}
 
 	switch count := len(entries) / 4; count {
 	case 0:
-		panicerr("impossible code path, call the programmer!")
+		panic("impossible code path, call the programmer!")
 
 	case 1:
 		ekey := z.getentry(0, entries).key()

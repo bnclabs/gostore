@@ -1,6 +1,7 @@
 package bubt
 
 import "encoding/binary"
+import "fmt"
 
 import "github.com/prataprc/storage.go/api"
 
@@ -74,9 +75,9 @@ func (n *node) Value() (value []byte) {
 	var vbuf [2]byte
 	vpos := int64(binary.BigEndian.Uint64(n.data[start : start+8]))
 	if ln, err := n.ss.datafd.ReadAt(vbuf[:], vpos); err != nil {
-		panicerr("bubt node reading value len: %v", err)
+		panic(fmt.Errorf("bubt node reading value len: %v", err))
 	} else if ln != len(vbuf) {
-		panicerr("bubt node read %v(%v) bytes", ln, len(vbuf))
+		panic(fmt.Errorf("bubt node read %v(%v) bytes", ln, len(vbuf)))
 	}
 	vlen := int64(binary.BigEndian.Uint16(vbuf[:]))
 	if int64(cap(n.value)) < vlen {
@@ -84,9 +85,9 @@ func (n *node) Value() (value []byte) {
 	}
 	n.value = n.value[:vlen]
 	if ln, err := n.ss.datafd.ReadAt(n.value, vpos+2); err != nil {
-		panicerr("bubt node reading value: %v", err)
+		panic(fmt.Errorf("bubt node reading value: %v", err))
 	} else if ln != len(n.value) {
-		panicerr("bubt node read %v(%v) bytes", ln, len(n.value))
+		panic(fmt.Errorf("bubt node read %v(%v) bytes", ln, len(n.value)))
 	}
 	return n.value
 }

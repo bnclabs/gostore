@@ -41,9 +41,9 @@ func (z *zblock) insert(nd api.Node) (ok, fin bool) {
 	if nd == nil {
 		return false, true
 	} else if key, value = nd.Key(), nd.Value(); int64(len(key)) > api.MaxKeymem {
-		panicerr("key cannot exceed %v", api.MaxKeymem)
+		panic(fmt.Errorf("key cannot exceed %v", api.MaxKeymem))
 	} else if int64(len(value)) > api.MaxValmem {
-		panicerr("value cannot exceed %v", api.MaxValmem)
+		panic(fmt.Errorf("value cannot exceed %v", api.MaxValmem))
 	}
 
 	// check whether enough space available in the block.
@@ -100,7 +100,8 @@ func (z *zblock) finalize() {
 	arrayblock := 4 + (len(z.entries) * 4)
 	sz, ln := arrayblock+len(z.kbuffer), len(z.kbuffer)
 	if zblksize := z.f.zblocksize; int64(sz) > zblksize {
-		panicerr("zblock overflow %v > %v, call the programmer!", sz, zblksize)
+		fmsg := "zblock overflow %v > %v, call the programmer!"
+		panic(fmt.Errorf(fmsg, sz, zblksize))
 	}
 
 	z.kbuffer = makespace(z.kbuffer[:z.f.zblocksize], arrayblock, ln)

@@ -124,33 +124,35 @@ func OpenBubtstore(name, path string) (ss *Snapshot, err error) {
 	settsat := markerat - markerBlocksize
 	n, err = ss.indexfd.ReadAt(block, settsat)
 	if err != nil {
-		panicerr("settings ReadAt: %v", err)
+		panic(fmt.Errorf("settings ReadAt: %v", err))
 	} else if int64(n) != markerBlocksize {
-		panicerr("%v partial read: %v != %v", ss.logprefix, n, markerBlocksize)
+		fmsg := "%v partial read: %v != %v"
+		panic(fmt.Errorf(fmsg, ss.logprefix, n, markerBlocksize))
 	} else {
 		ss.rootblock = int64(binary.BigEndian.Uint64(block[:8]))
 		ss.rootreduce = int64(binary.BigEndian.Uint64(block[8:16]))
 		ln := binary.BigEndian.Uint16(block[16:18])
 		if err = ss.json2setts(block[18 : 18+ln]); err != nil {
-			panicerr("json2setts: %v", err)
+			panic(fmt.Errorf("json2setts: %v", err))
 		}
 	}
 	// validate settings block
 	if ss.name != name {
-		panicerr("expected name %v, got %v", ss.name, name)
+		panic(fmt.Errorf("expected name %v, got %v", ss.name, name))
 	}
 
 	// load stats block
 	statat := settsat - markerBlocksize
 	n, err = ss.indexfd.ReadAt(block, statat)
 	if err != nil {
-		panicerr("stats ReadAt: %v", err)
+		panic(fmt.Errorf("stats ReadAt: %v", err))
 	} else if int64(n) != markerBlocksize {
-		panicerr("%v partial read: %v != %v", ss.logprefix, n, markerBlocksize)
+		fmsg := "%v partial read: %v != %v"
+		panic(fmt.Errorf(fmsg, ss.logprefix, n, markerBlocksize))
 	} else {
 		ln := binary.BigEndian.Uint16(block[:2])
 		if err = ss.json2stats(block[2 : 2+ln]); err != nil {
-			panicerr("json2stats: %v", err)
+			panic(fmt.Errorf("json2stats: %v", err))
 		}
 	}
 
@@ -549,9 +551,9 @@ func (ss *Snapshot) readat(fpos int64) (nd interface{}) {
 		nd = znode(data)
 	}
 	if n, err := ss.indexfd.ReadAt(data, vpos); err != nil {
-		panicerr("ReadAt %q: %v", ss.indexfile, err)
+		panic(fmt.Errorf("ReadAt %q: %v", ss.indexfile, err))
 	} else if n != len(data) {
-		panicerr("ReadAt %q : partial read", ss.indexfile)
+		panic(fmt.Errorf("ReadAt %q : partial read", ss.indexfile))
 	}
 	return
 }

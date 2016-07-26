@@ -73,7 +73,8 @@ func (m *mblock) finalize() {
 	arrayblock := 4 + (len(m.entries) * 4)
 	sz, ln := arrayblock+len(m.kbuffer), len(m.kbuffer)
 	if mblksize := m.f.mblocksize; int64(sz) > mblksize {
-		panicerr("mblock overflow %v > %v, call the programmer!", sz, mblksize)
+		fmsg := "mblock overflow %v > %v, call the programmer!"
+		panic(fmt.Errorf(fmsg, sz, mblksize))
 	}
 
 	m.kbuffer = makespace(m.kbuffer[:m.f.mblocksize], arrayblock, ln)
