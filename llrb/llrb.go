@@ -182,7 +182,7 @@ func (llrb *LLRB) RSnapshot(snapch chan api.IndexSnapshot) error {
 // Destroy implement Index{} interface.
 func (llrb *LLRB) Destroy() error {
 	if atomic.LoadInt64(&llrb.activeiter) > 0 {
-		panic("cannot distroy LLRB when iterators are active")
+		return api.ErrorActiveIterators
 	}
 	if llrb.dead == false {
 		if llrb.mvcc.enabled {

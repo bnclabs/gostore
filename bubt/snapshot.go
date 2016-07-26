@@ -55,6 +55,7 @@ func OpenBubtstore(name, path string) (ss *Snapshot, err error) {
 	defer readmu.Unlock()
 
 	if ss, ok = openstores[name]; ok {
+		ss.Refer()
 		return ss, nil
 	}
 
@@ -172,14 +173,19 @@ func OpenBubtstore(name, path string) (ss *Snapshot, err error) {
 
 	ss.iterpool = make(chan *iterator, ss.iterpoolsize)
 
+	log.Infof("%v opening snapshot", ss.logprefix)
+
+	ss.Refer()
 	openstores[ss.name] = ss
 	return ss, nil
 }
 
+// Indexfile return the indexfile backing this snapshot.
 func (ss *Snapshot) Indexfile() string {
 	return ss.indexfile
 }
 
+// Datafile return the datafile backing this snapshot.
 func (ss *Snapshot) Datafile() string {
 	return ss.datafile
 }
@@ -237,9 +243,9 @@ func (ss *Snapshot) Validate() {
 // Destroy implement Index{} interface.
 func (ss *Snapshot) Destroy() error {
 	if atomic.LoadInt64(&ss.n_snapshots) > 0 {
-		panic("Destory(): active snapshots")
+		return api.ErrorActiveSnapshots
 	} else if atomic.LoadInt64(&ss.activeiter) > 0 {
-		panic("Destroy(): active iterators")
+		return api.ErrorActiveIterators
 	}
 
 	readmu.Lock()
@@ -296,10 +302,12 @@ func (ss *Snapshot) Release() {
 
 //---- IndexReader{} interface.
 
+// Has implement IndexReader{} interface.
 func (ss *Snapshot) Has(key []byte) bool {
 	return ss.Get(key, nil)
 }
 
+// Get implement IndexReader{} interface.
 func (ss *Snapshot) Get(key []byte, callb api.NodeCallb) bool {
 	if ss.n_count == 0 {
 		return false
@@ -317,6 +325,7 @@ func (ss *Snapshot) Get(key []byte, callb api.NodeCallb) bool {
 	return rc
 }
 
+// Min implement IndexReader{} interface.
 func (ss *Snapshot) Min(callb api.NodeCallb) bool {
 	if ss.n_count == 0 {
 		return false
@@ -334,6 +343,7 @@ func (ss *Snapshot) Min(callb api.NodeCallb) bool {
 	return rc
 }
 
+// Max implement IndexReader{} interface.
 func (ss *Snapshot) Max(callb api.NodeCallb) bool {
 	if ss.n_count == 0 {
 		return false
@@ -351,6 +361,7 @@ func (ss *Snapshot) Max(callb api.NodeCallb) bool {
 	return rc
 }
 
+// Range implement IndexReader{} interface.
 func (ss *Snapshot) Range(lkey, hkey []byte, incl string, reverse bool, callb api.RangeCallb) {
 	if ss.rootblock < 0 {
 		return
@@ -396,6 +407,7 @@ func (ss *Snapshot) Range(lkey, hkey []byte, incl string, reverse bool, callb ap
 	return
 }
 
+// Iterate implement IndexReader{} interface.
 func (ss *Snapshot) Iterate(lkey, hkey []byte, incl string, r bool) api.IndexIterator {
 	lkey, hkey = ss.fixrangeargs(lkey, hkey)
 	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {

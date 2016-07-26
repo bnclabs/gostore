@@ -57,7 +57,7 @@ func (d *Dict) RSnapshot(snapch chan api.IndexSnapshot) error {
 // Destroy implement api.Index{} interface.
 func (d *Dict) Destroy() error {
 	if atomic.LoadInt64(&d.activeiter) > 0 {
-		panic("cannot distroy Dict when iterators are active")
+		return api.ErrorActiveIterators
 	}
 
 	d.dead = true

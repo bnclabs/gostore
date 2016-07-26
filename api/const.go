@@ -2,6 +2,12 @@
 
 package api
 
+import "errors"
+
+var ErrorActiveSnapshots = errors.New("activesnapshots")
+
+var ErrorActiveIterators = errors.New("activeiterators")
+
 // MinKeymem minimum key size.
 const MinKeymem = int64(32)
 

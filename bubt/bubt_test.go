@@ -41,7 +41,9 @@ func TestEmpty(t *testing.T) {
 	store, err := OpenBubtstore(name, path)
 	if err != nil {
 		t.Fatal(err)
-	} else if err := store.Destroy(); err != nil {
+	}
+	store.Release()
+	if err := store.Destroy(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -112,6 +114,7 @@ func TestMissing(t *testing.T) {
 
 	s.Release()
 
+	store.Release()
 	if err := store.Destroy(); err != nil {
 		t.Fatal(err)
 	} else if _, err := os.Stat(path); err == nil {
@@ -198,6 +201,7 @@ func TestLookup(t *testing.T) {
 			t.Fatal(err)
 		}
 		do(i, llrb, store, refnds)
+		store.Release()
 		if err := store.Destroy(); err != nil {
 			t.Fatal(err)
 		}
@@ -213,6 +217,7 @@ func TestLookup(t *testing.T) {
 			t.Fatal(err)
 		}
 		do(i, llrb, store, refnds)
+		store.Release()
 		if err := store.Destroy(); err != nil {
 			t.Fatal(err)
 		}
@@ -351,6 +356,7 @@ func TestPartialRange(t *testing.T) {
 			}
 		}
 	}
+	store.Release()
 	if err := store.Destroy(); err != nil {
 		t.Fatal(err)
 	}
@@ -410,6 +416,7 @@ func TestRange(t *testing.T) {
 			t.Fatal(err)
 		}
 		do(i, llrb, store, refnds)
+		store.Release()
 		if err := store.Destroy(); err != nil {
 			t.Fatal(err)
 		}
@@ -424,6 +431,7 @@ func TestRange(t *testing.T) {
 			t.Fatal(err)
 		}
 		do(i, llrb, store, refnds)
+		store.Release()
 		if err := store.Destroy(); err != nil {
 			t.Fatal(err)
 		}
@@ -580,6 +588,7 @@ func TestPartialIterate(t *testing.T) {
 			}
 		}
 	}
+	store.Release()
 	if err := store.Destroy(); err != nil {
 		t.Fatal(err)
 	}
@@ -642,6 +651,7 @@ func TestIterate(t *testing.T) {
 			t.Fatal(err)
 		}
 		do(i, llrb, store, refnds)
+		store.Release()
 		if err := store.Destroy(); err != nil {
 			t.Fatal(err)
 		}
@@ -656,6 +666,7 @@ func TestIterate(t *testing.T) {
 			t.Fatal(err)
 		}
 		do(i, llrb, store, refnds)
+		store.Release()
 		if err := store.Destroy(); err != nil {
 			t.Fatal(err)
 		}

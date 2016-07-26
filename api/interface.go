@@ -106,7 +106,7 @@ type Index interface {
 	Validate()
 
 	// Destroy to delete an index and clean up its resources. Calling this
-	// method while keeping references to its resources is not advised.
+	// method while keeping references to its resources will return error.
 	Destroy() error
 
 	IndexReader
