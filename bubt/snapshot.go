@@ -162,6 +162,14 @@ func OpenBubtstore(name, path string) (ss *Snapshot, err error) {
 	return ss, nil
 }
 
+func (ss *Snapshot) Metadata() []byte {
+	return ss.metadata
+}
+
+func (ss *Snapshot) Name() string {
+	return ss.path
+}
+
 // Indexfile return the indexfile backing this snapshot.
 func (ss *Snapshot) Indexfile() string {
 	return ss.indexfile
