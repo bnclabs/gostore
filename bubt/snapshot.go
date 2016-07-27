@@ -56,7 +56,6 @@ func OpenBubtstore(name, path string) (ss *Snapshot, err error) {
 	defer readmu.Unlock()
 
 	if ss, ok = openstores[name]; ok {
-		ss.Refer()
 		return ss, nil
 	}
 
@@ -159,7 +158,6 @@ func OpenBubtstore(name, path string) (ss *Snapshot, err error) {
 
 	log.Infof("%v opening snapshot", ss.logprefix)
 
-	ss.Refer()
 	openstores[ss.name] = ss
 	return ss, nil
 }

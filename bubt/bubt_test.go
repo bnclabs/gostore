@@ -43,7 +43,6 @@ func TestEmpty(t *testing.T) {
 		t.Fatal(err)
 	}
 	if store == nil {
-		store.Release()
 		if err := store.Destroy(); err != nil {
 			t.Fatal(err)
 		}
@@ -116,7 +115,6 @@ func TestMissing(t *testing.T) {
 
 	s.Release()
 
-	store.Release()
 	if err := store.Destroy(); err != nil {
 		t.Fatal(err)
 	} else if _, err := os.Stat(path); err == nil {
@@ -203,7 +201,6 @@ func TestLookup(t *testing.T) {
 			t.Fatal(err)
 		}
 		do(i, llrb, store, refnds)
-		store.Release()
 		if err := store.Destroy(); err != nil {
 			t.Fatal(err)
 		}
@@ -219,7 +216,6 @@ func TestLookup(t *testing.T) {
 			t.Fatal(err)
 		}
 		do(i, llrb, store, refnds)
-		store.Release()
 		if err := store.Destroy(); err != nil {
 			t.Fatal(err)
 		}
@@ -358,7 +354,6 @@ func TestPartialRange(t *testing.T) {
 			}
 		}
 	}
-	store.Release()
 	if err := store.Destroy(); err != nil {
 		t.Fatal(err)
 	}
@@ -392,7 +387,6 @@ func TestRange(t *testing.T) {
 			off--
 			return true
 		})
-
 		s.Release()
 	}
 
@@ -418,7 +412,6 @@ func TestRange(t *testing.T) {
 			t.Fatal(err)
 		}
 		do(i, llrb, store, refnds)
-		store.Release()
 		if err := store.Destroy(); err != nil {
 			t.Fatal(err)
 		}
@@ -433,7 +426,6 @@ func TestRange(t *testing.T) {
 			t.Fatal(err)
 		}
 		do(i, llrb, store, refnds)
-		store.Release()
 		if err := store.Destroy(); err != nil {
 			t.Fatal(err)
 		}
@@ -496,11 +488,16 @@ func TestPartialIterate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	ch := make(chan api.IndexSnapshot, 1)
+	if err := store.RSnapshot(ch); err != nil {
+		t.Fatal(err)
+	}
+	storesnap := <-ch
 
 	// forward range
 	incls := []string{"none", "low", "high", "both"}
-	for i := int64(0); i < store.Count()-1; i = i + 30000 {
-		for j := int64(i); j < store.Count(); j = j + 30000 {
+	for i := int64(0); i < storesnap.Count()-1; i = i + 30000 {
+		for j := int64(i); j < storesnap.Count(); j = j + 30000 {
 			for _, incl := range incls {
 				refkeys, outkeys := []string{}, []string{}
 				lkey, hkey := []byte(keys[i]), []byte(keys[j])
@@ -514,7 +511,7 @@ func TestPartialIterate(t *testing.T) {
 						refkeys = append(refkeys, string(nd.Key()))
 					}
 					iter.Close()
-					iter = store.Iterate(lkey, hkey, incl, false)
+					iter = storesnap.Iterate(lkey, hkey, incl, false)
 					for nd := iter.Next(); nd != nil; nd = iter.Next() {
 						outkeys = append(outkeys, string(nd.Key()))
 					}
@@ -531,7 +528,7 @@ func TestPartialIterate(t *testing.T) {
 						refkeys = append(refkeys, string(nd.Key()))
 					}
 					iter.Close()
-					iter = store.Iterate(lkey, hkey, incl, false)
+					iter = storesnap.Iterate(lkey, hkey, incl, false)
 					for nd := iter.Next(); nd != nil; nd = iter.Next() {
 						outkeys = append(outkeys, string(nd.Key()))
 					}
@@ -546,8 +543,8 @@ func TestPartialIterate(t *testing.T) {
 	}
 
 	// backward range
-	for i := int64(0); i < store.Count()-1; i = i + 30000 {
-		for j := int64(i); j < store.Count(); j = j + 30000 {
+	for i := int64(0); i < storesnap.Count()-1; i = i + 30000 {
+		for j := int64(i); j < storesnap.Count(); j = j + 30000 {
 			for _, incl := range incls {
 				refkeys, outkeys := []string{}, []string{}
 				lkey, hkey := []byte(keys[i]), []byte(keys[j])
@@ -560,7 +557,7 @@ func TestPartialIterate(t *testing.T) {
 						refkeys = append(refkeys, string(nd.Key()))
 					}
 					iter.Close()
-					iter = store.Iterate(lkey, hkey, incl, true)
+					iter = storesnap.Iterate(lkey, hkey, incl, true)
 					for nd := iter.Next(); nd != nil; nd = iter.Next() {
 						outkeys = append(outkeys, string(nd.Key()))
 					}
@@ -577,7 +574,7 @@ func TestPartialIterate(t *testing.T) {
 						refkeys = append(refkeys, string(nd.Key()))
 					}
 					iter.Close()
-					iter = store.Iterate(lkey, hkey, incl, true)
+					iter = storesnap.Iterate(lkey, hkey, incl, true)
 					for nd := iter.Next(); nd != nil; nd = iter.Next() {
 						outkeys = append(outkeys, string(nd.Key()))
 					}
@@ -590,7 +587,7 @@ func TestPartialIterate(t *testing.T) {
 			}
 		}
 	}
-	store.Release()
+	storesnap.Release()
 	if err := store.Destroy(); err != nil {
 		t.Fatal(err)
 	}
@@ -653,7 +650,6 @@ func TestIterate(t *testing.T) {
 			t.Fatal(err)
 		}
 		do(i, llrb, store, refnds)
-		store.Release()
 		if err := store.Destroy(); err != nil {
 			t.Fatal(err)
 		}
@@ -668,7 +664,6 @@ func TestIterate(t *testing.T) {
 			t.Fatal(err)
 		}
 		do(i, llrb, store, refnds)
-		store.Release()
 		if err := store.Destroy(); err != nil {
 			t.Fatal(err)
 		}
