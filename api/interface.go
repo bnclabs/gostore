@@ -17,9 +17,6 @@ type UpsertCallback func(index Index, offset int64, newnd, oldnd Node)
 // NodeCallb callback from Get,Min,Max API.
 type NodeCallb func(nd Node) bool
 
-// RangeCallb callback from Range API.
-type RangeCallb func(nd Node) bool
-
 // Node interface methods to access node attributes.
 type Node interface {
 	NodeSetter
@@ -159,7 +156,7 @@ type IndexReader interface {
 	//	"low"  - include lowkey but ignore highkey
 	//	"high" - ignore lowkey but include highkey
 	//	"both" - include both lowkey and highkey
-	Range(lowkey, highkey []byte, incl string, reverse bool, iter RangeCallb)
+	Range(lowkey, highkey []byte, incl string, reverse bool, iter NodeCallb)
 
 	// Iterate over entries between lowkey and highkey
 	// incl,

@@ -286,7 +286,7 @@ func (snapshot *LLRBSnapshot) max() api.Node {
 }
 
 // Range implement IndexReader{} interface.
-func (snapshot *LLRBSnapshot) Range(lkey, hkey []byte, incl string, reverse bool, iter api.RangeCallb) {
+func (snapshot *LLRBSnapshot) Range(lkey, hkey []byte, incl string, reverse bool, iter api.NodeCallb) {
 	lkey, hkey = snapshot.llrb.fixrangeargs(lkey, hkey)
 	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
 		if incl == "none" {

@@ -82,7 +82,7 @@ func (d *DictSnapshot) Max(callb api.NodeCallb) bool {
 }
 
 // Range implement IndexReader{} interface.
-func (d *DictSnapshot) Range(lk, hk []byte, incl string, reverse bool, iter api.RangeCallb) {
+func (d *DictSnapshot) Range(lk, hk []byte, incl string, reverse bool, iter api.NodeCallb) {
 	lk, hk = d.fixrangeargs(lk, hk)
 	if reverse {
 		d.rangebackward(lk, hk, incl, iter)

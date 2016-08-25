@@ -73,7 +73,7 @@ func OpenBubtstore(name, path string) (ss *Snapshot, err error) {
 		}
 	}()
 
-	ss.logprefix = fmt.Sprintf("[BUBT-%s]", name)
+	ss.logprefix = fmt.Sprintf("BUBT [%s]", name)
 
 	// open indexfile
 	if _, err = os.Stat(ss.indexfile); os.IsNotExist(err) {
@@ -359,7 +359,7 @@ func (ss *Snapshot) Max(callb api.NodeCallb) bool {
 }
 
 // Range implement IndexReader{} interface.
-func (ss *Snapshot) Range(lkey, hkey []byte, incl string, reverse bool, callb api.RangeCallb) {
+func (ss *Snapshot) Range(lkey, hkey []byte, incl string, reverse bool, callb api.NodeCallb) {
 	if ss.rootblock < 0 {
 		return
 	}
@@ -520,7 +520,7 @@ func (ss *Snapshot) json2stats(data []byte) error {
 }
 
 func (ss *Snapshot) rangeforward(
-	lkey, hkey []byte, fpos int64, cmp [2]int, callb api.RangeCallb) bool {
+	lkey, hkey []byte, fpos int64, cmp [2]int, callb api.NodeCallb) bool {
 
 	switch ndblk := ss.readat(fpos).(type) {
 	case mnode:
@@ -535,7 +535,7 @@ func (ss *Snapshot) rangeforward(
 }
 
 func (ss *Snapshot) rangebackward(
-	lkey, hkey []byte, fpos int64, cmp [2]int, callb api.RangeCallb) bool {
+	lkey, hkey []byte, fpos int64, cmp [2]int, callb api.NodeCallb) bool {
 
 	switch ndblk := ss.readat(fpos).(type) {
 	case mnode:

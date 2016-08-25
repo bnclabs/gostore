@@ -11,7 +11,7 @@ type znode []byte
 
 func (z znode) rangeforward(
 	ss *Snapshot,
-	lkey, hkey []byte, fpos int64, cmp [2]int, callb api.RangeCallb) bool {
+	lkey, hkey []byte, fpos int64, cmp [2]int, callb api.NodeCallb) bool {
 
 	entries := z.entryslice()
 	from := z.searchforward(lkey, entries, cmp[0])
@@ -63,7 +63,7 @@ func (z znode) searchforward(lkey []byte, entries []byte, cmp int) int32 {
 
 func (z znode) rangebackward(
 	ss *Snapshot,
-	lkey, hkey []byte, fpos int64, cmp [2]int, callb api.RangeCallb) bool {
+	lkey, hkey []byte, fpos int64, cmp [2]int, callb api.NodeCallb) bool {
 
 	entries := z.entryslice()
 	from := z.searchbackward(hkey, entries, cmp[1])

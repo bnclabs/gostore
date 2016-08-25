@@ -10,7 +10,7 @@ var _ = fmt.Sprintf("dummy")
 type mnode []byte
 
 func (m mnode) rangeforward(
-	ss *Snapshot, lkey, hkey []byte, cmp [2]int, callb api.RangeCallb) bool {
+	ss *Snapshot, lkey, hkey []byte, cmp [2]int, callb api.NodeCallb) bool {
 
 	var from int32
 
@@ -58,7 +58,7 @@ func (m mnode) searchforward(lkey []byte, entries []byte, cmp int) int32 {
 }
 
 func (m mnode) rangebackward(
-	ss *Snapshot, lkey, hkey []byte, cmp [2]int, callb api.RangeCallb) bool {
+	ss *Snapshot, lkey, hkey []byte, cmp [2]int, callb api.NodeCallb) bool {
 
 	var from int32
 

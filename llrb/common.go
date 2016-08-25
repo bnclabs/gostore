@@ -11,7 +11,7 @@ import "github.com/prataprc/storage.go/api"
 import "github.com/prataprc/storage.go/lib"
 
 // low <= (keys) <= high
-func (llrb *LLRB) rangehele(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) bool {
+func (llrb *LLRB) rangehele(nd *Llrbnode, lk, hk []byte, iter api.NodeCallb) bool {
 
 	if nd == nil {
 		return true
@@ -32,7 +32,7 @@ func (llrb *LLRB) rangehele(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) bo
 }
 
 // low <= (keys) < hk
-func (llrb *LLRB) rangehelt(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) bool {
+func (llrb *LLRB) rangehelt(nd *Llrbnode, lk, hk []byte, iter api.NodeCallb) bool {
 
 	if nd == nil {
 		return true
@@ -53,7 +53,7 @@ func (llrb *LLRB) rangehelt(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) bo
 }
 
 // low < (keys) <= hk
-func (llrb *LLRB) rangehtle(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) bool {
+func (llrb *LLRB) rangehtle(nd *Llrbnode, lk, hk []byte, iter api.NodeCallb) bool {
 	if nd == nil {
 		return true
 	}
@@ -73,7 +73,7 @@ func (llrb *LLRB) rangehtle(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) bo
 }
 
 // low < (keys) < hk
-func (llrb *LLRB) rangehtlt(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) bool {
+func (llrb *LLRB) rangehtlt(nd *Llrbnode, lk, hk []byte, iter api.NodeCallb) bool {
 	if nd == nil {
 		return true
 	}
@@ -93,7 +93,7 @@ func (llrb *LLRB) rangehtlt(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) bo
 }
 
 // high >= (keys) >= low
-func (llrb *LLRB) rvrslehe(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) bool {
+func (llrb *LLRB) rvrslehe(nd *Llrbnode, lk, hk []byte, iter api.NodeCallb) bool {
 	if nd == nil {
 		return true
 	}
@@ -113,7 +113,7 @@ func (llrb *LLRB) rvrslehe(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) boo
 }
 
 // high >= (keys) > low
-func (llrb *LLRB) rvrsleht(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) bool {
+func (llrb *LLRB) rvrsleht(nd *Llrbnode, lk, hk []byte, iter api.NodeCallb) bool {
 	if nd == nil {
 		return true
 	}
@@ -133,7 +133,7 @@ func (llrb *LLRB) rvrsleht(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) boo
 }
 
 // high > (keys) >= low
-func (llrb *LLRB) rvrslthe(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) bool {
+func (llrb *LLRB) rvrslthe(nd *Llrbnode, lk, hk []byte, iter api.NodeCallb) bool {
 	if nd == nil {
 		return true
 	}
@@ -153,7 +153,7 @@ func (llrb *LLRB) rvrslthe(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) boo
 }
 
 // high > (keys) > low
-func (llrb *LLRB) rvrsltht(nd *Llrbnode, lk, hk []byte, iter api.RangeCallb) bool {
+func (llrb *LLRB) rvrsltht(nd *Llrbnode, lk, hk []byte, iter api.NodeCallb) bool {
 	if nd == nil {
 		return true
 	}

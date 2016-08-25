@@ -349,7 +349,7 @@ func (llrb *LLRB) max() api.Node {
 }
 
 // Range from lkey to hkey, incl can be "both", "low", "high", "none"
-func (llrb *LLRB) Range(lkey, hkey []byte, incl string, reverse bool, iter api.RangeCallb) {
+func (llrb *LLRB) Range(lkey, hkey []byte, incl string, reverse bool, iter api.NodeCallb) {
 	if llrb.mvcc.enabled {
 		panic("Range(): mvcc enabled, use snapshots for reading")
 	}

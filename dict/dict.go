@@ -148,13 +148,13 @@ func (d *Dict) Max(callb api.NodeCallb) bool {
 }
 
 // Range implement IndexReader{} interface.
-func (d *Dict) Range(lk, hk []byte, incl string, reverse bool, iter api.RangeCallb) {
+func (d *Dict) Range(lk, hk []byte, incl string, reverse bool, iter api.NodeCallb) {
 	lk, hk = d.fixrangeargs(lk, hk)
 	d.sorted()
 	d.rangeover(lk, hk, incl, reverse, iter)
 }
 
-func (d *Dict) rangeover(lk, hk []byte, incl string, reverse bool, iter api.RangeCallb) {
+func (d *Dict) rangeover(lk, hk []byte, incl string, reverse bool, iter api.NodeCallb) {
 	if reverse {
 		d.rangebackward(lk, hk, incl, iter)
 		return
@@ -162,7 +162,7 @@ func (d *Dict) rangeover(lk, hk []byte, incl string, reverse bool, iter api.Rang
 	d.rangeforward(lk, hk, incl, iter)
 }
 
-func (d *Dict) rangeforward(lk, hk []byte, incl string, iter api.RangeCallb) {
+func (d *Dict) rangeforward(lk, hk []byte, incl string, iter api.NodeCallb) {
 	hashks := d.hashks
 	if lk != nil && hk != nil && bytes.Compare(lk, hk) == 0 {
 		if incl == "none" {
@@ -204,7 +204,7 @@ func (d *Dict) rangeforward(lk, hk []byte, incl string, iter api.RangeCallb) {
 	}
 }
 
-func (d *Dict) rangebackward(lk, hk []byte, incl string, iter api.RangeCallb) {
+func (d *Dict) rangebackward(lk, hk []byte, incl string, iter api.NodeCallb) {
 	hashks := d.hashks
 	if lk != nil && hk != nil && bytes.Compare(lk, hk) == 0 {
 		if incl == "none" {
