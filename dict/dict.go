@@ -312,24 +312,30 @@ func (d *Dict) Upsert(key, value []byte, callb api.NodeCallb) error {
 	return nil
 }
 
-// UpsertMany implement IndexWriter{} interface.
-func (d *Dict) UpsertMany(keys, values [][]byte, callb api.NodeCallb) error {
-	for i, key := range keys {
-		var value []byte
-		if len(values) > 0 {
-			value = values[i]
-		}
-		newnd := newdictnode(key, value)
-		hashv := crc64.Checksum(key, crcisotab)
-		oldnd, ok := d.dict[hashv]
+// Mutations implement IndexWriter{} interface.
+func (d *Dict) Mutations(cmds []byte, keys, values [][]byte, callb api.NodeCallb) error {
+	var i int
+	var cmd byte
+
+	localfn := func(index api.Index, _ int64, newnd, oldnd api.Node) bool {
 		if callb != nil {
-			if ok == false {
-				callb(d, int64(i), newnd, nil)
-			} else {
-				callb(d, int64(i), newnd, oldnd)
-			}
+			callb(index, int64(i), newnd, oldnd)
 		}
-		d.dict[hashv] = newnd
+		return false
+	}
+
+	for i, cmd = range cmds {
+		key, value := keys[i], values[i]
+		switch cmd {
+		case api.UpsertCmd:
+			d.Upsert(key, value, localfn)
+		case api.DelminCmd:
+			d.DeleteMin(localfn)
+		case api.DelmaxCmd:
+			d.DeleteMax(localfn)
+		case api.DeleteCmd:
+			d.Delete(key, localfn)
+		}
 	}
 	return nil
 }

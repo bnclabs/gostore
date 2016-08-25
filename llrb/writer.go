@@ -46,7 +46,7 @@ func (llrb *LLRB) spawnwriter() *LLRBWriter {
 const (
 	// op commands
 	cmdLlrbWriterUpsert byte = iota + 1
-	cmdLlrbWriterUpsertMany
+	cmdLlrbWriterMutations
 	cmdLlrbWriterDeleteMin
 	cmdLlrbWriterDeleteMax
 	cmdLlrbWriterDelete
@@ -68,9 +68,11 @@ func (writer *LLRBWriter) wupsert(key, value []byte, callb api.NodeCallb) error 
 	return err
 }
 
-func (writer *LLRBWriter) wupsertmany(keys, values [][]byte, callb api.NodeCallb) error {
+func (writer *LLRBWriter) wmutations(cmds []byte, keys, values [][]byte, callb api.NodeCallb) error {
 	respch := make(chan []interface{}, 0)
-	cmd := []interface{}{cmdLlrbWriterUpsertMany, keys, values, callb, respch}
+	cmd := []interface{}{
+		cmdLlrbWriterMutations, cmds, keys, values, callb, respch,
+	}
 	_, err := lib.FailsafeRequest(writer.reqch, respch, cmd, writer.finch)
 	return err
 }
@@ -209,18 +211,19 @@ loop:
 			reclaimNodes("upsert", reclaim)
 			close(respch)
 
-		case cmdLlrbWriterUpsertMany:
-			keys, values := msg[1].([][]byte), msg[2].([][]byte)
-			callb := msg[3].(api.NodeCallb)
-			respch := msg[4].(chan []interface{})
+		case cmdLlrbWriterMutations:
+			cmds := msg[1].([]byte)
+			keys, values := msg[2].([][]byte), msg[3].([][]byte)
+			callb := msg[4].(api.NodeCallb)
+			respch := msg[5].(chan []interface{})
 
-			reclaim = writer.mvccupsertmany(
-				keys, values, callb, reclaim,
+			reclaim = writer.mvccmutations(
+				cmds, keys, values, callb, reclaim,
 				func(reclaim []*Llrbnode) []*Llrbnode {
-					reclaimNodes("upmany", reclaim)
+					reclaimNodes("mutations", reclaim)
 					return reclaim[:0]
 				})
-			reclaimNodes("upmany", reclaim)
+			reclaimNodes("mutations", reclaim)
 			close(respch)
 
 		case cmdLlrbWriterDeleteMin:
@@ -326,34 +329,37 @@ func (writer *LLRBWriter) mvccupsert(
 	return reclaim
 }
 
-func (writer *LLRBWriter) mvccupsertmany(
-	keys, values [][]byte, callb api.NodeCallb,
+func (writer *LLRBWriter) mvccmutations(
+	cmds []byte, keys, values [][]byte, callb api.NodeCallb,
 	reclaim []*Llrbnode, rfn func([]*Llrbnode) []*Llrbnode) []*Llrbnode {
 
-	var root, newnd, oldnd *Llrbnode
+	var i int
+	var cmd byte
 
-	llrb := writer.llrb
-	llrb.mvcc.h_versions.Add(llrb.mvcc.n_activess)
-
-	atomic.AddInt64(&llrb.mvcc.ismut, 1)
-
-	for i, k := range keys {
-		var v []byte
-		if len(values) > 0 {
-			v = values[i]
-		}
-		root, newnd, oldnd, reclaim = writer.upsert(llrb.root, 1, k, v, reclaim)
-		root.metadata().setblack()
-		llrb.root = root
-		llrb.upsertcounts(k, v, oldnd)
+	localfn := func(index api.Index, _ int64, newnd, oldnd api.Node) bool {
 		if callb != nil {
-			callb(llrb, int64(i), llndornil(newnd), llndornil(oldnd))
+			callb(index, int64(i), newnd, oldnd)
 		}
-		newnd.metadata().cleardirty()
-		reclaim = rfn(reclaim)
+		return false
 	}
 
-	atomic.AddInt64(&llrb.mvcc.ismut, -1)
+	for i, cmd = range cmds {
+		k, v := keys[i], values[i]
+		switch cmd {
+		case api.UpsertCmd:
+			reclaim = writer.mvccupsert(k, v, localfn, reclaim)
+			reclaim = rfn(reclaim)
+		case api.DelminCmd:
+			reclaim = writer.mvccdelmin(localfn, reclaim)
+			reclaim = rfn(reclaim)
+		case api.DelmaxCmd:
+			reclaim = writer.mvccdelmax(localfn, reclaim)
+			reclaim = rfn(reclaim)
+		case api.DeleteCmd:
+			reclaim = writer.mvccdelete(k, localfn, reclaim)
+			reclaim = rfn(reclaim)
+		}
+	}
 	return reclaim
 }
 

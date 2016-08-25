@@ -117,11 +117,11 @@ func NewLLRB(name string, setts lib.Settings) *LLRB {
 		llrb.mvcc.reclaim = make([]*Llrbnode, 0, 64)
 		llrb.mvcc.h_bulkfree = lib.NewhistorgramInt64(200000, 500000, 100000)
 		llrb.mvcc.h_reclaims = map[string]*lib.HistogramInt64{
-			"upsert": lib.NewhistorgramInt64(4, 1024, 4),
-			"upmany": lib.NewhistorgramInt64(4, 1024, 4),
-			"delmin": lib.NewhistorgramInt64(4, 1024, 4),
-			"delmax": lib.NewhistorgramInt64(4, 1024, 4),
-			"delete": lib.NewhistorgramInt64(4, 1024, 4),
+			"upsert":    lib.NewhistorgramInt64(4, 1024, 4),
+			"mutations": lib.NewhistorgramInt64(4, 1024, 4),
+			"delmin":    lib.NewhistorgramInt64(4, 1024, 4),
+			"delmax":    lib.NewhistorgramInt64(4, 1024, 4),
+			"delete":    lib.NewhistorgramInt64(4, 1024, 4),
 		}
 		llrb.mvcc.h_versions = lib.NewhistorgramInt64(0, 32, 1)
 		llrb.spawnwriter()
@@ -480,33 +480,35 @@ func (llrb *LLRB) Upsert(key, value []byte, callb api.NodeCallb) error {
 	return nil
 }
 
-// UpsertMany implement IndexWriter{} interface.
-func (llrb *LLRB) UpsertMany(keys, values [][]byte, callb api.NodeCallb) error {
+// Mutations implement IndexWriter{} interface.
+func (llrb *LLRB) Mutations(cmds []byte, keys, values [][]byte, callb api.NodeCallb) error {
 	if llrb.mvcc.enabled {
-		return llrb.mvcc.writer.wupsertmany(keys, values, callb)
+		return llrb.mvcc.writer.wmutations(cmds, keys, values, callb)
 	}
 
-	llrb.rw.Lock()
+	var i int
+	var cmd byte
 
-	for i, key := range keys {
-		var value []byte
-		value = nil
-		if len(values) > 0 {
-			value = values[i]
-		}
-		root, newnd, oldnd := llrb.upsert(llrb.root, 1 /*depth*/, key, value)
-		root.metadata().setblack()
-		llrb.root = root
-		llrb.upsertcounts(key, value, oldnd)
-
+	localfn := func(index api.Index, _ int64, newnd, oldnd api.Node) bool {
 		if callb != nil {
-			callb(llrb, int64(i), llndornil(newnd), llndornil(oldnd))
+			callb(index, int64(i), newnd, oldnd)
 		}
-		newnd.metadata().cleardirty()
-		llrb.freenode(oldnd)
+		return false
 	}
 
-	llrb.rw.Unlock()
+	for i, cmd = range cmds {
+		key, value := keys[i], values[i]
+		switch cmd {
+		case api.UpsertCmd:
+			llrb.Upsert(key, value, localfn)
+		case api.DelminCmd:
+			llrb.DeleteMin(localfn)
+		case api.DelmaxCmd:
+			llrb.DeleteMax(localfn)
+		case api.DeleteCmd:
+			llrb.Delete(key, localfn)
+		}
+	}
 	return nil
 }
 

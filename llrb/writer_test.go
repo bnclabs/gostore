@@ -1500,13 +1500,14 @@ func makellrbmvcc(
 	}
 	// inserts
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(0x12345678)
-	keys, values := make([][]byte, 0), make([][]byte, 0)
+	cmds, keys, values := make([]byte, 0), make([][]byte, 0), make([][]byte, 0)
 	for _, kv := range inserts {
+		cmds = append(cmds, api.UpsertCmd)
 		keys = append(keys, kv[0])
 		values = append(values, kv[1])
 	}
-	llrb.UpsertMany(
-		keys, values,
+	llrb.Mutations(
+		cmds, keys, values,
 		func(index api.Index, i int64, newnd, oldnd api.Node) bool {
 			if oldnd != nil {
 				t.Errorf("expected old Llrbnode as nil")

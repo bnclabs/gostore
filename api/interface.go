@@ -4,11 +4,18 @@ package api
 
 import "unsafe"
 
+const (
+	UpsertCmd byte = iota + 1
+	DelminCmd
+	DelmaxCmd
+	DeleteCmd
+)
+
 // NodeCallb callback from IndexReader and IndexWriter.
 // * Don't keep any reference to newnd and oldnd:
 // * oldnd can only be read.
 // * newnd can be read or, for Upsert calls, updated.
-// * Other than UpsertMany and Range API, `i` will always be ZERO.
+// * Other than Mutations and Range API, `i` will always be ZERO.
 // * for IndexReader API, newnd and oldnd will be SAME.
 // * for Delete APIs, newnd and oldnd will be SAME and point to DELETED node.
 type NodeCallb func(index Index, i int64, newnd, oldnd Node) bool
@@ -178,9 +185,6 @@ type IndexWriter interface {
 	// Upsert a key/value pair.
 	Upsert(key, value []byte, callb NodeCallb) error
 
-	// UpsertMany upsert one or more key/value pairs.
-	UpsertMany(keys, values [][]byte, callb NodeCallb) error
-
 	// DeleteMin delete the last entry in the index.
 	DeleteMin(callb NodeCallb) error
 
@@ -189,6 +193,9 @@ type IndexWriter interface {
 
 	// Delete entry specified by key.
 	Delete(key []byte, callb NodeCallb) error
+
+	// Mutations upsert one or more key/value pairs.
+	Mutations(cmds []byte, keys, values [][]byte, callb NodeCallb) error
 }
 
 // Mallocer interface for custom memory management.

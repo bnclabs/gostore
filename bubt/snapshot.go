@@ -468,9 +468,9 @@ func (ss *Snapshot) Upsert(key, value []byte, callb api.NodeCallb) error {
 	panic("IndexWriter.Upsert() not implemented")
 }
 
-// UpsertMany IndexWriter{} method, will panic if called.
-func (ss *Snapshot) UpsertMany(keys, values [][]byte, callb api.NodeCallb) error {
-	panic("IndexWriter.UpsertMany() not implemented")
+// Mutations IndexWriter{} method, will panic if called.
+func (ss *Snapshot) Mutations(_ []byte, _, _ [][]byte, _ api.NodeCallb) error {
+	panic("IndexWriter.Mutations() not implemented")
 }
 
 // DeleteMin IndexWriter{} method, will panic if called.
