@@ -61,39 +61,35 @@ const (
 	cmdLlrbWriterLog
 )
 
-func (writer *LLRBWriter) wupsert(
-	key, value []byte, callb api.UpsertCallback) error {
-
+func (writer *LLRBWriter) wupsert(key, value []byte, callb api.NodeCallb) error {
 	respch := make(chan []interface{}, 0)
 	cmd := []interface{}{cmdLlrbWriterUpsert, key, value, callb, respch}
 	_, err := lib.FailsafeRequest(writer.reqch, respch, cmd, writer.finch)
 	return err
 }
 
-func (writer *LLRBWriter) wupsertmany(
-	keys, values [][]byte, callb api.UpsertCallback) error {
-
+func (writer *LLRBWriter) wupsertmany(keys, values [][]byte, callb api.NodeCallb) error {
 	respch := make(chan []interface{}, 0)
 	cmd := []interface{}{cmdLlrbWriterUpsertMany, keys, values, callb, respch}
 	_, err := lib.FailsafeRequest(writer.reqch, respch, cmd, writer.finch)
 	return err
 }
 
-func (writer *LLRBWriter) wdeleteMin(callb api.DeleteCallback) error {
+func (writer *LLRBWriter) wdeleteMin(callb api.NodeCallb) error {
 	respch := make(chan []interface{}, 0)
 	cmd := []interface{}{cmdLlrbWriterDeleteMin, callb, respch}
 	_, err := lib.FailsafeRequest(writer.reqch, respch, cmd, writer.finch)
 	return err
 }
 
-func (writer *LLRBWriter) wdeleteMax(callb api.DeleteCallback) error {
+func (writer *LLRBWriter) wdeleteMax(callb api.NodeCallb) error {
 	respch := make(chan []interface{}, 0)
 	cmd := []interface{}{cmdLlrbWriterDeleteMax, callb, respch}
 	_, err := lib.FailsafeRequest(writer.reqch, respch, cmd, writer.finch)
 	return err
 }
 
-func (writer *LLRBWriter) wdelete(key []byte, callb api.DeleteCallback) error {
+func (writer *LLRBWriter) wdelete(key []byte, callb api.NodeCallb) error {
 	respch := make(chan []interface{}, 0)
 	cmd := []interface{}{cmdLlrbWriterDelete, key, callb, respch}
 	_, err := lib.FailsafeRequest(writer.reqch, respch, cmd, writer.finch)
@@ -206,7 +202,7 @@ loop:
 		switch msg[0].(byte) {
 		case cmdLlrbWriterUpsert:
 			key, value := msg[1].([]byte), msg[2].([]byte)
-			callb := msg[3].(api.UpsertCallback)
+			callb := msg[3].(api.NodeCallb)
 			respch := msg[4].(chan []interface{})
 
 			reclaim = writer.mvccupsert(key, value, callb, reclaim)
@@ -215,7 +211,7 @@ loop:
 
 		case cmdLlrbWriterUpsertMany:
 			keys, values := msg[1].([][]byte), msg[2].([][]byte)
-			callb := msg[3].(api.UpsertCallback)
+			callb := msg[3].(api.NodeCallb)
 			respch := msg[4].(chan []interface{})
 
 			reclaim = writer.mvccupsertmany(
@@ -228,7 +224,7 @@ loop:
 			close(respch)
 
 		case cmdLlrbWriterDeleteMin:
-			callb := msg[1].(api.DeleteCallback)
+			callb := msg[1].(api.NodeCallb)
 			respch := msg[2].(chan []interface{})
 
 			reclaim = writer.mvccdelmin(callb, reclaim)
@@ -236,7 +232,7 @@ loop:
 			close(respch)
 
 		case cmdLlrbWriterDeleteMax:
-			callb := msg[1].(api.DeleteCallback)
+			callb := msg[1].(api.NodeCallb)
 			respch := msg[2].(chan []interface{})
 
 			reclaim = writer.mvccdelmax(callb, reclaim)
@@ -244,7 +240,7 @@ loop:
 			close(respch)
 
 		case cmdLlrbWriterDelete:
-			key, callb := msg[1].([]byte), msg[2].(api.DeleteCallback)
+			key, callb := msg[1].([]byte), msg[2].(api.NodeCallb)
 			respch := msg[3].(chan []interface{})
 
 			reclaim = writer.mvccdelete(key, callb, reclaim)
@@ -308,8 +304,7 @@ loop:
 }
 
 func (writer *LLRBWriter) mvccupsert(
-	key, value []byte, callb api.UpsertCallback,
-	reclaim []*Llrbnode) []*Llrbnode {
+	key, value []byte, callb api.NodeCallb, reclaim []*Llrbnode) []*Llrbnode {
 
 	var root, newnd, oldnd *Llrbnode
 
@@ -332,7 +327,7 @@ func (writer *LLRBWriter) mvccupsert(
 }
 
 func (writer *LLRBWriter) mvccupsertmany(
-	keys, values [][]byte, callb api.UpsertCallback,
+	keys, values [][]byte, callb api.NodeCallb,
 	reclaim []*Llrbnode, rfn func([]*Llrbnode) []*Llrbnode) []*Llrbnode {
 
 	var root, newnd, oldnd *Llrbnode
@@ -412,7 +407,7 @@ func (writer *LLRBWriter) upsert(
 }
 
 func (writer *LLRBWriter) mvccdelmin(
-	callb api.DeleteCallback, reclaim []*Llrbnode) []*Llrbnode {
+	callb api.NodeCallb, reclaim []*Llrbnode) []*Llrbnode {
 
 	var root, deleted *Llrbnode
 
@@ -428,7 +423,8 @@ func (writer *LLRBWriter) mvccdelmin(
 	llrb.root = root
 	llrb.delcount(deleted)
 	if callb != nil {
-		callb(llrb, llndornil(deleted))
+		nd := llndornil(deleted)
+		callb(llrb, 0, nd, nd)
 	}
 
 	atomic.AddInt64(&llrb.mvcc.ismut, -1)
@@ -464,7 +460,7 @@ func (writer *LLRBWriter) deletemin(
 }
 
 func (writer *LLRBWriter) mvccdelmax(
-	callb api.DeleteCallback, reclaim []*Llrbnode) []*Llrbnode {
+	callb api.NodeCallb, reclaim []*Llrbnode) []*Llrbnode {
 
 	var root, deleted *Llrbnode
 
@@ -480,7 +476,8 @@ func (writer *LLRBWriter) mvccdelmax(
 	llrb.root = root
 	llrb.delcount(deleted)
 	if callb != nil {
-		callb(llrb, llndornil(deleted))
+		nd := llndornil(deleted)
+		callb(llrb, 0, nd, nd)
 	}
 
 	atomic.AddInt64(&llrb.mvcc.ismut, -1)
@@ -518,7 +515,7 @@ func (writer *LLRBWriter) deletemax(
 }
 
 func (writer *LLRBWriter) mvccdelete(
-	key []byte, callb api.DeleteCallback, reclaim []*Llrbnode) []*Llrbnode {
+	key []byte, callb api.NodeCallb, reclaim []*Llrbnode) []*Llrbnode {
 
 	var root, deleted *Llrbnode
 
@@ -535,7 +532,8 @@ func (writer *LLRBWriter) mvccdelete(
 	llrb.root = root
 	llrb.delcount(deleted)
 	if callb != nil {
-		callb(llrb, llndornil(deleted))
+		nd := llndornil(deleted)
+		callb(llrb, 0, nd, nd)
 	}
 	return reclaim
 }

@@ -22,7 +22,7 @@ type Dict struct {
 	dict       map[uint64]*dictnode
 	sortkeys   []string
 	hashks     []uint64
-	dead       bool
+	dead       uint32
 	snapn      int
 	activeiter int64
 }
@@ -45,7 +45,7 @@ func (d *Dict) Count() int64 {
 
 // Isactive implement api.Index{} / api.IndexSnapshot{} interface.
 func (d *Dict) Isactive() bool {
-	return d.dead == false
+	return atomic.LoadUint32(&d.dead) == 1
 }
 
 // RSnapshot implement api.Index{} interface.
@@ -60,7 +60,7 @@ func (d *Dict) Destroy() error {
 		return api.ErrorActiveIterators
 	}
 
-	d.dead = true
+	atomic.StoreUint32(&d.dead, 1)
 	d.dict, d.sortkeys, d.hashks = nil, nil, nil
 	return nil
 }
@@ -118,7 +118,7 @@ func (d *Dict) Get(key []byte, callb api.NodeCallb) bool {
 		if callb == nil {
 			return true
 		}
-		return callb(nd)
+		return callb(d, 0, nd, nd)
 	}
 	return false
 }
@@ -132,7 +132,8 @@ func (d *Dict) Min(callb api.NodeCallb) bool {
 	if callb == nil {
 		return true
 	}
-	return callb(d.dict[hashv])
+	nd := d.dict[hashv]
+	return callb(d, 0, nd, nd)
 }
 
 // Max implement IndexReader{} interface.
@@ -144,25 +145,26 @@ func (d *Dict) Max(callb api.NodeCallb) bool {
 	if callb == nil {
 		return true
 	}
-	return callb(d.dict[hashks[len(hashks)-1]])
+	nd := d.dict[hashks[len(hashks)-1]]
+	return callb(d, 0, nd, nd)
 }
 
 // Range implement IndexReader{} interface.
-func (d *Dict) Range(lk, hk []byte, incl string, reverse bool, iter api.NodeCallb) {
+func (d *Dict) Range(lk, hk []byte, incl string, reverse bool, callb api.NodeCallb) {
 	lk, hk = d.fixrangeargs(lk, hk)
 	d.sorted()
-	d.rangeover(lk, hk, incl, reverse, iter)
+	d.rangeover(lk, hk, incl, reverse, callb)
 }
 
-func (d *Dict) rangeover(lk, hk []byte, incl string, reverse bool, iter api.NodeCallb) {
+func (d *Dict) rangeover(lk, hk []byte, incl string, reverse bool, callb api.NodeCallb) {
 	if reverse {
-		d.rangebackward(lk, hk, incl, iter)
+		d.rangebackward(lk, hk, incl, callb)
 		return
 	}
-	d.rangeforward(lk, hk, incl, iter)
+	d.rangeforward(lk, hk, incl, callb)
 }
 
-func (d *Dict) rangeforward(lk, hk []byte, incl string, iter api.NodeCallb) {
+func (d *Dict) rangeforward(lk, hk []byte, incl string, callb api.NodeCallb) {
 	hashks := d.hashks
 	if lk != nil && hk != nil && bytes.Compare(lk, hk) == 0 {
 		if incl == "none" {
@@ -195,7 +197,7 @@ func (d *Dict) rangeforward(lk, hk []byte, incl string, iter api.NodeCallb) {
 	for ; start < len(hashks); start++ {
 		nd = d.dict[hashks[start]]
 		if hk == nil || (api.Binarycmp(nd.key, hk, cmp == 1) < cmp) {
-			if iter(nd) == false {
+			if callb(d, 0, nd, nd) == false {
 				break
 			}
 			continue
@@ -204,7 +206,7 @@ func (d *Dict) rangeforward(lk, hk []byte, incl string, iter api.NodeCallb) {
 	}
 }
 
-func (d *Dict) rangebackward(lk, hk []byte, incl string, iter api.NodeCallb) {
+func (d *Dict) rangebackward(lk, hk []byte, incl string, callb api.NodeCallb) {
 	hashks := d.hashks
 	if lk != nil && hk != nil && bytes.Compare(lk, hk) == 0 {
 		if incl == "none" {
@@ -237,7 +239,7 @@ func (d *Dict) rangebackward(lk, hk []byte, incl string, iter api.NodeCallb) {
 	for ; start >= 0; start-- {
 		nd = d.dict[hashks[start]]
 		if lk == nil || (api.Binarycmp(nd.key, lk, cmp == 0) > cmp) {
-			if iter(nd) == false {
+			if callb(d, 0, nd, nd) == false {
 				break
 			}
 			continue
@@ -295,7 +297,7 @@ func (d *Dict) iterate(lkey, hkey []byte, incl string, r bool) api.IndexIterator
 //---- IndexWriter{} interface.
 
 // Upsert implement IndexWriter{} interface.
-func (d *Dict) Upsert(key, value []byte, callb api.UpsertCallback) error {
+func (d *Dict) Upsert(key, value []byte, callb api.NodeCallb) error {
 	newnd := newdictnode(key, value)
 	hashv := crc64.Checksum(key, crcisotab)
 	oldnd, ok := d.dict[hashv]
@@ -311,7 +313,7 @@ func (d *Dict) Upsert(key, value []byte, callb api.UpsertCallback) error {
 }
 
 // UpsertMany implement IndexWriter{} interface.
-func (d *Dict) UpsertMany(keys, values [][]byte, callb api.UpsertCallback) error {
+func (d *Dict) UpsertMany(keys, values [][]byte, callb api.NodeCallb) error {
 	for i, key := range keys {
 		var value []byte
 		if len(values) > 0 {
@@ -333,9 +335,9 @@ func (d *Dict) UpsertMany(keys, values [][]byte, callb api.UpsertCallback) error
 }
 
 // DeleteMin implement IndexWriter{} interface.
-func (d *Dict) DeleteMin(callb api.DeleteCallback) error {
+func (d *Dict) DeleteMin(callb api.NodeCallb) error {
 	if len(d.dict) > 0 {
-		d.Min(func(nd api.Node) bool {
+		d.Min(func(_ api.Index, _ int64, _, nd api.Node) bool {
 			d.Delete(nd.Key(), callb)
 			return true
 		})
@@ -344,9 +346,9 @@ func (d *Dict) DeleteMin(callb api.DeleteCallback) error {
 }
 
 // DeleteMax implement IndexWriter{} interface.
-func (d *Dict) DeleteMax(callb api.DeleteCallback) error {
+func (d *Dict) DeleteMax(callb api.NodeCallb) error {
 	if len(d.dict) > 0 {
-		d.Max(func(nd api.Node) bool {
+		d.Max(func(_ api.Index, _ int64, _, nd api.Node) bool {
 			d.Delete(nd.Key(), callb)
 			return true
 		})
@@ -355,15 +357,15 @@ func (d *Dict) DeleteMax(callb api.DeleteCallback) error {
 }
 
 // Delete implement IndexWriter{} interface.
-func (d *Dict) Delete(key []byte, callb api.DeleteCallback) error {
+func (d *Dict) Delete(key []byte, callb api.NodeCallb) error {
 	if len(d.dict) > 0 {
 		hashv := crc64.Checksum(key, crcisotab)
 		deleted, ok := d.dict[hashv]
 		if callb != nil {
 			if ok == false {
-				callb(d, nil)
+				callb(d, 0, nil, nil)
 			} else {
-				callb(d, deleted)
+				callb(d, 0, deleted, deleted)
 			}
 		}
 		delete(d.dict, hashv)

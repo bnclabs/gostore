@@ -59,7 +59,7 @@ func (iter *iterator) rangefill() {
 	iter.nodes, iter.index, iter.continuate = iter.nodes[:0], 0, false
 	count := 0
 	iter.dict.rangeover(iter.startkey, iter.endkey, iter.incl, iter.reverse,
-		func(nd api.Node) bool {
+		func(_ api.Index, _ int64, _, nd api.Node) bool {
 			breakkey = nd.Key()
 			if count < iter.limit || api.Binarycmp(prev, breakkey, true) == 0 {
 				prev = breakkey

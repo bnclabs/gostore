@@ -311,13 +311,15 @@ func (ss *Snapshot) Get(key []byte, callb api.NodeCallb) bool {
 	}
 
 	var rc bool
-	ss.rangeforward(key, key, ss.rootblock, [2]int{0, 0}, func(nd api.Node) bool {
-		rc = true
-		if callb != nil {
-			rc = callb(nd)
-		}
-		return false
-	})
+	ss.rangeforward(
+		key, key, ss.rootblock, [2]int{0, 0},
+		func(_ api.Index, _ int64, _, nd api.Node) bool {
+			rc = true
+			if callb != nil {
+				rc = callb(ss, 0, nd, nd)
+			}
+			return false
+		})
 	atomic.AddInt64(&ss.n_lookups, 1)
 	return rc
 }
@@ -329,13 +331,15 @@ func (ss *Snapshot) Min(callb api.NodeCallb) bool {
 	}
 
 	var rc bool
-	ss.rangeforward(nil, nil, ss.rootblock, [2]int{0, 0}, func(nd api.Node) bool {
-		rc = true
-		if callb != nil {
-			rc = callb(nd)
-		}
-		return false
-	})
+	ss.rangeforward(
+		nil, nil, ss.rootblock, [2]int{0, 0},
+		func(_ api.Index, _ int64, _, nd api.Node) bool {
+			rc = true
+			if callb != nil {
+				rc = callb(ss, 0, nd, nd)
+			}
+			return false
+		})
 	atomic.AddInt64(&ss.n_lookups, 1)
 	return rc
 }
@@ -347,13 +351,15 @@ func (ss *Snapshot) Max(callb api.NodeCallb) bool {
 	}
 
 	var rc bool
-	ss.rangebackward(nil, nil, ss.rootblock, [2]int{0, 0}, func(nd api.Node) bool {
-		rc = true
-		if callb != nil {
-			rc = callb(nd)
-		}
-		return false
-	})
+	ss.rangebackward(
+		nil, nil, ss.rootblock, [2]int{0, 0},
+		func(_ api.Index, _ int64, _, nd api.Node) bool {
+			rc = true
+			if callb != nil {
+				rc = callb(ss, 0, nd, nd)
+			}
+			return false
+		})
 	atomic.AddInt64(&ss.n_lookups, 1)
 	return rc
 }
@@ -458,27 +464,27 @@ func (ss *Snapshot) Iterate(lkey, hkey []byte, incl string, r bool) api.IndexIte
 //---- IndexWriter interface{}
 
 // Upsert IndexWriter{} method, will panic if called.
-func (ss *Snapshot) Upsert(key, value []byte, callb api.UpsertCallback) error {
+func (ss *Snapshot) Upsert(key, value []byte, callb api.NodeCallb) error {
 	panic("IndexWriter.Upsert() not implemented")
 }
 
 // UpsertMany IndexWriter{} method, will panic if called.
-func (ss *Snapshot) UpsertMany(keys, values [][]byte, callb api.UpsertCallback) error {
+func (ss *Snapshot) UpsertMany(keys, values [][]byte, callb api.NodeCallb) error {
 	panic("IndexWriter.UpsertMany() not implemented")
 }
 
 // DeleteMin IndexWriter{} method, will panic if called.
-func (ss *Snapshot) DeleteMin(callb api.DeleteCallback) error {
+func (ss *Snapshot) DeleteMin(callb api.NodeCallb) error {
 	panic("IndexWriter.DeleteMin() not implemented")
 }
 
 // DeleteMax IndexWriter{} method, will panic if called.
-func (ss *Snapshot) DeleteMax(callb api.DeleteCallback) error {
+func (ss *Snapshot) DeleteMax(callb api.NodeCallb) error {
 	panic("IndexWriter.DeleteMax() not implemented")
 }
 
 // Delete IndexWriter{} method, will panic if called.
-func (ss *Snapshot) Delete(key []byte, callb api.DeleteCallback) error {
+func (ss *Snapshot) Delete(key []byte, callb api.NodeCallb) error {
 	panic("IndexWriter.Delete() not implemented")
 }
 

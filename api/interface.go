@@ -4,18 +4,14 @@ package api
 
 import "unsafe"
 
-// DeleteCallback callback from Delete API. Don't keep any reference to
-// deleted node, it is read-only and valid until callback returns.
-type DeleteCallback func(index Index, deleted Node)
-
-// UpsertCallback callback from Upsert API. Don't keep any reference
-// to newnd and oldnd:
-//   * oldnd can only be read.
-//   * newnd can be read or updated.
-type UpsertCallback func(index Index, offset int64, newnd, oldnd Node)
-
-// NodeCallb callback from Get,Min,Max API.
-type NodeCallb func(nd Node) bool
+// NodeCallb callback from IndexReader and IndexWriter.
+// * Don't keep any reference to newnd and oldnd:
+// * oldnd can only be read.
+// * newnd can be read or, for Upsert calls, updated.
+// * Other than UpsertMany and Range API, `i` will always be ZERO.
+// * for IndexReader API, newnd and oldnd will be SAME.
+// * for Delete APIs, newnd and oldnd will be SAME and point to DELETED node.
+type NodeCallb func(index Index, i int64, newnd, oldnd Node) bool
 
 // Node interface methods to access node attributes.
 type Node interface {
@@ -180,19 +176,19 @@ type IndexIterator interface {
 // IndexWriter interface methods for updating index.
 type IndexWriter interface {
 	// Upsert a key/value pair.
-	Upsert(key, value []byte, callb UpsertCallback) error
+	Upsert(key, value []byte, callb NodeCallb) error
 
 	// UpsertMany upsert one or more key/value pairs.
-	UpsertMany(keys, values [][]byte, callb UpsertCallback) error
+	UpsertMany(keys, values [][]byte, callb NodeCallb) error
 
 	// DeleteMin delete the last entry in the index.
-	DeleteMin(callb DeleteCallback) error
+	DeleteMin(callb NodeCallb) error
 
 	// Delete the first entry in the index.
-	DeleteMax(callb DeleteCallback) error
+	DeleteMax(callb NodeCallb) error
 
 	// Delete entry specified by key.
-	Delete(key []byte, callb DeleteCallback) error
+	Delete(key []byte, callb NodeCallb) error
 }
 
 // Mallocer interface for custom memory management.

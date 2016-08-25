@@ -25,7 +25,7 @@ func (llrb *LLRB) rangehele(nd *Llrbnode, lk, hk []byte, iter api.NodeCallb) boo
 	if !llrb.rangehele(nd.left, lk, hk, iter) {
 		return false
 	}
-	if iter != nil && !iter(nd) {
+	if iter != nil && !iter(llrb, 0, nd, nd) {
 		return false
 	}
 	return llrb.rangehele(nd.right, lk, hk, iter)
@@ -46,7 +46,7 @@ func (llrb *LLRB) rangehelt(nd *Llrbnode, lk, hk []byte, iter api.NodeCallb) boo
 	if !llrb.rangehelt(nd.left, lk, hk, iter) {
 		return false
 	}
-	if iter != nil && !iter(nd) {
+	if iter != nil && !iter(llrb, 0, nd, nd) {
 		return false
 	}
 	return llrb.rangehelt(nd.right, lk, hk, iter)
@@ -66,7 +66,7 @@ func (llrb *LLRB) rangehtle(nd *Llrbnode, lk, hk []byte, iter api.NodeCallb) boo
 	if !llrb.rangehtle(nd.left, lk, hk, iter) {
 		return false
 	}
-	if iter != nil && !iter(nd) {
+	if iter != nil && !iter(llrb, 0, nd, nd) {
 		return false
 	}
 	return llrb.rangehtle(nd.right, lk, hk, iter)
@@ -86,7 +86,7 @@ func (llrb *LLRB) rangehtlt(nd *Llrbnode, lk, hk []byte, iter api.NodeCallb) boo
 	if !llrb.rangehtlt(nd.left, lk, hk, iter) {
 		return false
 	}
-	if iter != nil && !iter(nd) {
+	if iter != nil && !iter(llrb, 0, nd, nd) {
 		return false
 	}
 	return llrb.rangehtlt(nd.right, lk, hk, iter)
@@ -106,7 +106,7 @@ func (llrb *LLRB) rvrslehe(nd *Llrbnode, lk, hk []byte, iter api.NodeCallb) bool
 	if !llrb.rvrslehe(nd.right, lk, hk, iter) {
 		return false
 	}
-	if iter != nil && !iter(nd) {
+	if iter != nil && !iter(llrb, 0, nd, nd) {
 		return false
 	}
 	return llrb.rvrslehe(nd.left, lk, hk, iter)
@@ -126,7 +126,7 @@ func (llrb *LLRB) rvrsleht(nd *Llrbnode, lk, hk []byte, iter api.NodeCallb) bool
 	if !llrb.rvrsleht(nd.right, lk, hk, iter) {
 		return false
 	}
-	if iter != nil && !iter(nd) {
+	if iter != nil && !iter(llrb, 0, nd, nd) {
 		return false
 	}
 	return llrb.rvrsleht(nd.left, lk, hk, iter)
@@ -146,7 +146,7 @@ func (llrb *LLRB) rvrslthe(nd *Llrbnode, lk, hk []byte, iter api.NodeCallb) bool
 	if !llrb.rvrslthe(nd.right, lk, hk, iter) {
 		return false
 	}
-	if iter != nil && !iter(nd) {
+	if iter != nil && !iter(llrb, 0, nd, nd) {
 		return false
 	}
 	return llrb.rvrslthe(nd.left, lk, hk, iter)
@@ -166,7 +166,7 @@ func (llrb *LLRB) rvrsltht(nd *Llrbnode, lk, hk []byte, iter api.NodeCallb) bool
 	if !llrb.rvrsltht(nd.right, lk, hk, iter) {
 		return false
 	}
-	if iter != nil && !iter(nd) {
+	if iter != nil && !iter(llrb, 0, nd, nd) {
 		return false
 	}
 	return llrb.rvrsltht(nd.left, lk, hk, iter)

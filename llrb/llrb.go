@@ -269,7 +269,7 @@ func (llrb *LLRB) Get(key []byte, callb api.NodeCallb) bool {
 		if callb == nil {
 			return true
 		}
-		return callb(nd)
+		return callb(llrb, 0, nd, nd)
 	}
 	return false
 }
@@ -302,7 +302,7 @@ func (llrb *LLRB) Min(callb api.NodeCallb) bool {
 		if callb == nil {
 			return true
 		}
-		return callb(nd)
+		return callb(llrb, 0, nd, nd)
 	}
 	return false
 }
@@ -332,7 +332,7 @@ func (llrb *LLRB) Max(callb api.NodeCallb) bool {
 		if callb == nil {
 			return true
 		}
-		return callb(nd)
+		return callb(llrb, 0, nd, nd)
 	}
 	return false
 }
@@ -454,7 +454,7 @@ func (llrb *LLRB) Iterate(lkey, hkey []byte, incl string, r bool) api.IndexItera
 //---- IndexWriter{} interface
 
 // Upsert implement IndexWriter{} interface.
-func (llrb *LLRB) Upsert(key, value []byte, callb api.UpsertCallback) error {
+func (llrb *LLRB) Upsert(key, value []byte, callb api.NodeCallb) error {
 	if key == nil {
 		panic("Upsert(): upserting nil key")
 	}
@@ -481,7 +481,7 @@ func (llrb *LLRB) Upsert(key, value []byte, callb api.UpsertCallback) error {
 }
 
 // UpsertMany implement IndexWriter{} interface.
-func (llrb *LLRB) UpsertMany(keys, values [][]byte, callb api.UpsertCallback) error {
+func (llrb *LLRB) UpsertMany(keys, values [][]byte, callb api.NodeCallb) error {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.wupsertmany(keys, values, callb)
 	}
@@ -556,7 +556,7 @@ func (llrb *LLRB) upsert(
 }
 
 // DeleteMin implement IndexWriter{} interface.
-func (llrb *LLRB) DeleteMin(callb api.DeleteCallback) error {
+func (llrb *LLRB) DeleteMin(callb api.NodeCallb) error {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.wdeleteMin(callb)
 	}
@@ -572,7 +572,8 @@ func (llrb *LLRB) DeleteMin(callb api.DeleteCallback) error {
 	llrb.delcount(deleted)
 
 	if callb != nil {
-		callb(llrb, llndornil(deleted))
+		nd := llndornil(deleted)
+		callb(llrb, 0, nd, nd)
 	}
 	llrb.freenode(deleted)
 	llrb.rw.Unlock()
@@ -595,7 +596,7 @@ func (llrb *LLRB) deletemin(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 }
 
 // DeleteMax implements IndexWriter{} interface.
-func (llrb *LLRB) DeleteMax(callb api.DeleteCallback) error {
+func (llrb *LLRB) DeleteMax(callb api.NodeCallb) error {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.wdeleteMax(callb)
 	}
@@ -611,7 +612,8 @@ func (llrb *LLRB) DeleteMax(callb api.DeleteCallback) error {
 	llrb.delcount(deleted)
 
 	if callb != nil {
-		callb(llrb, llndornil(deleted))
+		nd := llndornil(deleted)
+		callb(llrb, 0, nd, nd)
 	}
 	llrb.freenode(deleted)
 
@@ -638,7 +640,7 @@ func (llrb *LLRB) deletemax(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 }
 
 // Delete implement IndexWriter{} interface.
-func (llrb *LLRB) Delete(key []byte, callb api.DeleteCallback) error {
+func (llrb *LLRB) Delete(key []byte, callb api.NodeCallb) error {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.wdelete(key, callb)
 	}
@@ -654,7 +656,8 @@ func (llrb *LLRB) Delete(key []byte, callb api.DeleteCallback) error {
 	llrb.delcount(deleted)
 
 	if callb != nil {
-		callb(llrb, llndornil(deleted))
+		nd := llndornil(deleted)
+		callb(llrb, 0, nd, nd)
 	}
 	llrb.freenode(deleted)
 

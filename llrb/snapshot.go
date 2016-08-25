@@ -206,7 +206,7 @@ func (snapshot *LLRBSnapshot) Get(key []byte, callb api.NodeCallb) bool {
 		if callb == nil {
 			return true
 		}
-		return callb(nd)
+		return callb(snapshot.llrb, 0, nd, nd)
 	}
 	return false
 }
@@ -239,7 +239,7 @@ func (snapshot *LLRBSnapshot) Min(callb api.NodeCallb) bool {
 		if callb == nil {
 			return true
 		}
-		return callb(nd)
+		return callb(snapshot.llrb, 0, nd, nd)
 	}
 	return false
 }
@@ -269,7 +269,7 @@ func (snapshot *LLRBSnapshot) Max(callb api.NodeCallb) bool {
 		if callb == nil {
 			return true
 		}
-		return callb(nd)
+		return callb(snapshot.llrb, 0, nd, nd)
 	}
 	return false
 }
@@ -286,7 +286,7 @@ func (snapshot *LLRBSnapshot) max() api.Node {
 }
 
 // Range implement IndexReader{} interface.
-func (snapshot *LLRBSnapshot) Range(lkey, hkey []byte, incl string, reverse bool, iter api.NodeCallb) {
+func (snapshot *LLRBSnapshot) Range(lkey, hkey []byte, incl string, reverse bool, callb api.NodeCallb) {
 	lkey, hkey = snapshot.llrb.fixrangeargs(lkey, hkey)
 	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
 		if incl == "none" {
@@ -299,25 +299,25 @@ func (snapshot *LLRBSnapshot) Range(lkey, hkey []byte, incl string, reverse bool
 	if reverse {
 		switch incl {
 		case "both":
-			snapshot.llrb.rvrslehe(snapshot.root, lkey, hkey, iter)
+			snapshot.llrb.rvrslehe(snapshot.root, lkey, hkey, callb)
 		case "high":
-			snapshot.llrb.rvrsleht(snapshot.root, lkey, hkey, iter)
+			snapshot.llrb.rvrsleht(snapshot.root, lkey, hkey, callb)
 		case "low":
-			snapshot.llrb.rvrslthe(snapshot.root, lkey, hkey, iter)
+			snapshot.llrb.rvrslthe(snapshot.root, lkey, hkey, callb)
 		default:
-			snapshot.llrb.rvrsltht(snapshot.root, lkey, hkey, iter)
+			snapshot.llrb.rvrsltht(snapshot.root, lkey, hkey, callb)
 		}
 
 	} else {
 		switch incl {
 		case "both":
-			snapshot.llrb.rangehele(snapshot.root, lkey, hkey, iter)
+			snapshot.llrb.rangehele(snapshot.root, lkey, hkey, callb)
 		case "high":
-			snapshot.llrb.rangehtle(snapshot.root, lkey, hkey, iter)
+			snapshot.llrb.rangehtle(snapshot.root, lkey, hkey, callb)
 		case "low":
-			snapshot.llrb.rangehelt(snapshot.root, lkey, hkey, iter)
+			snapshot.llrb.rangehelt(snapshot.root, lkey, hkey, callb)
 		default:
-			snapshot.llrb.rangehtlt(snapshot.root, lkey, hkey, iter)
+			snapshot.llrb.rangehtlt(snapshot.root, lkey, hkey, callb)
 		}
 	}
 

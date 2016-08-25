@@ -1,5 +1,6 @@
 package dict
 
+import "sync/atomic"
 import "strconv"
 
 import "github.com/prataprc/storage.go/api"
@@ -12,7 +13,9 @@ type DictSnapshot struct{ Dict }
 // NewDictSnapshot create a new instance of DictSnapshot.
 func (d *Dict) NewDictSnapshot() api.IndexSnapshot {
 	d.snapn++
-	snapshot := &DictSnapshot{Dict: Dict{snapn: d.snapn, dead: d.dead}}
+	snapshot := &DictSnapshot{
+		Dict: Dict{snapn: d.snapn, dead: atomic.LoadUint32(&d.dead)},
+	}
 	snapshot.dict = make(map[uint64]*dictnode)
 	for k, node := range d.dict {
 		newnode := *node
@@ -41,7 +44,7 @@ func (d *DictSnapshot) ID() string {
 
 // Isactive implement api.IndexSnapshot{} interface.
 func (d *DictSnapshot) Isactive() bool {
-	return !d.dead
+	return atomic.LoadUint32(&d.dead) == 0
 }
 
 // Refer implement api.IndexSnapshot{} interface.
@@ -51,7 +54,7 @@ func (d *DictSnapshot) Refer() {
 
 // Release implement api.IndexSnapshot{} interface.
 func (d *DictSnapshot) Release() {
-	d.dead = true
+	atomic.StoreUint32(&d.dead, 1)
 }
 
 // Validate implement api.IndexSnapshot{} interface.
@@ -68,7 +71,8 @@ func (d *DictSnapshot) Min(callb api.NodeCallb) bool {
 	} else if callb == nil {
 		return true
 	}
-	return callb(d.dict[d.hashks[0]])
+	nd := d.dict[d.hashks[0]]
+	return callb(d, 0, nd, nd)
 }
 
 // Max implement IndexReader{} interface.
@@ -78,7 +82,8 @@ func (d *DictSnapshot) Max(callb api.NodeCallb) bool {
 	} else if callb == nil {
 		return true
 	}
-	return callb(d.dict[d.hashks[len(d.hashks)-1]])
+	nd := d.dict[d.hashks[len(d.hashks)-1]]
+	return callb(d, 0, nd, nd)
 }
 
 // Range implement IndexReader{} interface.
