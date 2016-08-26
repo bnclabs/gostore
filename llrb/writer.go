@@ -344,7 +344,13 @@ func (writer *LLRBWriter) mvccmutations(
 	}
 
 	for i, cmd = range cmds {
-		k, v := keys[i], values[i]
+		k, v := []byte(nil), []byte(nil)
+		if len(keys) > 0 {
+			k = keys[i]
+		}
+		if len(values) > 0 {
+			v = values[i]
+		}
 		switch cmd {
 		case api.UpsertCmd:
 			reclaim = writer.mvccupsert(k, v, localfn, reclaim)

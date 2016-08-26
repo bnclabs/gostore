@@ -497,7 +497,13 @@ func (llrb *LLRB) Mutations(cmds []byte, keys, values [][]byte, callb api.NodeCa
 	}
 
 	for i, cmd = range cmds {
-		key, value := keys[i], values[i]
+		key, value := []byte(nil), []byte(nil)
+		if len(keys) > 0 {
+			key = keys[i]
+		}
+		if len(values) > 0 {
+			value = values[i]
+		}
 		switch cmd {
 		case api.UpsertCmd:
 			llrb.Upsert(key, value, localfn)
