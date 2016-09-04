@@ -72,7 +72,7 @@ func (d *DictSnapshot) Min(callb api.NodeCallb) bool {
 		return true
 	}
 	nd := d.dict[d.hashks[0]]
-	return callb(d, 0, nd, nd)
+	return callb(d, 0, nd, nd, nil)
 }
 
 // Max implement IndexReader{} interface.
@@ -83,7 +83,7 @@ func (d *DictSnapshot) Max(callb api.NodeCallb) bool {
 		return true
 	}
 	nd := d.dict[d.hashks[len(d.hashks)-1]]
-	return callb(d, 0, nd, nd)
+	return callb(d, 0, nd, nd, nil)
 }
 
 // Range implement IndexReader{} interface.

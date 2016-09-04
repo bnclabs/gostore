@@ -263,15 +263,18 @@ func (llrb *LLRB) Get(key []byte, callb api.NodeCallb) bool {
 
 	llrb.rw.RLock()
 	defer llrb.rw.RUnlock()
+
 	defer atomic.AddInt64(&llrb.n_lookups, 1)
 
-	if nd := llrb.get(key); nd != nil {
-		if callb == nil {
-			return true
+	if nd := llrb.get(key); nd == nil {
+		if callb != nil {
+			callb(llrb, 0, nil, nil, api.ErrorKeyMissing)
 		}
-		return callb(llrb, 0, nd, nd)
+		return false
+	} else if callb != nil {
+		callb(llrb, 0, nd, nd, nil)
 	}
-	return false
+	return true
 }
 
 func (llrb *LLRB) get(key []byte) api.Node {
@@ -298,13 +301,15 @@ func (llrb *LLRB) Min(callb api.NodeCallb) bool {
 	defer llrb.rw.RUnlock()
 	defer atomic.AddInt64(&llrb.n_lookups, 1)
 
-	if nd := llrb.min(); nd != nil {
-		if callb == nil {
-			return true
+	if nd := llrb.min(); nd == nil {
+		if callb != nil {
+			callb(llrb, 0, nil, nil, api.ErrorKeyMissing)
 		}
-		return callb(llrb, 0, nd, nd)
+		return false
+	} else if callb != nil {
+		callb(llrb, 0, nd, nd, nil)
 	}
-	return false
+	return true
 }
 
 func (llrb *LLRB) min() api.Node {
@@ -328,13 +333,15 @@ func (llrb *LLRB) Max(callb api.NodeCallb) bool {
 	defer llrb.rw.RUnlock()
 	defer atomic.AddInt64(&llrb.n_lookups, 1)
 
-	if nd := llrb.max(); nd != nil {
-		if callb == nil {
-			return true
+	if nd := llrb.max(); nd == nil {
+		if callb != nil {
+			callb(llrb, 0, nil, nil, api.ErrorKeyMissing)
 		}
-		return callb(llrb, 0, nd, nd)
+		return false
+	} else if callb != nil {
+		callb(llrb, 0, nd, nd, nil)
 	}
-	return false
+	return true
 }
 
 func (llrb *LLRB) max() api.Node {
@@ -349,7 +356,7 @@ func (llrb *LLRB) max() api.Node {
 }
 
 // Range from lkey to hkey, incl can be "both", "low", "high", "none"
-func (llrb *LLRB) Range(lkey, hkey []byte, incl string, reverse bool, iter api.NodeCallb) {
+func (llrb *LLRB) Range(lkey, hkey []byte, incl string, reverse bool, callb api.NodeCallb) {
 	if llrb.mvcc.enabled {
 		panic("Range(): mvcc enabled, use snapshots for reading")
 	}
@@ -368,25 +375,25 @@ func (llrb *LLRB) Range(lkey, hkey []byte, incl string, reverse bool, iter api.N
 	if reverse {
 		switch incl {
 		case "both":
-			llrb.rvrslehe(llrb.root, lkey, hkey, iter)
+			llrb.rvrslehe(llrb.root, lkey, hkey, callb)
 		case "high":
-			llrb.rvrsleht(llrb.root, lkey, hkey, iter)
+			llrb.rvrsleht(llrb.root, lkey, hkey, callb)
 		case "low":
-			llrb.rvrslthe(llrb.root, lkey, hkey, iter)
+			llrb.rvrslthe(llrb.root, lkey, hkey, callb)
 		default:
-			llrb.rvrsltht(llrb.root, lkey, hkey, iter)
+			llrb.rvrsltht(llrb.root, lkey, hkey, callb)
 		}
 
 	} else {
 		switch incl {
 		case "both":
-			llrb.rangehele(llrb.root, lkey, hkey, iter)
+			llrb.rangehele(llrb.root, lkey, hkey, callb)
 		case "high":
-			llrb.rangehtle(llrb.root, lkey, hkey, iter)
+			llrb.rangehtle(llrb.root, lkey, hkey, callb)
 		case "low":
-			llrb.rangehelt(llrb.root, lkey, hkey, iter)
+			llrb.rangehelt(llrb.root, lkey, hkey, callb)
 		default:
-			llrb.rangehtlt(llrb.root, lkey, hkey, iter)
+			llrb.rangehtlt(llrb.root, lkey, hkey, callb)
 		}
 	}
 
@@ -471,50 +478,12 @@ func (llrb *LLRB) Upsert(key, value []byte, callb api.NodeCallb) error {
 	llrb.upsertcounts(key, value, oldnd)
 
 	if callb != nil {
-		callb(llrb, 0, llndornil(newnd), llndornil(oldnd))
+		callb(llrb, 0, llndornil(newnd), llndornil(oldnd), nil)
 	}
 	newnd.metadata().cleardirty()
 	llrb.freenode(oldnd)
 
 	llrb.rw.Unlock()
-	return nil
-}
-
-// Mutations implement IndexWriter{} interface.
-func (llrb *LLRB) Mutations(cmds []byte, keys, values [][]byte, callb api.NodeCallb) error {
-	if llrb.mvcc.enabled {
-		return llrb.mvcc.writer.wmutations(cmds, keys, values, callb)
-	}
-
-	var i int
-	var cmd byte
-
-	localfn := func(index api.Index, _ int64, newnd, oldnd api.Node) bool {
-		if callb != nil {
-			callb(index, int64(i), newnd, oldnd)
-		}
-		return false
-	}
-
-	for i, cmd = range cmds {
-		key, value := []byte(nil), []byte(nil)
-		if len(keys) > 0 {
-			key = keys[i]
-		}
-		if len(values) > 0 {
-			value = values[i]
-		}
-		switch cmd {
-		case api.UpsertCmd:
-			llrb.Upsert(key, value, localfn)
-		case api.DelminCmd:
-			llrb.DeleteMin(localfn)
-		case api.DelmaxCmd:
-			llrb.DeleteMax(localfn)
-		case api.DeleteCmd:
-			llrb.Delete(key, localfn)
-		}
-	}
 	return nil
 }
 
@@ -581,7 +550,7 @@ func (llrb *LLRB) DeleteMin(callb api.NodeCallb) error {
 
 	if callb != nil {
 		nd := llndornil(deleted)
-		callb(llrb, 0, nd, nd)
+		callb(llrb, 0, nd, nd, nil)
 	}
 	llrb.freenode(deleted)
 	llrb.rw.Unlock()
@@ -621,7 +590,7 @@ func (llrb *LLRB) DeleteMax(callb api.NodeCallb) error {
 
 	if callb != nil {
 		nd := llndornil(deleted)
-		callb(llrb, 0, nd, nd)
+		callb(llrb, 0, nd, nd, nil)
 	}
 	llrb.freenode(deleted)
 
@@ -665,7 +634,7 @@ func (llrb *LLRB) Delete(key []byte, callb api.NodeCallb) error {
 
 	if callb != nil {
 		nd := llndornil(deleted)
-		callb(llrb, 0, nd, nd)
+		callb(llrb, 0, nd, nd, nil)
 	}
 	llrb.freenode(deleted)
 
@@ -726,6 +695,44 @@ func (llrb *LLRB) delete(nd *Llrbnode, key []byte) (newnd, deleted *Llrbnode) {
 		}
 	}
 	return llrb.fixup(nd), deleted
+}
+
+// Mutations implement IndexWriter{} interface.
+func (llrb *LLRB) Mutations(cmds []byte, keys, values [][]byte, callb api.NodeCallb) error {
+	if llrb.mvcc.enabled {
+		return llrb.mvcc.writer.wmutations(cmds, keys, values, callb)
+	}
+
+	var i int
+	var cmd byte
+
+	localfn := func(index api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
+		if callb != nil {
+			callb(index, int64(i), newnd, oldnd, err)
+		}
+		return false
+	}
+
+	for i, cmd = range cmds {
+		key, value := []byte(nil), []byte(nil)
+		if len(keys) > 0 {
+			key = keys[i]
+		}
+		if len(values) > 0 {
+			value = values[i]
+		}
+		switch cmd {
+		case api.UpsertCmd:
+			llrb.Upsert(key, value, localfn)
+		case api.DelminCmd:
+			llrb.DeleteMin(localfn)
+		case api.DelmaxCmd:
+			llrb.DeleteMax(localfn)
+		case api.DeleteCmd:
+			llrb.Delete(key, localfn)
+		}
+	}
+	return nil
 }
 
 // rotation routines for 2-3 algorithm

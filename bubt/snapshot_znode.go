@@ -22,7 +22,7 @@ func (z znode) rangeforward(
 			entryoff := int64(binary.BigEndian.Uint32(entries[koff : koff+4]))
 			nd := new(node)
 			ss.newznode(nd, []byte(z[entryoff:]), fpos+entryoff)
-			if callb(ss, 0, nd, nd) == false {
+			if callb(ss, 0, nd, nd, nil) == false {
 				return false
 			}
 			continue
@@ -74,7 +74,7 @@ func (z znode) rangebackward(
 			entryoff := int64(binary.BigEndian.Uint32(entries[koff : koff+4]))
 			nd := new(node)
 			ss.newznode(nd, []byte(z[entryoff:]), fpos+entryoff)
-			if callb(ss, 0, nd, nd) == false {
+			if callb(ss, 0, nd, nd, nil) == false {
 				return false
 			}
 			continue

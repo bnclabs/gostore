@@ -307,16 +307,27 @@ func (ss *Snapshot) Has(key []byte) bool {
 // Get implement IndexReader{} interface.
 func (ss *Snapshot) Get(key []byte, callb api.NodeCallb) bool {
 	if ss.n_count == 0 {
+		if callb != nil {
+			callb(ss, 0, nil, nil, api.ErrorKeyMissing)
+		}
 		return false
 	}
 
-	var rc bool
+	rc := false
 	ss.rangeforward(
 		key, key, ss.rootblock, [2]int{0, 0},
-		func(_ api.Index, _ int64, _, nd api.Node) bool {
-			rc = true
+		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+			if err == nil && nd != nil {
+				rc = true
+			}
 			if callb != nil {
-				rc = callb(ss, 0, nd, nd)
+				if err != nil {
+					callb(ss, 0, nil, nil, err)
+				} else if nd == nil {
+					callb(ss, 0, nil, nil, api.ErrorKeyMissing)
+				} else {
+					callb(ss, 0, nd, nd, nil)
+				}
 			}
 			return false
 		})
@@ -327,16 +338,27 @@ func (ss *Snapshot) Get(key []byte, callb api.NodeCallb) bool {
 // Min implement IndexReader{} interface.
 func (ss *Snapshot) Min(callb api.NodeCallb) bool {
 	if ss.n_count == 0 {
+		if callb != nil {
+			callb(ss, 0, nil, nil, api.ErrorKeyMissing)
+		}
 		return false
 	}
 
-	var rc bool
+	rc := false
 	ss.rangeforward(
 		nil, nil, ss.rootblock, [2]int{0, 0},
-		func(_ api.Index, _ int64, _, nd api.Node) bool {
-			rc = true
+		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+			if err == nil && nd != nil {
+				rc = true
+			}
 			if callb != nil {
-				rc = callb(ss, 0, nd, nd)
+				if err != nil {
+					callb(ss, 0, nil, nil, err)
+				} else if nd == nil {
+					callb(ss, 0, nil, nil, api.ErrorKeyMissing)
+				} else {
+					callb(ss, 0, nd, nd, nil)
+				}
 			}
 			return false
 		})
@@ -347,16 +369,27 @@ func (ss *Snapshot) Min(callb api.NodeCallb) bool {
 // Max implement IndexReader{} interface.
 func (ss *Snapshot) Max(callb api.NodeCallb) bool {
 	if ss.n_count == 0 {
+		if callb != nil {
+			callb(ss, 0, nil, nil, api.ErrorKeyMissing)
+		}
 		return false
 	}
 
-	var rc bool
+	rc := false
 	ss.rangebackward(
 		nil, nil, ss.rootblock, [2]int{0, 0},
-		func(_ api.Index, _ int64, _, nd api.Node) bool {
-			rc = true
+		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+			if err == nil && nd != nil {
+				rc = true
+			}
 			if callb != nil {
-				rc = callb(ss, 0, nd, nd)
+				if err != nil {
+					callb(ss, 0, nil, nil, err)
+				} else if nd == nil {
+					callb(ss, 0, nil, nil, api.ErrorKeyMissing)
+				} else {
+					callb(ss, 0, nd, nd, nil)
+				}
 			}
 			return false
 		})
@@ -468,11 +501,6 @@ func (ss *Snapshot) Upsert(key, value []byte, callb api.NodeCallb) error {
 	panic("IndexWriter.Upsert() not implemented")
 }
 
-// Mutations IndexWriter{} method, will panic if called.
-func (ss *Snapshot) Mutations(_ []byte, _, _ [][]byte, _ api.NodeCallb) error {
-	panic("IndexWriter.Mutations() not implemented")
-}
-
 // DeleteMin IndexWriter{} method, will panic if called.
 func (ss *Snapshot) DeleteMin(callb api.NodeCallb) error {
 	panic("IndexWriter.DeleteMin() not implemented")
@@ -486,6 +514,11 @@ func (ss *Snapshot) DeleteMax(callb api.NodeCallb) error {
 // Delete IndexWriter{} method, will panic if called.
 func (ss *Snapshot) Delete(key []byte, callb api.NodeCallb) error {
 	panic("IndexWriter.Delete() not implemented")
+}
+
+// Mutations IndexWriter{} method, will panic if called.
+func (ss *Snapshot) Mutations(_ []byte, _, _ [][]byte, _ api.NodeCallb) error {
+	panic("IndexWriter.Mutations() not implemented")
 }
 
 //---- helper methods.

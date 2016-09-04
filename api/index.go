@@ -16,7 +16,7 @@ const (
 // * Other than Mutations and Range API, `i` will always be ZERO.
 // * for IndexReader API, newnd and oldnd will be SAME.
 // * for Delete APIs, newnd and oldnd will be SAME and point to DELETED node.
-type NodeCallb func(index Index, i int64, newnd, oldnd Node) bool
+type NodeCallb func(index Index, i int64, newnd, oldnd Node, err error) bool
 
 // Node interface methods to access node attributes.
 type Node interface {

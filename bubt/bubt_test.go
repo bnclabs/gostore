@@ -28,7 +28,7 @@ func TestEmpty(t *testing.T) {
 	os.Remove(path)
 	defer os.Remove(path)
 
-	llrb := refllrb(0)
+	llrb := refllrb(t, 0)
 
 	bsetts := DefaultSettings()
 	bsetts["datafile"] = true
@@ -59,7 +59,7 @@ func TestMissing(t *testing.T) {
 	defer os.Remove(path)
 
 	count := 1
-	llrb := refllrb(count)
+	llrb := refllrb(t, count)
 
 	bsetts := DefaultSettings()
 	bsetts["datafile"] = true
@@ -73,7 +73,10 @@ func TestMissing(t *testing.T) {
 	refnds := make([]api.Node, 0)
 	llrb.Range(
 		nil, nil, "both", false,
-		func(_ api.Index, _ int64, _, nd api.Node) bool {
+		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			}
 			refnds = append(refnds, nd)
 			return true
 		})
@@ -106,7 +109,7 @@ func TestMissing(t *testing.T) {
 
 	missingkey := []byte("not found")
 	if s.Has(missingkey) == true {
-		t.Fatalf("expected missing key %v")
+		t.Fatalf("expected missing key %q", missingkey)
 	} else if s.Get(missingkey, nil) == true {
 		t.Fatalf("expected missing key %v")
 	} else if s.Min(nil) == false {
@@ -156,17 +159,28 @@ func TestLookup(t *testing.T) {
 			if s.Has(key) == false {
 				t.Fatalf("missing key %v", string(key))
 			}
-			s.Get(key, func(_ api.Index, _ int64, _, nd api.Node) bool {
-				verifynode(refnds[j], nd)
-				return true
-			})
+			s.Get(
+				key,
+				func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+					if err != nil {
+						t.Error(err)
+					}
+					verifynode(refnds[j], nd)
+					return true
+				})
 		}
-		s.Min(func(_ api.Index, _ int64, _, nd api.Node) bool {
+		s.Min(func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			}
 			verifynode(refnds[0], nd)
 			return true
 		})
 		last := len(refnds) - 1
-		s.Max(func(_ api.Index, _ int64, _, nd api.Node) bool {
+		s.Max(func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			}
 			verifynode(refnds[last], nd)
 			return true
 		})
@@ -176,13 +190,16 @@ func TestLookup(t *testing.T) {
 
 	for i := 1; i <= 2000; i += 7 {
 		//t.Logf("trying %v", i)
-		llrb := refllrb(i)
+		llrb := refllrb(t, i)
 
 		// gather reference list of nodes
 		refnds := make([]api.Node, 0)
 		llrb.Range(
 			nil, nil, "both", false,
-			func(_ api.Index, _ int64, _, nd api.Node) bool {
+			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				refnds = append(refnds, nd)
 				return true
 			})
@@ -251,16 +268,20 @@ func TestPartialRange(t *testing.T) {
 	for _, kv := range inserts {
 		llrb.Upsert(
 			kv[0], kv[1],
-			func(_ api.Index, _ int64, _, oldnd api.Node) bool {
-				if oldnd != nil {
+			func(_ api.Index, _ int64, _, oldnd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				} else if oldnd != nil {
 					t.Errorf("expected nil")
 				}
 				return false
 			})
 		d.Upsert(
 			kv[0], kv[1],
-			func(_ api.Index, _ int64, _, oldnd api.Node) bool {
-				if oldnd != nil {
+			func(_ api.Index, _ int64, _, oldnd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				} else if oldnd != nil {
 					t.Errorf("expected nil")
 				}
 				return false
@@ -298,13 +319,19 @@ func TestPartialRange(t *testing.T) {
 				//lkey, hkey, incl = []byte("20"), []byte("40"), "none"
 				d.Range(
 					lkey, hkey, incl, false,
-					func(_ api.Index, _ int64, _, nd api.Node) bool {
+					func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+						if err != nil {
+							t.Error(err)
+						}
 						refkeys = append(refkeys, string(nd.Key()))
 						return true
 					})
 				store.Range(
 					lkey, hkey, incl, false,
-					func(_ api.Index, _ int64, _, nd api.Node) bool {
+					func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+						if err != nil {
+							t.Error(err)
+						}
 						outkeys = append(outkeys, string(nd.Key()))
 						return true
 					})
@@ -317,13 +344,19 @@ func TestPartialRange(t *testing.T) {
 				refkeys, outkeys = refkeys[:0], outkeys[:0]
 				llrb.Range(
 					lkey, hkey, incl, false,
-					func(_ api.Index, _ int64, _, nd api.Node) bool {
+					func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+						if err != nil {
+							t.Error(err)
+						}
 						refkeys = append(refkeys, string(nd.Key()))
 						return true
 					})
 				store.Range(
 					lkey, hkey, incl, false,
-					func(_ api.Index, _ int64, _, nd api.Node) bool {
+					func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+						if err != nil {
+							t.Error(err)
+						}
 						outkeys = append(outkeys, string(nd.Key()))
 						return true
 					})
@@ -344,13 +377,19 @@ func TestPartialRange(t *testing.T) {
 				lkey, hkey = lkey[:len(lkey)/2], hkey[:len(hkey)/2]
 				d.Range(
 					lkey, hkey, incl, true,
-					func(_ api.Index, _ int64, _, nd api.Node) bool {
+					func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+						if err != nil {
+							t.Error(err)
+						}
 						refkeys = append(refkeys, string(nd.Key()))
 						return true
 					})
 				store.Range(
 					lkey, hkey, incl, true,
-					func(_ api.Index, _ int64, _, nd api.Node) bool {
+					func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+						if err != nil {
+							t.Error(err)
+						}
 						outkeys = append(outkeys, string(nd.Key()))
 						return true
 					})
@@ -363,13 +402,19 @@ func TestPartialRange(t *testing.T) {
 				refkeys, outkeys = refkeys[:0], outkeys[:0]
 				llrb.Range(
 					lkey, hkey, incl, true,
-					func(_ api.Index, _ int64, _, nd api.Node) bool {
+					func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+						if err != nil {
+							t.Error(err)
+						}
 						refkeys = append(refkeys, string(nd.Key()))
 						return true
 					})
 				store.Range(
 					lkey, hkey, incl, true,
-					func(_ api.Index, _ int64, _, nd api.Node) bool {
+					func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+						if err != nil {
+							t.Error(err)
+						}
 						outkeys = append(outkeys, string(nd.Key()))
 						return true
 					})
@@ -403,7 +448,10 @@ func TestRange(t *testing.T) {
 		off := 0
 		s.Range(
 			nil, nil, "both", false,
-			func(_ api.Index, _ int64, _, nd api.Node) bool {
+			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				verifynode(refnds[off], nd)
 				off++
 				return true
@@ -412,7 +460,10 @@ func TestRange(t *testing.T) {
 		off = count - 1
 		s.Range(
 			nil, nil, "both", true,
-			func(_ api.Index, _ int64, _, nd api.Node) bool {
+			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				verifynode(refnds[off], nd)
 				off--
 				return true
@@ -422,11 +473,14 @@ func TestRange(t *testing.T) {
 
 	for i := 1; i <= 2000; i += 7 {
 		//t.Logf("trying %v", i)
-		llrb := refllrb(i)
+		llrb := refllrb(t, i)
 		refnds := make([]api.Node, 0)
 		llrb.Range(
 			nil, nil, "both", false,
-			func(_ api.Index, _ int64, _, nd api.Node) bool {
+			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				refnds = append(refnds, nd)
 				return true
 			})
@@ -490,16 +544,20 @@ func TestPartialIterate(t *testing.T) {
 	for _, kv := range inserts {
 		llrb.Upsert(
 			kv[0], kv[1],
-			func(_ api.Index, _ int64, _, oldnd api.Node) bool {
-				if oldnd != nil {
+			func(_ api.Index, _ int64, _, oldnd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				} else if oldnd != nil {
 					t.Errorf("expected nil")
 				}
 				return false
 			})
 		d.Upsert(
 			kv[0], kv[1],
-			func(_ api.Index, _ int64, _, oldnd api.Node) bool {
-				if oldnd != nil {
+			func(_ api.Index, _ int64, _, oldnd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				} else if oldnd != nil {
 					t.Errorf("expected nil")
 				}
 				return false
@@ -668,11 +726,14 @@ func TestIterate(t *testing.T) {
 
 	for i := 1; i <= 2000; i += 7 {
 		//t.Logf("trying %v", i)
-		llrb := refllrb(i)
+		llrb := refllrb(t, i)
 		refnds := make([]api.Node, 0)
 		llrb.Range(
 			nil, nil, "both", false,
-			func(_ api.Index, _ int64, _, nd api.Node) bool {
+			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				refnds = append(refnds, nd)
 				return true
 			})
@@ -734,7 +795,7 @@ func makekeyvalue(key, value []byte) ([]byte, []byte) {
 	return key, value
 }
 
-func refllrb(count int) *llrb.LLRB {
+func refllrb(t *testing.T, count int) *llrb.LLRB {
 	lsetts := llrb.DefaultSettings()
 	lsetts["metadata.bornseqno"] = true
 	lsetts["metadata.deadseqno"] = true
@@ -749,8 +810,10 @@ func refllrb(count int) *llrb.LLRB {
 		key, value = makekeyvalue(key, value)
 		llrb.Upsert(
 			key, value,
-			func(index api.Index, _ int64, newnd, oldnd api.Node) bool {
-				if oldnd != nil {
+			func(index api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				} else if oldnd != nil {
 					panic("expected nil")
 				} else if x := index.Count(); x != int64(i+1) {
 					panic(fmt.Errorf("expected %v, got %v", i, x))

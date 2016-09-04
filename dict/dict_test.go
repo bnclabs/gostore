@@ -25,8 +25,10 @@ func TestDict(t *testing.T) {
 	for _, kv := range inserts {
 		d.Upsert(
 			kv[0], kv[1],
-			func(_ api.Index, _ int64, newnd, oldnd api.Node) bool {
-				if oldnd != nil {
+			func(_ api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				} else if oldnd != nil {
 					t.Errorf("expected nil")
 				}
 				return false
@@ -38,10 +40,15 @@ func TestDict(t *testing.T) {
 	}
 
 	var nd api.Node
-	rc := d.Get(inserts[2][0], func(_ api.Index, _ int64, _, x api.Node) bool {
-		nd = x
-		return true
-	})
+	rc := d.Get(
+		inserts[2][0],
+		func(_ api.Index, _ int64, _, x api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			}
+			nd = x
+			return true
+		})
 	if !rc {
 		t.Errorf("missing key %v", string(inserts[2][0]))
 	}
@@ -54,7 +61,10 @@ func TestDict(t *testing.T) {
 	}
 
 	nd = nil
-	rc = d.Min(func(_ api.Index, _ int64, _, x api.Node) bool {
+	rc = d.Min(func(_ api.Index, _ int64, _, x api.Node, err error) bool {
+		if err != nil {
+			t.Error(err)
+		}
 		nd = x
 		return true
 	})
@@ -67,7 +77,10 @@ func TestDict(t *testing.T) {
 	}
 
 	nd = nil
-	rc = d.Max(func(_ api.Index, _ int64, _, x api.Node) bool {
+	rc = d.Max(func(_ api.Index, _ int64, _, x api.Node, err error) bool {
+		if err != nil {
+			t.Error(err)
+		}
 		nd = x
 		return true
 	})
@@ -82,16 +95,20 @@ func TestDict(t *testing.T) {
 	// upsert
 	d.Upsert(
 		inserts[0][0], []byte("value11"),
-		func(_ api.Index, _ int64, newnd, oldnd api.Node) bool {
-			if v := oldnd.Value(); bytes.Compare(v, inserts[0][1]) != 0 {
+		func(_ api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			} else if v := oldnd.Value(); bytes.Compare(v, inserts[0][1]) != 0 {
 				fmsg := "expected %v, got %v\n"
 				t.Errorf(fmsg, string(inserts[0][1]), string(v))
 			}
 			return false
 		})
 	// delete-min
-	d.DeleteMin(func(_ api.Index, _ int64, _, nd api.Node) bool {
-		if k := nd.Key(); bytes.Compare(k, inserts[0][0]) != 0 {
+	d.DeleteMin(func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+		if err != nil {
+			t.Error(err)
+		} else if k := nd.Key(); bytes.Compare(k, inserts[0][0]) != 0 {
 			t.Errorf("expected %v, got %v", string(inserts[0][0]), string(k))
 		} else if v := nd.Value(); bytes.Compare(v, []byte("value11")) != 0 {
 			t.Errorf("expected %v, got %v", string(inserts[0][1]), string(v))
@@ -102,8 +119,10 @@ func TestDict(t *testing.T) {
 		t.Errorf("expected %v, got %v", len(inserts)-1, d.Count())
 	}
 	// delete-max
-	d.DeleteMax(func(_ api.Index, _ int64, _, nd api.Node) bool {
-		if k := nd.Key(); bytes.Compare(k, []byte("key5")) != 0 {
+	d.DeleteMax(func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+		if err != nil {
+			t.Error(err)
+		} else if k := nd.Key(); bytes.Compare(k, []byte("key5")) != 0 {
 			t.Errorf("expected %v, got %v", "key5", string(k))
 		} else if v := nd.Value(); bytes.Compare(v, []byte("value5")) != 0 {
 			t.Errorf("expected %v, got %v", "value5", string(v))
@@ -114,12 +133,16 @@ func TestDict(t *testing.T) {
 		t.Errorf("expected %v, got %v", len(inserts)-2, d.Count())
 	}
 	// delete
-	d.Delete([]byte("key2"), func(_ api.Index, _ int64, _, nd api.Node) bool {
-		if v := nd.Value(); bytes.Compare(v, []byte("value2")) != 0 {
-			t.Errorf("expected %v, got %v", "value2", string(v))
-		}
-		return false
-	})
+	d.Delete(
+		[]byte("key2"),
+		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			} else if v := nd.Value(); bytes.Compare(v, []byte("value2")) != 0 {
+				t.Errorf("expected %v, got %v", "value2", string(v))
+			}
+			return false
+		})
 	if int(d.Count()) != (len(inserts) - 3) {
 		t.Errorf("expected %v, got %v", len(inserts)-3, d.Count())
 	}
@@ -132,24 +155,33 @@ func TestDict(t *testing.T) {
 	if d.Max(nil) == true {
 		t.Errorf("expected false")
 	}
-	d.DeleteMin(func(_ api.Index, _ int64, _, nd api.Node) bool {
-		if k, v := nd.Key(), nd.Value(); k != nil || v != nil {
+	d.DeleteMin(
+		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			} else if k, v := nd.Key(), nd.Value(); k != nil || v != nil {
+				t.Errorf("expected {nil,nil}, got {%v,%v}", k, v)
+			}
+			return false
+		})
+	d.DeleteMax(func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+		if err != nil {
+			t.Error(err)
+		} else if k, v := nd.Key(), nd.Value(); k != nil || v != nil {
 			t.Errorf("expected {nil,nil}, got {%v,%v}", k, v)
 		}
 		return false
 	})
-	d.DeleteMax(func(_ api.Index, _ int64, _, nd api.Node) bool {
-		if k, v := nd.Key(), nd.Value(); k != nil || v != nil {
-			t.Errorf("expected {nil,nil}, got {%v,%v}", k, v)
-		}
-		return false
-	})
-	d.Delete([]byte("hello"), func(_ api.Index, _ int64, _, nd api.Node) bool {
-		if v := nd.Value(); v != nil {
-			t.Errorf("expected nil, got %v", v)
-		}
-		return false
-	})
+	d.Delete(
+		[]byte("hello"),
+		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			} else if v := nd.Value(); v != nil {
+				t.Errorf("expected nil, got %v", v)
+			}
+			return false
+		})
 }
 
 func TestDictBasicRange(t *testing.T) {
@@ -168,8 +200,10 @@ func TestDictBasicRange(t *testing.T) {
 	for _, kv := range inserts {
 		d.Upsert(
 			kv[0], kv[1],
-			func(_ api.Index, _ int64, newnd, oldnd api.Node) bool {
-				if oldnd != nil {
+			func(_ api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				} else if oldnd != nil {
 					t.Errorf("expected nil")
 				}
 				return false
@@ -220,7 +254,10 @@ func TestDictBasicRange(t *testing.T) {
 		outs := make([][2][]byte, 0)
 		d.Range(
 			lowkey, highkey, incl, false,
-			func(_ api.Index, _ int64, _, nd api.Node) bool {
+			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
 				return true
 			})
@@ -232,7 +269,10 @@ func TestDictBasicRange(t *testing.T) {
 		outs = make([][2][]byte, 0)
 		d.Range(
 			lowkey, highkey, incl, false,
-			func(_ api.Index, _ int64, _, nd api.Node) bool {
+			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
 				return false
 			})
@@ -249,7 +289,10 @@ func TestDictBasicRange(t *testing.T) {
 		outs = make([][2][]byte, 0)
 		d.Range(
 			lowkey, highkey, incl, true,
-			func(_ api.Index, _ int64, _, nd api.Node) bool {
+			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
 				return true
 			})
@@ -264,7 +307,10 @@ func TestDictBasicRange(t *testing.T) {
 		outs = make([][2][]byte, 0)
 		d.Range(
 			lowkey, highkey, incl, true,
-			func(_ api.Index, _ int64, _, nd api.Node) bool {
+			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
 				return false
 			})
@@ -295,7 +341,10 @@ func TestPartialRange(t *testing.T) {
 	for _, kv := range inserts {
 		d.Upsert(
 			kv[0], kv[1],
-			func(_ api.Index, _ int64, newnd, oldnd api.Node) bool {
+			func(_ api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				if oldnd != nil {
 					t.Errorf("expected nil")
 				}
@@ -307,7 +356,10 @@ func TestPartialRange(t *testing.T) {
 	keys := make([]string, 0)
 	d.Range(
 		[]byte("key1"), []byte("key2"), "none", false,
-		func(_ api.Index, _ int64, _, nd api.Node) bool {
+		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			}
 			keys = append(keys, string(nd.Key()))
 			return true
 		})
@@ -318,7 +370,10 @@ func TestPartialRange(t *testing.T) {
 	keys = make([]string, 0)
 	d.Range(
 		[]byte("key1"), []byte("key2"), "low", false,
-		func(_ api.Index, _ int64, _, nd api.Node) bool {
+		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			}
 			keys = append(keys, string(nd.Key()))
 			return true
 		})
@@ -330,7 +385,10 @@ func TestPartialRange(t *testing.T) {
 	keys = make([]string, 0)
 	d.Range(
 		[]byte("key1"), []byte("key2"), "high", false,
-		func(_ api.Index, _ int64, _, nd api.Node) bool {
+		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			}
 			keys = append(keys, string(nd.Key()))
 			return true
 		})
@@ -342,7 +400,10 @@ func TestPartialRange(t *testing.T) {
 	keys = make([]string, 0)
 	d.Range(
 		[]byte("key1"), []byte("key2"), "both", false,
-		func(_ api.Index, _ int64, _, nd api.Node) bool {
+		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			}
 			keys = append(keys, string(nd.Key()))
 			return true
 		})
@@ -357,7 +418,10 @@ func TestPartialRange(t *testing.T) {
 	keys = make([]string, 0)
 	d.Range(
 		[]byte("key1"), []byte("key2"), "none", true,
-		func(_ api.Index, _ int64, _, nd api.Node) bool {
+		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			}
 			keys = append(keys, string(nd.Key()))
 			return true
 		})
@@ -368,7 +432,10 @@ func TestPartialRange(t *testing.T) {
 	keys = make([]string, 0)
 	d.Range(
 		[]byte("key1"), []byte("key2"), "low", true,
-		func(_ api.Index, _ int64, _, nd api.Node) bool {
+		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			}
 			keys = append(keys, string(nd.Key()))
 			return true
 		})
@@ -380,7 +447,10 @@ func TestPartialRange(t *testing.T) {
 	keys = make([]string, 0)
 	d.Range(
 		[]byte("key1"), []byte("key2"), "high", true,
-		func(_ api.Index, _ int64, _, nd api.Node) bool {
+		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			}
 			keys = append(keys, string(nd.Key()))
 			return true
 		})
@@ -392,7 +462,10 @@ func TestPartialRange(t *testing.T) {
 	keys = make([]string, 0)
 	d.Range(
 		[]byte("key1"), []byte("key2"), "both", true,
-		func(_ api.Index, _ int64, _, nd api.Node) bool {
+		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			}
 			keys = append(keys, string(nd.Key()))
 			return true
 		})
@@ -419,8 +492,10 @@ func TestDictRange(t *testing.T) {
 	for _, kv := range inserts {
 		d.Upsert(
 			kv[0], kv[1],
-			func(_ api.Index, _ int64, newnd, oldnd api.Node) bool {
-				if oldnd != nil {
+			func(_ api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				} else if oldnd != nil {
 					t.Errorf("expected nil")
 				}
 				return false
@@ -473,7 +548,10 @@ func TestDictRange(t *testing.T) {
 		count, prev := 0, []byte(nil)
 		d.Range(
 			lkey, hkey, incl, false,
-			func(_ api.Index, _ int64, _, nd api.Node) bool {
+			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				key := nd.Key()
 				if prev != nil && bytes.Compare(key, prev) != 1 {
 					fmsg := "failed for %v (%v,%v,%v)"
@@ -488,7 +566,10 @@ func TestDictRange(t *testing.T) {
 		count = 0
 		d.Range(
 			lkey, hkey, incl, false,
-			func(_ api.Index, _ int64, _, nd api.Node) bool {
+			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				verify(lkey, hkey, incl, nd)
 				count++
 				return false
@@ -502,7 +583,10 @@ func TestDictRange(t *testing.T) {
 		count, prev = 0, []byte(nil)
 		d.Range(
 			lkey, hkey, incl, true,
-			func(_ api.Index, _ int64, _, nd api.Node) bool {
+			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				key := nd.Key()
 				if prev != nil && bytes.Compare(key, prev) != -1 {
 					fmsg := "failed for %v (%v,%v,%v)"
@@ -517,7 +601,10 @@ func TestDictRange(t *testing.T) {
 		count = 0
 		d.Range(
 			lkey, hkey, incl, true,
-			func(_ api.Index, _ int64, _, nd api.Node) bool {
+			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				verify(lkey, hkey, incl, nd)
 				count++
 				return false
@@ -545,8 +632,10 @@ func TestDictBasicIterate(t *testing.T) {
 	for _, kv := range inserts {
 		d.Upsert(
 			kv[0], kv[1],
-			func(_ api.Index, _ int64, newnd, oldnd api.Node) bool {
-				if oldnd != nil {
+			func(_ api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				} else if oldnd != nil {
 					t.Errorf("expected nil")
 				}
 				return false
@@ -590,7 +679,10 @@ func TestDictBasicIterate(t *testing.T) {
 		refs := make([][2][]byte, 0)
 		d.Range(
 			lowkey, highkey, incl, false,
-			func(_ api.Index, _ int64, _, nd api.Node) bool {
+			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				refs = append(refs, [2][]byte{nd.Key(), nd.Value()})
 				return true
 			})
@@ -611,7 +703,10 @@ func TestDictBasicIterate(t *testing.T) {
 		refs = make([][2][]byte, 0)
 		d.Range(
 			lowkey, highkey, incl, true,
-			func(_ api.Index, _ int64, _, nd api.Node) bool {
+			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				refs = append(refs, [2][]byte{nd.Key(), nd.Value()})
 				return true
 			})
@@ -647,8 +742,10 @@ func TestPartialIterate(t *testing.T) {
 	for _, kv := range inserts {
 		d.Upsert(
 			kv[0], kv[1],
-			func(_ api.Index, _ int64, newnd, oldnd api.Node) bool {
-				if oldnd != nil {
+			func(_ api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				} else if oldnd != nil {
 					t.Errorf("expected nil")
 				}
 				return false
@@ -771,8 +868,10 @@ func TestDictIterate(t *testing.T) {
 	for _, kv := range inserts {
 		d.Upsert(
 			kv[0], kv[1],
-			func(_ api.Index, _ int64, newnd, oldnd api.Node) bool {
-				if oldnd != nil {
+			func(_ api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				} else if oldnd != nil {
 					t.Errorf("expected nil")
 				}
 				return false
@@ -799,7 +898,10 @@ func TestDictIterate(t *testing.T) {
 		refs := make([][2][]byte, 0)
 		d.Range(
 			lowkey, highkey, incl, false,
-			func(_ api.Index, _ int64, _, nd api.Node) bool {
+			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				refs = append(refs, [2][]byte{nd.Key(), nd.Value()})
 				return true
 			})
@@ -819,7 +921,10 @@ func TestDictIterate(t *testing.T) {
 		refs = make([][2][]byte, 0)
 		d.Range(
 			lowkey, highkey, incl, true,
-			func(_ api.Index, _ int64, _, nd api.Node) bool {
+			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				refs = append(refs, [2][]byte{nd.Key(), nd.Value()})
 				return true
 			})
@@ -849,7 +954,7 @@ func TestDictRsnapshot(t *testing.T) {
 	for _, kv := range inserts {
 		d.Upsert(
 			kv[0], kv[1],
-			func(_ api.Index, _ int64, newnd, oldnd api.Node) bool {
+			func(_ api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
 				if oldnd != nil {
 					t.Errorf("expected nil")
 				}
@@ -865,13 +970,15 @@ func TestDictRsnapshot(t *testing.T) {
 	rd := <-snapch
 
 	d.Upsert(inserts[1][0], []byte("newvalue"), nil)
-	rc := rd.Get(inserts[1][0], func(_ api.Index, _ int64, _, nd api.Node) bool {
-		if v := nd.Value(); bytes.Compare(v, inserts[1][1]) != 0 {
-			t.Errorf("expected %v, got %v", inserts[1][1], v)
-			return false
-		}
-		return true
-	})
+	rc := rd.Get(
+		inserts[1][0],
+		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+			if v := nd.Value(); bytes.Compare(v, inserts[1][1]) != 0 {
+				t.Errorf("expected %v, got %v", inserts[1][1], v)
+				return false
+			}
+			return true
+		})
 	if rc == false {
 		t.Errorf("missing key %v", string(inserts[1][0]))
 	}

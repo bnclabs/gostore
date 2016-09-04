@@ -114,39 +114,47 @@ func (d *Dict) Has(key []byte) bool {
 // Get implement IndexReader{} interface.
 func (d *Dict) Get(key []byte, callb api.NodeCallb) bool {
 	hashv := crc64.Checksum(key, crcisotab)
-	if nd, ok := d.dict[hashv]; ok {
-		if callb == nil {
-			return true
-		}
-		return callb(d, 0, nd, nd)
+	nd, ok := d.dict[hashv]
+	if callb == nil {
+		return ok
+	} else if ok {
+		callb(d, 0, nd, nd, nil)
+		return true
 	}
+	callb(d, 0, nil, nil, api.ErrorKeyMissing)
 	return false
 }
 
 // Min implement IndexReader{} interface.
 func (d *Dict) Min(callb api.NodeCallb) bool {
 	if len(d.dict) == 0 {
+		if callb != nil {
+			callb(d, 0, nil, nil, api.ErrorKeyMissing)
+		}
 		return false
 	}
 	hashv := d.sorted()[0]
-	if callb == nil {
-		return true
+	if callb != nil {
+		nd := d.dict[hashv]
+		callb(d, 0, nd, nd, nil)
 	}
-	nd := d.dict[hashv]
-	return callb(d, 0, nd, nd)
+	return true
 }
 
 // Max implement IndexReader{} interface.
 func (d *Dict) Max(callb api.NodeCallb) bool {
 	if len(d.dict) == 0 {
+		if callb != nil {
+			callb(d, 0, nil, nil, api.ErrorKeyMissing)
+		}
 		return false
 	}
 	hashks := d.sorted()
-	if callb == nil {
-		return true
+	if callb != nil {
+		nd := d.dict[hashks[len(hashks)-1]]
+		callb(d, 0, nd, nd, nil)
 	}
-	nd := d.dict[hashks[len(hashks)-1]]
-	return callb(d, 0, nd, nd)
+	return true
 }
 
 // Range implement IndexReader{} interface.
@@ -197,7 +205,7 @@ func (d *Dict) rangeforward(lk, hk []byte, incl string, callb api.NodeCallb) {
 	for ; start < len(hashks); start++ {
 		nd = d.dict[hashks[start]]
 		if hk == nil || (api.Binarycmp(nd.key, hk, cmp == 1) < cmp) {
-			if callb(d, 0, nd, nd) == false {
+			if callb(d, 0, nd, nd, nil) == false {
 				break
 			}
 			continue
@@ -239,7 +247,7 @@ func (d *Dict) rangebackward(lk, hk []byte, incl string, callb api.NodeCallb) {
 	for ; start >= 0; start-- {
 		nd = d.dict[hashks[start]]
 		if lk == nil || (api.Binarycmp(nd.key, lk, cmp == 0) > cmp) {
-			if callb(d, 0, nd, nd) == false {
+			if callb(d, 0, nd, nd, nil) == false {
 				break
 			}
 			continue
@@ -303,12 +311,64 @@ func (d *Dict) Upsert(key, value []byte, callb api.NodeCallb) error {
 	oldnd, ok := d.dict[hashv]
 	if callb != nil {
 		if ok == false {
-			callb(d, 0, newnd, nil)
+			callb(d, 0, newnd, nil, nil)
 		} else {
-			callb(d, 0, newnd, oldnd)
+			callb(d, 0, newnd, oldnd, nil)
 		}
 	}
 	d.dict[hashv] = newnd
+	return nil
+}
+
+// DeleteMin implement IndexWriter{} interface.
+func (d *Dict) DeleteMin(callb api.NodeCallb) (err error) {
+	if len(d.dict) > 0 {
+		d.Min(func(idx api.Index, i int64, nnd, ond api.Node, e error) bool {
+			if e != nil {
+				err = e
+				callb(idx, i, nnd, ond, e)
+			} else {
+				err = d.Delete(ond.Key(), callb)
+			}
+			return false
+		})
+	}
+	return
+}
+
+// DeleteMax implement IndexWriter{} interface.
+func (d *Dict) DeleteMax(callb api.NodeCallb) (err error) {
+	if len(d.dict) > 0 {
+		d.Max(func(idx api.Index, i int64, nnd, ond api.Node, e error) bool {
+			if e != nil {
+				err = e
+				callb(idx, i, nnd, ond, e)
+			} else {
+				err = d.Delete(ond.Key(), callb)
+			}
+			return false
+		})
+	}
+	return
+}
+
+// Delete implement IndexWriter{} interface.
+func (d *Dict) Delete(key []byte, callb api.NodeCallb) error {
+	if len(d.dict) > 0 {
+		hashv := crc64.Checksum(key, crcisotab)
+		deleted, ok := d.dict[hashv]
+		if callb == nil && !ok {
+			return api.ErrorKeyMissing
+
+		} else if callb != nil {
+			if !ok {
+				callb(d, 0, nil, nil, api.ErrorKeyMissing)
+			} else {
+				callb(d, 0, deleted, deleted, nil)
+			}
+		}
+		delete(d.dict, hashv)
+	}
 	return nil
 }
 
@@ -317,9 +377,9 @@ func (d *Dict) Mutations(cmds []byte, keys, values [][]byte, callb api.NodeCallb
 	var i int
 	var cmd byte
 
-	localfn := func(index api.Index, _ int64, newnd, oldnd api.Node) bool {
+	localfn := func(idx api.Index, _ int64, nnd, ond api.Node, err error) bool {
 		if callb != nil {
-			callb(index, int64(i), newnd, oldnd)
+			callb(idx, int64(i), nnd, ond, err)
 		}
 		return false
 	}
@@ -336,45 +396,6 @@ func (d *Dict) Mutations(cmds []byte, keys, values [][]byte, callb api.NodeCallb
 		case api.DeleteCmd:
 			d.Delete(key, localfn)
 		}
-	}
-	return nil
-}
-
-// DeleteMin implement IndexWriter{} interface.
-func (d *Dict) DeleteMin(callb api.NodeCallb) error {
-	if len(d.dict) > 0 {
-		d.Min(func(_ api.Index, _ int64, _, nd api.Node) bool {
-			d.Delete(nd.Key(), callb)
-			return true
-		})
-	}
-	return nil
-}
-
-// DeleteMax implement IndexWriter{} interface.
-func (d *Dict) DeleteMax(callb api.NodeCallb) error {
-	if len(d.dict) > 0 {
-		d.Max(func(_ api.Index, _ int64, _, nd api.Node) bool {
-			d.Delete(nd.Key(), callb)
-			return true
-		})
-	}
-	return nil
-}
-
-// Delete implement IndexWriter{} interface.
-func (d *Dict) Delete(key []byte, callb api.NodeCallb) error {
-	if len(d.dict) > 0 {
-		hashv := crc64.Checksum(key, crcisotab)
-		deleted, ok := d.dict[hashv]
-		if callb != nil {
-			if ok == false {
-				callb(d, 0, nil, nil)
-			} else {
-				callb(d, 0, deleted, deleted)
-			}
-		}
-		delete(d.dict, hashv)
 	}
 	return nil
 }

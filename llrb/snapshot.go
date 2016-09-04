@@ -202,13 +202,15 @@ func (snapshot *LLRBSnapshot) Get(key []byte, callb api.NodeCallb) bool {
 		}
 	}()
 
-	if nd := snapshot.get(key); nd != nil {
-		if callb == nil {
-			return true
+	if nd := snapshot.get(key); nd == nil {
+		if callb != nil {
+			callb(snapshot.llrb, 0, nil, nil, api.ErrorKeyMissing)
 		}
-		return callb(snapshot.llrb, 0, nd, nd)
+		return false
+	} else if callb != nil {
+		callb(snapshot.llrb, 0, nd, nd, nil)
 	}
-	return false
+	return true
 }
 
 func (snapshot *LLRBSnapshot) get(key []byte) api.Node {
@@ -235,13 +237,15 @@ func (snapshot *LLRBSnapshot) Min(callb api.NodeCallb) bool {
 		}
 	}()
 
-	if nd := snapshot.min(); nd != nil {
-		if callb == nil {
-			return true
+	if nd := snapshot.min(); nd == nil {
+		if callb != nil {
+			callb(snapshot.llrb, 0, nil, nil, api.ErrorKeyMissing)
 		}
-		return callb(snapshot.llrb, 0, nd, nd)
+		return false
+	} else if callb != nil {
+		callb(snapshot.llrb, 0, nd, nd, nil)
 	}
-	return false
+	return true
 }
 
 func (snapshot *LLRBSnapshot) min() api.Node {
@@ -265,13 +269,15 @@ func (snapshot *LLRBSnapshot) Max(callb api.NodeCallb) bool {
 		}
 	}()
 
-	if nd := snapshot.max(); nd != nil {
-		if callb == nil {
-			return true
+	if nd := snapshot.max(); nd == nil {
+		if callb != nil {
+			callb(snapshot.llrb, 0, nil, nil, api.ErrorKeyMissing)
 		}
-		return callb(snapshot.llrb, 0, nd, nd)
+		return false
+	} else if callb != nil {
+		callb(snapshot.llrb, 0, nd, nd, nil)
 	}
-	return false
+	return true
 }
 
 func (snapshot *LLRBSnapshot) max() api.Node {

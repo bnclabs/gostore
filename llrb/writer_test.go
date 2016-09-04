@@ -138,7 +138,10 @@ func TestLLRBMvcclBasicLookup(t *testing.T) {
 	var nd api.Node
 	rc := snapshot.Get(
 		inserts[2][0],
-		func(_ api.Index, _ int64, _, x api.Node) bool {
+		func(_ api.Index, _ int64, _, x api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			}
 			nd = x
 			return true
 		})
@@ -154,7 +157,10 @@ func TestLLRBMvcclBasicLookup(t *testing.T) {
 	}
 	// min
 	nd = nil
-	rc = snapshot.Min(func(_ api.Index, _ int64, _, x api.Node) bool {
+	rc = snapshot.Min(func(_ api.Index, _ int64, _, x api.Node, err error) bool {
+		if err != nil {
+			t.Error(err)
+		}
 		nd = x
 		return true
 	})
@@ -169,7 +175,10 @@ func TestLLRBMvcclBasicLookup(t *testing.T) {
 	}
 	// max
 	nd = nil
-	rc = snapshot.Max(func(_ api.Index, _ int64, _, x api.Node) bool {
+	rc = snapshot.Max(func(_ api.Index, _ int64, _, x api.Node, err error) bool {
+		if err != nil {
+			t.Error(err)
+		}
 		nd = x
 		return true
 	})
@@ -213,7 +222,10 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 	countref := llrb.Count()
 	llrb.Upsert(
 		inserts[0][0], newvalue,
-		func(index api.Index, _ int64, newnd, oldnd api.Node) bool {
+		func(index api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			}
 			newnd.Setvbno(vbno).SetVbuuid(vbuuid).SetBornseqno(seqno)
 			vs := oldnd.Value()
 			if bytes.Compare(vs, inserts[0][1]) != 0 {
@@ -242,7 +254,10 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 	var nd api.Node
 	rc := snapshot.Get(
 		inserts[0][0],
-		func(_ api.Index, _ int64, _, x api.Node) bool {
+		func(_ api.Index, _ int64, _, x api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			}
 			nd = x
 			return true
 		})
@@ -263,7 +278,10 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 	//-- delete-min
 	countref, key, value := llrb.Count(), []byte(nil), []byte(nil)
 	llrb.DeleteMin(
-		func(index api.Index, _ int64, _, nd api.Node) bool {
+		func(index api.Index, _ int64, _, nd api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			}
 			key, value = nd.Key(), nd.Value()
 			fmsg := "expected %v, got %v"
 			if bytes.Compare(key, inserts[0][0]) != 0 {
@@ -285,7 +303,10 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 	nd = nil
 	rc = snapshot.Get(
 		key,
-		func(_ api.Index, _ int64, _, x api.Node) bool {
+		func(_ api.Index, _ int64, _, x api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			}
 			nd = x
 			return true
 		})
@@ -311,7 +332,10 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 	// delete-max
 	countref, key, value = llrb.Count(), nil, nil
 	llrb.DeleteMax(
-		func(index api.Index, _ int64, _, nd api.Node) bool {
+		func(index api.Index, _ int64, _, nd api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			}
 			key, value = nd.Key(), nd.Value()
 			fmsg := "expected %v, got %v"
 			if bytes.Compare(key, []byte("key5")) != 0 {
@@ -333,7 +357,10 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 	nd = nil
 	rc = snapshot.Get(
 		key,
-		func(_ api.Index, _ int64, _, x api.Node) bool {
+		func(_ api.Index, _ int64, _, x api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			}
 			nd = x
 			return true
 		})
@@ -359,7 +386,10 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 	countref, key, value = llrb.Count(), []byte("key2"), nil
 	llrb.Delete(
 		key,
-		func(index api.Index, _ int64, _, nd api.Node) bool {
+		func(index api.Index, _ int64, _, nd api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			}
 			value = nd.Value()
 			fmsg := "expected %v, got %v"
 			if bytes.Compare(value, []byte("value2")) != 0 {
@@ -379,7 +409,10 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 	nd = nil
 	rc = snapshot.Get(
 		key,
-		func(_ api.Index, _ int64, _, x api.Node) bool {
+		func(_ api.Index, _ int64, _, x api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			}
 			nd = x
 			return true
 		})
@@ -468,7 +501,10 @@ func TestLLRBMvccBasicRange(t *testing.T) {
 		outs := make([][2][]byte, 0)
 		snapshot.Range(
 			lowkey, highkey, incl, false,
-			func(_ api.Index, _ int64, _, nd api.Node) bool {
+			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
 				return true
 			})
@@ -480,7 +516,10 @@ func TestLLRBMvccBasicRange(t *testing.T) {
 		outs = make([][2][]byte, 0)
 		snapshot.Range(
 			lowkey, highkey, incl, false,
-			func(_ api.Index, _ int64, _, nd api.Node) bool {
+			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
 				return false
 			})
@@ -522,8 +561,10 @@ func TestPartialMvccRange(t *testing.T) {
 		key, value = makekeyvalue(key, value)
 		llrb.Upsert(
 			key, value,
-			func(index api.Index, _ int64, newnd, oldnd api.Node) bool {
-				if oldnd != nil {
+			func(index api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				} else if oldnd != nil {
 					t.Errorf("expected nil")
 				} else if x := llrb.Count(); x != int64(i+1) {
 					t.Errorf("expected %v, got %v", i, x)
@@ -555,7 +596,10 @@ func TestPartialMvccRange(t *testing.T) {
 		llrbks, llrbvs := make([][]byte, 0), make([][]byte, 0)
 		snapshot.Range(
 			lowkey, highkey, incl, false,
-			func(_ api.Index, _ int64, _, nd api.Node) bool {
+			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				llrbks = append(llrbks, nd.Key())
 				llrbvs = append(llrbvs, nd.Value())
 				return true
@@ -563,7 +607,10 @@ func TestPartialMvccRange(t *testing.T) {
 		dks, dvs := make([][]byte, 0), make([][]byte, 0)
 		d.Range(
 			lowkey, highkey, incl, false,
-			func(_ api.Index, _ int64, _, nd api.Node) bool {
+			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				dks, dvs = append(dks, nd.Key()), append(dvs, nd.Value())
 				return true
 			})
@@ -584,7 +631,10 @@ func TestPartialMvccRange(t *testing.T) {
 		llrbks, llrbvs = make([][]byte, 0), make([][]byte, 0)
 		snapshot.Range(
 			lowkey, highkey, incl, true,
-			func(_ api.Index, _ int64, _, nd api.Node) bool {
+			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				llrbks = append(llrbks, nd.Key())
 				llrbvs = append(llrbvs, nd.Value())
 				return true
@@ -592,7 +642,10 @@ func TestPartialMvccRange(t *testing.T) {
 		dks, dvs = make([][]byte, 0), make([][]byte, 0)
 		d.Range(
 			lowkey, highkey, incl, true,
-			func(_ api.Index, _ int64, _, nd api.Node) bool {
+			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				dks, dvs = append(dks, nd.Key()), append(dvs, nd.Value())
 				return true
 			})
@@ -638,8 +691,10 @@ func TestLLRBMvccRange(t *testing.T) {
 		key, value = makekeyvalue(key, value)
 		llrb.Upsert(
 			key, value,
-			func(index api.Index, _ int64, newnd, oldnd api.Node) bool {
-				if oldnd != nil {
+			func(index api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				} else if oldnd != nil {
 					t.Errorf("expected nil")
 				} else if x := llrb.Count(); x != int64(i+1) {
 					t.Errorf("expected %v, got %v", i, x)
@@ -670,7 +725,10 @@ func TestLLRBMvccRange(t *testing.T) {
 		llrbks, llrbvs := make([][]byte, 0), make([][]byte, 0)
 		snapshot.Range(
 			lowkey, highkey, incl, false,
-			func(_ api.Index, _ int64, _, nd api.Node) bool {
+			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				llrbks = append(llrbks, nd.Key())
 				llrbvs = append(llrbvs, nd.Value())
 				return true
@@ -678,7 +736,10 @@ func TestLLRBMvccRange(t *testing.T) {
 		dks, dvs := make([][]byte, 0), make([][]byte, 0)
 		d.Range(
 			lowkey, highkey, incl, false,
-			func(_ api.Index, _ int64, _, nd api.Node) bool {
+			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				dks, dvs = append(dks, nd.Key()), append(dvs, nd.Value())
 				return true
 			})
@@ -699,7 +760,10 @@ func TestLLRBMvccRange(t *testing.T) {
 		llrbks, llrbvs = make([][]byte, 0), make([][]byte, 0)
 		snapshot.Range(
 			lowkey, highkey, incl, true,
-			func(_ api.Index, _ int64, _, nd api.Node) bool {
+			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				llrbks = append(llrbks, nd.Key())
 				llrbvs = append(llrbvs, nd.Value())
 				return true
@@ -707,7 +771,10 @@ func TestLLRBMvccRange(t *testing.T) {
 		dks, dvs = make([][]byte, 0), make([][]byte, 0)
 		d.Range(
 			lowkey, highkey, incl, true,
-			func(_ api.Index, _ int64, _, nd api.Node) bool {
+			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				dks, dvs = append(dks, nd.Key()), append(dvs, nd.Value())
 				return true
 			})
@@ -862,8 +929,10 @@ func TestPartialMvccIterate(t *testing.T) {
 		key, value = makekeyvalue(key, value)
 		llrb.Upsert(
 			key, value,
-			func(index api.Index, _ int64, newnd, oldnd api.Node) bool {
-				if oldnd != nil {
+			func(index api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				} else if oldnd != nil {
 					t.Errorf("expected nil")
 				} else if x := index.Count(); x != int64(i+1) {
 					t.Errorf("expected %v, got %v", i, x)
@@ -992,8 +1061,10 @@ func TestLLRBMvccIterate(t *testing.T) {
 		key, value = makekeyvalue(key, value)
 		llrb.Upsert(
 			key, value,
-			func(index api.Index, _ int64, newnd, oldnd api.Node) bool {
-				if oldnd != nil {
+			func(index api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				} else if oldnd != nil {
 					t.Errorf("expected nil")
 				} else if x := index.Count(); x != int64(i+1) {
 					t.Errorf("expected %v, got %v", i, x)
@@ -1166,7 +1237,10 @@ func TestLLRBMvccInsert(t *testing.T) {
 		nd = nil
 		rc := snapshot.Get(
 			key,
-			func(_ api.Index, _ int64, _, x api.Node) bool {
+			func(_ api.Index, _ int64, _, x api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				}
 				nd = x
 				return true
 			})
@@ -1227,8 +1301,10 @@ func TestLLRBMvccUpsert(t *testing.T) {
 		newvalues = append(newvalues, value)
 		llrb.Upsert(
 			key, value,
-			func(index api.Index, _ int64, newnd, oldnd api.Node) bool {
-				if oldnd == nil {
+			func(index api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				} else if oldnd == nil {
 					t.Errorf("unexpected nil")
 				} else if x := oldnd.Vbno(); x != vbno {
 					t.Errorf("expected %v, got %v", vbno, x)
@@ -1326,8 +1402,10 @@ func TestLLRBMvccDeleteMin(t *testing.T) {
 	// delete first item
 	vbno, vbuuid := uint16(10), uint64(0xABCD)
 	llrb.DeleteMin(
-		func(index api.Index, _ int64, _, nd api.Node) bool {
-			if nd == nil {
+		func(index api.Index, _ int64, _, nd api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			} else if nd == nil {
 				t.Errorf("unexpected nil")
 			} else if x := nd.Vbno(); x != vbno {
 				t.Errorf("expected %v, got %v", vbno, x)
@@ -1384,8 +1462,10 @@ func TestLLRBMvccDelete(t *testing.T) {
 	for i, key := range keys[:count/2] {
 		llrb.Delete(
 			key,
-			func(index api.Index, _ int64, _, nd api.Node) bool {
-				if nd == nil {
+			func(index api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				} else if nd == nil {
 					t.Errorf("unexpected nil")
 				} else if x := nd.Vbno(); x != vbno {
 					t.Errorf("expected %v, got %v", vbno, x)
@@ -1412,8 +1492,10 @@ func TestLLRBMvccDelete(t *testing.T) {
 	// delete minimums
 	for i := 0; i < len(keys[count/2:(2*count)/3]); i++ {
 		llrb.DeleteMin(
-			func(index api.Index, _ int64, _, nd api.Node) bool {
-				if nd == nil {
+			func(index api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				} else if nd == nil {
 					t.Errorf("unexpected nil")
 				} else if x := nd.Vbno(); x != vbno {
 					t.Errorf("expected %v, got %v", vbno, x)
@@ -1433,8 +1515,10 @@ func TestLLRBMvccDelete(t *testing.T) {
 	// delete maximums
 	for i := 0; i < len(keys[(2*count)/3:]); i++ {
 		llrb.DeleteMax(
-			func(index api.Index, _ int64, _, nd api.Node) bool {
-				if nd == nil {
+			func(index api.Index, _ int64, _, nd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				} else if nd == nil {
 					t.Errorf("unexpected nil")
 				} else if x := nd.Vbno(); x != vbno {
 					t.Errorf("expected %v, got %v", vbno, x)
@@ -1508,8 +1592,10 @@ func makellrbmvcc(
 	}
 	llrb.Mutations(
 		cmds, keys, values,
-		func(index api.Index, i int64, newnd, oldnd api.Node) bool {
-			if oldnd != nil {
+		func(index api.Index, i int64, newnd, oldnd api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			} else if oldnd != nil {
 				t.Errorf("expected old Llrbnode as nil")
 			}
 			newnd.Setvbno(vbno).SetVbuuid(vbuuid)
