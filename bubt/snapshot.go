@@ -501,6 +501,11 @@ func (ss *Snapshot) Upsert(key, value []byte, callb api.NodeCallb) error {
 	panic("IndexWriter.Upsert() not implemented")
 }
 
+// Upsert IndexWriter{} method, will panic if called.
+func (ss *Snapshot) UpsertCas(key, value []byte, cas uint64, callb api.NodeCallb) error {
+	panic("IndexWriter.UpsertCas() not implemented")
+}
+
 // DeleteMin IndexWriter{} method, will panic if called.
 func (ss *Snapshot) DeleteMin(callb api.NodeCallb) error {
 	panic("IndexWriter.DeleteMin() not implemented")
@@ -517,7 +522,7 @@ func (ss *Snapshot) Delete(key []byte, callb api.NodeCallb) error {
 }
 
 // Mutations IndexWriter{} method, will panic if called.
-func (ss *Snapshot) Mutations(_ []byte, _, _ [][]byte, _ api.NodeCallb) error {
+func (ss *Snapshot) Mutations(_ []api.MutationCmd, callb api.NodeCallb) error {
 	panic("IndexWriter.Mutations() not implemented")
 }
 

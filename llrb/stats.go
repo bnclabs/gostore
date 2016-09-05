@@ -65,6 +65,7 @@ func (llrb *LLRB) statsmem(stats map[string]interface{}) map[string]interface{} 
 func (llrb *LLRB) stattree(stats map[string]interface{}) map[string]interface{} {
 	stats["n_count"] = llrb.n_count
 	stats["n_lookups"] = llrb.n_lookups
+	stats["n_casgets"] = llrb.n_casgets
 	stats["n_ranges"] = llrb.n_ranges
 	stats["n_inserts"] = llrb.n_inserts
 	stats["n_updates"] = llrb.n_updates

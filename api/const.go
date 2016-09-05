@@ -10,6 +10,8 @@ var ErrorActiveIterators = errors.New("activeIterators")
 
 var ErrorKeyMissing = errors.New("keyMissing")
 
+var ErrorInvalidCAS = errors.New("invalidCAS")
+
 // MinKeymem minimum key size.
 const MinKeymem = int64(32)
 

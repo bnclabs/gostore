@@ -1523,14 +1523,16 @@ func makellrb(
 	}
 	// inserts
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
-	cmds, keys, values := make([]byte, 0), make([][]byte, 0), make([][]byte, 0)
+	mcmds := make([]api.MutationCmd, 0)
 	for _, kv := range inserts {
-		cmds = append(cmds, api.UpsertCmd)
-		keys = append(keys, kv[0])
-		values = append(values, kv[1])
+		mcmds = append(mcmds, api.MutationCmd{
+			Cmd:   api.UpsertCmd,
+			Key:   kv[0],
+			Value: kv[1],
+		})
 	}
 	llrb.Mutations(
-		cmds, keys, values,
+		mcmds,
 		func(index api.Index, i int64, newnd, oldnd api.Node, err error) bool {
 			if err != nil {
 				t.Error(err)

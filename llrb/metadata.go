@@ -64,6 +64,26 @@ const (
 	mdFlagDeleted                = 0x4000
 )
 
+func (mask metadataMask) isBornSeqno() bool {
+	return (mask & mdFlagBornseqno) > 0
+}
+
+func (mask metadataMask) isDeadSeqno() bool {
+	return (mask & mdFlagDeadseqno) > 0
+}
+
+func (mask metadataMask) isMvalue() bool {
+	return (mask & mdFlagMvalue) > 0
+}
+
+func (mask metadataMask) isVbuuid() bool {
+	return (mask & mdFlagVbuuid) > 0
+}
+
+func (mask metadataMask) isFpos() bool {
+	return (mask & mdFlagFpos) > 0
+}
+
 func (mask metadataMask) enableBornSeqno() metadataMask {
 	return mask | mdFlagBornseqno
 }

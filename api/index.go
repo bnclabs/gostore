@@ -4,10 +4,17 @@ package api
 
 const (
 	UpsertCmd byte = iota + 1
+	CasCmd
 	DelminCmd
 	DelmaxCmd
 	DeleteCmd
 )
+
+type MutationCmd struct {
+	Cmd        byte
+	Cas        uint64
+	Key, Value []byte
+}
 
 // NodeCallb callback from IndexReader and IndexWriter.
 // * Don't keep any reference to newnd and oldnd:
@@ -183,6 +190,9 @@ type IndexWriter interface {
 	// Upsert a key/value pair.
 	Upsert(key, value []byte, callb NodeCallb) error
 
+	// Upsert a key/value pair.
+	UpsertCas(key, value []byte, cas uint64, callb NodeCallb) error
+
 	// DeleteMin delete the last entry in the index.
 	DeleteMin(callb NodeCallb) error
 
@@ -193,5 +203,5 @@ type IndexWriter interface {
 	Delete(key []byte, callb NodeCallb) error
 
 	// Mutations upsert one or more key/value pairs.
-	Mutations(cmds []byte, keys, values [][]byte, callb NodeCallb) error
+	Mutations(cmds []MutationCmd, callb NodeCallb) error
 }

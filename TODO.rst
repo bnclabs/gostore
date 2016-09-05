@@ -1,3 +1,4 @@
+- replace `chan bool` sync channels with `chan struct{}`
 - cleanup panic messages, log messages, and dummy-imports
 - replace panicerr() with panic()
 

@@ -18,6 +18,7 @@ import humanize "github.com/dustin/go-humanize"
 type LLRB struct { // tree container
 	// 64-bit aligned reader statistics
 	n_lookups int64
+	n_casgets int64
 	n_ranges  int64
 
 	// 64-bit aligned writer statistics
@@ -118,6 +119,7 @@ func NewLLRB(name string, setts lib.Settings) *LLRB {
 		llrb.mvcc.h_bulkfree = lib.NewhistorgramInt64(200000, 500000, 100000)
 		llrb.mvcc.h_reclaims = map[string]*lib.HistogramInt64{
 			"upsert":    lib.NewhistorgramInt64(4, 1024, 4),
+			"upsertcas": lib.NewhistorgramInt64(4, 1024, 4),
 			"mutations": lib.NewhistorgramInt64(4, 1024, 4),
 			"delmin":    lib.NewhistorgramInt64(4, 1024, 4),
 			"delmax":    lib.NewhistorgramInt64(4, 1024, 4),
@@ -487,6 +489,53 @@ func (llrb *LLRB) Upsert(key, value []byte, callb api.NodeCallb) error {
 	return nil
 }
 
+func (llrb *LLRB) UpsertCas(key, value []byte, cas uint64, callb api.NodeCallb) error {
+	if key == nil {
+		panic("Upsert(): upserting nil key")
+	}
+
+	if llrb.fmask.isBornSeqno() == false {
+		if callb != nil {
+			callb(llrb, 0, nil, nil, api.ErrorInvalidCAS)
+		}
+		return api.ErrorInvalidCAS
+	}
+
+	if llrb.mvcc.enabled {
+		return llrb.mvcc.writer.wupsertcas(key, value, cas, callb)
+	}
+
+	llrb.rw.Lock()
+
+	// Get to check for CAS
+	var currcas uint64
+	defer atomic.AddInt64(&llrb.n_casgets, 1)
+	if nd := llrb.get(key); nd != nil {
+		currcas = nd.Bornseqno()
+	}
+	if currcas != cas {
+		if callb != nil {
+			callb(llrb, 0, nil, nil, api.ErrorInvalidCAS)
+		}
+		return api.ErrorInvalidCAS
+	}
+
+	// if cas matches go ahead with upsert.
+	root, newnd, oldnd := llrb.upsert(llrb.root, 1 /*depth*/, key, value)
+	root.metadata().setblack()
+	llrb.root = root
+	llrb.upsertcounts(key, value, oldnd)
+
+	if callb != nil {
+		callb(llrb, 0, llndornil(newnd), llndornil(oldnd), nil)
+	}
+	newnd.metadata().cleardirty()
+	llrb.freenode(oldnd)
+
+	llrb.rw.Unlock()
+	return nil
+}
+
 // returns root, newnd, oldnd
 func (llrb *LLRB) upsert(
 	nd *Llrbnode, depth int64,
@@ -698,13 +747,13 @@ func (llrb *LLRB) delete(nd *Llrbnode, key []byte) (newnd, deleted *Llrbnode) {
 }
 
 // Mutations implement IndexWriter{} interface.
-func (llrb *LLRB) Mutations(cmds []byte, keys, values [][]byte, callb api.NodeCallb) error {
+func (llrb *LLRB) Mutations(cmds []api.MutationCmd, callb api.NodeCallb) error {
 	if llrb.mvcc.enabled {
-		return llrb.mvcc.writer.wmutations(cmds, keys, values, callb)
+		return llrb.mvcc.writer.wmutations(cmds, callb)
 	}
 
 	var i int
-	var cmd byte
+	var mcmd api.MutationCmd
 
 	localfn := func(index api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
 		if callb != nil {
@@ -713,23 +762,20 @@ func (llrb *LLRB) Mutations(cmds []byte, keys, values [][]byte, callb api.NodeCa
 		return false
 	}
 
-	for i, cmd = range cmds {
-		key, value := []byte(nil), []byte(nil)
-		if len(keys) > 0 {
-			key = keys[i]
-		}
-		if len(values) > 0 {
-			value = values[i]
-		}
-		switch cmd {
+	for i, mcmd = range cmds {
+		switch mcmd.Cmd {
 		case api.UpsertCmd:
-			llrb.Upsert(key, value, localfn)
+			llrb.Upsert(mcmd.Key, mcmd.Value, localfn)
+		case api.CasCmd:
+			llrb.UpsertCas(mcmd.Key, mcmd.Value, mcmd.Cas, localfn)
 		case api.DelminCmd:
 			llrb.DeleteMin(localfn)
 		case api.DelmaxCmd:
 			llrb.DeleteMax(localfn)
 		case api.DeleteCmd:
-			llrb.Delete(key, localfn)
+			llrb.Delete(mcmd.Key, localfn)
+		default:
+			panic("invalid mutation command")
 		}
 	}
 	return nil

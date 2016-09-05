@@ -320,6 +320,11 @@ func (d *Dict) Upsert(key, value []byte, callb api.NodeCallb) error {
 	return nil
 }
 
+// Upsert implement IndexWriter{} interface.
+func (d *Dict) UpsertCas(key, value []byte, cas uint64, callb api.NodeCallb) error {
+	return d.Upsert(key, value, callb) // TODO: CAS is ignore.
+}
+
 // DeleteMin implement IndexWriter{} interface.
 func (d *Dict) DeleteMin(callb api.NodeCallb) (err error) {
 	if len(d.dict) > 0 {
@@ -373,9 +378,9 @@ func (d *Dict) Delete(key []byte, callb api.NodeCallb) error {
 }
 
 // Mutations implement IndexWriter{} interface.
-func (d *Dict) Mutations(cmds []byte, keys, values [][]byte, callb api.NodeCallb) error {
+func (d *Dict) Mutations(cmds []api.MutationCmd, callb api.NodeCallb) error {
 	var i int
-	var cmd byte
+	var mcmd api.MutationCmd
 
 	localfn := func(idx api.Index, _ int64, nnd, ond api.Node, err error) bool {
 		if callb != nil {
@@ -384,17 +389,20 @@ func (d *Dict) Mutations(cmds []byte, keys, values [][]byte, callb api.NodeCallb
 		return false
 	}
 
-	for i, cmd = range cmds {
-		key, value := keys[i], values[i]
-		switch cmd {
+	for i, mcmd = range cmds {
+		switch mcmd.Cmd {
 		case api.UpsertCmd:
-			d.Upsert(key, value, localfn)
+			d.Upsert(mcmd.Key, mcmd.Value, localfn)
+		case api.CasCmd:
+			d.UpsertCas(mcmd.Key, mcmd.Value, mcmd.Cas, localfn)
 		case api.DelminCmd:
 			d.DeleteMin(localfn)
 		case api.DelmaxCmd:
 			d.DeleteMax(localfn)
 		case api.DeleteCmd:
-			d.Delete(key, localfn)
+			d.Delete(mcmd.Key, localfn)
+		default:
+			panic("invalid mutation command")
 		}
 	}
 	return nil
