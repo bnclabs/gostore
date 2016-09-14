@@ -57,6 +57,11 @@ func (d *DictSnapshot) Release() {
 	atomic.StoreUint32(&d.dead, 1)
 }
 
+// Metadata implement api.IndexSnapshot{} interface.
+func (d *DictSnapshot) Metadata() []byte {
+	return nil
+}
+
 // Validate implement api.IndexSnapshot{} interface.
 func (d *DictSnapshot) Validate() {
 	panic("Validate(): not implemented for DictSnapshot")

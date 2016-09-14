@@ -202,7 +202,7 @@ func (llrb *LLRB) Destroy() error {
 	panic("Destroy(): already dead tree")
 }
 
-// Stats implement Indexer{} interface.
+// Stats implement api.Index{} interface.
 func (llrb *LLRB) Stats() (map[string]interface{}, error) {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.stats()
@@ -212,7 +212,7 @@ func (llrb *LLRB) Stats() (map[string]interface{}, error) {
 	return llrb.stats()
 }
 
-// Fullstats implement Indexer{} interface.
+// Fullstats implement api.Index{} interface.
 func (llrb *LLRB) Fullstats() (map[string]interface{}, error) {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.fullstats()
@@ -223,7 +223,12 @@ func (llrb *LLRB) Fullstats() (map[string]interface{}, error) {
 	return llrb.fullstats()
 }
 
-// Validate implement Indexer{} interface.
+// Metadata implement api.Index{} interface.
+func (llrb *LLRB) Metadata() []byte {
+	return nil
+}
+
+// Validate implement api.Index{} interface.
 func (llrb *LLRB) Validate() {
 	if llrb.mvcc.enabled {
 		if err := llrb.mvcc.writer.validate(); err != nil {
@@ -236,7 +241,7 @@ func (llrb *LLRB) Validate() {
 	llrb.rw.RUnlock()
 }
 
-// Log implement Indexer{} interface.
+// Log implement api.Index{} interface.
 func (llrb *LLRB) Log(involved int, humanize bool) {
 	if llrb.mvcc.enabled {
 		llrb.mvcc.writer.log(involved, humanize)

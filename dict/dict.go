@@ -75,6 +75,11 @@ func (d *Dict) Fullstats() (map[string]interface{}, error) {
 	panic("dict.Fullstats() not implemented for Dict")
 }
 
+// Metadata implement api.IndexSnapshot{} interface.
+func (d *Dict) Metadata() []byte {
+	return nil
+}
+
 // Validate implement api.Index{} interface.
 func (d *Dict) Validate() {
 	panic("dict.Validate() not implemented for Dict")

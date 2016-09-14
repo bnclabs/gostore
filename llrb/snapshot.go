@@ -166,6 +166,11 @@ func (snapshot *LLRBSnapshot) Release() {
 	}
 }
 
+// Metadata implement api.Index{} interface.
+func (snapshot *LLRBSnapshot) Metadata() []byte {
+	return nil
+}
+
 // Validate implement IndexSnapshot interface.
 func (snapshot *LLRBSnapshot) Validate() {
 	snapshot.validate(snapshot.root)

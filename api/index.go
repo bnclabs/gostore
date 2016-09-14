@@ -107,6 +107,9 @@ type Index interface {
 	// in human readable format.
 	Log(involved int, humanize bool)
 
+	// Metadata return index properties as json encoded object.
+	Metadata() []byte
+
 	// Validate check whether index is in sane state.
 	Validate()
 
@@ -137,6 +140,9 @@ type IndexSnapshot interface {
 	// Release snapshot after reading. Should be called after RSnapshot() and
 	// for every Refer() calls made on that snapshot.
 	Release()
+
+	// Metadata return snapshot properties as json encoded object.
+	Metadata() []byte
 
 	// Validate check whether index is in sane state.
 	Validate()
