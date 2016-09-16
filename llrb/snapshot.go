@@ -69,6 +69,7 @@ type LLRBSnapshot struct {
 	keymemory     int64
 	valmemory     int64
 	h_upsertdepth lib.HistogramInt64
+	refcount      int64
 
 	// can be unaligned fields
 
@@ -79,9 +80,8 @@ type LLRBSnapshot struct {
 	clock *vectorclock
 
 	// snapshot specific fields
-	reclaim  []*Llrbnode
-	next     *LLRBSnapshot
-	refcount int64
+	reclaim []*Llrbnode
+	next    *LLRBSnapshot
 
 	// settings
 	fmask     metadataMask

@@ -16,7 +16,7 @@ func DefaultSettings() lib.Settings {
 		"metadata.fpos":           false,
 		"mvcc.enable":             false,
 		"mvcc.snapshot.tick":      int64(5), // 5 millisecond
-		"mvcc.writer.chanbuffer":  int64(1000),
+		"mvcc.writer.chansize":    int64(1000),
 		"nodearena.capacity":      int64(1024 * 1024 * 1024),
 		"nodearena.minblock":      int64(96),
 		"nodearena.maxblock":      int64(1024),

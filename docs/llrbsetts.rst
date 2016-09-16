@@ -10,7 +10,7 @@ LLRB settings:
 `mvcc.snapshot.tick`
     as integer, interval in milli-second for generating read-snapshots.
 
-`mvcc.writer.chanbuffer`
+`mvcc.writer.chansize`
     as integer, buffer size for mvcc writer's i/p channel.
 
 `nodearena.minblock`

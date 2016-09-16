@@ -16,67 +16,61 @@ import humanize "github.com/dustin/go-humanize"
 
 // LLRB to manage in-memory sorted index using left-leaning-red-black trees.
 type LLRB struct { // tree container
-	// 64-bit aligned reader statistics
-	n_lookups int64
-	n_casgets int64
-	n_ranges  int64
-
-	// 64-bit aligned writer statistics
-	n_count   int64 // number of nodes in the tree
-	n_inserts int64
-	n_updates int64
-	n_deletes int64
-	n_nodes   int64
-	n_frees   int64
-	n_clones  int64
-	keymemory int64 // memory used by all keys
-	valmemory int64 // memory used by all values
+	// 64-bit aligned
+	activeiter int64
+	llrbstats
 
 	// mvcc
 	mvcc struct {
-		// 64-bit aligned
-		ismut int64
-		// statistics
-		n_snapshots int64
-		n_purgedss  int64
-		n_activess  int64
-		n_cclookups int64
-		n_ccranges  int64
-
+		ismut int64 // need to be 64-bit aligned
+		mvccstats
 		// can be unaligned fields
-
 		enabled    bool
 		reclaim    []*Llrbnode
 		writer     *LLRBWriter
 		snapshot   *LLRBSnapshot
-		n_reclaims int64
 		h_bulkfree *lib.HistogramInt64
 		h_reclaims map[string]*lib.HistogramInt64
 		h_versions *lib.HistogramInt64
 	}
-
 	h_upsertdepth *lib.HistogramInt64
 
 	// can be unaligned fields
 
-	name       string
-	nodearena  api.Mallocer
-	valarena   api.Mallocer
-	root       *Llrbnode
-	borntime   time.Time
-	dead       bool
-	clock      *vectorclock // current clock
-	rw         sync.RWMutex
-	iterpool   chan *iterator
-	activeiter int64
+	name      string
+	nodearena api.Mallocer
+	valarena  api.Mallocer
+	root      *Llrbnode
+	borntime  time.Time
+	dead      bool
+	clock     *vectorclock // current clock
+	rw        sync.RWMutex
+	iterpool  chan *iterator
 
 	// settings
-	fmask     metadataMask // only 12 bits
-	mdsize    int
-	maxvb     int64
-	setts     lib.Settings
-	logprefix string
-	memratio  float64
+	fmask        metadataMask // only 12 bits
+	mdsize       int
+	maxvb        int64 // maxvb
+	iterpoolsize int64 // iterpool.size
+	naminblock   int64
+	namaxblock   int64
+	nacapacity   int64
+	napcapacity  int64
+	namaxpools   int64
+	namaxchunks  int64
+	naallocator  string
+	vaminblock   int64
+	vamaxblock   int64
+	vacapacity   int64
+	vapcapacity  int64
+	vamaxpools   int64
+	vamaxchunks  int64
+	vaallocator  string
+	writechansz  int64 // mvcc settings
+	snaptick     int64 // mvcc settings
+	setts        lib.Settings
+	logprefix    string
+	memratio     float64
 
 	// scratch pad
 	strsl []string
@@ -85,13 +79,10 @@ type LLRB struct { // tree container
 // NewLLRB a new instance of in-memory sorted index.
 func NewLLRB(name string, setts lib.Settings) *LLRB {
 	setts = make(lib.Settings).Mixin(DefaultSettings(), setts)
-
 	llrb := &LLRB{name: name, borntime: time.Now()}
-	llrb.iterpool = make(chan *iterator, setts.Int64("iterpool.size"))
+	llrb.getsettings(setts)
+	llrb.iterpool = make(chan *iterator, llrb.iterpoolsize)
 
-	llrb.validateSettings(setts)
-
-	llrb.maxvb = setts.Int64("maxvb")
 	llrb.clock = newvectorclock(llrb.maxvb)
 
 	// setup arena for nodes and node-values.
@@ -113,13 +104,12 @@ func NewLLRB(name string, setts lib.Settings) *LLRB {
 	llrb.memratio = 0.4 // (keymemory / allocated) for each arena
 
 	// mvcc
-	llrb.mvcc.enabled = setts.Bool("mvcc.enable")
 	if llrb.mvcc.enabled {
 		llrb.enableMVCC()
 	}
 
 	log.Infof("%v started ...\n", llrb.logprefix)
-	llrb.logsettings(setts)
+	llrb.logarenasettings()
 	return llrb
 }
 
@@ -1037,26 +1027,26 @@ func (llrb *LLRB) equivalent(n1, n2 *Llrbnode) bool {
 	return true
 }
 
-func (llrb *LLRB) logsettings(setts lib.Settings) {
+func (llrb *LLRB) logarenasettings() {
 	// key arena
 	stats, err := llrb.stats()
 	if err != nil {
-		panic(fmt.Errorf("logsettings(): %v", err))
+		panic(fmt.Errorf("logarenasettings(): %v", err))
 	}
 	kblocks := len(stats["node.blocks"].([]int64))
-	min := humanize.Bytes(uint64(llrb.setts.Int64("nodearena.minblock")))
-	max := humanize.Bytes(uint64(llrb.setts.Int64("nodearena.maxblock")))
-	cp := humanize.Bytes(uint64(llrb.setts.Int64("nodearena.capacity")))
-	pcp := humanize.Bytes(uint64(llrb.setts.Int64("nodearena.pool.capacity")))
+	min := humanize.Bytes(uint64(llrb.naminblock))
+	max := humanize.Bytes(uint64(llrb.namaxblock))
+	cp := humanize.Bytes(uint64(llrb.nacapacity))
+	pcp := humanize.Bytes(uint64(llrb.napcapacity))
 	fmsg := "%v key arena %v blocks over {%v %v} cap %v poolcap %v\n"
 	log.Infof(fmsg, llrb.logprefix, kblocks, min, max, cp, pcp)
 
 	// value arena
 	vblocks := len(stats["value.blocks"].([]int64))
-	min = humanize.Bytes(uint64(llrb.setts.Int64("valarena.minblock")))
-	max = humanize.Bytes(uint64(llrb.setts.Int64("valarena.maxblock")))
-	cp = humanize.Bytes(uint64(llrb.setts.Int64("valarena.capacity")))
-	pcp = humanize.Bytes(uint64(llrb.setts.Int64("valarena.pool.capacity")))
+	min = humanize.Bytes(uint64(llrb.vaminblock))
+	max = humanize.Bytes(uint64(llrb.vamaxblock))
+	cp = humanize.Bytes(uint64(llrb.vacapacity))
+	pcp = humanize.Bytes(uint64(llrb.vapcapacity))
 	fmsg = "%v val arena %v blocks over {%v %v} cap %v poolcap %v\n"
 	log.Infof(fmsg, llrb.logprefix, vblocks, min, max, cp, pcp)
 }

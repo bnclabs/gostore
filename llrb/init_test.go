@@ -24,8 +24,7 @@ func TestLLRBValidate(t *testing.T) {
 				t.Errorf("expected panic")
 			}
 		}()
-		llrb := NewLLRB("test", setts)
-		llrb.validateSettings(setts)
+		NewLLRB("test", setts)
 	}
 
 	setts := DefaultSettings()

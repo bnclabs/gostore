@@ -9,6 +9,33 @@ import gohumanize "github.com/dustin/go-humanize"
 import "github.com/prataprc/storage.go/lib"
 import "github.com/prataprc/storage.go/log"
 
+type llrbstats struct {
+	// 64-bit aligned reader statistics
+	n_lookups int64
+	n_casgets int64
+	n_ranges  int64
+
+	// 64-bit aligned writer statistics
+	n_count   int64 // number of nodes in the tree
+	n_inserts int64
+	n_updates int64
+	n_deletes int64
+	n_nodes   int64
+	n_frees   int64
+	n_clones  int64
+	keymemory int64 // memory used by all keys
+	valmemory int64 // memory used by all values
+}
+
+type mvccstats struct {
+	n_snapshots int64
+	n_purgedss  int64
+	n_activess  int64
+	n_cclookups int64
+	n_ccranges  int64
+	n_reclaims  int64
+}
+
 func (llrb *LLRB) stats() (map[string]interface{}, error) {
 	stats := llrb.statsmem(map[string]interface{}{})
 	stats = llrb.stattree(stats)
