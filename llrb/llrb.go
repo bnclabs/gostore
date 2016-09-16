@@ -115,18 +115,7 @@ func NewLLRB(name string, setts lib.Settings) *LLRB {
 	// mvcc
 	llrb.mvcc.enabled = setts.Bool("mvcc.enable")
 	if llrb.mvcc.enabled {
-		llrb.mvcc.reclaim = make([]*Llrbnode, 0, 64)
-		llrb.mvcc.h_bulkfree = lib.NewhistorgramInt64(200000, 500000, 100000)
-		llrb.mvcc.h_reclaims = map[string]*lib.HistogramInt64{
-			"upsert":    lib.NewhistorgramInt64(4, 1024, 4),
-			"upsertcas": lib.NewhistorgramInt64(4, 1024, 4),
-			"mutations": lib.NewhistorgramInt64(4, 1024, 4),
-			"delmin":    lib.NewhistorgramInt64(4, 1024, 4),
-			"delmax":    lib.NewhistorgramInt64(4, 1024, 4),
-			"delete":    lib.NewhistorgramInt64(4, 1024, 4),
-		}
-		llrb.mvcc.h_versions = lib.NewhistorgramInt64(0, 32, 1)
-		llrb.spawnwriter()
+		llrb.enableMVCC()
 	}
 
 	log.Infof("%v started ...\n", llrb.logprefix)
@@ -167,6 +156,30 @@ func (llrb *LLRB) Refer() {
 // calling on this type will cause panic.
 func (llrb *LLRB) Release() {
 	panic("Release(): only allowed on snapshot")
+}
+
+func (llrb *LLRB) EnableMVCC() {
+	llrb.setts = (lib.Settings{}).Mixin(
+		llrb.setts,
+		lib.Settings{"mvcc.enable": true},
+	)
+	llrb.mvcc.enabled = true
+	llrb.enableMVCC()
+}
+
+func (llrb *LLRB) enableMVCC() {
+	llrb.mvcc.reclaim = make([]*Llrbnode, 0, 64)
+	llrb.mvcc.h_bulkfree = lib.NewhistorgramInt64(200000, 500000, 100000)
+	llrb.mvcc.h_reclaims = map[string]*lib.HistogramInt64{
+		"upsert":    lib.NewhistorgramInt64(4, 1024, 4),
+		"upsertcas": lib.NewhistorgramInt64(4, 1024, 4),
+		"mutations": lib.NewhistorgramInt64(4, 1024, 4),
+		"delmin":    lib.NewhistorgramInt64(4, 1024, 4),
+		"delmax":    lib.NewhistorgramInt64(4, 1024, 4),
+		"delete":    lib.NewhistorgramInt64(4, 1024, 4),
+	}
+	llrb.mvcc.h_versions = lib.NewhistorgramInt64(0, 32, 1)
+	llrb.spawnwriter()
 }
 
 // RSnapshot implement Index{} interface.

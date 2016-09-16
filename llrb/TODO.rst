@@ -1,5 +1,6 @@
 * IndexReader{} and IndexWriter{} APIs now include error arguments. Update the
   test case for handling error arguments.
+* test marked deletes in mvcc mode.
 * write test cases for Mutations() API.
 * if there are no outstanding snapshots, may be we can do non-mvcc
   upserts and deletes ?
