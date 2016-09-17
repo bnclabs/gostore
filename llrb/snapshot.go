@@ -73,11 +73,10 @@ type LLRBSnapshot struct {
 
 	// can be unaligned fields
 
-	llrb  *LLRB
-	id    string
-	root  *Llrbnode
-	dead  bool
-	clock *vectorclock
+	llrb *LLRB
+	id   string
+	root *Llrbnode
+	dead bool
 
 	// snapshot specific fields
 	reclaim []*Llrbnode
@@ -95,7 +94,6 @@ func (llrb *LLRB) newsnapshot(id string) *LLRBSnapshot {
 		id:    id,
 		root:  llrb.root,
 		dead:  llrb.dead,
-		clock: llrb.clock.clone(),
 		fmask: llrb.fmask,
 		// writer statistics
 		n_count:       llrb.n_count,

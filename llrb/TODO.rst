@@ -7,4 +7,3 @@
 * YCSB test cases.
 * add llrb tree validation rules, based on sedgewick paper.
 * add interface for vector-clock under api:Index{} and api:IndexSnapshot{}
-* refactor vectorclock out of llrb.

@@ -1321,9 +1321,6 @@ func TestLLRBMvccUpsert(t *testing.T) {
 				}
 
 				newnd.Setvbno(vbno).SetVbuuid(vbuuid).SetBornseqno(seqno)
-				llrb := index.(*LLRB)
-				llrb.clock.updatevbuuids([]uint16{vbno}, []uint64{vbuuid})
-				llrb.clock.updateseqnos([]uint16{vbno}, []uint64{seqno})
 				return false
 			})
 		seqno++
@@ -1602,8 +1599,6 @@ func makellrbmvcc(
 			}
 			newnd.Setvbno(vbno).SetVbuuid(vbuuid)
 			newnd.SetBornseqno(seqno + uint64(i))
-			llrb.clock.updatevbuuids([]uint16{vbno}, []uint64{vbuuid})
-			llrb.clock.updateseqnos([]uint16{vbno}, []uint64{seqno + uint64(i)})
 			return true
 		})
 	return llrb

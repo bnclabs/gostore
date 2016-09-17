@@ -1539,11 +1539,8 @@ func makellrb(
 			} else if oldnd != nil {
 				t.Errorf("expected old Llrbnode as nil")
 			}
-			llrb := index.(*LLRB)
 			newnd.Setvbno(vbno).SetVbuuid(vbuuid)
 			newnd.SetBornseqno(seqno + uint64(i))
-			llrb.clock.updatevbuuids([]uint16{vbno}, []uint64{vbuuid})
-			llrb.clock.updateseqnos([]uint16{vbno}, []uint64{seqno + uint64(i)})
 			return true
 		})
 	return llrb

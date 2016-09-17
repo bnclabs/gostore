@@ -43,7 +43,6 @@ type LLRB struct { // tree container
 	root      *Llrbnode
 	borntime  time.Time
 	dead      bool
-	clock     *vectorclock // current clock
 	rw        sync.RWMutex
 	iterpool  chan *iterator
 
@@ -82,8 +81,6 @@ func NewLLRB(name string, setts lib.Settings) *LLRB {
 	llrb := &LLRB{name: name, borntime: time.Now()}
 	llrb.getsettings(setts)
 	llrb.iterpool = make(chan *iterator, llrb.iterpoolsize)
-
-	llrb.clock = newvectorclock(llrb.maxvb)
 
 	// setup arena for nodes and node-values.
 	llrb.nodearena = llrb.newnodearena(setts)
@@ -197,7 +194,7 @@ func (llrb *LLRB) Destroy() error {
 		}
 		llrb.nodearena.Release()
 		llrb.valarena.Release()
-		llrb.root, llrb.clock = nil, nil
+		llrb.root = nil
 		llrb.setts, llrb.strsl = nil, nil
 		llrb.dead = true
 		return nil
