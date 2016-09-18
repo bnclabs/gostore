@@ -1,6 +1,4 @@
-- Mark delete, Node{} accessors (both read and write) should be atomic.
-- Finish the vector clock interface and refactor out types implementing
-  the interface.
+- Add test cases for markdelete and SetDeadseqno() and IsDeleted() APIs.
 - replace `chan bool` sync channels with `chan struct{}`
 - cleanup panic messages, log messages, and dummy-imports
 - replace panicerr() with panic()
