@@ -240,7 +240,7 @@ func (snapshot *LLRBSnapshot) Min(callb api.NodeCallb) bool {
 		}
 	}()
 
-	if nd := snapshot.min(); nd == nil {
+	if nd, _ := snapshot.min(snapshot.root); nd == nil {
 		if callb != nil {
 			callb(snapshot.llrb, 0, nil, nil, api.ErrorKeyMissing)
 		}
@@ -251,15 +251,15 @@ func (snapshot *LLRBSnapshot) Min(callb api.NodeCallb) bool {
 	return true
 }
 
-func (snapshot *LLRBSnapshot) min() api.Node {
-	var nd *Llrbnode
-	if nd = snapshot.root; nd == nil {
-		return nil
+func (snapshot *LLRBSnapshot) min(nd *Llrbnode) (api.Node, bool) {
+	if nd == nil {
+		return nil, false
+	} else if minnd, ok := snapshot.min(nd.left); ok {
+		return minnd, ok
+	} else if nd.IsDeleted() {
+		return snapshot.min(nd.right)
 	}
-	for nd.left != nil {
-		nd = nd.left
-	}
-	return nd
+	return nd, true
 }
 
 // Max implement IndexReader{} interface.
@@ -272,7 +272,7 @@ func (snapshot *LLRBSnapshot) Max(callb api.NodeCallb) bool {
 		}
 	}()
 
-	if nd := snapshot.max(); nd == nil {
+	if nd, _ := snapshot.max(snapshot.root); nd == nil {
 		if callb != nil {
 			callb(snapshot.llrb, 0, nil, nil, api.ErrorKeyMissing)
 		}
@@ -283,15 +283,15 @@ func (snapshot *LLRBSnapshot) Max(callb api.NodeCallb) bool {
 	return true
 }
 
-func (snapshot *LLRBSnapshot) max() api.Node {
-	var nd *Llrbnode
-	if nd = snapshot.root; nd == nil {
-		return nil
+func (snapshot *LLRBSnapshot) max(nd *Llrbnode) (api.Node, bool) {
+	if nd == nil {
+		return nil, false
+	} else if maxnd, ok := snapshot.max(nd.right); ok {
+		return maxnd, ok
+	} else if nd.IsDeleted() {
+		return snapshot.max(nd.left)
 	}
-	for nd.right != nil {
-		nd = nd.right
-	}
-	return nd
+	return nd, true
 }
 
 // Range implement IndexReader{} interface.

@@ -47,6 +47,7 @@ func (nd *Llrbnode) SetBornseqno(seqno uint64) api.Node {
 // SetDeadseqno implement NodeSetter{}
 func (nd *Llrbnode) SetDeadseqno(seqno uint64) api.Node {
 	if nd != nil {
+		nd.metadata().setdeleted()
 		nd.metadata().setddseq(seqno)
 	}
 	return nd
@@ -106,6 +107,14 @@ func (nd *Llrbnode) Deadseqno() uint64 {
 		return nd.metadata().ddseq()
 	}
 	return 0
+}
+
+// IsDeleted implement NodeGetter{}
+func (nd *Llrbnode) IsDeleted() bool {
+	if nd != nil {
+		return nd.metadata().isdeleted()
+	}
+	return true
 }
 
 // Vbuuid implement NodeGetter{}

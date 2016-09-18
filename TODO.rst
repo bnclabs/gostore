@@ -1,7 +1,6 @@
-- Node{} accessors (both read and write) should be atomic.
+- Mark delete, Node{} accessors (both read and write) should be atomic.
 - Finish the vector clock interface and refactor out types implementing
   the interface.
-- Should be able to do initial build of LLRB and then enable MVCC on that.
 - replace `chan bool` sync channels with `chan struct{}`
 - cleanup panic messages, log messages, and dummy-imports
 - replace panicerr() with panic()

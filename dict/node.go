@@ -3,12 +3,13 @@ package dict
 import "github.com/prataprc/storage.go/api"
 
 type dictnode struct {
-	key    []byte
-	value  []byte
-	vbno   uint16
-	vbuuid uint64
-	bornsq uint64
-	deadsq uint64
+	key     []byte
+	value   []byte
+	vbno    uint16
+	vbuuid  uint64
+	bornsq  uint64
+	deadsq  uint64
+	deleted bool
 }
 
 func newdictnode(key, value []byte) *dictnode {
@@ -43,6 +44,10 @@ func (dn *dictnode) Bornseqno() uint64 {
 // Deadseqno implement NodeGetter{} interface.
 func (dn *dictnode) Deadseqno() uint64 {
 	return dn.deadsq
+}
+
+func (dn *dictnode) IsDeleted() bool {
+	return dn.deleted
 }
 
 // Key implement NodeGetter{} interface.
@@ -92,7 +97,7 @@ func (dn *dictnode) SetBornseqno(seqno uint64) api.Node {
 // SetDeadseqno implement NodeSetter{} interface.
 func (dn *dictnode) SetDeadseqno(seqno uint64) api.Node {
 	if dn != nil {
-		dn.deadsq = seqno
+		dn.deadsq, dn.deleted = seqno, true
 	}
 	return dn
 }

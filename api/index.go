@@ -45,6 +45,9 @@ type NodeGetter interface {
 	// Deadseqno return vbucket-seqno at which this entry was deleted.
 	Deadseqno() (seqno uint64)
 
+	// IsDeleted return true if node is marked as deleted.
+	IsDeleted() bool
+
 	// Vbuuid return entry's unique vbucket id.
 	Vbuuid() (uuid uint64)
 

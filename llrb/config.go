@@ -9,6 +9,7 @@ func DefaultSettings() lib.Settings {
 	setts := lib.Settings{
 		"maxvb":                   int64(1024),
 		"iterpool.size":           int64(100),
+		"markdelete":              false,
 		"metadata.bornseqno":      false,
 		"metadata.deadseqno":      false,
 		"metadata.mvalue":         true,

@@ -257,7 +257,7 @@ func (md *metadata) setbnseq(seqno uint64) *metadata {
 
 func (md *metadata) setddseq(seqno uint64) *metadata {
 	off := mdlookup[mdOffsetmaskDdseq&md.hdr]
-	md.fields[off-1] = seqno
+	atomic.StoreUint64(&md.fields[off-1], seqno)
 	return md
 }
 
@@ -301,7 +301,7 @@ func (md *metadata) bnseq() uint64 {
 
 func (md *metadata) ddseq() uint64 {
 	off := mdlookup[mdOffsetmaskDdseq&md.hdr]
-	return md.fields[off-1]
+	return atomic.LoadUint64(&md.fields[off-1])
 }
 
 func (md *metadata) mvalue() uint64 {

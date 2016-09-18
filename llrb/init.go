@@ -7,6 +7,7 @@ import "github.com/prataprc/storage.go/lib"
 func (llrb *LLRB) getsettings(setts lib.Settings) {
 	llrb.maxvb = setts.Int64("maxvb")
 	llrb.iterpoolsize = setts.Int64("iterpool.size")
+	llrb.markdelete = setts.Bool("markdelete")
 	llrb.naminblock = setts.Int64("nodearena.minblock")
 	llrb.namaxblock = setts.Int64("nodearena.maxblock")
 	llrb.nacapacity = setts.Int64("nodearena.capacity")

@@ -106,27 +106,31 @@ func makebytes(buf []byte, size int) []byte {
 type bytesnode []byte
 
 func (n bytesnode) Vbno() (vbno uint16) {
-	panic("unexpected call")
+	panic("unsupported call")
 }
 
 func (n bytesnode) Access() (ts uint64) {
-	panic("unexpected call")
+	panic("unsupported call")
 }
 
 func (n bytesnode) Bornseqno() (seqno uint64) {
-	panic("unexpected call")
+	panic("unsupported call")
 }
 
 func (n bytesnode) Deadseqno() (seqno uint64) {
-	panic("unexpected call")
+	panic("unsupported call")
+}
+
+func (nd bytesnode) IsDeleted() bool {
+	panic("unsupported call")
 }
 
 func (n bytesnode) Vbuuid() (uuid uint64) {
-	panic("unexpected call")
+	panic("unsupported call")
 }
 
 func (n bytesnode) Fpos() (level byte, offset int64) {
-	panic("unexpected call")
+	panic("unsupported call")
 }
 
 func (n bytesnode) Key() (key []byte) {
@@ -134,29 +138,29 @@ func (n bytesnode) Key() (key []byte) {
 }
 
 func (n bytesnode) Value() (value []byte) {
-	panic("unexpected call")
+	panic("unsupported call")
 }
 
 func (n bytesnode) Setvbno(vbno uint16) Node {
-	panic("unexpected call")
+	panic("unsupported call")
 }
 
 func (n bytesnode) Setaccess(access uint64) Node {
-	panic("unexpected call")
+	panic("unsupported call")
 }
 
 func (n bytesnode) SetVbuuid(uuid uint64) Node {
-	panic("unexpected call")
+	panic("unsupported call")
 }
 
 func (n bytesnode) SetFpos(level byte, offset uint64) Node {
-	panic("unexpected call")
+	panic("unsupported call")
 }
 
 func (n bytesnode) SetBornseqno(seqno uint64) Node {
-	panic("unexpected call")
+	panic("unsupported call")
 }
 
 func (n bytesnode) SetDeadseqno(seqno uint64) Node {
-	panic("unexpected call")
+	panic("unsupported call")
 }

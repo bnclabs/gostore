@@ -53,6 +53,11 @@ func (n *node) Deadseqno() (seqno uint64) {
 	return binary.BigEndian.Uint64(n.data[18:26])
 }
 
+// IsDeleted implement NodeGetter{} interface.
+func (n *node) IsDeleted() bool {
+	panic("unsupported method")
+}
+
 // Key implement NodeGetter{} interface.
 func (n *node) Key() (key []byte) {
 	klen := binary.BigEndian.Uint16(n.data[26:28])

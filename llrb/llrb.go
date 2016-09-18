@@ -51,6 +51,7 @@ type LLRB struct { // tree container
 	mdsize       int
 	maxvb        int64 // maxvb
 	iterpoolsize int64 // iterpool.size
+	markdelete   bool
 	naminblock   int64
 	namaxblock   int64
 	nacapacity   int64
@@ -308,26 +309,27 @@ func (llrb *LLRB) Min(callb api.NodeCallb) bool {
 	defer llrb.rw.RUnlock()
 	defer atomic.AddInt64(&llrb.n_lookups, 1)
 
-	if nd := llrb.min(); nd == nil {
+	if nd, _ := llrb.min(llrb.root); nd == nil {
 		if callb != nil {
 			callb(llrb, 0, nil, nil, api.ErrorKeyMissing)
 		}
 		return false
+
 	} else if callb != nil {
 		callb(llrb, 0, nd, nd, nil)
 	}
 	return true
 }
 
-func (llrb *LLRB) min() api.Node {
-	var nd *Llrbnode
-	if nd = llrb.root; nd == nil {
-		return nil
+func (llrb *LLRB) min(nd *Llrbnode) (api.Node, bool) {
+	if nd == nil {
+		return nil, false
+	} else if minnd, ok := llrb.min(nd.left); ok {
+		return minnd, ok
+	} else if nd.IsDeleted() {
+		return llrb.min(nd.right)
 	}
-	for nd.left != nil {
-		nd = nd.left
-	}
-	return nd
+	return nd, true
 }
 
 // Max implement IndexReader{} interface.
@@ -340,26 +342,27 @@ func (llrb *LLRB) Max(callb api.NodeCallb) bool {
 	defer llrb.rw.RUnlock()
 	defer atomic.AddInt64(&llrb.n_lookups, 1)
 
-	if nd := llrb.max(); nd == nil {
+	if nd, _ := llrb.max(llrb.root); nd == nil {
 		if callb != nil {
 			callb(llrb, 0, nil, nil, api.ErrorKeyMissing)
 		}
 		return false
+
 	} else if callb != nil {
 		callb(llrb, 0, nd, nd, nil)
 	}
 	return true
 }
 
-func (llrb *LLRB) max() api.Node {
-	var nd *Llrbnode
-	if nd = llrb.root; nd == nil {
-		return nil
+func (llrb *LLRB) max(nd *Llrbnode) (api.Node, bool) {
+	if nd == nil {
+		return nil, false
+	} else if maxnd, ok := llrb.max(nd.right); ok {
+		return maxnd, ok
+	} else if nd.IsDeleted() {
+		return llrb.max(nd.left)
 	}
-	for nd.right != nil {
-		nd = nd.right
-	}
-	return nd
+	return nd, true
 }
 
 // Range from lkey to hkey, incl can be "both", "low", "high", "none"
@@ -587,28 +590,41 @@ func (llrb *LLRB) upsert(
 }
 
 // DeleteMin implement IndexWriter{} interface.
-func (llrb *LLRB) DeleteMin(callb api.NodeCallb) error {
+func (llrb *LLRB) DeleteMin(callb api.NodeCallb) (e error) {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.wdeleteMin(callb)
 	}
 
 	llrb.rw.Lock()
 
-	root, deleted := llrb.deletemin(llrb.root)
-	if root != nil {
-		root.metadata().setblack()
-	}
-	llrb.root = root
+	if llrb.markdelete {
+		llrb.Min(func(_ api.Index, i int64, _, nd api.Node, err error) bool {
+			e = err
+			if err != nil && callb != nil {
+				callb(llrb, 0, nd, nd, err)
+			} else if nd != nil && callb != nil {
+				callb(llrb, 0, nd, nd, nil)
+			}
+			return false
+		})
 
-	llrb.delcount(deleted)
+	} else {
+		root, deleted := llrb.deletemin(llrb.root)
+		if root != nil {
+			root.metadata().setblack()
+		}
+		llrb.root = root
 
-	if callb != nil {
-		nd := llndornil(deleted)
-		callb(llrb, 0, nd, nd, nil)
+		llrb.delcount(deleted)
+
+		if callb != nil {
+			nd := llndornil(deleted)
+			callb(llrb, 0, nd, nd, nil)
+		}
+		llrb.freenode(deleted)
 	}
-	llrb.freenode(deleted)
 	llrb.rw.Unlock()
-	return nil
+	return
 }
 
 // using 2-3 trees
@@ -627,29 +643,41 @@ func (llrb *LLRB) deletemin(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 }
 
 // DeleteMax implements IndexWriter{} interface.
-func (llrb *LLRB) DeleteMax(callb api.NodeCallb) error {
+func (llrb *LLRB) DeleteMax(callb api.NodeCallb) (e error) {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.wdeleteMax(callb)
 	}
 
 	llrb.rw.Lock()
 
-	root, deleted := llrb.deletemax(llrb.root)
-	if root != nil {
-		root.metadata().setblack()
+	if llrb.markdelete {
+		llrb.Max(func(_ api.Index, i int64, _, nd api.Node, err error) bool {
+			e = err
+			if err != nil && callb != nil {
+				callb(llrb, 0, nd, nd, err)
+			} else if nd != nil && callb != nil {
+				callb(llrb, 0, nd, nd, nil)
+			}
+			return false
+		})
+
+	} else {
+		root, deleted := llrb.deletemax(llrb.root)
+		if root != nil {
+			root.metadata().setblack()
+		}
+		llrb.root = root
+
+		llrb.delcount(deleted)
+
+		if callb != nil {
+			nd := llndornil(deleted)
+			callb(llrb, 0, nd, nd, nil)
+		}
+		llrb.freenode(deleted)
 	}
-	llrb.root = root
-
-	llrb.delcount(deleted)
-
-	if callb != nil {
-		nd := llndornil(deleted)
-		callb(llrb, 0, nd, nd, nil)
-	}
-	llrb.freenode(deleted)
-
 	llrb.rw.Unlock()
-	return nil
+	return
 }
 
 // using 2-3 trees
@@ -671,29 +699,44 @@ func (llrb *LLRB) deletemax(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 }
 
 // Delete implement IndexWriter{} interface.
-func (llrb *LLRB) Delete(key []byte, callb api.NodeCallb) error {
+func (llrb *LLRB) Delete(key []byte, callb api.NodeCallb) (e error) {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.wdelete(key, callb)
 	}
 
 	llrb.rw.Lock()
 
-	root, deleted := llrb.delete(llrb.root, key)
-	if root != nil {
-		root.metadata().setblack()
-	}
-	llrb.root = root
+	if llrb.markdelete {
+		llrb.Get(
+			key,
+			func(_ api.Index, i int64, _, nd api.Node, err error) bool {
+				e = err
+				if err != nil && callb != nil {
+					callb(llrb, 0, nd, nd, err)
+				} else if nd != nil && callb != nil {
+					callb(llrb, 0, nd, nd, nil)
+				}
+				return false
+			})
 
-	llrb.delcount(deleted)
+	} else {
+		root, deleted := llrb.delete(llrb.root, key)
+		if root != nil {
+			root.metadata().setblack()
+		}
+		llrb.root = root
 
-	if callb != nil {
-		nd := llndornil(deleted)
-		callb(llrb, 0, nd, nd, nil)
+		llrb.delcount(deleted)
+
+		if callb != nil {
+			nd := llndornil(deleted)
+			callb(llrb, 0, nd, nd, nil)
+		}
+		llrb.freenode(deleted)
 	}
-	llrb.freenode(deleted)
 
 	llrb.rw.Unlock()
-	return nil
+	return
 }
 
 func (llrb *LLRB) delete(nd *Llrbnode, key []byte) (newnd, deleted *Llrbnode) {
