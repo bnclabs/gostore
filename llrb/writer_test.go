@@ -92,6 +92,7 @@ func TestLLRBMvccBasicSnapshot(t *testing.T) {
 	}
 	snapshot.Release()
 
+	time.Sleep(100 * time.Millisecond)
 	if err := llrb.Destroy(); err != nil {
 		t.Fatal(err)
 	}
@@ -194,6 +195,7 @@ func TestLLRBMvcclBasicLookup(t *testing.T) {
 
 	snapshot.Release()
 
+	time.Sleep(100 * time.Millisecond)
 	if err := llrb.Destroy(); err != nil {
 		t.Fatal(err)
 	}
@@ -435,6 +437,7 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 	}
 	snapshot.Release()
 
+	time.Sleep(100 * time.Millisecond)
 	if err := llrb.Destroy(); err != nil {
 		t.Fatal(err)
 	}
@@ -535,6 +538,7 @@ func TestLLRBMvccBasicRange(t *testing.T) {
 
 	snapshot.Release()
 
+	time.Sleep(100 * time.Millisecond)
 	if err := llrb.Destroy(); err != nil {
 		t.Fatal(err)
 	}
@@ -665,6 +669,7 @@ func TestPartialMvccRange(t *testing.T) {
 
 	snapshot.Release()
 
+	time.Sleep(100 * time.Millisecond)
 	if err := llrb.Destroy(); err != nil {
 		t.Fatal(err)
 	}
@@ -794,6 +799,7 @@ func TestLLRBMvccRange(t *testing.T) {
 
 	snapshot.Release()
 
+	time.Sleep(100 * time.Millisecond)
 	if err := llrb.Destroy(); err != nil {
 		t.Fatal(err)
 	}
@@ -903,6 +909,7 @@ func TestLLRBMvccBasicIterate(t *testing.T) {
 	llrb.SetMemratio(0.04)
 	llrb.Validate()
 
+	time.Sleep(100 * time.Millisecond)
 	if err := llrb.Destroy(); err != nil {
 		t.Fatal(err)
 	}
@@ -1035,6 +1042,7 @@ func TestPartialMvccIterate(t *testing.T) {
 
 	snapshot.Release()
 
+	time.Sleep(100 * time.Millisecond)
 	if err := llrb.Destroy(); err != nil {
 		t.Fatal(err)
 	}
@@ -1262,6 +1270,7 @@ func TestLLRBMvccInsert(t *testing.T) {
 
 	snapshot.Release()
 
+	time.Sleep(100 * time.Millisecond)
 	if err := llrb.Destroy(); err != nil {
 		t.Fatal(err)
 	}

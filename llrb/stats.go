@@ -3,6 +3,7 @@ package llrb
 import "fmt"
 import "math"
 import "strings"
+import "sync/atomic"
 import "encoding/json"
 
 import gohumanize "github.com/dustin/go-humanize"
@@ -104,7 +105,7 @@ func (llrb *LLRB) stattree(stats map[string]interface{}) map[string]interface{} 
 	stats["valmemory"] = llrb.valmemory
 	stats["mvcc.n_snapshots"] = llrb.mvcc.n_snapshots
 	stats["mvcc.n_purgedss"] = llrb.mvcc.n_purgedss
-	stats["mvcc.n_activess"] = llrb.mvcc.n_activess
+	stats["mvcc.n_activess"] = atomic.LoadInt64(&llrb.mvcc.n_activess)
 	stats["mvcc.n_cclookups"] = llrb.mvcc.n_cclookups
 	stats["mvcc.n_ccranges"] = llrb.mvcc.n_ccranges
 	return stats
@@ -132,7 +133,8 @@ func (llrb *LLRB) validatestats() error {
 	}
 	// mvcc.n_snapshots should match (mvcc.n_activess + mvcc.n_purgedss)
 	n_snapshots := llrb.mvcc.n_snapshots
-	n_purgedss, n_activess := llrb.mvcc.n_purgedss, llrb.mvcc.n_activess
+	n_purgedss := llrb.mvcc.n_purgedss
+	n_activess := atomic.LoadInt64(&llrb.mvcc.n_activess)
 	if n_snapshots != (n_purgedss + n_activess) {
 		fmsg := "validatestats(): " +
 			"n_snapshots:%v != (n_activess:%v + n_purgedss:%v)"

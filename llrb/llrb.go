@@ -16,7 +16,7 @@ import humanize "github.com/dustin/go-humanize"
 
 // LLRB to manage in-memory sorted index using left-leaning-red-black trees.
 type LLRB struct { // tree container
-	// 64-bit aligned
+	// all are 64-bit aligned
 	activeiter int64
 	llrbstats
 
@@ -184,7 +184,9 @@ func (llrb *LLRB) RSnapshot(snapch chan api.IndexSnapshot) error {
 
 // Destroy implement Index{} interface.
 func (llrb *LLRB) Destroy() error {
-	if atomic.LoadInt64(&llrb.activeiter) > 0 {
+	if atomic.LoadInt64(&llrb.mvcc.n_activess) > 0 {
+		return api.ErrorActiveSnapshots
+	} else if atomic.LoadInt64(&llrb.activeiter) > 0 {
 		return api.ErrorActiveIterators
 	}
 	if llrb.dead == false {

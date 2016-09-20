@@ -128,7 +128,7 @@ func (llrb *LLRB) newsnapshot(id string) *LLRBSnapshot {
 	fmsg := "%v snapshot BORN %v nodes to reclaim...\n"
 	log.Debugf(fmsg, snapshot.logprefix, len(snapshot.reclaim))
 	llrb.mvcc.n_snapshots++
-	llrb.mvcc.n_activess++
+	atomic.AddInt64(&llrb.mvcc.n_activess, 1)
 	return snapshot
 }
 
