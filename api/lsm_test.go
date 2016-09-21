@@ -190,7 +190,7 @@ func (n *bytesnode) Deadseqno() (seqno uint64) {
 }
 
 func (nd *bytesnode) IsDeleted() bool {
-	panic("unsupported call")
+	return false
 }
 
 func (n *bytesnode) Vbuuid() (uuid uint64) {

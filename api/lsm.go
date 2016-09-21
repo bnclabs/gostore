@@ -25,7 +25,7 @@ func LSMIterators(reverse bool, iterators ...IndexIterator) IndexIterator {
 		sort.Sort(miter)
 	}
 	if len(iterators) > 0 {
-		miter.node = miter.next()
+		miter.node = miter.nextnotdeleted()
 	}
 	return miter
 }
@@ -34,7 +34,7 @@ func (miter *lsmiterator) Next() (n Node) {
 	if miter.node == nil {
 		return nil
 	}
-	n, miter.node = miter.node, miter.next()
+	n, miter.node = miter.node, miter.nextnotdeleted()
 	for {
 		if miter.node == nil {
 			return n
@@ -47,7 +47,7 @@ func (miter *lsmiterator) Next() (n Node) {
 			if cmpts < 0 {
 				n = miter.node
 			}
-			miter.node = miter.next()
+			miter.node = miter.nextnotdeleted()
 		default:
 			return n
 		}
@@ -84,6 +84,13 @@ func (miter *lsmiterator) next() Node {
 		miter.iterators[till], miter.nexts[till] = iterator, nextnode
 	}
 	return node
+}
+
+func (miter *lsmiterator) nextnotdeleted() (node Node) {
+	for node = miter.next(); node != nil && node.IsDeleted(); {
+		node = miter.next()
+	}
+	return
 }
 
 func (miter *lsmiterator) Close() {
