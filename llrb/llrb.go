@@ -976,7 +976,8 @@ func (llrb *LLRB) clone(nd *Llrbnode) (newnd *Llrbnode) {
 	// clone Llrbnode.
 	newndptr, mpool := llrb.nodearena.Alloc(nd.pool.Chunksize())
 	newnd = (*Llrbnode)(newndptr)
-	lib.Memcpy(unsafe.Pointer(newnd), unsafe.Pointer(nd), int(nd.pool.Chunksize()))
+	size := int(nd.pool.Chunksize())
+	lib.Memcpy(unsafe.Pointer(newnd), unsafe.Pointer(nd), size)
 	newnd.pool = mpool
 	// clone value if value is present.
 	if nd.metadata().ismvalue() {

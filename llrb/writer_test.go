@@ -98,7 +98,7 @@ func TestLLRBMvccBasicSnapshot(t *testing.T) {
 	}
 }
 
-func TestLLRBMvcclBasicLookup(t *testing.T) {
+func TestLLRBMvccBasicLookup(t *testing.T) {
 	inserts := [][2][]byte{
 		[2][]byte{[]byte("key1"), []byte("value1")},
 		[2][]byte{[]byte("key2"), []byte("value2")},
