@@ -1,3 +1,6 @@
+- lsm.go, test with IsDelete() returning true or false based on Deadseqno().
+- implement Clone() method for Index{} interface.
+- check whether calling multiple Destroy() is safe.
 - Add test cases for markdelete and SetDeadseqno() and IsDeleted() APIs.
 - replace `chan bool` sync channels with `chan struct{}`
 - cleanup panic messages, log messages, and dummy-imports
