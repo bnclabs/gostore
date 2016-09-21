@@ -80,7 +80,7 @@ type LLRB struct { // tree container
 func NewLLRB(name string, setts lib.Settings) *LLRB {
 	setts = make(lib.Settings).Mixin(DefaultSettings(), setts)
 	llrb := &LLRB{name: name, borntime: time.Now()}
-	llrb.getsettings(setts)
+	llrb.readsettings(setts)
 	llrb.iterpool = make(chan *iterator, llrb.iterpoolsize)
 
 	// setup arena for nodes and node-values.

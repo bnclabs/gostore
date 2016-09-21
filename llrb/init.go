@@ -4,7 +4,7 @@ import "github.com/prataprc/storage.go/malloc"
 import "github.com/prataprc/storage.go/api"
 import "github.com/prataprc/storage.go/lib"
 
-func (llrb *LLRB) getsettings(setts lib.Settings) {
+func (llrb *LLRB) readsettings(setts lib.Settings) {
 	llrb.maxvb = setts.Int64("maxvb")
 	llrb.iterpoolsize = setts.Int64("iterpool.size")
 	llrb.markdelete = setts.Bool("markdelete")
