@@ -42,6 +42,7 @@ type LLRB struct { // tree container
 	valarena  api.Mallocer
 	root      *Llrbnode
 	borntime  time.Time
+	clock     api.Clock
 	dead      bool
 	rw        sync.RWMutex
 	iterpool  chan *iterator
@@ -109,6 +110,10 @@ func NewLLRB(name string, setts lib.Settings) *LLRB {
 	log.Infof("%v started ...\n", llrb.logprefix)
 	llrb.logarenasettings()
 	return llrb
+}
+
+func (llrb *LLRB) Setclock(clock api.Clock) {
+	llrb.clock = clock
 }
 
 // SetMemratio for validating memory consumption. Set this to minimum expected
@@ -180,6 +185,11 @@ func (llrb *LLRB) RSnapshot(snapch chan api.IndexSnapshot) error {
 		return nil
 	}
 	panic("RSnapshot(): mvcc is not enabled")
+}
+
+// Updateclock implement Index{} interface.
+func (llrb *LLRB) Updateclock(clock api.Clock) {
+	llrb.clock = clock
 }
 
 // Destroy implement Index{} interface.

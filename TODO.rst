@@ -1,4 +1,6 @@
 - lsm.go, test with IsDelete() returning true or false based on Deadseqno().
+- update store/ test cases to create and update clocks for dict and llrb
+  structure.
 - implement Clone() method for Index{} interface.
 - check whether calling multiple Destroy() is safe.
 - Add test cases for markdelete and SetDeadseqno() and IsDeleted() APIs.

@@ -83,6 +83,21 @@ type NodeSetter interface {
 	SetDeadseqno(seqno uint64) Node
 }
 
+type Clock interface {
+	// Update clock upto latest msg.
+	Update(msg interface{}) Clock
+
+	// Clone creates a copy of the clock.
+	Clone() Clock
+
+	// Less compare wether this clock is less than other clock
+	Less(other Clock) bool
+
+	// LessEqual compare wether this clock is less than or equal to the
+	// other clock
+	LessEqual(other Clock) bool
+}
+
 // Index interface for managing key,value pairs.
 type Index interface {
 	// Id return index id. Typically, it is human readable and unique.
@@ -98,6 +113,9 @@ type Index interface {
 	// Caller should make sure to call snapshot.Release() once it is done with
 	// the snapshot.
 	RSnapshot(snapch chan IndexSnapshot) error
+
+	// Updateclock ties up an external clock with storage structure.
+	Updateclock(clock Clock)
 
 	// Stats return a set of index statistics.
 	Stats() (map[string]interface{}, error)
@@ -134,6 +152,9 @@ type IndexSnapshot interface {
 
 	// Isactive return whether the index is active or not.
 	Isactive() bool
+
+	// Clock return the clock at which this snapshot was created.
+	Getclock() Clock
 
 	// Refer snapshot before reading, don't hold on to it for long time.
 	// Note that RSnapshot() implicitly call a Refer() and there after Refer()

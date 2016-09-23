@@ -73,10 +73,11 @@ type LLRBSnapshot struct {
 
 	// can be unaligned fields
 
-	llrb *LLRB
-	id   string
-	root *Llrbnode
-	dead bool
+	llrb  *LLRB
+	id    string
+	root  *Llrbnode
+	clock api.Clock
+	dead  bool
 
 	// snapshot specific fields
 	reclaim []*Llrbnode
@@ -93,6 +94,7 @@ func (llrb *LLRB) newsnapshot(id string) *LLRBSnapshot {
 		llrb:  llrb,
 		id:    id,
 		root:  llrb.root,
+		clock: llrb.clock,
 		dead:  llrb.dead,
 		fmask: llrb.fmask,
 		// writer statistics
@@ -147,6 +149,11 @@ func (snapshot *LLRBSnapshot) Count() int64 {
 // Isactive implement IndexSnapshot{} interface.
 func (snapshot *LLRBSnapshot) Isactive() bool {
 	return snapshot.dead == false
+}
+
+// Getclock implement IndexSnapshot{} inteface.
+func (snapshot *LLRBSnapshot) Getclock() api.Clock {
+	return snapshot.clock
 }
 
 // Refer implement IndexSnapshot interface.

@@ -24,6 +24,7 @@ type Dict struct {
 	hashks     []uint64
 	dead       uint32
 	snapn      int
+	clock      api.Clock
 	activeiter int64
 }
 
@@ -34,6 +35,10 @@ func NewDict() *Dict {
 		dict:     make(map[uint64]*dictnode),
 		sortkeys: make([]string, 0, 10000),
 	}
+}
+
+func (d *Dict) Setclock(clock api.Clock) {
+	d.clock = clock
 }
 
 //---- api.Index{} interface.
@@ -52,6 +57,11 @@ func (d *Dict) Isactive() bool {
 func (d *Dict) RSnapshot(snapch chan api.IndexSnapshot) error {
 	snapch <- d.NewDictSnapshot()
 	return nil
+}
+
+// Updateclock implement api.Index{} interface.
+func (d *Dict) Updateclock(clock api.Clock) {
+	d.clock = clock
 }
 
 // Destroy implement api.Index{} interface.

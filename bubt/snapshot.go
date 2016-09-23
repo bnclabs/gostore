@@ -204,6 +204,11 @@ func (ss *Snapshot) RSnapshot(snapch chan api.IndexSnapshot) error {
 	return nil
 }
 
+// Updateclock implement Index{} interface.
+func (ss *Snapshot) Updateclock(clock api.Clock) {
+	panic("unsupported call, bubt is read-only")
+}
+
 // Stats implement Index{} interface.
 func (ss *Snapshot) Stats() (map[string]interface{}, error) {
 	panic("TBD")
@@ -288,6 +293,10 @@ func (ss *Snapshot) destroy() error {
 }
 
 //---- IndexSnapshot interface.
+
+func (ss *Snapshot) Getclock() api.Clock {
+	panic("TBD") // TODO: get the clock from metadata.
+}
 
 func (ss *Snapshot) Refer() {
 	atomic.AddInt64(&ss.n_snapshots, 1)
