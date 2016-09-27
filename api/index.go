@@ -115,7 +115,7 @@ type Index interface {
 	RSnapshot(snapch chan IndexSnapshot) error
 
 	// Getclock return current clock attached to the index.
-	Getclock(clock Clock)
+	Getclock() Clock
 
 	// Setclock attaches a new clock to the index.
 	Setclock(clock Clock)

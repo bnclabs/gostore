@@ -37,10 +37,6 @@ func NewDict() *Dict {
 	}
 }
 
-func (d *Dict) Setclock(clock api.Clock) {
-	d.clock = clock
-}
-
 //---- api.Index{} interface.
 
 // Count implement api.Index{} / api.IndexSnapshot{} interface.
@@ -59,8 +55,13 @@ func (d *Dict) RSnapshot(snapch chan api.IndexSnapshot) error {
 	return nil
 }
 
-// Updateclock implement api.Index{} interface.
-func (d *Dict) Updateclock(clock api.Clock) {
+// Getclock implement api.Index{} interface.
+func (d *Dict) Getclock() api.Clock {
+	return d.clock
+}
+
+// Setclock implement api.Index{} interface.
+func (d *Dict) Setclock(clock api.Clock) {
 	d.clock = clock
 }
 

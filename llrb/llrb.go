@@ -112,10 +112,6 @@ func NewLLRB(name string, setts lib.Settings) *LLRB {
 	return llrb
 }
 
-func (llrb *LLRB) Setclock(clock api.Clock) {
-	llrb.clock = clock
-}
-
 // SetMemratio for validating memory consumption. Set this to minimum expected
 // ratio of keymemory / allocated, before calling llrb.Validate().
 func (llrb *LLRB) SetMemratio(memratio float64) {
@@ -187,8 +183,13 @@ func (llrb *LLRB) RSnapshot(snapch chan api.IndexSnapshot) error {
 	panic("RSnapshot(): mvcc is not enabled")
 }
 
-// Updateclock implement Index{} interface.
-func (llrb *LLRB) Updateclock(clock api.Clock) {
+// Getclock implement Index{} interface.
+func (llrb *LLRB) Getclock() api.Clock {
+	return llrb.clock
+}
+
+// Setclock implement Index{} interface.
+func (llrb *LLRB) Setclock(clock api.Clock) {
 	llrb.clock = clock
 }
 
