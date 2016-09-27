@@ -21,6 +21,7 @@ type Snapshot struct {
 	rootblock  int64
 	rootreduce int64
 	metadata   []byte
+	clock      Clock
 
 	// statisitcs, need to be 8 byte aligned.
 	n_snapshots int64
@@ -206,7 +207,7 @@ func (ss *Snapshot) RSnapshot(snapch chan api.IndexSnapshot) error {
 
 // Setclock implement Index{} interface.
 func (ss *Snapshot) Setclock(clock api.Clock) {
-	panic("unsupported call, bubt is read-only")
+	ss.clock = clock
 }
 
 // Stats implement Index{} interface.
@@ -296,7 +297,7 @@ func (ss *Snapshot) destroy() error {
 
 // Getclock implement IndexSnapshot{} interface.
 func (ss *Snapshot) Getclock() api.Clock {
-	panic("TBD") // TODO: get the clock from metadata.
+	return ss.clock
 }
 
 // Refer implement IndexSnapshot{} interface.
