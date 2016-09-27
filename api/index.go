@@ -114,8 +114,11 @@ type Index interface {
 	// the snapshot.
 	RSnapshot(snapch chan IndexSnapshot) error
 
-	// Updateclock ties up an external clock with storage structure.
-	Updateclock(clock Clock)
+	// Getclock return current clock attached to the index.
+	Getclock(clock Clock)
+
+	// Setclock attaches a new clock to the index.
+	Setclock(clock Clock)
 
 	// Stats return a set of index statistics.
 	Stats() (map[string]interface{}, error)
@@ -153,7 +156,7 @@ type IndexSnapshot interface {
 	// Isactive return whether the index is active or not.
 	Isactive() bool
 
-	// Clock return the clock at which this snapshot was created.
+	// Getclock return the clock at which this snapshot was created.
 	Getclock() Clock
 
 	// Refer snapshot before reading, don't hold on to it for long time.
