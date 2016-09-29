@@ -21,7 +21,7 @@ type Snapshot struct {
 	rootblock  int64
 	rootreduce int64
 	metadata   []byte
-	clock      Clock
+	clock      api.Clock
 
 	// statisitcs, need to be 8 byte aligned.
 	n_snapshots int64
