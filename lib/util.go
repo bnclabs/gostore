@@ -98,6 +98,15 @@ func GetStacktrace(skip int, stack []byte) string {
 	return buf.String()
 }
 
+func Fixbuffer(buffer []byte, size int64) []byte {
+	if size == 0 {
+		return buffer
+	} else if buffer == nil || int64(cap(buffer)) < size {
+		return make([]byte, size)
+	}
+	return buffer[:size]
+}
+
 func panicerr(fmsg string, args ...interface{}) {
 	panic(fmt.Errorf(fmsg, args...))
 }
