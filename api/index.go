@@ -52,7 +52,7 @@ type NodeGetter interface {
 	Vbuuid() (uuid uint64)
 
 	// Fpos return disk backed position for value. Returned offset points
-	// to value on disk encoded as {2byte-len, value-byte-array}
+	// to value on disk encoded as {8byte-len, value-byte-array}
 	Fpos() (level byte, offset int64)
 
 	// Key return entry key as byte slice.
@@ -89,6 +89,12 @@ type Clock interface {
 
 	// Clone creates a copy of the clock.
 	Clone() Clock
+
+	// JSONMarshal return clock in JSON encoded format.
+	JSONMarshal(buf []byte) []byte
+
+	// JSONUnmarshal populates clock from JSON encoded bytes.
+	JSONUnmarshal(data []byte) Clock
 
 	// Less compare wether this clock is less than other clock
 	Less(other Clock) bool

@@ -45,3 +45,17 @@ func (this Scalarclock) Less(other Clock) bool {
 func (this Scalarclock) LessEqual(other Clock) bool {
 	return this <= other.(Scalarclock)
 }
+
+func (this Scalarclock) JSONMarshal(buf []byte) []byte {
+	buf = lib.Fixbuffer(buf, 64)
+	return strconv.AppendUint(buf, uint64(this), 16)
+}
+
+func (this Scalarclock) JSONUnmarshal(data []byte) Clock {
+	sdata := lib.Bytes2str(data)
+	clk, err := strconv.ParseUint(sdata, 16, 64)
+	if err != nil {
+		panic(fmt.Errorf("Scalarclock.JSONUnmarshal(%v): %v", sdata, err))
+	}
+	return Scalarclock(clk)
+}
