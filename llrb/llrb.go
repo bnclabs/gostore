@@ -42,7 +42,7 @@ type LLRB struct { // tree container
 	valarena  api.Mallocer
 	root      *Llrbnode
 	borntime  time.Time
-	clock     api.Clock
+	clock     unsafe.Pointer // api.Clock
 	dead      bool
 	rw        sync.RWMutex
 	iterpool  chan *iterator
@@ -185,12 +185,48 @@ func (llrb *LLRB) RSnapshot(snapch chan api.IndexSnapshot) error {
 
 // Getclock implement Index{} interface.
 func (llrb *LLRB) Getclock() api.Clock {
-	return llrb.clock
+	clock := (*api.Clock)(atomic.LoadPointer(&llrb.clock))
+	if clock == nil {
+		return nil
+	}
+	return *clock
 }
 
 // Setclock implement Index{} interface.
 func (llrb *LLRB) Setclock(clock api.Clock) {
-	llrb.clock = clock
+	atomic.StorePointer(&llrb.clock, unsafe.Pointer(&clock))
+}
+
+// Clone implement Index{} interface.
+func (llrb *LLRB) Clone(name string) api.Index {
+	if llrb.mvcc.enabled {
+		newllrb, err := llrb.mvcc.writer.clone(name)
+		if err != nil {
+			log.Errorf("%v Clone(): %v\n", llrb.logprefix, err)
+		}
+		return newllrb
+	}
+
+	llrb.rw.Lock()
+	defer llrb.rw.Unlock()
+
+	return llrb.doclone(name)
+}
+
+func (llrb *LLRB) doclone(name string) *LLRB {
+	if llrb.activeiter > 0 {
+		fmsg := "Clone(): unexpected active-iterators %v"
+		panic(fmt.Errorf(fmsg, llrb.activeiter))
+	}
+
+	newllrb := NewLLRB(llrb.name, llrb.setts)
+	clock := llrb.Getclock()
+	newllrb.clock = unsafe.Pointer(&clock)
+	newllrb.dead = llrb.dead
+
+	newllrb.root = newllrb.clonetree(llrb.root)
+
+	return newllrb
 }
 
 // Destroy implement Index{} interface.
@@ -578,7 +614,7 @@ func (llrb *LLRB) upsert(
 	} else if nd.ltkey(llrb.mdsize, key, false) {
 		nd.right, newnd, oldnd = llrb.upsert(nd.right, depth+1, key, value)
 	} else {
-		oldnd, dirty = llrb.clone(nd), false
+		oldnd, dirty = llrb.clonenode(nd), false
 		if nd.metadata().ismvalue() {
 			if nv := nd.nodevalue(); nv != nil { // free the value if present
 				nv.pool.Free(unsafe.Pointer(nv))
@@ -784,7 +820,7 @@ func (llrb *LLRB) delete(nd *Llrbnode, key []byte) (newnd, deleted *Llrbnode) {
 			if subdeleted == nil {
 				panic("delete(): fatal logic, call the programmer")
 			}
-			newnd := llrb.clone(subdeleted)
+			newnd := llrb.clonenode(subdeleted)
 			newnd.left, newnd.right = nd.left, nd.right
 			if nd.metadata().isdirty() {
 				//newnd.metadata().setdirty()
@@ -983,7 +1019,20 @@ func (llrb *LLRB) freenode(nd *Llrbnode) {
 	}
 }
 
-func (llrb *LLRB) clone(nd *Llrbnode) (newnd *Llrbnode) {
+func (llrb *LLRB) clonetree(nd *Llrbnode) *Llrbnode {
+	if nd == nil {
+		return nil
+	}
+
+	newnd := llrb.clonenode(nd)
+	llrb.n_clones--
+
+	newnd.left = llrb.clonetree(nd.left)
+	newnd.right = llrb.clonetree(nd.right)
+	return newnd
+}
+
+func (llrb *LLRB) clonenode(nd *Llrbnode) (newnd *Llrbnode) {
 	// clone Llrbnode.
 	newndptr, mpool := llrb.nodearena.Alloc(nd.pool.Chunksize())
 	newnd = (*Llrbnode)(newndptr)

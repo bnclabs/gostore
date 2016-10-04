@@ -94,7 +94,7 @@ func (llrb *LLRB) newsnapshot(id string) *LLRBSnapshot {
 		llrb:  llrb,
 		id:    id,
 		root:  llrb.root,
-		clock: llrb.clock,
+		clock: llrb.Getclock(),
 		dead:  llrb.dead,
 		fmask: llrb.fmask,
 		// writer statistics

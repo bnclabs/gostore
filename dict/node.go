@@ -101,3 +101,12 @@ func (dn *dictnode) SetDeadseqno(seqno uint64) api.Node {
 	}
 	return dn
 }
+
+func (dn *dictnode) clone() *dictnode {
+	newdn := *dn
+	newdn.key = make([]byte, len(dn.key))
+	copy(newdn.key, dn.key)
+	newdn.value = make([]byte, len(dn.value))
+	copy(newdn.value, dn.value)
+	return &newdn
+}

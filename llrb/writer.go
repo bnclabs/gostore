@@ -53,6 +53,7 @@ const (
 	cmdLlrbWriterMakeSnapshot
 	cmdLlrbWriterGetSnapshot
 	cmdLlrbWriterPurgeSnapshot
+	cmdLlrbWriterClone
 	cmdLlrbWriterDestroy
 	// maintanence commands
 	cmdLlrbWriterStats
@@ -143,6 +144,16 @@ func (writer *LLRBWriter) log(involved int, humanize bool) {
 	respch := make(chan []interface{}, 1)
 	cmd := []interface{}{cmdLlrbWriterLog, involved, humanize, respch}
 	lib.FailsafeRequest(writer.reqch, respch, cmd, writer.finch)
+}
+
+func (writer *LLRBWriter) clone(name string) (*LLRB, error) {
+	respch := make(chan []interface{}, 0)
+	cmd := []interface{}{cmdLlrbWriterClone, name, respch}
+	resp, err := lib.FailsafeRequest(writer.reqch, respch, cmd, writer.finch)
+	if err != nil {
+		return nil, err
+	}
+	return resp[0].(*LLRB), nil
 }
 
 func (writer *LLRBWriter) destroy() error {
@@ -283,6 +294,11 @@ loop:
 		case cmdLlrbWriterPurgeSnapshot:
 			writer.purgesnapshot(llrb)
 
+		case cmdLlrbWriterClone:
+			name, respch := msg[1].(string), msg[2].(chan []interface{})
+			newllrb := writer.llrb.doclone(name)
+			respch <- []interface{}{newllrb}
+
 		case cmdLlrbWriterDestroy:
 			ch := make(chan bool)
 			dodestroy(ch)
@@ -392,7 +408,7 @@ func (writer *LLRBWriter) upsert(
 		return newnd, newnd, nil, reclaim
 	}
 	reclaim = append(reclaim, nd)
-	ndmvcc := llrb.clone(nd)
+	ndmvcc := llrb.clonenode(nd)
 
 	ndmvcc = writer.walkdownrot23(ndmvcc)
 
@@ -461,7 +477,7 @@ func (writer *LLRBWriter) deletemin(
 	}
 
 	reclaim = append(reclaim, nd)
-	ndmvcc := writer.llrb.clone(nd)
+	ndmvcc := writer.llrb.clonenode(nd)
 
 	if ndmvcc.left == nil {
 		reclaim = append(reclaim, ndmvcc)
@@ -513,7 +529,7 @@ func (writer *LLRBWriter) deletemax(
 		return nil, nil, reclaim
 	}
 	reclaim = append(reclaim, nd)
-	ndmvcc := writer.llrb.clone(nd)
+	ndmvcc := writer.llrb.clonenode(nd)
 
 	if isred(ndmvcc.left) {
 		ndmvcc, reclaim = writer.rotateright(ndmvcc, reclaim)
@@ -569,7 +585,7 @@ func (writer *LLRBWriter) delete(
 		return nil, nil, reclaim
 	}
 	reclaim = append(reclaim, nd)
-	ndmvcc := llrb.clone(nd)
+	ndmvcc := llrb.clonenode(nd)
 
 	if ndmvcc.gtkey(llrb.mdsize, key, false) {
 		if ndmvcc.left == nil { // key not present. Nothing to delete
@@ -604,7 +620,7 @@ func (writer *LLRBWriter) delete(
 			if subd == nil {
 				panic("delete(): fatal logic, call the programmer")
 			}
-			newnd = llrb.clone(subd)
+			newnd = llrb.clonenode(subd)
 			newnd.left, newnd.right = ndmvcc.left, ndmvcc.right
 			if ndmvcc.metadata().isdirty() {
 				//newnd.metadata().setdirty()
@@ -826,5 +842,5 @@ func (writer *LLRBWriter) cloneifdirty(nd *Llrbnode) (*Llrbnode, bool) {
 	if nd.metadata().isdirty() { // already cloned
 		return nd, false
 	}
-	return writer.llrb.clone(nd), true
+	return writer.llrb.clonenode(nd), true
 }

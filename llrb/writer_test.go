@@ -1069,15 +1069,15 @@ func TestLLRBMvccIterate(t *testing.T) {
 		key, value = makekeyvalue(key, value)
 		llrb.Upsert(
 			key, value,
-			func(index api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
+			func(index api.Index, _ int64, nnd, ond api.Node, err error) bool {
 				if err != nil {
 					t.Error(err)
-				} else if oldnd != nil {
+				} else if ond != nil {
 					t.Errorf("expected nil")
 				} else if x := index.Count(); x != int64(i+1) {
 					t.Errorf("expected %v, got %v", i, x)
 				}
-				newnd.Setvbno(vbno).SetVbuuid(vbuuid).SetBornseqno(seqno)
+				nnd.Setvbno(vbno).SetVbuuid(vbuuid).SetBornseqno(seqno)
 				return false
 			})
 		d.Upsert(key, value, nil)
@@ -1310,17 +1310,17 @@ func TestLLRBMvccUpsert(t *testing.T) {
 		newvalues = append(newvalues, value)
 		llrb.Upsert(
 			key, value,
-			func(index api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
+			func(index api.Index, _ int64, nnd, ond api.Node, err error) bool {
 				if err != nil {
 					t.Error(err)
-				} else if oldnd == nil {
+				} else if ond == nil {
 					t.Errorf("unexpected nil")
-				} else if x := oldnd.Vbno(); x != vbno {
+				} else if x := ond.Vbno(); x != vbno {
 					t.Errorf("expected %v, got %v", vbno, x)
-				} else if x := oldnd.Vbuuid(); x != vbuuid {
+				} else if x := ond.Vbuuid(); x != vbuuid {
 					t.Errorf("expected %v, got %v", vbuuid, x)
 				}
-				x, y, z := values[i], oldnd.Value(), newnd.Value()
+				x, y, z := values[i], ond.Value(), nnd.Value()
 				if bytes.Compare(x, y) != 0 {
 					fmsg := "%q expected old %s, got %s"
 					t.Errorf(fmsg, string(key), string(x), string(y))
@@ -1329,7 +1329,7 @@ func TestLLRBMvccUpsert(t *testing.T) {
 					t.Errorf(fmsg, string(key), string(value), string(z))
 				}
 
-				newnd.Setvbno(vbno).SetVbuuid(vbuuid).SetBornseqno(seqno)
+				nnd.Setvbno(vbno).SetVbuuid(vbuuid).SetBornseqno(seqno)
 				return false
 			})
 		seqno++
@@ -1380,6 +1380,7 @@ func TestLLRBMvccUpsert(t *testing.T) {
 		t.Errorf("expected %v, got %v", x, y)
 	}
 
+	time.Sleep(100 * time.Millisecond)
 	if err := llrb.Destroy(); err != nil {
 		t.Fatal(err)
 	}
@@ -1581,6 +1582,103 @@ func TestLLRBMvccDelete(t *testing.T) {
 	}
 }
 
+func TestLLRBMvccClone(t *testing.T) {
+	setts := DefaultSettings()
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.deadseqno"] = false
+	setts["metadata.vbuuid"] = true
+	setts["mvcc.enable"] = true
+	llrb := NewLLRB("test", setts)
+	if llrb.Count() != 0 {
+		t.Fatalf("expected an empty dict")
+	}
+	// inserts
+	inserts, n := make([][2][]byte, 0), 100
+	for i := 0; i < n; i += 2 {
+		key, value := fmt.Sprintf("key%v", i), fmt.Sprintf("value%v", i)
+		inserts = append(inserts, [2][]byte{[]byte(key), []byte(value)})
+	}
+	for _, kv := range inserts {
+		llrb.Upsert(
+			kv[0], kv[1],
+			func(_ api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				} else if oldnd != nil {
+					t.Errorf("expected nil")
+				}
+				return false
+			})
+	}
+
+	snapch := make(chan api.IndexSnapshot, 1)
+	if err := llrb.RSnapshot(snapch); err != nil {
+		t.Error(err)
+	}
+	snapshot := <-snapch
+
+	refkeys, refvalues := make([][]byte, 0), make([][]byte, 0)
+	snapshot.Range(
+		nil, nil, "both", false,
+		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+			key := make([]byte, len(nd.Key()))
+			copy(key, nd.Key())
+			refkeys = append(refkeys, key)
+			value := make([]byte, len(nd.Value()))
+			copy(value, nd.Value())
+			refvalues = append(refvalues, value)
+			return true
+		})
+
+	inserts, n = make([][2][]byte, 0), 100
+	for i := 0; i < n; i += 2 {
+		key, value := fmt.Sprintf("key%v", i), fmt.Sprintf("value%v", i)
+		inserts = append(inserts, [2][]byte{[]byte(key), []byte(value)})
+	}
+	for _, kv := range inserts {
+		llrb.Upsert(
+			kv[0], kv[1],
+			func(_ api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
+				return false
+			})
+	}
+
+	newllrb := llrb.Clone(llrb.name + "-clone")
+
+	snapch = make(chan api.IndexSnapshot, 1)
+	if err := newllrb.RSnapshot(snapch); err != nil {
+		t.Error(err)
+	}
+	snapshot = <-snapch
+
+	keys, values := make([][]byte, 0), make([][]byte, 0)
+	snapshot.Range(
+		nil, nil, "both", false,
+		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+			key := make([]byte, len(nd.Key()))
+			copy(key, nd.Key())
+			keys = append(keys, key)
+			value := make([]byte, len(nd.Value()))
+			copy(value, nd.Value())
+			values = append(values, value)
+			return true
+		})
+
+	if x, y := len(refkeys), len(keys); x != y {
+		t.Fatalf("expected %v, got %v", x, y)
+	} else if x, y = len(refvalues), len(values); x != y {
+		t.Fatalf("expected %v, got %v", x, y)
+	}
+	for i := 0; i < len(keys); i++ {
+		if x, y := refkeys[i], keys[i]; bytes.Compare(x, y) != 0 {
+			t.Fatalf("expected %v, got %v", string(x), string(y))
+		} else if x, y := refvalues[i], values[i]; bytes.Compare(x, y) != 0 {
+			t.Fatalf("expected %v, got %v", string(x), string(y))
+		}
+	}
+}
+
 func makellrbmvcc(
 	t *testing.T, nm string, inserts [][2][]byte, setts lib.Settings) *LLRB {
 
@@ -1600,14 +1698,14 @@ func makellrbmvcc(
 	}
 	llrb.Mutations(
 		mcmds,
-		func(index api.Index, i int64, newnd, oldnd api.Node, err error) bool {
+		func(index api.Index, i int64, nnd, ond api.Node, err error) bool {
 			if err != nil {
 				t.Error(err)
-			} else if oldnd != nil {
+			} else if ond != nil {
 				t.Errorf("expected old Llrbnode as nil")
 			}
-			newnd.Setvbno(vbno).SetVbuuid(vbuuid)
-			newnd.SetBornseqno(seqno + uint64(i))
+			nnd.Setvbno(vbno).SetVbuuid(vbuuid)
+			nnd.SetBornseqno(seqno + uint64(i))
 			return true
 		})
 	return llrb

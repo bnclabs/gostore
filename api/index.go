@@ -126,6 +126,10 @@ type Index interface {
 	// Setclock attaches a new clock to the index.
 	Setclock(clock Clock)
 
+	// Clone will do a deep copy of the underlying data structure and
+	// return the new copy.
+	Clone(name string) Index
+
 	// Stats return a set of index statistics.
 	Stats() (map[string]interface{}, error)
 

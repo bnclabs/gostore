@@ -984,6 +984,85 @@ func TestDictRsnapshot(t *testing.T) {
 	}
 }
 
+func TestDictClone(t *testing.T) {
+	d := NewDict()
+	if d.Count() != 0 {
+		t.Fatalf("expected an empty dict")
+	}
+	// inserts
+	inserts, n := make([][2][]byte, 0), 100
+	for i := 0; i < n; i += 2 {
+		key, value := fmt.Sprintf("key%v", i), fmt.Sprintf("value%v", i)
+		inserts = append(inserts, [2][]byte{[]byte(key), []byte(value)})
+	}
+	for _, kv := range inserts {
+		d.Upsert(
+			kv[0], kv[1],
+			func(_ api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
+				if err != nil {
+					t.Error(err)
+				} else if oldnd != nil {
+					t.Errorf("expected nil")
+				}
+				return false
+			})
+	}
+
+	refkeys, refvalues := make([][]byte, 0), make([][]byte, 0)
+	d.Range(
+		nil, nil, "both", false,
+		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+			key := make([]byte, len(nd.Key()))
+			copy(key, nd.Key())
+			refkeys = append(refkeys, key)
+			value := make([]byte, len(nd.Value()))
+			copy(value, nd.Value())
+			refvalues = append(refvalues, value)
+			return true
+		})
+
+	inserts, n = make([][2][]byte, 0), 100
+	for i := 0; i < n; i += 2 {
+		key, value := fmt.Sprintf("key%v", i), fmt.Sprintf("value%v", i)
+		inserts = append(inserts, [2][]byte{[]byte(key), []byte(value)})
+	}
+	for _, kv := range inserts {
+		d.Upsert(
+			kv[0], kv[1],
+			func(_ api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
+				return false
+			})
+	}
+
+	newd := d.Clone(d.id + "-clone")
+
+	keys, values := make([][]byte, 0), make([][]byte, 0)
+	newd.Range(
+		nil, nil, "both", false,
+		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+			key := make([]byte, len(nd.Key()))
+			copy(key, nd.Key())
+			keys = append(keys, key)
+			value := make([]byte, len(nd.Value()))
+			copy(value, nd.Value())
+			values = append(values, value)
+			return true
+		})
+
+	if x, y := len(refkeys), len(keys); x != y {
+		t.Fatalf("expected %v, got %v", x, y)
+	} else if x, y = len(refvalues), len(values); x != y {
+		t.Fatalf("expected %v, got %v", x, y)
+	}
+	for i := 0; i < len(keys); i++ {
+		if x, y := refkeys[i], keys[i]; bytes.Compare(x, y) != 0 {
+			t.Fatalf("expected %v, got %v", string(x), string(y))
+		} else if x, y := refvalues[i], values[i]; bytes.Compare(x, y) != 0 {
+			t.Fatalf("expected %v, got %v", string(x), string(y))
+		}
+	}
+}
+
 func BenchmarkDictSnapshot(b *testing.B) {
 	d := NewDict()
 	for i := 0; i < 10000; i++ {

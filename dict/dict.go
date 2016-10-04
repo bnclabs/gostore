@@ -34,6 +34,7 @@ func NewDict() *Dict {
 		id:       "dict",
 		dict:     make(map[uint64]*dictnode),
 		sortkeys: make([]string, 0, 10000),
+		hashks:   make([]uint64, 0, 10000),
 	}
 }
 
@@ -63,6 +64,21 @@ func (d *Dict) Getclock() api.Clock {
 // Setclock implement api.Index{} interface.
 func (d *Dict) Setclock(clock api.Clock) {
 	d.clock = clock
+}
+
+// Clone implement api.Index{} interface.
+func (d *Dict) Clone(name string) api.Index {
+	newd := NewDict()
+	newd.id, newd.dead, newd.snapn = name, d.dead, d.snapn
+	newd.clock, newd.activeiter = d.clock, d.activeiter
+	for hash, dn := range d.dict {
+		newd.dict[hash] = dn.clone()
+	}
+	for _, key := range d.sortkeys {
+		newd.sortkeys = append(newd.sortkeys, key)
+	}
+	newd.hashks = newd.sorted()
+	return newd
 }
 
 // Destroy implement api.Index{} interface.
@@ -174,14 +190,14 @@ func (d *Dict) Max(callb api.NodeCallb) bool {
 }
 
 // Range implement IndexReader{} interface.
-func (d *Dict) Range(lk, hk []byte, incl string, reverse bool, callb api.NodeCallb) {
+func (d *Dict) Range(lk, hk []byte, incl string, r bool, callb api.NodeCallb) {
 	lk, hk = d.fixrangeargs(lk, hk)
 	d.sorted()
-	d.rangeover(lk, hk, incl, reverse, callb)
+	d.rangeover(lk, hk, incl, r, callb)
 }
 
-func (d *Dict) rangeover(lk, hk []byte, incl string, reverse bool, callb api.NodeCallb) {
-	if reverse {
+func (d *Dict) rangeover(lk, hk []byte, incl string, r bool, callb api.NodeCallb) {
+	if r {
 		d.rangebackward(lk, hk, incl, callb)
 		return
 	}
