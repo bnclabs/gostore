@@ -96,6 +96,12 @@ type Clock interface {
 	// JSONUnmarshal populates clock from JSON encoded bytes.
 	JSONUnmarshal(data []byte) Clock
 
+	// Marshal return clock in binary encoded format.
+	Marshal(buf []byte) []byte
+
+	// Unmarshal populates clock from binary encoded bytes.
+	Unmarshal(data []byte) Clock
+
 	// Less compare wether this clock is less than other clock
 	Less(other Clock) bool
 

@@ -1,6 +1,7 @@
 package api
 
 import "strconv"
+import "encoding/binary"
 import "fmt"
 
 type Scalarclock uint64
@@ -51,7 +52,7 @@ func (this Scalarclock) LessEqual(other Clock) bool {
 
 func (this Scalarclock) JSONMarshal(buf []byte) []byte {
 	buf = Fixbuffer(buf, 64)
-	return strconv.AppendUint(buf, uint64(this), 16)
+	return strconv.AppendUint(buf[:0], uint64(this), 16)
 }
 
 func (this Scalarclock) JSONUnmarshal(data []byte) Clock {
@@ -61,4 +62,14 @@ func (this Scalarclock) JSONUnmarshal(data []byte) Clock {
 		panic(fmt.Errorf("Scalarclock.JSONUnmarshal(%v): %v", sdata, err))
 	}
 	return Scalarclock(clk)
+}
+
+func (this Scalarclock) Marshal(buf []byte) []byte {
+	buf = Fixbuffer(buf, 64)
+	binary.BigEndian.PutUint64(buf, uint64(this))
+	return buf[:8]
+}
+
+func (this Scalarclock) Unmarshal(data []byte) Clock {
+	return Scalarclock(binary.BigEndian.Uint64(data))
 }

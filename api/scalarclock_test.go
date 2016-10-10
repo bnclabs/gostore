@@ -1,6 +1,9 @@
 package api
 
 import "testing"
+import "fmt"
+
+var _ = fmt.Sprintf("dummy")
 
 func TestScalarClock(t *testing.T) {
 	clock := Scalarclock(10)
@@ -17,5 +20,23 @@ func TestScalarClock(t *testing.T) {
 		t.Errorf("expected %v, got %v", true, ok)
 	} else if ok := clock.LessEqual(Scalarclock(10)); ok == false {
 		t.Errorf("expected %v, got %v", true, false)
+	}
+}
+
+func TestScalarClockJson(t *testing.T) {
+	ref := Scalarclock(10)
+	buf := ref.JSONMarshal(nil)
+	clock := ref.JSONUnmarshal(buf)
+	if clock != ref {
+		t.Errorf("expected %v, got %v", ref, clock)
+	}
+}
+
+func TestScalarClockBinary(t *testing.T) {
+	ref := Scalarclock(10)
+	buf := ref.Marshal(nil)
+	clock := ref.Unmarshal(buf)
+	if clock != ref {
+		t.Errorf("expected %v, got %v", ref, clock)
 	}
 }
