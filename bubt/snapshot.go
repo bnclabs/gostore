@@ -201,7 +201,7 @@ func (ss *Snapshot) Isactive() bool {
 // RSnapshot implement Index{} interface.
 func (ss *Snapshot) RSnapshot(snapch chan api.IndexSnapshot) error {
 	ss.Refer()
-	go func() { snapch <- ss }()
+	snapch <- ss
 	return nil
 }
 
