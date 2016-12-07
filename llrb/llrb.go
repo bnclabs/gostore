@@ -844,13 +844,13 @@ func (llrb *LLRB) delete(nd *Llrbnode, key []byte) (newnd, deleted *Llrbnode) {
 }
 
 // Mutations implement IndexWriter{} interface.
-func (llrb *LLRB) Mutations(cmds []api.MutationCmd, callb api.NodeCallb) error {
+func (llrb *LLRB) Mutations(cmds []*api.MutationCmd, callb api.NodeCallb) error {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.wmutations(cmds, callb)
 	}
 
 	var i int
-	var mcmd api.MutationCmd
+	var mcmd *api.MutationCmd
 
 	localfn := func(index api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
 		if callb != nil {

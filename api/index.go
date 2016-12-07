@@ -252,5 +252,5 @@ type IndexWriter interface {
 	Delete(key []byte, callb NodeCallb) error
 
 	// Mutations upsert one or more key/value pairs.
-	Mutations(cmds []MutationCmd, callb NodeCallb) error
+	Mutations(cmds []*MutationCmd, callb NodeCallb) error
 }

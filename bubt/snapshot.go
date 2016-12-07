@@ -540,7 +540,7 @@ func (ss *Snapshot) Delete(key []byte, callb api.NodeCallb) error {
 }
 
 // Mutations IndexWriter{} method, will panic if called.
-func (ss *Snapshot) Mutations(_ []api.MutationCmd, callb api.NodeCallb) error {
+func (ss *Snapshot) Mutations(_ []*api.MutationCmd, callb api.NodeCallb) error {
 	panic("IndexWriter.Mutations() not implemented")
 }
 

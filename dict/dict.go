@@ -410,9 +410,9 @@ func (d *Dict) Delete(key []byte, callb api.NodeCallb) error {
 }
 
 // Mutations implement IndexWriter{} interface.
-func (d *Dict) Mutations(cmds []api.MutationCmd, callb api.NodeCallb) error {
+func (d *Dict) Mutations(cmds []*api.MutationCmd, callb api.NodeCallb) error {
 	var i int
-	var mcmd api.MutationCmd
+	var mcmd *api.MutationCmd
 
 	localfn := func(idx api.Index, _ int64, nnd, ond api.Node, err error) bool {
 		if callb != nil {

@@ -1617,9 +1617,9 @@ func makellrb(
 	}
 	// inserts
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
-	mcmds := make([]api.MutationCmd, 0)
+	mcmds := make([]*api.MutationCmd, 0)
 	for _, kv := range inserts {
-		mcmds = append(mcmds, api.MutationCmd{
+		mcmds = append(mcmds, &api.MutationCmd{
 			Cmd:   api.UpsertCmd,
 			Key:   kv[0],
 			Value: kv[1],

@@ -97,7 +97,7 @@ func (writer *LLRBWriter) wdelete(key []byte, callb api.NodeCallb) error {
 	return err
 }
 
-func (writer *LLRBWriter) wmutations(cmds []api.MutationCmd, callb api.NodeCallb) error {
+func (writer *LLRBWriter) wmutations(cmds []*api.MutationCmd, callb api.NodeCallb) error {
 	respch := make(chan []interface{}, 0)
 	cmd := []interface{}{cmdLlrbWriterMutations, cmds, callb, respch}
 	_, err := lib.FailsafeRequest(writer.reqch, respch, cmd, writer.finch)
@@ -261,7 +261,7 @@ loop:
 			close(respch)
 
 		case cmdLlrbWriterMutations:
-			cmds, callb := msg[1].([]api.MutationCmd), msg[2].(api.NodeCallb)
+			cmds, callb := msg[1].([]*api.MutationCmd), msg[2].(api.NodeCallb)
 			respch := msg[3].(chan []interface{})
 			reclaim = writer.mvccmutations(
 				cmds, callb, reclaim,
@@ -646,11 +646,11 @@ func (writer *LLRBWriter) delete(
 }
 
 func (writer *LLRBWriter) mvccmutations(
-	cmds []api.MutationCmd, callb api.NodeCallb,
+	cmds []*api.MutationCmd, callb api.NodeCallb,
 	reclaim []*Llrbnode, rfn func([]*Llrbnode) []*Llrbnode) []*Llrbnode {
 
 	var i int
-	var mcmd api.MutationCmd
+	var mcmd *api.MutationCmd
 
 	localfn := func(index api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
 		if callb != nil {
