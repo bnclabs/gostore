@@ -133,7 +133,7 @@ func TestNodeFields(t *testing.T) {
 		t.Errorf("expected %v, got %v", deadsno, x)
 	} else if lvl, off := nd.Fpos(); level != 1 {
 		t.Errorf("expected %v, got %v", level, lvl)
-	} else if off != int64(offset) {
+	} else if off != uint64(offset) {
 		t.Errorf("expected %v, got %v", offset, off)
 	}
 

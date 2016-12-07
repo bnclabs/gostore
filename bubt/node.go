@@ -98,14 +98,14 @@ func (n *node) Value() (value []byte) {
 }
 
 // Fpos implement NodeGetter{} interface.
-func (n *node) Fpos() (level byte, offset int64) {
+func (n *node) Fpos() (level byte, offset uint64) {
 	klen := binary.BigEndian.Uint16(n.data[26:28])
 	start := 28 + klen
 	if n.ss.hasdatafile() {
 		vpos := binary.BigEndian.Uint64(n.data[start : start+8])
-		return n.ss.level, int64(vpos)
+		return n.ss.level, uint64(vpos)
 	}
-	return n.ss.level, n.offset + int64(start)
+	return n.ss.level, uint64(n.offset + int64(start))
 }
 
 //---- NodeSetter implementation

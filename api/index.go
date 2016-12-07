@@ -53,7 +53,7 @@ type NodeGetter interface {
 
 	// Fpos return disk backed position for value. Returned offset points
 	// to value on disk encoded as {8byte-len, value-byte-array}
-	Fpos() (level byte, offset int64)
+	Fpos() (level byte, offset uint64)
 
 	// Key return entry key as byte slice.
 	Key() (key []byte)
@@ -90,6 +90,13 @@ type Clock interface {
 	// Clone creates a copy of the clock.
 	Clone() Clock
 
+	// Less compare wether this clock is less than other clock
+	Less(other Clock) bool
+
+	// LessEqual compare wether this clock is less than or equal to the
+	// other clock
+	LessEqual(other Clock) bool
+
 	// JSONMarshal return clock in JSON encoded format.
 	JSONMarshal(buf []byte) []byte
 
@@ -101,13 +108,6 @@ type Clock interface {
 
 	// Unmarshal populates clock from binary encoded bytes.
 	Unmarshal(data []byte) Clock
-
-	// Less compare wether this clock is less than other clock
-	Less(other Clock) bool
-
-	// LessEqual compare wether this clock is less than or equal to the
-	// other clock
-	LessEqual(other Clock) bool
 }
 
 // Index interface for managing key,value pairs.

@@ -32,7 +32,7 @@ func (dn *dictnode) Vbuuid() uint64 {
 }
 
 // Fpos implement NodeGetter{} interface.
-func (dn *dictnode) Fpos() (level byte, offset int64) {
+func (dn *dictnode) Fpos() (level byte, offset uint64) {
 	panic("not implemented")
 }
 

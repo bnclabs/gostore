@@ -197,7 +197,7 @@ func (n *bytesnode) Vbuuid() (uuid uint64) {
 	panic("unsupported call")
 }
 
-func (n *bytesnode) Fpos() (level byte, offset int64) {
+func (n *bytesnode) Fpos() (level byte, offset uint64) {
 	panic("unsupported call")
 }
 

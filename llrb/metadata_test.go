@@ -108,7 +108,7 @@ func TestFposMetadata(t *testing.T) {
 			md.setfpos(level, offset)
 			lvl, off := md.setfpos(level, offset).fpos()
 			if md.isfpos() {
-				if int64(offset) != off {
+				if uint64(offset) != off {
 					t.Errorf("expected %v, got %v", offset, off)
 				} else if level != lvl {
 					t.Errorf("expected %v, got %v", level, lvl)

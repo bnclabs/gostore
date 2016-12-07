@@ -314,8 +314,8 @@ func (md *metadata) vbuuid() uint64 {
 	return md.fields[off-1]
 }
 
-func (md *metadata) fpos() (level byte, offset int64) {
+func (md *metadata) fpos() (level byte, offset uint64) {
 	off := mdlookup[mdOffsetmaskFpos&md.hdr]
 	fpos := md.fields[off-1]
-	return byte(fpos >> 59), int64(fpos & 0x07FFFFFFFFFFFFFF)
+	return byte(fpos >> 59), uint64(fpos & 0x07FFFFFFFFFFFFFF)
 }
