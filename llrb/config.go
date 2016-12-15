@@ -7,9 +7,9 @@ import "github.com/prataprc/storage.go/malloc"
 // key,value of 1TB storage.
 func Defaultsettings() lib.Settings {
 	setts := lib.Settings{
-		"maxvb":                   int64(1024),
 		"iterpool.size":           int64(100),
 		"markdelete":              false,
+		"memutilization":          float64(0.4),
 		"metadata.bornseqno":      false,
 		"metadata.deadseqno":      false,
 		"metadata.mvalue":         true,

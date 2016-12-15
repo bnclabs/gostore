@@ -282,7 +282,7 @@ func TestLLRBBasicUpdates(t *testing.T) {
 		t.Errorf("expected %v, got %v", newvalue, nd.Value())
 	}
 
-	llrb.SetMemratio(0.04)
+	llrb.ExpectedUtilization(0.04)
 	llrb.Validate()
 
 	// delete
@@ -515,7 +515,7 @@ func TestLLRBBasicRange(t *testing.T) {
 		}
 	}
 
-	llrb.SetMemratio(0.04)
+	llrb.ExpectedUtilization(0.04)
 	llrb.Validate()
 
 	if err := llrb.Destroy(); err != nil {
@@ -895,7 +895,7 @@ func TestLLRBBasicIterate(t *testing.T) {
 		}
 	}
 
-	llrb.SetMemratio(0.04)
+	llrb.ExpectedUtilization(0.04)
 	llrb.Validate()
 
 	if err := llrb.Destroy(); err != nil {
@@ -1114,7 +1114,7 @@ func TestLLRBIterate(t *testing.T) {
 		}
 	}
 
-	llrb.SetMemratio(0.04)
+	llrb.ExpectedUtilization(0.04)
 	llrb.Validate()
 
 	if err := llrb.Destroy(); err != nil {

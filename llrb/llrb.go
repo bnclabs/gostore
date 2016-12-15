@@ -25,7 +25,7 @@ type LLRB struct { // tree container
 		ismut int64 // need to be 64-bit aligned
 		mvccstats
 		// can be unaligned fields
-		enabled    bool
+		enabled    bool // comes from mvcc.enable settings
 		reclaim    []*Llrbnode
 		writer     *LLRBWriter
 		snapshot   *LLRBSnapshot
@@ -48,30 +48,29 @@ type LLRB struct { // tree container
 	iterpool  chan *iterator
 
 	// settings
-	fmask        metadataMask // only 12 bits
-	mdsize       int
-	maxvb        int64 // maxvb
-	iterpoolsize int64 // iterpool.size
-	markdelete   bool
-	naminblock   int64
-	namaxblock   int64
-	nacapacity   int64
-	napcapacity  int64
-	namaxpools   int64
-	namaxchunks  int64
-	naallocator  string
-	vaminblock   int64
-	vamaxblock   int64
-	vacapacity   int64
-	vapcapacity  int64
-	vamaxpools   int64
-	vamaxchunks  int64
-	vaallocator  string
-	writechansz  int64 // mvcc settings
-	snaptick     int64 // mvcc settings
-	setts        lib.Settings
-	logprefix    string
-	memratio     float64
+	fmask          metadataMask // only 12 bits
+	mdsize         int
+	iterpoolsize   int64 // iterpool.size
+	markdelete     bool
+	naminblock     int64
+	namaxblock     int64
+	nacapacity     int64
+	napcapacity    int64
+	namaxpools     int64
+	namaxchunks    int64
+	naallocator    string
+	vaminblock     int64
+	vamaxblock     int64
+	vacapacity     int64
+	vapcapacity    int64
+	vamaxpools     int64
+	vamaxchunks    int64
+	vaallocator    string
+	writechansz    int64 // mvcc settings
+	snaptick       int64 // mvcc settings
+	memutilization float64
+	setts          lib.Settings
+	logprefix      string
 
 	// scratch pad
 	strsl []string
@@ -100,7 +99,6 @@ func NewLLRB(name string, setts lib.Settings) *LLRB {
 
 	// scratch pads
 	llrb.strsl = make([]string, 0)
-	llrb.memratio = 0.4 // (keymemory / allocated) for each arena
 
 	// mvcc
 	if llrb.mvcc.enabled {
@@ -112,10 +110,11 @@ func NewLLRB(name string, setts lib.Settings) *LLRB {
 	return llrb
 }
 
-// SetMemratio for validating memory consumption. Set this to minimum expected
-// ratio of keymemory / allocated, before calling llrb.Validate().
-func (llrb *LLRB) SetMemratio(memratio float64) {
-	llrb.memratio = memratio
+// ExpectedUtilization for validating memory consumption.
+// Set this to minimum expected ratio of keymemory / allocated, before
+// calling llrb.Validate().
+func (llrb *LLRB) ExpectedUtilization(ut float64) {
+	llrb.memutilization = ut
 }
 
 // ---- Index{} interface

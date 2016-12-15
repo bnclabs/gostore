@@ -5,7 +5,6 @@ import "github.com/prataprc/storage.go/api"
 import "github.com/prataprc/storage.go/lib"
 
 func (llrb *LLRB) readsettings(setts lib.Settings) {
-	llrb.maxvb = setts.Int64("maxvb")
 	llrb.iterpoolsize = setts.Int64("iterpool.size")
 	llrb.markdelete = setts.Bool("markdelete")
 	llrb.naminblock = setts.Int64("nodearena.minblock")
@@ -39,6 +38,7 @@ func (llrb *LLRB) readsettings(setts lib.Settings) {
 	llrb.mvcc.enabled = setts.Bool("mvcc.enable")
 	llrb.writechansz = setts.Int64("mvcc.writer.chansize")
 	llrb.snaptick = setts.Int64("mvcc.snapshot.tick")
+	llrb.memutilization = setts.Float64("memutilization")
 }
 
 func (llrb *LLRB) newnodearena(setts lib.Settings) *malloc.Arena {
