@@ -67,6 +67,42 @@ func (setts Settings) Bool(key string) bool {
 	panic("unreachable code")
 }
 
+// Float64 return the int64 value for key.
+func (setts Settings) Float64(key string) float64 {
+	value, ok := setts[key]
+	if !ok {
+		panicerr("missing settings %q", key)
+	}
+	switch val := value.(type) {
+	case float64:
+		return val
+	case float32:
+		return float64(val)
+	case uint:
+		return float64(val)
+	case uint64:
+		return float64(val)
+	case uint32:
+		return float64(val)
+	case uint16:
+		return float64(val)
+	case uint8:
+		return float64(val)
+	case int:
+		return float64(val)
+	case int64:
+		return float64(val)
+	case int32:
+		return float64(val)
+	case int16:
+		return float64(val)
+	case int8:
+		return float64(val)
+	}
+	panicerr("settings %v not a number: %T", key, value)
+	return 0
+}
+
 // Int64 return the int64 value for key.
 func (setts Settings) Int64(key string) int64 {
 	value, ok := setts[key]
