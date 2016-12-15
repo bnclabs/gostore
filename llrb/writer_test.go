@@ -14,7 +14,7 @@ import "github.com/prataprc/storage.go/dict"
 var _ = fmt.Sprintf("dummy")
 
 func TestNewLLRBMvcc(t *testing.T) {
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["mvcc.enable"] = true
 
 	llrb := NewLLRB("test", setts)
@@ -66,7 +66,7 @@ func TestLLRBMvccBasicSnapshot(t *testing.T) {
 		[2][]byte{[]byte("key5"), []byte("value5")},
 	}
 
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["mvcc.enable"] = true
 	setts["metadata.mvalue"] = true
 	setts["metadata.fpos"] = true
@@ -107,7 +107,7 @@ func TestLLRBMvccBasicLookup(t *testing.T) {
 		[2][]byte{[]byte("key5"), []byte("value5")},
 	}
 
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["mvcc.enable"] = true
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
@@ -210,7 +210,7 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 		[2][]byte{[]byte("key5"), []byte("value5")},
 	}
 
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["mvcc.enable"] = true
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
@@ -452,7 +452,7 @@ func TestLLRBMvccBasicRange(t *testing.T) {
 		[2][]byte{[]byte("key5"), []byte("value5")},
 	}
 
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["mvcc.enable"] = true
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
@@ -545,7 +545,7 @@ func TestLLRBMvccBasicRange(t *testing.T) {
 }
 
 func TestPartialMvccRange(t *testing.T) {
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["mvcc.enable"] = true
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
@@ -676,7 +676,7 @@ func TestPartialMvccRange(t *testing.T) {
 }
 
 func TestLLRBMvccRange(t *testing.T) {
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["mvcc.enable"] = true
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
@@ -815,7 +815,7 @@ func TestLLRBMvccBasicIterate(t *testing.T) {
 		[2][]byte{[]byte("key5"), []byte("value5")},
 	}
 
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["mvcc.enable"] = true
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
@@ -916,7 +916,7 @@ func TestLLRBMvccBasicIterate(t *testing.T) {
 }
 
 func TestPartialMvccIterate(t *testing.T) {
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["mvcc.enable"] = true
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
@@ -1049,7 +1049,7 @@ func TestPartialMvccIterate(t *testing.T) {
 }
 
 func TestLLRBMvccIterate(t *testing.T) {
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["mvcc.enable"] = true
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
@@ -1181,7 +1181,7 @@ func TestLLRBMvccIterate(t *testing.T) {
 }
 
 func TestLLRBMvccInsert(t *testing.T) {
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["mvcc.enable"] = true
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
@@ -1277,7 +1277,7 @@ func TestLLRBMvccInsert(t *testing.T) {
 }
 
 func TestLLRBMvccUpsert(t *testing.T) {
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["mvcc.enable"] = true
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
@@ -1387,7 +1387,7 @@ func TestLLRBMvccUpsert(t *testing.T) {
 }
 
 func TestLLRBMvccDeleteMin(t *testing.T) {
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["mvcc.enable"] = true
 	setts["metadata.mvalue"] = true
 	setts["metadata.fpos"] = true
@@ -1439,7 +1439,7 @@ func TestLLRBMvccDeleteMin(t *testing.T) {
 }
 
 func TestLLRBMvccDelete(t *testing.T) {
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["mvcc.enable"] = true
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
@@ -1583,7 +1583,7 @@ func TestLLRBMvccDelete(t *testing.T) {
 }
 
 func TestLLRBMvccClone(t *testing.T) {
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.deadseqno"] = false

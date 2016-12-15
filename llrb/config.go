@@ -3,9 +3,9 @@ package llrb
 import "github.com/prataprc/storage.go/lib"
 import "github.com/prataprc/storage.go/malloc"
 
-// DefaultSettings provides an initial set of settings tuned for in-memory
+// Defaultsettings provides an initial set of settings tuned for in-memory
 // key,value of 1TB storage.
-func DefaultSettings() lib.Settings {
+func Defaultsettings() lib.Settings {
 	setts := lib.Settings{
 		"maxvb":                   int64(1024),
 		"iterpool.size":           int64(100),

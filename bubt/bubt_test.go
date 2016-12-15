@@ -30,7 +30,7 @@ func TestEmpty(t *testing.T) {
 
 	llrb := refllrb(t, 0)
 
-	bsetts := DefaultSettings()
+	bsetts := Defaultsettings()
 	bsetts["datafile"] = true
 	name := fmt.Sprintf("unittest-empty-%v", 0)
 	bubt := NewBubt(name, path, bsetts)
@@ -61,7 +61,7 @@ func TestMissing(t *testing.T) {
 	count := 1
 	llrb := refllrb(t, count)
 
-	bsetts := DefaultSettings()
+	bsetts := Defaultsettings()
 	bsetts["datafile"] = true
 	name := fmt.Sprintf("unittest-empty-%v", count)
 	bubt := NewBubt(name, path, bsetts)
@@ -209,7 +209,7 @@ func TestLookup(t *testing.T) {
 			t.Fatalf("expected %v, got %v", i, len(refnds))
 		}
 
-		bsetts := DefaultSettings()
+		bsetts := Defaultsettings()
 		bsetts["datafile"] = true
 
 		// with data file
@@ -227,7 +227,7 @@ func TestLookup(t *testing.T) {
 		}
 
 		// without data file
-		bsetts = DefaultSettings()
+		bsetts = Defaultsettings()
 		bubt = NewBubt(name, path, bsetts)
 		llrbiter = llrb.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter, nil)
@@ -251,7 +251,7 @@ func TestLookup(t *testing.T) {
 }
 
 func TestPartialRange(t *testing.T) {
-	lsetts := llrb.DefaultSettings()
+	lsetts := llrb.Defaultsettings()
 	lsetts["metadata.bornseqno"] = true
 	lsetts["metadata.deadseqno"] = true
 	lsetts["metadata.vbuuid"] = true
@@ -292,7 +292,7 @@ func TestPartialRange(t *testing.T) {
 	os.Remove(path)
 
 	name := "unittest-range"
-	bsetts := DefaultSettings()
+	bsetts := Defaultsettings()
 	bsetts["mblocksize"] = 512
 	bsetts["zblocksize"] = 512
 	bsetts["datafile"] = true
@@ -485,7 +485,7 @@ func TestRange(t *testing.T) {
 				return true
 			})
 
-		bsetts := DefaultSettings()
+		bsetts := Defaultsettings()
 		bsetts["datafile"] = true
 
 		// with datafile
@@ -502,7 +502,7 @@ func TestRange(t *testing.T) {
 			t.Fatal(err)
 		}
 		// without data file
-		bsetts = DefaultSettings()
+		bsetts = Defaultsettings()
 		bubt = NewBubt(name, path, bsetts)
 		llrbiter = llrb.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter, nil)
@@ -527,7 +527,7 @@ func TestRange(t *testing.T) {
 }
 
 func TestPartialIterate(t *testing.T) {
-	lsetts := llrb.DefaultSettings()
+	lsetts := llrb.Defaultsettings()
 	lsetts["metadata.bornseqno"] = true
 	lsetts["metadata.deadseqno"] = true
 	lsetts["metadata.vbuuid"] = true
@@ -569,7 +569,7 @@ func TestPartialIterate(t *testing.T) {
 	defer os.Remove(path)
 
 	name := "unittest-range"
-	bsetts := DefaultSettings()
+	bsetts := Defaultsettings()
 	bsetts["mblocksize"] = 512
 	bsetts["zblocksize"] = 512
 	bsetts["datafile"] = true
@@ -738,7 +738,7 @@ func TestIterate(t *testing.T) {
 				return true
 			})
 
-		bsetts := DefaultSettings()
+		bsetts := Defaultsettings()
 		bsetts["datafile"] = true
 
 		// with datafile
@@ -755,7 +755,7 @@ func TestIterate(t *testing.T) {
 			t.Fatal(err)
 		}
 		// without datafile
-		bsetts = DefaultSettings()
+		bsetts = Defaultsettings()
 		bubt = NewBubt(name, path, bsetts)
 		llrbiter = llrb.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter, nil)
@@ -796,7 +796,7 @@ func makekeyvalue(key, value []byte) ([]byte, []byte) {
 }
 
 func refllrb(t *testing.T, count int) *llrb.LLRB {
-	lsetts := llrb.DefaultSettings()
+	lsetts := llrb.Defaultsettings()
 	lsetts["metadata.bornseqno"] = true
 	lsetts["metadata.deadseqno"] = true
 	lsetts["metadata.vbuuid"] = true

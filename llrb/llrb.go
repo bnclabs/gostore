@@ -79,7 +79,7 @@ type LLRB struct { // tree container
 
 // NewLLRB a new instance of in-memory sorted index.
 func NewLLRB(name string, setts lib.Settings) *LLRB {
-	setts = make(lib.Settings).Mixin(DefaultSettings(), setts)
+	setts = make(lib.Settings).Mixin(Defaultsettings(), setts)
 	llrb := &LLRB{name: name, borntime: time.Now()}
 	llrb.readsettings(setts)
 	llrb.iterpool = make(chan *iterator, llrb.iterpoolsize)

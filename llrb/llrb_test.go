@@ -15,7 +15,7 @@ import "github.com/prataprc/storage.go/lib"
 var _ = fmt.Sprintf("dummy")
 
 func TestNewLLRB(t *testing.T) {
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 
 	llrb := NewLLRB("test", setts)
 	if llrb == nil {
@@ -63,7 +63,7 @@ func TestNewLLRB(t *testing.T) {
 }
 
 func TestNewLLRBNode(t *testing.T) {
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["metadata.bornseqno"] = true
 	setts["metadata.deadseqno"] = true
 	setts["metadata.mvalue"] = true
@@ -101,7 +101,7 @@ func TestNewLLRBNode(t *testing.T) {
 }
 
 func TestNewLLRBNodePanic(t *testing.T) {
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["metadata.mvalue"] = false
 	llrb := NewLLRB("test", setts)
 	key, value := makekeyvalue(make([]byte, 128), make([]byte, 1024))
@@ -120,7 +120,7 @@ func TestNewLLRBNodePanic(t *testing.T) {
 }
 
 func TestCloneLLRBNode(t *testing.T) {
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	llrb := NewLLRB("test", setts)
 
@@ -151,7 +151,7 @@ func TestLLRBBasicLookup(t *testing.T) {
 		[2][]byte{[]byte("key5"), []byte("value5")},
 	}
 
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
@@ -233,7 +233,7 @@ func TestLLRBBasicUpdates(t *testing.T) {
 		[2][]byte{[]byte("key5"), []byte("value5")},
 	}
 
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
@@ -371,7 +371,7 @@ func TestLLRBBasicUpdates(t *testing.T) {
 }
 
 func TestLLRBBasicRange(t *testing.T) {
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.fpos"] = true
 	setts["metadata.bornseqno"] = true
@@ -526,7 +526,7 @@ func TestLLRBBasicRange(t *testing.T) {
 func TestPartialRange(t *testing.T) {
 	d := dict.NewDict()
 
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
@@ -642,7 +642,7 @@ func TestPartialRange(t *testing.T) {
 }
 
 func TestLLRBRange(t *testing.T) {
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
@@ -762,7 +762,7 @@ func TestLLRBRange(t *testing.T) {
 }
 
 func TestLLRBIteratePool(t *testing.T) {
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
@@ -788,7 +788,7 @@ func TestLLRBIteratePool(t *testing.T) {
 }
 
 func TestLLRBBasicIterate(t *testing.T) {
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
@@ -906,7 +906,7 @@ func TestLLRBBasicIterate(t *testing.T) {
 func TestPartialIterate(t *testing.T) {
 	d := dict.NewDict()
 
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
@@ -1002,7 +1002,7 @@ func TestPartialIterate(t *testing.T) {
 }
 
 func TestLLRBIterate(t *testing.T) {
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
@@ -1123,7 +1123,7 @@ func TestLLRBIterate(t *testing.T) {
 }
 
 func TestLLRBInsert(t *testing.T) {
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.deadseqno"] = false
@@ -1225,7 +1225,7 @@ func TestLLRBInsert(t *testing.T) {
 }
 
 func TestLLRBUpsert(t *testing.T) {
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.deadseqno"] = false
@@ -1329,7 +1329,7 @@ func TestLLRBUpsert(t *testing.T) {
 }
 
 func TestLLRBDelete(t *testing.T) {
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
@@ -1461,7 +1461,7 @@ func TestLLRBDelete(t *testing.T) {
 }
 
 func TestLLRBClone(t *testing.T) {
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.deadseqno"] = false
@@ -1545,7 +1545,7 @@ func TestLLRBClone(t *testing.T) {
 }
 
 func BenchmarkLLRBCloneKey(b *testing.B) {
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
@@ -1561,7 +1561,7 @@ func BenchmarkLLRBCloneKey(b *testing.B) {
 }
 
 func BenchmarkLLRBCloneSmall(b *testing.B) {
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
@@ -1577,7 +1577,7 @@ func BenchmarkLLRBCloneSmall(b *testing.B) {
 }
 
 func BenchmarkLLRBCloneLarge(b *testing.B) {
-	setts := DefaultSettings()
+	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
