@@ -74,7 +74,7 @@ func NewBubt(name, path string, setts lib.Settings) *Bubt {
 	f.logprefix = fmt.Sprintf("[BUBT-%s]", name)
 
 	if err := os.MkdirAll(path, 0770); err != nil {
-		log.Errorf("%v MkdirAll(%q)", f.logprefix, path)
+		log.Errorf("%v MkdirAll(%q)\n", f.logprefix, path)
 		return nil
 	}
 

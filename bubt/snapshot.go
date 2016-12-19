@@ -111,7 +111,7 @@ func OpenBubtstore(name, path string) (ss *Snapshot, err error) {
 		return ss, err
 
 	} else if n != len(header) {
-		err = fmt.Errorf("partial header read: %v != %v\n", n, len(header))
+		err = fmt.Errorf("partial header read: %v != %v", n, len(header))
 		log.Errorf("%v %v\n", ss.logprefix, err)
 		return ss, err
 	}
@@ -157,7 +157,7 @@ func OpenBubtstore(name, path string) (ss *Snapshot, err error) {
 
 	ss.iterpool = make(chan *iterator, ss.iterpoolsize)
 
-	log.Infof("%v opening snapshot", ss.logprefix)
+	log.Infof("%v opening snapshot ...\n", ss.logprefix)
 
 	openstores[ss.name] = ss
 	return ss, nil
@@ -683,11 +683,11 @@ func (ss *Snapshot) loadMetadata(mdat int64, mdlen int64) error {
 	metadata := make([]byte, mdlen)
 	n, err := ss.indexfd.ReadAt(ss.metadata, mdat)
 	if err != nil {
-		log.Errorf("%v settings ReadAt: %v", ss.logprefix, err)
+		log.Errorf("%v settings ReadAt: %v\n", ss.logprefix, err)
 		return err
 	} else if int64(n) != mdlen {
 		err := fmt.Errorf("partial read: %v != %v", n, mdlen)
-		log.Errorf("%v %v", ss.logprefix, err)
+		log.Errorf("%v %v\n", ss.logprefix, err)
 		return err
 	}
 	ss.metadata = metadata
@@ -698,16 +698,16 @@ func (ss *Snapshot) loadSettings(statsat int64, statslen int64) error {
 	block := make([]byte, statslen)
 	n, err := ss.indexfd.ReadAt(block, statsat)
 	if err != nil {
-		log.Errorf("%v settings ReadAt: %v", ss.logprefix, err)
+		log.Errorf("%v settings ReadAt: %v\n", ss.logprefix, err)
 		return err
 	} else if int64(n) != statslen {
 		err := fmt.Errorf("partial read: %v != %v", n, statslen)
-		log.Errorf("%v %v", ss.logprefix, err)
+		log.Errorf("%v %v\n", ss.logprefix, err)
 		return err
 	} else {
 		if err = ss.json2setts(block); err != nil {
 			err := fmt.Errorf("json2setts: %v", err)
-			log.Errorf("%v %v", ss.logprefix, err)
+			log.Errorf("%v %v\n", ss.logprefix, err)
 			return err
 		}
 	}
@@ -718,16 +718,16 @@ func (ss *Snapshot) loadStats(settsat int64, settslen int64) error {
 	block := make([]byte, settslen)
 	n, err := ss.indexfd.ReadAt(block, settsat)
 	if err != nil {
-		log.Errorf("%v settings ReadAt: %v", ss.logprefix, err)
+		log.Errorf("%v settings ReadAt: %v\n", ss.logprefix, err)
 		return err
 	} else if int64(n) != settslen {
 		err := fmt.Errorf("partial read: %v != %v", n, settslen)
-		log.Errorf("%v %v", ss.logprefix, err)
+		log.Errorf("%v %v\n", ss.logprefix, err)
 		return err
 	} else {
 		if err = ss.json2stats(block); err != nil {
 			err := fmt.Errorf("json2stats: %v", err)
-			log.Errorf("%v %v", ss.logprefix, err)
+			log.Errorf("%v %v\n", ss.logprefix, err)
 			return err
 		}
 	}
