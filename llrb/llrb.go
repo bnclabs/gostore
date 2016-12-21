@@ -87,7 +87,7 @@ func NewLLRB(name string, setts lib.Settings) *LLRB {
 	llrb.nodearena = llrb.newnodearena(setts)
 	llrb.valarena = llrb.newvaluearena(setts)
 
-	llrb.logprefix = fmt.Sprintf("[LLRB-%s]", name)
+	llrb.logprefix = fmt.Sprintf("LLRB [%s]", name)
 
 	// set up metadata options
 	llrb.fmask = llrb.setupfmask(setts)
