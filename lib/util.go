@@ -6,6 +6,8 @@ import "fmt"
 import "errors"
 import "bytes"
 import "strings"
+import "sort"
+import "encoding/json"
 
 // Memcpy copy memory block of length `ln` from `src` to `dst`. This
 // function is useful if memory block is obtained outside golang runtime.
@@ -105,6 +107,26 @@ func Fixbuffer(buffer []byte, size int64) []byte {
 		return make([]byte, size)
 	}
 	return buffer[:size]
+}
+
+func Prettystats(stats map[string]interface{}, pretty bool) string {
+	if pretty == false {
+		data, err := json.Marshal(stats)
+		if err != nil {
+			panic(err)
+		}
+		return string(data)
+	}
+	keys := make([]string, 0)
+	for k := range stats {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	ss := []string{}
+	for _, k := range keys {
+		ss = append(ss, fmt.Sprintf("%v: %v", k, stats[k]))
+	}
+	return "{\n" + strings.Join(ss, ",\n") + "}\n"
 }
 
 func panicerr(fmsg string, args ...interface{}) {

@@ -198,7 +198,7 @@ func (llrb *LLRB) validate(root *Llrbnode) {
 }
 
 func (llrb *LLRB) validatemem() {
-	stats := llrb.statsmem(make(map[string]interface{}))
+	stats := llrb.statsval(llrb.statskey(make(map[string]interface{})))
 	memory := float64(llrb.keymemory)
 	allocated := float64(stats["node.allocated"].(int64))
 	ratio := memory / allocated

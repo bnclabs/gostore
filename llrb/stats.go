@@ -4,7 +4,6 @@ import "fmt"
 import "math"
 import "strings"
 import "sync/atomic"
-import "encoding/json"
 
 import gohumanize "github.com/dustin/go-humanize"
 import "github.com/prataprc/storage.go/lib"
@@ -38,8 +37,8 @@ type mvccstats struct {
 }
 
 func (llrb *LLRB) stats() (map[string]interface{}, error) {
-	stats := llrb.statsmem(map[string]interface{}{})
-	stats = llrb.stattree(stats)
+	stats := llrb.statsval(llrb.statskey(map[string]interface{}{}))
+	stats = llrb.statsrd(llrb.statswt(llrb.statstree(stats)))
 	stats["h_upsertdepth"] = llrb.h_upsertdepth.Fullstats()
 	if llrb.mvcc.enabled {
 		stats["mvcc.h_bulkfree"] = llrb.mvcc.h_bulkfree.Fullstats()
@@ -68,41 +67,50 @@ func (llrb *LLRB) fullstats() (map[string]interface{}, error) {
 	return stats, nil
 }
 
-// memory statistics -
-//	   node-arena, value.arena, total-keysize, total-valuesize
-func (llrb *LLRB) statsmem(stats map[string]interface{}) map[string]interface{} {
+// memory statistics for keys: node-arena, total-keysize
+func (llrb *LLRB) statskey(stats map[string]interface{}) map[string]interface{} {
 	overhead, useful := llrb.nodearena.Memory()
+	stats["keymemory"] = llrb.keymemory
 	stats["node.overhead"] = overhead
 	stats["node.useful"] = useful
 	stats["node.allocated"] = llrb.nodearena.Allocated()
 	stats["node.available"] = llrb.nodearena.Available()
 	stats["node.blocks"] = llrb.nodearena.Chunksizes()
-	overhead, useful = llrb.valarena.Memory()
+	return stats
+}
+
+// memory statistics for keys: value.arena, total-valuesize
+func (llrb *LLRB) statsval(stats map[string]interface{}) map[string]interface{} {
+	overhead, useful := llrb.valarena.Memory()
 	stats["value.overhead"] = overhead
 	stats["value.useful"] = useful
 	stats["value.allocated"] = llrb.valarena.Allocated()
 	stats["value.available"] = llrb.valarena.Available()
 	stats["value.blocks"] = llrb.valarena.Chunksizes()
-	stats["keymemory"] = llrb.keymemory
 	stats["valmemory"] = llrb.valmemory
-
 	return stats
 }
 
 // tree statistics -
-func (llrb *LLRB) stattree(stats map[string]interface{}) map[string]interface{} {
+func (llrb *LLRB) statstree(stats map[string]interface{}) map[string]interface{} {
 	stats["n_count"] = llrb.n_count
+	return stats
+}
+
+func (llrb *LLRB) statsrd(stats map[string]interface{}) map[string]interface{} {
 	stats["n_lookups"] = llrb.n_lookups
 	stats["n_casgets"] = llrb.n_casgets
 	stats["n_ranges"] = llrb.n_ranges
+	return stats
+}
+
+func (llrb *LLRB) statswt(stats map[string]interface{}) map[string]interface{} {
 	stats["n_inserts"] = llrb.n_inserts
 	stats["n_updates"] = llrb.n_updates
 	stats["n_deletes"] = llrb.n_deletes
 	stats["n_nodes"] = llrb.n_nodes
 	stats["n_frees"] = llrb.n_frees
 	stats["n_clones"] = llrb.n_clones
-	stats["keymemory"] = llrb.keymemory
-	stats["valmemory"] = llrb.valmemory
 	stats["mvcc.n_snapshots"] = llrb.mvcc.n_snapshots
 	stats["mvcc.n_purgedss"] = llrb.mvcc.n_purgedss
 	stats["mvcc.n_activess"] = atomic.LoadInt64(&llrb.mvcc.n_activess)
@@ -166,6 +174,7 @@ func (llrb *LLRB) log(involved int, humanize bool) {
 		}
 		return val.(int64)
 	}
+
 	if humanize {
 		overh := dohumanize(stats["node.overhead"])
 		use := dohumanize(stats["node.useful"])
@@ -206,11 +215,16 @@ func (llrb *LLRB) log(involved int, humanize bool) {
 	}
 
 	// log statistics
-	text, err := json.Marshal(stats)
-	if err != nil {
-		panic(fmt.Errorf("log(): %v", err))
-	}
-	log.Infof("%v stats %v\n", llrb.logprefix, string(text))
+	text := lib.Prettystats(llrb.statskey(map[string]interface{}{}), false)
+	log.Infof("%v keystats %v\n", llrb.logprefix, string(text))
+	text = lib.Prettystats(llrb.statsval(map[string]interface{}{}), false)
+	log.Infof("%v valstats %v\n", llrb.logprefix, string(text))
+	text = lib.Prettystats(llrb.statstree(map[string]interface{}{}), false)
+	log.Infof("%v treestats %v\n", llrb.logprefix, string(text))
+	text = lib.Prettystats(llrb.statswt(map[string]interface{}{}), false)
+	log.Infof("%v writestats %v\n", llrb.logprefix, string(text))
+	text = lib.Prettystats(llrb.statsrd(map[string]interface{}{}), false)
+	log.Infof("%v readstats %v\n", llrb.logprefix, string(text))
 
 	// log snapshot chain
 	if llrb.mvcc.enabled {
