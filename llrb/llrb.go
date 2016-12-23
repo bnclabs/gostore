@@ -871,7 +871,7 @@ func (llrb *LLRB) Mutations(cmds []*api.MutationCmd, callb api.NodeCallb) error 
 		case api.DeleteCmd:
 			llrb.Delete(mcmd.Key, localfn)
 		default:
-			panic("invalid mutation command")
+			panic(fmt.Errorf("invalid mutation command : {%v,%v}", i, mcmd.Cmd))
 		}
 	}
 	return nil
