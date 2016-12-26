@@ -230,9 +230,11 @@ func (llrb *LLRB) doclone(name string) *LLRB {
 
 // Destroy implement Index{} interface.
 func (llrb *LLRB) Destroy() error {
-	if atomic.LoadInt64(&llrb.mvcc.n_activess) > 0 {
+	if n_activess := atomic.LoadInt64(&llrb.mvcc.n_activess); n_activess > 0 {
+		log.Infof("%v activesnapshots: %v\n", llrb.logprefix, n_activess)
 		return api.ErrorActiveSnapshots
-	} else if atomic.LoadInt64(&llrb.activeiter) > 0 {
+	} else if activeiter := atomic.LoadInt64(&llrb.activeiter); activeiter > 0 {
+		log.Infof("%v activeiter: %v\n", llrb.logprefix, n_activess)
 		return api.ErrorActiveIterators
 	}
 	if llrb.dead == false {
