@@ -181,8 +181,8 @@ func (llrb *LLRB) log(involved int, humanize bool) {
 		alloc := dohumanize(stats["node.allocated"])
 		avail := dohumanize(stats["node.available"])
 		kmem := dohumanize(stats["keymemory"])
-		fmsg := "%v keymem(%v): %v useful, overhd %v allocated %v avail %v\n"
-		log.Infof(fmsg, llrb.logprefix, kmem, use, overh, alloc, avail)
+		fmsg := "%v keymem(%v): avail %v {useful:%v,overhd,%v}; allocated %v\n"
+		log.Infof(fmsg, llrb.logprefix, kmem, avail, use, overh, alloc)
 
 		// node utilization
 		outs := []string{}
@@ -200,8 +200,8 @@ func (llrb *LLRB) log(involved int, humanize bool) {
 		alloc = dohumanize(stats["value.allocated"])
 		avail = dohumanize(stats["value.available"])
 		vmem := dohumanize(stats["valmemory"])
-		fmsg = "%v valmem(%v): %v useful, overhd %v allocated %v avail %v\n"
-		log.Infof(fmsg, llrb.logprefix, vmem, use, overh, alloc, avail)
+		fmsg = "%v valmem(%v): avail %v {useful:%v,overhd:%v}; allocated %v\n"
+		log.Infof(fmsg, llrb.logprefix, vmem, avail, use, overh, alloc)
 
 		// value utilization
 		outs = []string{}
