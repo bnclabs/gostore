@@ -240,7 +240,7 @@ func (md *metadata) setvbno(vbno uint16) *metadata {
 }
 
 func (md *metadata) setaccess(access uint64) *metadata {
-	md.hdr = (md.hdr & 0x000fffff00000000) | ((access & 0xfffff) << 32)
+	md.hdr = (md.hdr & 0xfff00000ffffffff) | ((access & 0xfffff) << 32)
 	return md
 }
 

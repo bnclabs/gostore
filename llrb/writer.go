@@ -191,7 +191,7 @@ func (writer *LLRBWriter) run() {
 		}
 		for msg := range writer.reqch {
 			if msg[0].(byte) == cmdLlrbWriterGetSnapshot {
-				close(msg[1].(chan *LLRBSnapshot))
+				close(msg[1].(chan api.IndexSnapshot))
 			}
 		}
 		log.Infof("%v ... stopping mvcc writer\n", llrb.logprefix)
