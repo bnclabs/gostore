@@ -202,8 +202,8 @@ func (arena *Arena) Utilization() ([]int, []float64) {
 	sort.Ints(sizes)
 
 	ss, zs := make([]int, 0), make([]float64, 0)
-	capacity, allocated := float64(0), float64(0)
 	for _, size := range sizes {
+		capacity, allocated := float64(0), float64(0)
 		for _, mpool := range arena.mpools[int64(size)] {
 			_, useful := mpool.Memory()
 			capacity += float64(useful)
