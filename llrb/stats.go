@@ -2,6 +2,7 @@ package llrb
 
 import "fmt"
 import "math"
+import "time"
 import "strings"
 import "sync/atomic"
 
@@ -163,10 +164,12 @@ func (llrb *LLRB) validatestats() error {
 }
 
 func (llrb *LLRB) log(involved int, humanize bool) {
+	startts := time.Now()
 	stats, err := llrb.fullstats() // llrb.stats(involved)
 	if err != nil {
 		panic(fmt.Errorf("log(): %v", err))
 	}
+	log.Infof("%v fullstats() took %v\n", llrb.logprefix, time.Since(startts))
 
 	dohumanize := func(val interface{}) interface{} {
 		if humanize {
