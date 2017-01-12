@@ -47,7 +47,7 @@ func TestAccessMetadata(t *testing.T) {
 		t.Errorf("expected %x, got %x", 0x2, x)
 	} else if x := md.setaccess(0xfffff).access(); x != 0xfffff {
 		t.Errorf("expected %x, got %x", 0xfffff, x)
-	} else if x := md.setaccess(0x100000).access(); x != 0xfffff {
+	} else if x := md.setaccess(0x100000).access(); x != 0 {
 		t.Errorf("expected %x, got %x", 0xfffff, x)
 	}
 }
