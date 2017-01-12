@@ -251,6 +251,7 @@ func (llrb *LLRB) Destroy() error {
 		llrb.root = nil
 		llrb.setts, llrb.strsl = nil, nil
 		llrb.dead = true
+		log.Infof("%v destroyed\n", llrb.logprefix)
 		return nil
 	}
 	panic("Destroy(): already dead tree")
