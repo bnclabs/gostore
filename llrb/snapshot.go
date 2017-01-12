@@ -337,9 +337,8 @@ func (snapshot *LLRBSnapshot) Range(lkey, hkey []byte, incl string, reverse bool
 
 	if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
 		atomic.AddInt64(&snapshot.n_ccranges, 1)
-	} else {
-		atomic.AddInt64(&snapshot.n_ranges, 1)
 	}
+	atomic.AddInt64(&snapshot.n_ranges, 1)
 }
 
 // Iterate implement IndexReader{} interface.
@@ -391,9 +390,8 @@ func (snapshot *LLRBSnapshot) Iterate(lkey, hkey []byte, incl string, r bool) ap
 
 	if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
 		atomic.AddInt64(&snapshot.n_ccranges, 1)
-	} else {
-		atomic.AddInt64(&snapshot.n_ranges, 1)
 	}
+	atomic.AddInt64(&snapshot.n_ranges, 1)
 	atomic.AddInt64(&llrb.n_activeiter, 1)
 	return iter
 }
