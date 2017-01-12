@@ -369,7 +369,7 @@ func (snapshot *LLRBSnapshot) Iterate(lkey, hkey []byte, incl string, r bool) ap
 	iter.nodes, iter.index, iter.limit = iter.nodes[:0], 0, 5
 	iter.continuate = false
 	iter.startkey, iter.endkey, iter.incl, iter.reverse = lkey, hkey, incl, r
-	iter.closed, iter.activeiter = false, &llrb.activeiter
+	iter.closed, iter.n_activeiter = false, &llrb.n_activeiter
 
 	if iter.nodes == nil {
 		iter.nodes = make([]api.Node, 0)
@@ -397,7 +397,7 @@ func (snapshot *LLRBSnapshot) Iterate(lkey, hkey []byte, incl string, r bool) ap
 	} else {
 		atomic.AddInt64(&snapshot.n_ranges, 1)
 	}
-	atomic.AddInt64(&llrb.activeiter, 1)
+	atomic.AddInt64(&llrb.n_activeiter, 1)
 	return iter
 }
 

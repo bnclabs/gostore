@@ -17,7 +17,7 @@ import humanize "github.com/dustin/go-humanize"
 // LLRB to manage in-memory sorted index using left-leaning-red-black trees.
 type LLRB struct { // tree container
 	// all are 64-bit aligned
-	activeiter int64
+	n_activeiter int64
 	llrbstats
 
 	// mvcc
@@ -213,9 +213,10 @@ func (llrb *LLRB) Clone(name string) api.Index {
 }
 
 func (llrb *LLRB) doclone(name string) *LLRB {
-	if llrb.activeiter > 0 {
+	n_activeiter := atomic.LoadInt64(&llrb.n_activeiter)
+	if n_activeiter > 0 {
 		fmsg := "Clone(): unexpected active-iterators %v"
-		panic(fmt.Errorf(fmsg, llrb.activeiter))
+		panic(fmt.Errorf(fmsg, n_activeiter))
 	}
 
 	newllrb := NewLLRB(llrb.name, llrb.setts)
@@ -230,11 +231,13 @@ func (llrb *LLRB) doclone(name string) *LLRB {
 
 // Destroy implement Index{} interface.
 func (llrb *LLRB) Destroy() error {
-	if n_activess := atomic.LoadInt64(&llrb.mvcc.n_activess); n_activess > 0 {
+	n_activess := atomic.LoadInt64(&llrb.mvcc.n_activess)
+	n_activeiter := atomic.LoadInt64(&llrb.n_activeiter)
+	if n_activess > 0 {
 		log.Infof("%v activesnapshots: %v\n", llrb.logprefix, n_activess)
 		return api.ErrorActiveSnapshots
-	} else if activeiter := atomic.LoadInt64(&llrb.activeiter); activeiter > 0 {
-		log.Infof("%v activeiter: %v\n", llrb.logprefix, n_activess)
+	} else if n_activeiter > 0 {
+		log.Infof("%v n_activeiter: %v\n", llrb.logprefix, n_activess)
 		return api.ErrorActiveIterators
 	}
 	if llrb.dead == false {
@@ -490,7 +493,7 @@ func (llrb *LLRB) Iterate(lkey, hkey []byte, incl string, r bool) api.IndexItera
 	iter.nodes, iter.index, iter.limit = iter.nodes[:0], 0, 5
 	iter.continuate = false
 	iter.startkey, iter.endkey, iter.incl, iter.reverse = lkey, hkey, incl, r
-	iter.closed, iter.activeiter = false, &llrb.activeiter
+	iter.closed, iter.n_activeiter = false, &llrb.n_activeiter
 
 	if iter.nodes == nil {
 		iter.nodes = make([]api.Node, 0)
@@ -514,7 +517,7 @@ func (llrb *LLRB) Iterate(lkey, hkey []byte, incl string, r bool) api.IndexItera
 	}
 
 	atomic.AddInt64(&llrb.n_ranges, 1)
-	atomic.AddInt64(&llrb.activeiter, 1)
+	atomic.AddInt64(&llrb.n_activeiter, 1)
 	return iter
 }
 

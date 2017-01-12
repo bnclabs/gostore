@@ -8,6 +8,9 @@ import "github.com/prataprc/storage.go/api"
 var _ = fmt.Sprintf("dummy")
 
 type iterator struct {
+	// 64-bit aligned
+	n_activeiter *int64
+
 	tree       api.IndexReader
 	llrb       *LLRB
 	continuate bool
@@ -19,7 +22,6 @@ type iterator struct {
 	incl       string
 	reverse    bool
 	closed     bool
-	activeiter *int64
 }
 
 // Next implement IndexIterator{} interface.
@@ -49,7 +51,7 @@ func (iter *iterator) Close() {
 		iter.nodes[i] = nil
 	}
 	iter.nodes = iter.nodes[:0]
-	atomic.AddInt64(iter.activeiter, -1)
+	atomic.AddInt64(iter.n_activeiter, -1)
 
 	// give it back to the pool if not overflowing.
 	llrb := iter.llrb
