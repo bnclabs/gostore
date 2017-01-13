@@ -244,61 +244,23 @@ func (llrb *LLRB) log(involved string, humanize bool) {
 	text = lib.Prettystats(llrb.statsrd(map[string]interface{}{}), false)
 	log.Infof("%v readstats %v\n", llrb.logprefix, string(text))
 	// log histograms
-	h_upsertdepth := stats["h_upsertdepth"].(map[string]interface{})
-	text = lib.Prettystats(h_upsertdepth, false)
-	log.Infof("%v h_upsertdepth %v\n", llrb.logprefix, string(text))
-	h_bulkfree := stats["mvcc.h_bulkfree"].(map[string]interface{})
-	text = lib.Prettystats(h_bulkfree, false)
-	log.Infof("%v mvcc.h_bulkfree %v\n", llrb.logprefix, string(text))
-	h_versions := stats["mvcc.h_versions"].(map[string]interface{})
-	text = lib.Prettystats(h_versions, false)
-	log.Infof("%v mvcc.h_versions %v\n", llrb.logprefix, string(text))
-	if h_height, ok := stats["h_height"].(map[string]interface{}); ok {
-		text = lib.Prettystats(h_height, false)
-		log.Infof("%v h_versions %v\n", llrb.logprefix, string(text))
-	}
-	if n_blacks, ok := stats["n_blacks"].(map[string]interface{}); ok {
-		text = lib.Prettystats(n_blacks, false)
-		log.Infof("%v n_blacks %v\n", llrb.logprefix, string(text))
-	}
-	// log reclaim histograms
-	h_reclaim_upsert, ok :=
-		stats["mvcc.h_reclaims.upsert"].(map[string]interface{})
-	if ok {
-		text = lib.Prettystats(h_reclaim_upsert, false)
-		log.Infof("%v mvcc.h_reclaims.upsert %v\n", llrb.logprefix, string(text))
-	}
-	h_reclaim_upsertcas, ok :=
-		stats["mvcc.h_reclaims.upsertcase"].(map[string]interface{})
-	if ok {
-		text = lib.Prettystats(h_reclaim_upsertcas, false)
-		fmsg := "%v mvcc.h_reclaims.upsertcas %v\n"
-		log.Infof(fmsg, llrb.logprefix, string(text))
-	}
-	h_reclaim_delmin, ok :=
-		stats["mvcc.h_reclaims.delmin"].(map[string]interface{})
-	if ok {
-		text = lib.Prettystats(h_reclaim_delmin, false)
-		log.Infof("%v mvcc.h_reclaims.delmin %v\n", llrb.logprefix, string(text))
-	}
-	h_reclaim_delmax, ok :=
-		stats["mvcc.h_reclaims.delmax"].(map[string]interface{})
-	if ok {
-		text = lib.Prettystats(h_reclaim_delmax, false)
-		log.Infof("%v mvcc.h_reclaims.delmax %v\n", llrb.logprefix, string(text))
-	}
-	h_reclaim_delete, ok :=
-		stats["mvcc.h_reclaims.delete"].(map[string]interface{})
-	if ok {
-		text = lib.Prettystats(h_reclaim_delete, false)
-		log.Infof("%v mvcc.h_reclaims.delete %v\n", llrb.logprefix, string(text))
-	}
-	h_reclaim_muts, ok :=
-		stats["mvcc.h_reclaims.mutations"].(map[string]interface{})
-	if ok {
-		text = lib.Prettystats(h_reclaim_muts, false)
-		fmsg := "%v mvcc.h_reclaims.mutations %v\n"
-		log.Infof(fmsg, llrb.logprefix, string(text))
+	text = llrb.h_upsertdepth.Logstring()
+	log.Infof("%v h_upsertdepth %v\n", llrb.logprefix, text)
+	if llrb.mvcc.enabled {
+		text = llrb.mvcc.h_bulkfree.Logstring()
+		log.Infof("%v h_bulkfree %v\n", llrb.logprefix, text)
+		text = llrb.mvcc.h_versions.Logstring()
+		log.Infof("%v h_versions %v\n", llrb.logprefix, text)
+		// log reclaim histograms
+		keys := []string{
+			"upsert", "upsertcas", "delmin", "delmax", "delete", "mutations",
+		}
+		for _, key := range keys {
+			if h := llrb.mvcc.h_reclaims[key]; h.Samples() > 0 {
+				text = h.Logstring()
+				log.Infof("%v h_reclaims.%v %v\n", llrb.logprefix, key, text)
+			}
+		}
 	}
 
 	// log snapshot chain

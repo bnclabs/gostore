@@ -157,16 +157,16 @@ func (llrb *LLRB) EnableMVCC() {
 
 func (llrb *LLRB) enableMVCC() {
 	llrb.mvcc.reclaim = make([]*Llrbnode, 0, 64)
-	llrb.mvcc.h_bulkfree = lib.NewhistorgramInt64(200000, 500000, 100000)
+	llrb.mvcc.h_bulkfree = lib.NewhistorgramInt64(100, 1000, 1000)
 	llrb.mvcc.h_reclaims = map[string]*lib.HistogramInt64{
-		"upsert":    lib.NewhistorgramInt64(4, 1024, 4),
-		"upsertcas": lib.NewhistorgramInt64(4, 1024, 4),
-		"mutations": lib.NewhistorgramInt64(4, 1024, 4),
-		"delmin":    lib.NewhistorgramInt64(4, 1024, 4),
-		"delmax":    lib.NewhistorgramInt64(4, 1024, 4),
-		"delete":    lib.NewhistorgramInt64(4, 1024, 4),
+		"upsert":    lib.NewhistorgramInt64(10, 200, 20),
+		"upsertcas": lib.NewhistorgramInt64(10, 200, 20),
+		"mutations": lib.NewhistorgramInt64(10, 200, 20),
+		"delmin":    lib.NewhistorgramInt64(10, 200, 20),
+		"delmax":    lib.NewhistorgramInt64(10, 200, 20),
+		"delete":    lib.NewhistorgramInt64(10, 200, 20),
 	}
-	llrb.mvcc.h_versions = lib.NewhistorgramInt64(0, 32, 1)
+	llrb.mvcc.h_versions = lib.NewhistorgramInt64(1, 30, 10)
 	llrb.spawnwriter()
 }
 
