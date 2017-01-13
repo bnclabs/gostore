@@ -43,6 +43,7 @@ func (llrb *LLRB) stats() (map[string]interface{}, error) {
 	stats["h_upsertdepth"] = llrb.h_upsertdepth.Fullstats()
 	if llrb.mvcc.enabled {
 		stats["mvcc.h_bulkfree"] = llrb.mvcc.h_bulkfree.Fullstats()
+		stats["mvcc.h_versions"] = llrb.mvcc.h_versions.Fullstats()
 		for k, h := range llrb.mvcc.h_reclaims {
 			stats["mvcc.h_reclaims."+k] = h.Fullstats()
 		}
@@ -55,6 +56,7 @@ func (llrb *LLRB) fullstats() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	h_heightav := lib.NewhistorgramInt64(1, 256, 1)
 	llrb.heightStats(llrb.root, 1 /*depth*/, h_heightav)
 	stats["h_height"] = h_heightav.Fullstats()
@@ -117,7 +119,7 @@ func (llrb *LLRB) statsmvcc(stats map[string]interface{}) map[string]interface{}
 	stats["mvcc.n_activess"] = atomic.LoadInt64(&llrb.mvcc.n_activess)
 	stats["mvcc.n_cclookups"] = llrb.mvcc.n_cclookups
 	stats["mvcc.n_ccranges"] = llrb.mvcc.n_ccranges
-	stats["mvcc.n_reclaims"] = llrb.mvcc.n_ccranges
+	stats["mvcc.n_reclaims"] = llrb.mvcc.n_reclaims
 	return stats
 }
 
@@ -164,13 +166,25 @@ func (llrb *LLRB) validatestats() error {
 	return nil
 }
 
-func (llrb *LLRB) log(involved int, humanize bool) {
-	startts := time.Now()
-	stats, err := llrb.fullstats() // llrb.stats(involved)
-	if err != nil {
-		panic(fmt.Errorf("log(): %v", err))
+func (llrb *LLRB) log(involved string, humanize bool) {
+	var stats map[string]interface{}
+	var err error
+
+	switch involved {
+	case "full":
+		startts := time.Now()
+		stats, err = llrb.fullstats()
+		if err != nil {
+			panic(fmt.Errorf("log(): %v", err))
+		}
+		log.Infof("%v fullstats() took %v\n", llrb.logprefix, time.Since(startts))
+
+	default:
+		stats, err = llrb.stats()
+		if err != nil {
+			panic(fmt.Errorf("log(): %v", err))
+		}
 	}
-	log.Infof("%v fullstats() took %v\n", llrb.logprefix, time.Since(startts))
 
 	dohumanize := func(val interface{}) interface{} {
 		if humanize {
@@ -229,6 +243,63 @@ func (llrb *LLRB) log(involved int, humanize bool) {
 	log.Infof("%v mvcc %v\n", llrb.logprefix, string(text))
 	text = lib.Prettystats(llrb.statsrd(map[string]interface{}{}), false)
 	log.Infof("%v readstats %v\n", llrb.logprefix, string(text))
+	// log histograms
+	h_upsertdepth := stats["h_upsertdepth"].(map[string]interface{})
+	text = lib.Prettystats(h_upsertdepth, false)
+	log.Infof("%v h_upsertdepth %v\n", llrb.logprefix, string(text))
+	h_bulkfree := stats["mvcc.h_bulkfree"].(map[string]interface{})
+	text = lib.Prettystats(h_bulkfree, false)
+	log.Infof("%v mvcc.h_bulkfree %v\n", llrb.logprefix, string(text))
+	h_versions := stats["mvcc.h_versions"].(map[string]interface{})
+	text = lib.Prettystats(h_versions, false)
+	log.Infof("%v mvcc.h_versions %v\n", llrb.logprefix, string(text))
+	if h_height, ok := stats["h_height"].(map[string]interface{}); ok {
+		text = lib.Prettystats(h_height, false)
+		log.Infof("%v h_versions %v\n", llrb.logprefix, string(text))
+	}
+	if n_blacks, ok := stats["n_blacks"].(map[string]interface{}); ok {
+		text = lib.Prettystats(n_blacks, false)
+		log.Infof("%v n_blacks %v\n", llrb.logprefix, string(text))
+	}
+	// log reclaim histograms
+	h_reclaim_upsert, ok :=
+		stats["mvcc.h_reclaims.upsert"].(map[string]interface{})
+	if ok {
+		text = lib.Prettystats(h_reclaim_upsert, false)
+		log.Infof("%v mvcc.h_reclaims.upsert %v\n", llrb.logprefix, string(text))
+	}
+	h_reclaim_upsertcas, ok :=
+		stats["mvcc.h_reclaims.upsertcase"].(map[string]interface{})
+	if ok {
+		text = lib.Prettystats(h_reclaim_upsertcas, false)
+		fmsg := "%v mvcc.h_reclaims.upsertcas %v\n"
+		log.Infof(fmsg, llrb.logprefix, string(text))
+	}
+	h_reclaim_delmin, ok :=
+		stats["mvcc.h_reclaims.delmin"].(map[string]interface{})
+	if ok {
+		text = lib.Prettystats(h_reclaim_delmin, false)
+		log.Infof("%v mvcc.h_reclaims.delmin %v\n", llrb.logprefix, string(text))
+	}
+	h_reclaim_delmax, ok :=
+		stats["mvcc.h_reclaims.delmax"].(map[string]interface{})
+	if ok {
+		text = lib.Prettystats(h_reclaim_delmax, false)
+		log.Infof("%v mvcc.h_reclaims.delmax %v\n", llrb.logprefix, string(text))
+	}
+	h_reclaim_delete, ok :=
+		stats["mvcc.h_reclaims.delete"].(map[string]interface{})
+	if ok {
+		text = lib.Prettystats(h_reclaim_delete, false)
+		log.Infof("%v mvcc.h_reclaims.delete %v\n", llrb.logprefix, string(text))
+	}
+	h_reclaim_muts, ok :=
+		stats["mvcc.h_reclaims.mutations"].(map[string]interface{})
+	if ok {
+		text = lib.Prettystats(h_reclaim_muts, false)
+		fmsg := "%v mvcc.h_reclaims.mutations %v\n"
+		log.Infof(fmsg, llrb.logprefix, string(text))
+	}
 
 	// log snapshot chain
 	if llrb.mvcc.enabled {

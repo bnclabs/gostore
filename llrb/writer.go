@@ -140,7 +140,7 @@ func (writer *LLRBWriter) validate() error {
 	return err
 }
 
-func (writer *LLRBWriter) log(involved int, humanize bool) {
+func (writer *LLRBWriter) log(involved string, humanize bool) {
 	respch := make(chan []interface{}, 1)
 	cmd := []interface{}{cmdLlrbWriterLog, involved, humanize, respch}
 	lib.FailsafeRequest(writer.reqch, respch, cmd, writer.finch)
@@ -324,7 +324,7 @@ loop:
 			respch <- []interface{}{}
 
 		case cmdLlrbWriterLog:
-			involved := msg[1].(int)
+			involved := msg[1].(string)
 			humanize := msg[2].(bool)
 			respch := msg[3].(chan []interface{})
 			llrb.log(involved, humanize)

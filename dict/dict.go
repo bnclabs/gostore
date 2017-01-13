@@ -113,7 +113,7 @@ func (d *Dict) Validate() {
 }
 
 // Log implement api.Index{} interface.
-func (d *Dict) Log(involved int, humanize bool) {
+func (d *Dict) Log(involved string, humanize bool) {
 	panic("dict.Log() not implemented for Dict")
 }
 

@@ -226,7 +226,7 @@ func (ss *Snapshot) Fullstats() (map[string]interface{}, error) {
 }
 
 // Log implement Index{} interface.
-func (ss *Snapshot) Log(involved int, humanize bool) {
+func (ss *Snapshot) Log(involved string, humanize bool) {
 	if atomic.LoadInt64(&ss.n_snapshots) == 0 {
 		panic("TBD")
 	}

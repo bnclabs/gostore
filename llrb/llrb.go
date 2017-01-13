@@ -95,7 +95,7 @@ func NewLLRB(name string, setts lib.Settings) *LLRB {
 	llrb.setts = setts
 
 	// statistics
-	llrb.h_upsertdepth = lib.NewhistorgramInt64(1, 256, 1)
+	llrb.h_upsertdepth = lib.NewhistorgramInt64(10, 100, 10)
 
 	// scratch pads
 	llrb.strsl = make([]string, 0)
@@ -297,7 +297,7 @@ func (llrb *LLRB) Validate() {
 }
 
 // Log implement api.Index{} interface.
-func (llrb *LLRB) Log(involved int, humanize bool) {
+func (llrb *LLRB) Log(involved string, humanize bool) {
 	if llrb.mvcc.enabled {
 		llrb.mvcc.writer.log(involved, humanize)
 		return

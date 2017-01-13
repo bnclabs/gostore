@@ -145,7 +145,7 @@ type Index interface {
 
 	// Log current statistics, if humanize is true log some or all of the stats
 	// in human readable format.
-	Log(involved int, humanize bool)
+	Log(what string, humanize bool)
 
 	// Metadata return index properties as json encoded object.
 	Metadata() []byte
