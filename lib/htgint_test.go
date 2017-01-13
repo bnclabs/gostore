@@ -22,9 +22,9 @@ func TestHistogramInt(t *testing.T) {
 		t.Errorf("Sum() expected %v, got %v", x, y)
 	} else if x, y := h.Sum()/h.Samples(), h.Mean(); x != y {
 		t.Errorf("Mean() expected %v, got %v", x, y)
-	} else if x, y := 883.5, h.Variance(); x != y {
+	} else if x, y := int64(883), h.Variance(); x != y {
 		t.Errorf("Variance() expected %v, got %v", x, y)
-	} else if x, y := 29.723727895403698, h.SD(); x != y {
+	} else if x, y := int64(29), h.SD(); x != y {
 		t.Errorf("SD() expected %v, got %v", x, y)
 	}
 

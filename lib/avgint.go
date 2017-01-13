@@ -50,19 +50,19 @@ func (av *AverageInt64) Mean() int64 {
 	return int64(float64(av.sum) / float64(av.n))
 }
 
-func (av *AverageInt64) Variance() float64 {
+func (av *AverageInt64) Variance() int64 {
 	if av.n == 0 {
 		return 0
 	}
 	nF, meanF := float64(av.n), float64(av.Mean())
-	return (av.sumsq / nF) - (meanF * meanF)
+	return int64((av.sumsq / nF) - (meanF * meanF))
 }
 
-func (av *AverageInt64) SD() float64 {
+func (av *AverageInt64) SD() int64 {
 	if av.n == 0 {
 		return 0
 	}
-	return math.Sqrt(av.Variance())
+	return int64(math.Sqrt(float64(av.Variance())))
 }
 
 func (av *AverageInt64) Clone() *AverageInt64 {

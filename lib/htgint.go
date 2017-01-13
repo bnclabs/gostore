@@ -73,19 +73,19 @@ func (h *HistogramInt64) Mean() int64 {
 	return int64(float64(h.sum) / float64(h.n))
 }
 
-func (h *HistogramInt64) Variance() float64 {
+func (h *HistogramInt64) Variance() int64 {
 	if h.n == 0 {
 		return 0
 	}
 	nF, meanF := float64(h.n), float64(h.Mean())
-	return (h.sumsq / nF) - (meanF * meanF)
+	return int64((h.sumsq / nF) - (meanF * meanF))
 }
 
-func (h *HistogramInt64) SD() float64 {
+func (h *HistogramInt64) SD() int64 {
 	if h.n == 0 {
 		return 0
 	}
-	return math.Sqrt(h.Variance())
+	return int64(math.Sqrt(float64(h.Variance())))
 }
 
 func (h *HistogramInt64) Stats() map[string]int64 {
