@@ -1,6 +1,9 @@
 package lib
 
 import "math"
+import "sort"
+import "fmt"
+import "strings"
 import "strconv"
 
 // HistogramInt64 statistical histogram.
@@ -131,4 +134,40 @@ func (h *HistogramInt64) Clone() *HistogramInt64 {
 	newh.histogram = make([]int64, len(h.histogram))
 	copy(newh.histogram, h.histogram)
 	return &newh
+}
+
+func (h *HistogramInt64) Logstring() string {
+	stats, keys := h.Fullstats(), []string{}
+	// everything except histogram
+	for k := range stats {
+		if k == "histogram" {
+			continue
+		}
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	ss := []string{}
+	for _, key := range keys {
+		ss = append(ss, fmt.Sprintf(`"%v": %v`, key, stats[key]))
+	}
+	// sort historgram
+	hkeys := []int{}
+	histogram := stats["histogram"].(map[string]interface{})
+	for k := range histogram {
+		if k == "+" {
+			continue
+		}
+		n, _ := strconv.Atoi(k)
+		hkeys = append(hkeys, n)
+	}
+	sort.Ints(hkeys)
+	hs := []string{}
+	for _, k := range hkeys {
+		ks := strconv.Itoa(k)
+		hs = append(hs, fmt.Sprintf(`"%v": %v`, ks, histogram[ks]))
+	}
+	hs = append(hs, fmt.Sprintf(`"%v": %v`, "+", histogram["+"]))
+	s := "{" + strings.Join(hs, ",") + "}"
+	ss = append(ss, fmt.Sprintf(`"histogram": %v`, s))
+	return "{" + strings.Join(ss, ",") + "}"
 }
