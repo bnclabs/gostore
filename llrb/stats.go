@@ -114,7 +114,7 @@ func (llrb *LLRB) statswt(stats map[string]interface{}) map[string]interface{} {
 }
 
 func (llrb *LLRB) statsmvcc(stats map[string]interface{}) map[string]interface{} {
-	stats["mvcc.n_snapshots"] = llrb.mvcc.n_snapshots
+	stats["mvcc.n_snapshots"] = atomic.LoadInt64(&llrb.mvcc.n_snapshots)
 	stats["mvcc.n_purgedss"] = llrb.mvcc.n_purgedss
 	stats["mvcc.n_activess"] = atomic.LoadInt64(&llrb.mvcc.n_activess)
 	stats["mvcc.n_cclookups"] = llrb.mvcc.n_cclookups
@@ -144,7 +144,7 @@ func (llrb *LLRB) validatestats() error {
 		panic(fmt.Errorf(fmsg, n_deletes, n_frees, n_clones))
 	}
 	// mvcc.n_snapshots should match (mvcc.n_activess + mvcc.n_purgedss)
-	n_snapshots := llrb.mvcc.n_snapshots
+	n_snapshots := atomic.LoadInt64(&llrb.mvcc.n_snapshots)
 	n_purgedss := llrb.mvcc.n_purgedss
 	n_activess := atomic.LoadInt64(&llrb.mvcc.n_activess)
 	if n_snapshots != (n_purgedss + n_activess) {

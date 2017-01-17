@@ -43,8 +43,10 @@ loop:
 		}
 		log.Tracef("%v snapshot tick for $%v ...\n", llrb.logprefix, id)
 		if err := writer.makeSnapshot(id); err != nil {
-			fmsg := "%v make snapshot $%v failed: %v\n"
-			log.Errorf(fmsg, llrb.logprefix, id, err)
+			if err.Error() != "closed" {
+				fmsg := "%v make snapshot $%v failed: %v\n"
+				log.Errorf(fmsg, llrb.logprefix, id, err)
+			}
 			break loop
 		}
 	}
@@ -130,7 +132,7 @@ func (llrb *LLRB) newsnapshot(id string) *LLRBSnapshot {
 
 	fmsg := "%v snapshot BORN %v nodes to reclaim...\n"
 	log.Debugf(fmsg, snapshot.logprefix, len(snapshot.reclaim))
-	llrb.mvcc.n_snapshots++
+	atomic.AddInt64(&llrb.mvcc.n_snapshots, 1)
 	atomic.AddInt64(&llrb.mvcc.n_activess, 1)
 	return snapshot
 }

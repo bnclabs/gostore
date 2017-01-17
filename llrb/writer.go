@@ -15,6 +15,7 @@ type LLRBWriter struct {
 	llrb    *LLRB
 	waiters []chan api.IndexSnapshot
 	reqch   chan []interface{}
+	snapwt  chan []interface{}
 	finch   chan bool
 }
 
@@ -30,6 +31,7 @@ func (llrb *LLRB) spawnwriter() *LLRBWriter {
 		llrb:    llrb,
 		waiters: make([]chan api.IndexSnapshot, 0, 128),
 		reqch:   make(chan []interface{}, llrb.writechansz),
+		snapwt:  make(chan []interface{}, llrb.writechansz),
 		finch:   make(chan bool),
 	}
 	log.Infof("%v starting mvcc writer ...\n", llrb.logprefix)
@@ -111,7 +113,7 @@ func (writer *LLRBWriter) makeSnapshot(id string) error {
 
 func (writer *LLRBWriter) getSnapshot(snapch chan api.IndexSnapshot) error {
 	cmd := []interface{}{cmdLlrbWriterGetSnapshot, snapch}
-	return lib.FailsafePost(writer.reqch, cmd, writer.finch)
+	return lib.FailsafePost(writer.snapwt, cmd, writer.finch)
 }
 
 func (writer *LLRBWriter) purgeSnapshot() error {
@@ -189,7 +191,7 @@ func (writer *LLRBWriter) run() {
 		for _, waiter := range writer.waiters {
 			close(waiter)
 		}
-		for msg := range writer.reqch {
+		for msg := range writer.snapwt {
 			if msg[0].(byte) == cmdLlrbWriterGetSnapshot {
 				close(msg[1].(chan api.IndexSnapshot))
 			}
@@ -213,10 +215,14 @@ func (writer *LLRBWriter) run() {
 		}
 	}
 
+	var msg []interface{}
 loop:
 	for {
 		reclaim = reclaim[:0]
-		msg := <-writer.reqch
+		select {
+		case msg = <-writer.reqch:
+		case msg = <-writer.snapwt:
+		}
 		switch msg[0].(byte) {
 		case cmdLlrbWriterUpsert:
 			key, value := msg[1].([]byte), msg[2].([]byte)
@@ -267,6 +273,11 @@ loop:
 				cmds, callb, reclaim,
 				func(reclaim []*Llrbnode) []*Llrbnode {
 					reclaimNodes("mutations", reclaim)
+					select {
+					case msg := <-writer.snapwt:
+						writer.deliversnapshots(msg)
+					default:
+					}
 					return reclaim[:0]
 				})
 			reclaimNodes("mutations", reclaim)
@@ -275,11 +286,11 @@ loop:
 		case cmdLlrbWriterMakeSnapshot:
 			id, ln := msg[1].(string), len(writer.waiters)
 			writer.purgesnapshot(llrb)
+			snapshot := llrb.newsnapshot(id)
 			if ln > 0 {
-				snapshot := llrb.newsnapshot(id)
-				for _, waiter := range writer.waiters {
+				for _, snapch := range writer.waiters {
 					snapshot.Refer()
-					waiter <- snapshot
+					snapch <- snapshot
 				}
 				fmsg := "%v $%v snapshot ACCOUNTED to %v waiters\n"
 				log.Debugf(fmsg, llrb.logprefix, id, ln)
@@ -287,9 +298,7 @@ loop:
 			}
 
 		case cmdLlrbWriterGetSnapshot:
-			waiter := msg[1].(chan api.IndexSnapshot)
-			log.Debugf("%v adding waiter for next snapshot\n", llrb.logprefix)
-			writer.waiters = append(writer.waiters, waiter)
+			writer.deliversnapshots(msg)
 
 		case cmdLlrbWriterPurgeSnapshot:
 			writer.purgesnapshot(llrb)
@@ -330,6 +339,21 @@ loop:
 			llrb.log(involved, humanize)
 			respch <- []interface{}{}
 		}
+	}
+}
+
+func (writer *LLRBWriter) deliversnapshots(msg []interface{}) {
+	llrb, snapch := writer.llrb, msg[1].(chan api.IndexSnapshot)
+	if llrb.mvcc.snapshot != nil {
+		snapshot := llrb.mvcc.snapshot
+		for snapshot.next != nil {
+			snapshot = snapshot.next
+		}
+		snapshot.Refer()
+		snapch <- snapshot
+	} else {
+		log.Debugf("%v adding waiter for next snapshot\n", llrb.logprefix)
+		writer.waiters = append(writer.waiters, snapch)
 	}
 }
 
@@ -652,7 +676,9 @@ func (writer *LLRBWriter) mvccmutations(
 	var i int
 	var mcmd *api.MutationCmd
 
-	localfn := func(index api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
+	localfn := func(
+		index api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
+
 		if callb != nil {
 			callb(index, int64(i), newnd, oldnd, err)
 		}
