@@ -111,8 +111,10 @@ func (writer *LLRBWriter) makeSnapshot(id string) error {
 	return lib.FailsafePost(writer.snapwt, cmd, writer.finch)
 }
 
-func (writer *LLRBWriter) getSnapshot(snapch chan api.IndexSnapshot) error {
-	cmd := []interface{}{cmdLlrbWriterGetSnapshot, snapch}
+func (writer *LLRBWriter) getSnapshot(
+	snapch chan api.IndexSnapshot, next bool) error {
+
+	cmd := []interface{}{cmdLlrbWriterGetSnapshot, snapch, next}
 	return lib.FailsafePost(writer.snapwt, cmd, writer.finch)
 }
 
@@ -342,17 +344,17 @@ func (writer *LLRBWriter) handlesnapshots(msg []interface{}) {
 		}
 
 	case cmdLlrbWriterGetSnapshot:
-		snapch := msg[1].(chan api.IndexSnapshot)
-		if llrb.mvcc.snapshot != nil {
+		snapch, next := msg[1].(chan api.IndexSnapshot), msg[2].(bool)
+		if next || llrb.mvcc.snapshot == nil {
+			log.Debugf("%v adding waiter for next snapshot\n", llrb.logprefix)
+			writer.waiters = append(writer.waiters, snapch)
+		} else {
 			snapshot := llrb.mvcc.snapshot
 			for snapshot.next != nil {
 				snapshot = snapshot.next
 			}
 			snapshot.Refer()
 			snapch <- snapshot
-		} else {
-			log.Debugf("%v adding waiter for next snapshot\n", llrb.logprefix)
-			writer.waiters = append(writer.waiters, snapch)
 		}
 
 	case cmdLlrbWriterPurgeSnapshot:

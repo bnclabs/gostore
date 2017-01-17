@@ -171,9 +171,9 @@ func (llrb *LLRB) enableMVCC() {
 }
 
 // RSnapshot implement Index{} interface.
-func (llrb *LLRB) RSnapshot(snapch chan api.IndexSnapshot) error {
+func (llrb *LLRB) RSnapshot(snapch chan api.IndexSnapshot, next bool) error {
 	if llrb.mvcc.enabled {
-		err := llrb.mvcc.writer.getSnapshot(snapch)
+		err := llrb.mvcc.writer.getSnapshot(snapch, next)
 		if err != nil {
 			return err
 		}

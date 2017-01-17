@@ -76,7 +76,7 @@ func TestLLRBMvccBasicSnapshot(t *testing.T) {
 	writer := llrb.mvcc.writer
 
 	snapch := make(chan api.IndexSnapshot, 1)
-	err := llrb.RSnapshot(snapch)
+	err := llrb.RSnapshot(snapch, true /*next*/)
 	if err != nil {
 		t.Error(err)
 	}
@@ -116,7 +116,7 @@ func TestLLRBMvccBasicLookup(t *testing.T) {
 	writer := llrb.mvcc.writer
 
 	snapch := make(chan api.IndexSnapshot, 1)
-	err := llrb.RSnapshot(snapch)
+	err := llrb.RSnapshot(snapch, true /*next*/)
 	if err != nil {
 		t.Error(err)
 	}
@@ -243,7 +243,7 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 		})
 
 	snapch := make(chan api.IndexSnapshot, 1)
-	err := llrb.RSnapshot(snapch)
+	err := llrb.RSnapshot(snapch, true /*next*/)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1614,7 +1614,7 @@ func TestLLRBMvccClone(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 	snapch := make(chan api.IndexSnapshot, 1)
-	if err := llrb.RSnapshot(snapch); err != nil {
+	if err := llrb.RSnapshot(snapch, true /*next*/); err != nil {
 		t.Error(err)
 	}
 	snapshot := <-snapch
@@ -1648,7 +1648,7 @@ func TestLLRBMvccClone(t *testing.T) {
 	newllrb := llrb.Clone(llrb.name + "-clone")
 
 	snapch = make(chan api.IndexSnapshot, 1)
-	if err := newllrb.RSnapshot(snapch); err != nil {
+	if err := newllrb.RSnapshot(snapch, true /*next*/); err != nil {
 		t.Error(err)
 	}
 	snapshot = <-snapch
@@ -1716,7 +1716,7 @@ func validatesnapshot(sleep int, writer *LLRBWriter) (api.IndexSnapshot, error) 
 	time.Sleep(time.Duration(sleep) * time.Millisecond)
 
 	snapch := make(chan api.IndexSnapshot, 1)
-	err := writer.llrb.RSnapshot(snapch)
+	err := writer.llrb.RSnapshot(snapch, true /*next*/)
 	if err != nil {
 		return nil, err
 	}

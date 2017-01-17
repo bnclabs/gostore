@@ -199,7 +199,7 @@ func (ss *Snapshot) Isactive() bool {
 }
 
 // RSnapshot implement Index{} interface.
-func (ss *Snapshot) RSnapshot(snapch chan api.IndexSnapshot) error {
+func (ss *Snapshot) RSnapshot(snapch chan api.IndexSnapshot, next bool) error {
 	ss.Refer()
 	snapch <- ss
 	return nil

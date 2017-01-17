@@ -51,7 +51,7 @@ func (d *Dict) Isactive() bool {
 }
 
 // RSnapshot implement api.Index{} interface.
-func (d *Dict) RSnapshot(snapch chan api.IndexSnapshot) error {
+func (d *Dict) RSnapshot(snapch chan api.IndexSnapshot, next bool) error {
 	snapch <- d.NewDictSnapshot()
 	return nil
 }

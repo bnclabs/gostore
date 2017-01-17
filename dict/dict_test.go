@@ -963,7 +963,7 @@ func TestDictRsnapshot(t *testing.T) {
 	}
 
 	snapch := make(chan api.IndexSnapshot, 1)
-	err := d.RSnapshot(snapch)
+	err := d.RSnapshot(snapch, true)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1073,7 +1073,7 @@ func BenchmarkDictSnapshot(b *testing.B) {
 	snapch := make(chan api.IndexSnapshot, 1)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		d.RSnapshot(snapch)
+		d.RSnapshot(snapch, true)
 		<-snapch
 	}
 }

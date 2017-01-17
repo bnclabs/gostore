@@ -92,7 +92,7 @@ func TestMissing(t *testing.T) {
 	}
 
 	snapch := make(chan api.IndexSnapshot, 1)
-	if err := store.RSnapshot(snapch); err != nil {
+	if err := store.RSnapshot(snapch, true /*next*/); err != nil {
 		t.Fatalf("acquiring snapshot: %v", err)
 	}
 	s := <-snapch
@@ -140,7 +140,7 @@ func TestLookup(t *testing.T) {
 
 	do := func(count int, llrb *llrb.LLRB, store *Snapshot, refnds []api.Node) {
 		snapch := make(chan api.IndexSnapshot, 1)
-		err := store.RSnapshot(snapch)
+		err := store.RSnapshot(snapch, true /*next*/)
 		if err != nil {
 			t.Fatalf("acquiring snapshot: %v", err)
 		}
@@ -439,7 +439,7 @@ func TestRange(t *testing.T) {
 
 	do := func(count int, llrb *llrb.LLRB, store *Snapshot, refnds []api.Node) {
 		snapch := make(chan api.IndexSnapshot, 1)
-		if err := store.RSnapshot(snapch); err != nil {
+		if err := store.RSnapshot(snapch, true /*next*/); err != nil {
 			t.Fatalf("acquiring snapshot: %v", err)
 		}
 		s := <-snapch
@@ -585,7 +585,7 @@ func TestPartialIterate(t *testing.T) {
 		t.Fatal(err)
 	}
 	ch := make(chan api.IndexSnapshot, 1)
-	if err := store.RSnapshot(ch); err != nil {
+	if err := store.RSnapshot(ch, true /*next*/); err != nil {
 		t.Fatal(err)
 	}
 	storesnap := <-ch
@@ -697,7 +697,7 @@ func TestIterate(t *testing.T) {
 
 	do := func(count int, llrb *llrb.LLRB, store *Snapshot, refnds []api.Node) {
 		snapch := make(chan api.IndexSnapshot, 1)
-		if err := store.RSnapshot(snapch); err != nil {
+		if err := store.RSnapshot(snapch, true /*next*/); err != nil {
 			t.Fatalf("acquiring snapshot: %v", err)
 		}
 		s := <-snapch
