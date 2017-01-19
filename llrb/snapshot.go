@@ -61,18 +61,17 @@ type LLRBSnapshot struct {
 	n_ccranges  int64
 
 	// 64-bit aligned writer statistics
-	n_count       int64
-	n_inserts     int64
-	n_updates     int64
-	n_deletes     int64
-	n_nodes       int64
-	n_frees       int64
-	n_clones      int64
-	n_reclaims    int64
-	keymemory     int64
-	valmemory     int64
-	h_upsertdepth lib.HistogramInt64
-	refcount      int64
+	n_count    int64
+	n_inserts  int64
+	n_updates  int64
+	n_deletes  int64
+	n_nodes    int64
+	n_frees    int64
+	n_clones   int64
+	n_reclaims int64
+	keymemory  int64
+	valmemory  int64
+	refcount   int64
 
 	// can be unaligned fields
 
@@ -101,17 +100,16 @@ func (llrb *LLRB) newsnapshot(id string) *LLRBSnapshot {
 		dead:  llrb.dead,
 		fmask: llrb.fmask,
 		// writer statistics
-		n_count:       llrb.n_count,
-		n_inserts:     llrb.n_inserts,
-		n_updates:     llrb.n_updates,
-		n_deletes:     llrb.n_deletes,
-		n_nodes:       llrb.n_nodes,
-		n_frees:       llrb.n_frees,
-		n_clones:      llrb.n_clones,
-		n_reclaims:    llrb.mvcc.n_reclaims,
-		keymemory:     llrb.keymemory,
-		valmemory:     llrb.valmemory,
-		h_upsertdepth: *llrb.h_upsertdepth,
+		n_count:    llrb.n_count,
+		n_inserts:  llrb.n_inserts,
+		n_updates:  llrb.n_updates,
+		n_deletes:  llrb.n_deletes,
+		n_nodes:    llrb.n_nodes,
+		n_frees:    llrb.n_frees,
+		n_clones:   llrb.n_clones,
+		n_reclaims: llrb.mvcc.n_reclaims,
+		keymemory:  llrb.keymemory,
+		valmemory:  llrb.valmemory,
 	}
 	snapshot.logprefix = fmt.Sprintf("[LLRBSnapshot-%s/%s]", llrb.name, id)
 
