@@ -566,16 +566,18 @@ func (llrb *LLRB) UpsertCas(key, value []byte, cas uint64, callb api.NodeCallb) 
 	llrb.rw.Lock()
 
 	// Get to check for CAS
-	var currcas uint64
-	defer atomic.AddInt64(&llrb.n_casgets, 1)
-	if nd := llrb.get(key); nd != nil {
-		currcas = nd.Bornseqno()
-	}
-	if currcas != cas {
-		if callb != nil {
-			callb(llrb, 0, nil, nil, api.ErrorInvalidCAS)
+	if cas > 0 {
+		var currcas uint64
+		defer atomic.AddInt64(&llrb.n_casgets, 1)
+		if nd := llrb.get(key); nd != nil {
+			currcas = nd.Bornseqno()
 		}
-		return api.ErrorInvalidCAS
+		if currcas != cas {
+			if callb != nil {
+				callb(llrb, 0, nil, nil, api.ErrorInvalidCAS)
+			}
+			return api.ErrorInvalidCAS
+		}
 	}
 
 	// if cas matches go ahead with upsert.

@@ -242,8 +242,13 @@ loop:
 			callb := msg[4].(api.NodeCallb)
 			respch := msg[5].(chan []interface{})
 
-			reclaim = writer.mvccupsertcas(key, value, cas, callb, reclaim)
-			reclaimNodes("upsertcas", reclaim)
+			if cas > 0 { // only if cas is !zero, otherwise fall back to upsert
+				reclaim = writer.mvccupsertcas(key, value, cas, callb, reclaim)
+				reclaimNodes("upsertcas", reclaim)
+			} else {
+				reclaim = writer.mvccupsert(key, value, callb, reclaim)
+				reclaimNodes("upsert", reclaim)
+			}
 			close(respch)
 
 		case cmdLlrbWriterDeleteMin:
@@ -681,7 +686,7 @@ func (writer *LLRBWriter) mvccmutations(
 	var i int
 	var mcmd *api.MutationCmd
 
-	localfn := func(
+	lfn := func(
 		index api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
 
 		if callb != nil {
@@ -693,20 +698,25 @@ func (writer *LLRBWriter) mvccmutations(
 	for i, mcmd = range cmds {
 		switch mcmd.Cmd {
 		case api.UpsertCmd:
-			reclaim = writer.mvccupsert(mcmd.Key, mcmd.Value, localfn, reclaim)
+			reclaim = writer.mvccupsert(mcmd.Key, mcmd.Value, lfn, reclaim)
 			reclaim = rfn(reclaim)
 		case api.CasCmd:
 			key, value, cas := mcmd.Key, mcmd.Value, mcmd.Cas
-			reclaim = writer.mvccupsertcas(key, value, cas, localfn, reclaim)
-			reclaim = rfn(reclaim)
+			if cas > 0 { // only if cas is !zero, otherwsie fall back to upsert
+				reclaim = writer.mvccupsertcas(key, value, cas, lfn, reclaim)
+				reclaim = rfn(reclaim)
+			} else {
+				reclaim = writer.mvccupsert(mcmd.Key, mcmd.Value, lfn, reclaim)
+				reclaim = rfn(reclaim)
+			}
 		case api.DelminCmd:
-			reclaim = writer.mvccdelmin(localfn, reclaim)
+			reclaim = writer.mvccdelmin(lfn, reclaim)
 			reclaim = rfn(reclaim)
 		case api.DelmaxCmd:
-			reclaim = writer.mvccdelmax(localfn, reclaim)
+			reclaim = writer.mvccdelmax(lfn, reclaim)
 			reclaim = rfn(reclaim)
 		case api.DeleteCmd:
-			reclaim = writer.mvccdelete(mcmd.Key, localfn, reclaim)
+			reclaim = writer.mvccdelete(mcmd.Key, lfn, reclaim)
 			reclaim = rfn(reclaim)
 		}
 	}
