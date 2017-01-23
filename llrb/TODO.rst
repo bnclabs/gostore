@@ -1,3 +1,5 @@
+* run `make test` and `snaptools.go:/run.sh mvcc` simultaneously there seem to
+  be some data race.
 * IndexReader{} and IndexWriter{} APIs now include error arguments. Update the
   test case for handling error arguments.
 * test marked deletes in mvcc mode.
