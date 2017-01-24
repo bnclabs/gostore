@@ -129,6 +129,13 @@ func Prettystats(stats map[string]interface{}, pretty bool) string {
 	return "{\n" + strings.Join(ss, ",\n") + "}\n"
 }
 
+func AbsInt64(x int64) int64 {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
 func panicerr(fmsg string, args ...interface{}) {
 	panic(fmt.Errorf(fmsg, args...))
 }
