@@ -137,11 +137,13 @@ func (llrb *LLRB) validatestats() error {
 		fmsg := "validatestats(): n_inserts:%v != n_nodes:%v"
 		panic(fmt.Errorf(fmsg, n_inserts, n_nodes))
 	}
-	// n_deletes should match (n_frees - n_clones)
+	// n_deletes + reclaim should match (n_frees - n_clones)
+	total_reclaim := int64(len(llrb.mvcc.reclaim))
+	total_reclaim += llrb.mvcc.snapshot.countreclaimnodes()
 	n_frees, n_clones := llrb.n_frees, llrb.n_clones
-	if n_deletes != (n_frees - n_clones) {
-		fmsg := "validatestats(): n_deletes:%v != (n_frees:%v + n_clones:%v)"
-		panic(fmt.Errorf(fmsg, n_deletes, n_frees, n_clones))
+	if (n_deletes + total_reclaim) != lib.AbsInt64(n_clones-n_frees) {
+		fmsg := "validatestats(): (n_deletes:%v + reclaim:%v) != (n_clones:%v - n_frees:%v)"
+		panic(fmt.Errorf(fmsg, n_deletes, total_reclaim, n_clones, n_frees))
 	}
 	// mvcc.n_snapshots should match (mvcc.n_activess + mvcc.n_purgedss)
 	n_snapshots := atomic.LoadInt64(&llrb.mvcc.n_snapshots)

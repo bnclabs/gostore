@@ -135,6 +135,17 @@ func (llrb *LLRB) newsnapshot(id string) *LLRBSnapshot {
 	return snapshot
 }
 
+func (snapshot *LLRBSnapshot) countreclaimnodes() int64 {
+	if snapshot == nil {
+		return 0
+	}
+	total := int64(len(snapshot.reclaim))
+	for snap := snapshot.next; snap != nil; snap = snapshot.next {
+		total += int64(len(snap.reclaim))
+	}
+	return total
+}
+
 //---- IndexSnapshot{} interface.
 
 // ID implement IndexSnapshot{} interface.
