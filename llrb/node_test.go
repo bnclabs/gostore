@@ -90,7 +90,7 @@ func TestNode(t *testing.T) {
 		t.Errorf("expected %v, got %v", key, nd.key(mdsize))
 	}
 
-	mpool.Free(ptr)
+	nd.pool.Free(ptr)
 }
 
 func TestNodeFields(t *testing.T) {
