@@ -5,10 +5,26 @@ import "github.com/prataprc/storage.go/api"
 import "github.com/prataprc/storage.go/lib"
 
 func (llrb *LLRB) readsettings(setts lib.Settings) {
+	fmask := llrb.setupfmask(setts)
+	mdsize := int64((&metadata{}).initMetadata(0, fmask).sizeof())
+
 	llrb.iterpoolsize = setts.Int64("iterpool.size")
 	llrb.markdelete = setts.Bool("markdelete")
-	llrb.naminblock = setts.Int64("nodearena.minblock")
-	llrb.namaxblock = setts.Int64("nodearena.maxblock")
+	llrb.minkeysize = setts.Int64("minkeysize")
+	llrb.maxkeysize = setts.Int64("maxkeysize")
+	llrb.naminblock = (llrb.minkeysize / 32) * 32 // floor minsize
+	llrb.namaxblock = llrb.maxkeysize + int64((&Llrbnode{}).sizeof()) + mdsize
+	if (llrb.namaxblock % 32) != 0 { // ceil maxsize
+		llrb.namaxblock = ((llrb.namaxblock / 32) + 1) * 32
+	}
+	llrb.minvalsize = setts.Int64("minvalsize")
+	llrb.maxvalsize = setts.Int64("maxvalsize")
+	llrb.vaminblock = (llrb.minvalsize / 32) * 32 // floor minsize
+	llrb.vamaxblock = llrb.maxvalsize + int64((&nodevalue{}).sizeof())
+	if (llrb.vamaxblock % 32) != 0 { // ceil maxsize
+		llrb.vamaxblock = ((llrb.vamaxblock / 32) + 1) * 32
+	}
+
 	llrb.nacapacity = setts.Int64("nodearena.capacity")
 	llrb.napcapacity = setts.Int64("nodearena.pool.capacity")
 	llrb.namaxpools = setts.Int64("nodearena.maxpools")
@@ -21,8 +37,6 @@ func (llrb *LLRB) readsettings(setts lib.Settings) {
 	} else if llrb.nacapacity == 0 {
 		panicerr("nodearena.capacity cannot be ZERO")
 	}
-	llrb.vaminblock = setts.Int64("valarena.minblock")
-	llrb.vamaxblock = setts.Int64("valarena.maxblock")
 	llrb.vacapacity = setts.Int64("valarena.capacity")
 	llrb.vapcapacity = setts.Int64("valarena.pool.capacity")
 	llrb.vamaxpools = setts.Int64("valarena.maxpools")
@@ -42,11 +56,17 @@ func (llrb *LLRB) readsettings(setts lib.Settings) {
 }
 
 func (llrb *LLRB) newnodearena(setts lib.Settings) *malloc.Arena {
-	return malloc.NewArena(setts.Section("nodearena").Trim("nodearena."))
+	memsetts := setts.Section("nodearena").Trim("nodearena.")
+	memsetts["minblock"] = llrb.naminblock
+	memsetts["maxblock"] = llrb.namaxblock
+	return malloc.NewArena(memsetts)
 }
 
 func (llrb *LLRB) newvaluearena(setts lib.Settings) *malloc.Arena {
-	return malloc.NewArena(setts.Section("valarena").Trim("valarena."))
+	memsetts := setts.Section("valarena").Trim("valarena.")
+	memsetts["minblock"] = llrb.vaminblock
+	memsetts["maxblock"] = llrb.vamaxblock
+	return malloc.NewArena(memsetts)
 }
 
 func (llrb *LLRB) setupfmask(setts lib.Settings) metadataMask {

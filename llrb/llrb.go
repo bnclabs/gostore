@@ -52,6 +52,10 @@ type LLRB struct { // tree container
 	mdsize         int
 	iterpoolsize   int64 // iterpool.size
 	markdelete     bool
+	minkeysize     int64
+	maxkeysize     int64
+	minvalsize     int64
+	maxvalsize     int64
 	naminblock     int64
 	namaxblock     int64
 	nacapacity     int64

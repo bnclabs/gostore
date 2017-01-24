@@ -28,7 +28,7 @@ func TestConstants(t *testing.T) {
 	}
 }
 
-func Testnode(t *testing.T) {
+func TestNode(t *testing.T) {
 	marena := malloc.NewArena(lib.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 10),
@@ -45,13 +45,15 @@ func Testnode(t *testing.T) {
 	nd := (*Llrbnode)(ptr)
 	nd.pool = mpool
 
-	vbno, fmask := uint16(0x1234), metadataMask(0)
+	vbno, fmask := uint16(0x1234), metadataMask(0).enableMvalue()
 	nd.metadata().initMetadata(vbno, fmask)
 	nd.setkeysize(len(key))
 	if x := nd.metadata().vbno(); x != vbno {
 		t.Errorf("expected %v, got %v", vbno, x)
 	} else if nd.keysize() != len(key) {
 		t.Errorf("expected %v, got %v", len(key), nd.keysize())
+	} else if nd.sizeof() != 40 {
+		t.Errorf("expected %v, got %v", 40, nd.sizeof())
 	}
 
 	vptr, mpool := marena.Alloc(20)

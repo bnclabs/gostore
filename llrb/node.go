@@ -18,6 +18,10 @@ type Llrbnode struct {
 	mdmarker unsafe.Pointer
 }
 
+func (nd *Llrbnode) sizeof() int {
+	return int(unsafe.Sizeof(*nd))
+}
+
 //---- Exported methods for metadata.
 
 // Setvbno implement NodeSetter{}

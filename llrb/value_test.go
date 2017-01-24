@@ -28,6 +28,8 @@ func TestNodeValue(t *testing.T) {
 		t.Errorf("expected %v, got %v", len(value), x)
 	} else if v := nv.value(); bytes.Compare(value, v) != 0 {
 		t.Errorf("expected %v, got %v", value, v)
+	} else if nv.sizeof() != 32 {
+		t.Errorf("expected %v, got %v", 8, nv.sizeof())
 	}
 	mpool.Free(ptr)
 }

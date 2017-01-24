@@ -28,11 +28,7 @@ func TestLLRBValidate(t *testing.T) {
 	}
 
 	setts := Defaultsettings()
-	setts["nodearena.minblock"] = api.MinKeymem - 1
-	dotest(setts)
-
-	setts = Defaultsettings()
-	setts["nodearena.maxblock"] = api.MaxKeymem + 1
+	setts["maxkeysize"] = api.MaxKeymem + 1
 	dotest(setts)
 
 	setts = Defaultsettings()
@@ -40,11 +36,7 @@ func TestLLRBValidate(t *testing.T) {
 	dotest(setts)
 
 	setts = Defaultsettings()
-	setts["valarena.minblock"] = api.MinValmem - 1
-	dotest(setts)
-
-	setts = Defaultsettings()
-	setts["valarena.maxblock"] = api.MaxValmem + 1
+	setts["maxvalsize"] = api.MaxValmem + 1
 	dotest(setts)
 
 	setts = Defaultsettings()

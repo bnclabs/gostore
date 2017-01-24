@@ -4,6 +4,20 @@ LLRB settings:
 `maxvb`
     as integer, maximum number of vbuckets that will used in this llrb tree.
 
+`minkeysize`
+    as integer, minimum size allowed for key.
+
+`maxkeysize`
+    as integer, maximum size allowed for key.
+
+`minvalsize`
+    as integer, minimum size allowed for value, if non-zero, `mvalue` should
+    be enabled.
+
+`maxvalsize`
+    as integer, maximum size allowed for value, if non-zero, `mvalue` should
+    be enabled.
+
 `mvcc.enable`
     as boolean, consume LLRB as Multi-Version-Concurrency-Control-led tree.
 
@@ -12,12 +26,6 @@ LLRB settings:
 
 `mvcc.writer.chansize`
     as integer, buffer size for mvcc writer's i/p channel.
-
-`nodearena.minblock`
-    as integer, minimum node-block size that shall be requested from the arena.
-
-`nodearena.maxblock`
-    as integer, maximum node-block size that shall be requested from the arena.
 
 `nodearena.capacity`
     as integer, capacity in bytes that the arena shall manage for node-blocks
@@ -34,14 +42,6 @@ LLRB settings:
 
 `nodearena.allocator`
     as string, type of allocater to use "flist".
-
-`valarena.minblock`
-    as integer, minimum value-block size that shall be requested from the
-    arena.
-
-`valarena.maxblock`
-    as integer, maximum value-block size that shall be requested from the
-    arena.
 
 `valarena.capacity`
     as integer, capacity in bytes that the arena shall manage for

@@ -17,6 +17,10 @@ type nodevalue struct {
 	valstart unsafe.Pointer // just a place-holder
 }
 
+func (nv *nodevalue) sizeof() int {
+	return int(unsafe.Sizeof(*nv))
+}
+
 func (nv *nodevalue) setvalsize(size int64) *nodevalue {
 	if nv != nil {
 		nv.hdr1 = (nv.hdr1 & 0xffffff0000000000) | (uint64(size) & 0xffffffffff)
