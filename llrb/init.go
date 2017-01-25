@@ -30,9 +30,9 @@ func (llrb *LLRB) readsettings(setts lib.Settings) {
 	llrb.namaxpools = setts.Int64("nodearena.maxpools")
 	llrb.namaxchunks = setts.Int64("nodearena.maxchunks")
 	llrb.naallocator = setts.String("nodearena.allocator")
-	if llrb.naminblock < api.MinKeymem {
+	if llrb.minkeysize < api.MinKeymem {
 		panicerr("nodearena.minblock < %v settings", api.MinKeymem)
-	} else if llrb.namaxblock > api.MaxKeymem {
+	} else if llrb.maxkeysize > api.MaxKeymem {
 		panicerr("nodearena.maxblock > %v settings", api.MaxKeymem)
 	} else if llrb.nacapacity == 0 {
 		panicerr("nodearena.capacity cannot be ZERO")
@@ -42,9 +42,9 @@ func (llrb *LLRB) readsettings(setts lib.Settings) {
 	llrb.vamaxpools = setts.Int64("valarena.maxpools")
 	llrb.vamaxchunks = setts.Int64("valarena.maxchunks")
 	llrb.vaallocator = setts.String("valarena.allocator")
-	if llrb.vaminblock < api.MinValmem {
+	if llrb.minvalsize < api.MinValmem {
 		panicerr("valarena.minblock < %v settings", api.MinValmem)
-	} else if llrb.vamaxblock > api.MaxValmem {
+	} else if llrb.maxvalsize > api.MaxValmem {
 		panicerr("valarena.maxblock > %v settings", api.MaxValmem)
 	} else if llrb.vacapacity == 0 {
 		panicerr("valarena.capacity cannot be ZERO")
