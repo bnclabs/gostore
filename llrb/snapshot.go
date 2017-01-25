@@ -95,7 +95,7 @@ func (llrb *LLRB) newsnapshot(id string) *LLRBSnapshot {
 	snapshot := &LLRBSnapshot{
 		llrb:  llrb,
 		id:    id,
-		root:  llrb.root,
+		root:  llrb.getroot(),
 		clock: llrb.Getclock(),
 		dead:  llrb.dead,
 		fmask: llrb.fmask,
@@ -118,11 +118,11 @@ func (llrb *LLRB) newsnapshot(id string) *LLRBSnapshot {
 	llrb.mvcc.reclaim = llrb.mvcc.reclaim[:0] // reset writer reclaims
 
 	// track to the tail of read-snapshot list.
-	if llrb.mvcc.snapshot == nil {
+	if llrb.mvcc.snapshot == nil || llrb.mvcc.snapshot.getrefcount() == 0 {
 		llrb.mvcc.snapshot = snapshot
 	} else {
 		parent := llrb.mvcc.snapshot
-		for parent.next != nil {
+		for parent.next != nil && parent.next.getrefcount() > 0 {
 			parent = parent.next
 		}
 		parent.next = snapshot
@@ -140,10 +140,14 @@ func (snapshot *LLRBSnapshot) countreclaimnodes() int64 {
 		return 0
 	}
 	total := int64(len(snapshot.reclaim))
-	for snap := snapshot.next; snap != nil; snap = snapshot.next {
+	for snap := snapshot.next; snap != nil; snap = snap.next {
 		total += int64(len(snap.reclaim))
 	}
 	return total
+}
+
+func (snapshot *LLRBSnapshot) getrefcount() int64 {
+	return atomic.LoadInt64(&snapshot.refcount)
 }
 
 //---- IndexSnapshot{} interface.

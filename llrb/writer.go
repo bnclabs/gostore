@@ -318,7 +318,7 @@ loop:
 
 		case cmdLlrbWriterValidate:
 			respch := msg[1].(chan []interface{})
-			llrb.validate(llrb.root)
+			llrb.validate(llrb.getroot())
 			respch <- []interface{}{}
 
 		case cmdLlrbWriterLog:
@@ -377,9 +377,10 @@ func (writer *LLRBWriter) mvccupsert(
 
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
 
-	root, newnd, oldnd, reclaim = writer.upsert(llrb.root, 1, key, value, reclaim)
+	root, newnd, oldnd, reclaim = writer.upsert(
+		llrb.getroot(), 1, key, value, reclaim)
 	root.metadata().setblack()
-	llrb.root = root
+	llrb.setroot(root)
 	llrb.upsertcounts(key, value, oldnd)
 	if callb != nil {
 		callb(llrb, 0, llndornil(newnd), llndornil(oldnd), nil)
@@ -413,9 +414,10 @@ func (writer *LLRBWriter) mvccupsertcas(
 	var root, newnd, oldnd *Llrbnode
 	llrb.mvcc.h_versions.Add(atomic.LoadInt64(&llrb.mvcc.n_activess))
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
-	root, newnd, oldnd, reclaim = writer.upsert(llrb.root, 1, key, value, reclaim)
+	root, newnd, oldnd, reclaim = writer.upsert(
+		llrb.getroot(), 1, key, value, reclaim)
 	root.metadata().setblack()
-	llrb.root = root
+	llrb.setroot(root)
 	llrb.upsertcounts(key, value, oldnd)
 	if callb != nil {
 		callb(llrb, 0, llndornil(newnd), llndornil(oldnd), nil)
@@ -485,11 +487,11 @@ func (writer *LLRBWriter) mvccdelmin(
 
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
 
-	root, deleted, reclaim = writer.deletemin(llrb.root, reclaim)
+	root, deleted, reclaim = writer.deletemin(llrb.getroot(), reclaim)
 	if root != nil {
 		root.metadata().setblack()
 	}
-	llrb.root = root
+	llrb.setroot(root)
 	llrb.delcount(deleted)
 	if callb != nil {
 		nd := llndornil(deleted)
@@ -538,11 +540,11 @@ func (writer *LLRBWriter) mvccdelmax(
 
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
 
-	root, deleted, reclaim = writer.deletemax(llrb.root, reclaim)
+	root, deleted, reclaim = writer.deletemax(llrb.getroot(), reclaim)
 	if root != nil {
 		root.metadata().setblack()
 	}
-	llrb.root = root
+	llrb.setroot(root)
 	llrb.delcount(deleted)
 	if callb != nil {
 		nd := llndornil(deleted)
@@ -594,11 +596,11 @@ func (writer *LLRBWriter) mvccdelete(
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
 	atomic.AddInt64(&llrb.mvcc.ismut, -1)
 
-	root, deleted, reclaim = writer.delete(llrb.root, key, reclaim)
+	root, deleted, reclaim = writer.delete(llrb.getroot(), key, reclaim)
 	if root != nil {
 		root.metadata().setblack()
 	}
-	llrb.root = root
+	llrb.setroot(root)
 	llrb.delcount(deleted)
 	if callb != nil {
 		nd := llndornil(deleted)

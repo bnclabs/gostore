@@ -40,7 +40,7 @@ type LLRB struct { // tree container
 	name      string
 	nodearena api.Mallocer
 	valarena  api.Mallocer
-	root      *Llrbnode
+	root      unsafe.Pointer // *Llrbnode
 	borntime  time.Time
 	clock     unsafe.Pointer // api.Clock
 	dead      bool
@@ -112,6 +112,14 @@ func NewLLRB(name string, setts lib.Settings) *LLRB {
 	log.Infof("%v started ...\n", llrb.logprefix)
 	llrb.logarenasettings()
 	return llrb
+}
+
+func (llrb *LLRB) getroot() *Llrbnode {
+	return (*Llrbnode)(atomic.LoadPointer(&llrb.root))
+}
+
+func (llrb *LLRB) setroot(root *Llrbnode) {
+	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
 }
 
 // ExpectedUtilization for validating memory consumption.
@@ -225,10 +233,10 @@ func (llrb *LLRB) doclone(name string) *LLRB {
 
 	newllrb := NewLLRB(llrb.name, llrb.setts)
 	clock := llrb.Getclock()
-	newllrb.clock = unsafe.Pointer(&clock)
+	atomic.StorePointer(&newllrb.clock, unsafe.Pointer(&clock))
 	newllrb.dead = llrb.dead
 
-	newllrb.root = newllrb.clonetree(llrb.root)
+	newllrb.setroot(newllrb.clonetree(llrb.getroot()))
 
 	return newllrb
 }
@@ -248,7 +256,7 @@ func (llrb *LLRB) Destroy() error {
 		}
 		llrb.nodearena.Release()
 		llrb.valarena.Release()
-		llrb.root = nil
+		llrb.setroot(nil)
 		llrb.setts, llrb.strsl = nil, nil
 		llrb.dead = true
 		log.Infof("%v destroyed\n", llrb.logprefix)
@@ -292,7 +300,7 @@ func (llrb *LLRB) Validate() {
 		return
 	}
 	llrb.rw.RLock()
-	llrb.validate(llrb.root)
+	llrb.validate(llrb.getroot())
 	llrb.rw.RUnlock()
 }
 
@@ -340,7 +348,7 @@ func (llrb *LLRB) Get(key []byte, callb api.NodeCallb) bool {
 }
 
 func (llrb *LLRB) get(key []byte) api.Node {
-	nd := llrb.root
+	nd := llrb.getroot()
 	for nd != nil {
 		if nd.gtkey(llrb.mdsize, key, false) {
 			nd = nd.left
@@ -363,7 +371,7 @@ func (llrb *LLRB) Min(callb api.NodeCallb) bool {
 	defer llrb.rw.RUnlock()
 	defer atomic.AddInt64(&llrb.n_lookups, 1)
 
-	if nd, _ := llrb.min(llrb.root); nd == nil {
+	if nd, _ := llrb.min(llrb.getroot()); nd == nil {
 		if callb != nil {
 			callb(llrb, 0, nil, nil, api.ErrorKeyMissing)
 		}
@@ -396,7 +404,7 @@ func (llrb *LLRB) Max(callb api.NodeCallb) bool {
 	defer llrb.rw.RUnlock()
 	defer atomic.AddInt64(&llrb.n_lookups, 1)
 
-	if nd, _ := llrb.max(llrb.root); nd == nil {
+	if nd, _ := llrb.max(llrb.getroot()); nd == nil {
 		if callb != nil {
 			callb(llrb, 0, nil, nil, api.ErrorKeyMissing)
 		}
@@ -439,25 +447,25 @@ func (llrb *LLRB) Range(lkey, hkey []byte, incl string, reverse bool, callb api.
 	if reverse {
 		switch incl {
 		case "both":
-			llrb.rvrslehe(llrb.root, lkey, hkey, callb)
+			llrb.rvrslehe(llrb.getroot(), lkey, hkey, callb)
 		case "high":
-			llrb.rvrsleht(llrb.root, lkey, hkey, callb)
+			llrb.rvrsleht(llrb.getroot(), lkey, hkey, callb)
 		case "low":
-			llrb.rvrslthe(llrb.root, lkey, hkey, callb)
+			llrb.rvrslthe(llrb.getroot(), lkey, hkey, callb)
 		default:
-			llrb.rvrsltht(llrb.root, lkey, hkey, callb)
+			llrb.rvrsltht(llrb.getroot(), lkey, hkey, callb)
 		}
 
 	} else {
 		switch incl {
 		case "both":
-			llrb.rangehele(llrb.root, lkey, hkey, callb)
+			llrb.rangehele(llrb.getroot(), lkey, hkey, callb)
 		case "high":
-			llrb.rangehtle(llrb.root, lkey, hkey, callb)
+			llrb.rangehtle(llrb.getroot(), lkey, hkey, callb)
 		case "low":
-			llrb.rangehelt(llrb.root, lkey, hkey, callb)
+			llrb.rangehelt(llrb.getroot(), lkey, hkey, callb)
 		default:
-			llrb.rangehtlt(llrb.root, lkey, hkey, callb)
+			llrb.rangehtlt(llrb.getroot(), lkey, hkey, callb)
 		}
 	}
 
@@ -536,9 +544,9 @@ func (llrb *LLRB) Upsert(key, value []byte, callb api.NodeCallb) error {
 
 	llrb.rw.Lock()
 
-	root, newnd, oldnd := llrb.upsert(llrb.root, 1 /*depth*/, key, value)
+	root, newnd, oldnd := llrb.upsert(llrb.getroot(), 1 /*depth*/, key, value)
 	root.metadata().setblack()
-	llrb.root = root
+	llrb.setroot(root)
 	llrb.upsertcounts(key, value, oldnd)
 
 	if callb != nil {
@@ -585,9 +593,9 @@ func (llrb *LLRB) UpsertCas(key, value []byte, cas uint64, callb api.NodeCallb) 
 	}
 
 	// if cas matches go ahead with upsert.
-	root, newnd, oldnd := llrb.upsert(llrb.root, 1 /*depth*/, key, value)
+	root, newnd, oldnd := llrb.upsert(llrb.getroot(), 1 /*depth*/, key, value)
 	root.metadata().setblack()
-	llrb.root = root
+	llrb.setroot(root)
 	llrb.upsertcounts(key, value, oldnd)
 
 	if callb != nil {
@@ -665,11 +673,11 @@ func (llrb *LLRB) DeleteMin(callb api.NodeCallb) (e error) {
 		})
 
 	} else {
-		root, deleted := llrb.deletemin(llrb.root)
+		root, deleted := llrb.deletemin(llrb.getroot())
 		if root != nil {
 			root.metadata().setblack()
 		}
-		llrb.root = root
+		llrb.setroot(root)
 
 		llrb.delcount(deleted)
 
@@ -718,11 +726,11 @@ func (llrb *LLRB) DeleteMax(callb api.NodeCallb) (e error) {
 		})
 
 	} else {
-		root, deleted := llrb.deletemax(llrb.root)
+		root, deleted := llrb.deletemax(llrb.getroot())
 		if root != nil {
 			root.metadata().setblack()
 		}
-		llrb.root = root
+		llrb.setroot(root)
 
 		llrb.delcount(deleted)
 
@@ -776,11 +784,11 @@ func (llrb *LLRB) Delete(key []byte, callb api.NodeCallb) (e error) {
 			})
 
 	} else {
-		root, deleted := llrb.delete(llrb.root, key)
+		root, deleted := llrb.delete(llrb.getroot(), key)
 		if root != nil {
 			root.metadata().setblack()
 		}
-		llrb.root = root
+		llrb.setroot(root)
 
 		llrb.delcount(deleted)
 
@@ -986,7 +994,7 @@ func (llrb *LLRB) Dotdump(buffer io.Writer) {
 		"}",
 	}
 	buffer.Write([]byte(strings.Join(lines[:len(lines)-1], "\n")))
-	llrb.root.dotdump(buffer)
+	llrb.getroot().dotdump(buffer)
 	buffer.Write([]byte(lines[len(lines)-1]))
 }
 

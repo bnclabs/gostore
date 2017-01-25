@@ -81,9 +81,6 @@ func TestLLRBMvccBasicSnapshot(t *testing.T) {
 		t.Error(err)
 	}
 	snapshot := <-snapch
-	if len(snapshot.(*LLRBSnapshot).reclaim) > 0 {
-		t.Errorf("expected reclaim nodes to be zero")
-	}
 	snapshot.Release()
 
 	snapshot, err = validatesnapshot(100 /*mS*/, writer)
@@ -122,9 +119,6 @@ func TestLLRBMvccBasicLookup(t *testing.T) {
 	}
 	snapshot := <-snapch
 
-	if len(snapshot.(*LLRBSnapshot).reclaim) > 0 {
-		t.Errorf("expected reclaim nodes to be zero")
-	}
 	snapshot.Release()
 
 	snapshot, err = validatesnapshot(100 /*mS*/, writer)
