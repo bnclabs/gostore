@@ -128,6 +128,16 @@ func TestResponseError(t *testing.T) {
 	}
 }
 
+func TestFixbuffer(t *testing.T) {
+	if ln := len(Fixbuffer(nil, 10)); ln != 10 {
+		t.Errorf("expected %v, got %v", 10, ln)
+	} else if ln = len(Fixbuffer(nil, 0)); ln != 0 {
+		t.Errorf("expected %v, got %v", 0, ln)
+	} else if ln = len(Fixbuffer([]byte{10, 20}, 0)); ln != 0 {
+		t.Errorf("expected %v, got %v", 0, ln)
+	}
+}
+
 func BenchmarkMemcpy(b *testing.B) {
 	ln := 10 * 1024
 	src, dst := make([]byte, ln), make([]byte, ln)

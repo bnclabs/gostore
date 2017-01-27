@@ -16,6 +16,9 @@ func Binarycmp(key, limit []byte, partial bool) int {
 
 func Fixbuffer(buffer []byte, size int64) []byte {
 	if size == 0 {
+		if buffer != nil {
+			buffer = buffer[:0]
+		}
 		return buffer
 	} else if buffer == nil || int64(cap(buffer)) < size {
 		return make([]byte, size)
