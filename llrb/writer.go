@@ -335,16 +335,16 @@ func (writer *LLRBWriter) handlesnapshots(msg []interface{}) {
 	llrb := writer.llrb
 	switch msg[0].(byte) {
 	case cmdLlrbWriterMakeSnapshot:
-		id, ln := msg[1].(string), len(writer.waiters)
+		id := msg[1].(string)
 		writer.purgesnapshot(llrb)
-		snapshot := llrb.newsnapshot(id)
-		if ln > 0 {
+		if len(writer.waiters) > 0 || llrb.mvcc.snapshot == nil {
+			snapshot := llrb.newsnapshot(id)
 			for _, snapch := range writer.waiters {
 				snapshot.Refer()
 				snapch <- snapshot
 			}
 			fmsg := "%v $%v snapshot ACCOUNTED to %v waiters\n"
-			log.Debugf(fmsg, llrb.logprefix, id, ln)
+			log.Debugf(fmsg, llrb.logprefix, id, len(writer.waiters))
 			writer.waiters = writer.waiters[:0]
 		}
 
