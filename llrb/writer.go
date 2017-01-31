@@ -173,7 +173,7 @@ func (writer *LLRBWriter) run() {
 
 	dodestroy := func(ch chan bool) {
 		for llrb.mvcc.snapshot != nil {
-			writer.purgesnapshot(llrb)
+			writer.purgesnapshots(true /*all*/)
 			time.Sleep(100 * time.Millisecond) // TODO: no magic
 		}
 		close(ch)
@@ -227,6 +227,7 @@ loop:
 			writer.handlesnapshots(msg)
 			continue loop
 		}
+
 		switch msg[0].(byte) {
 		case cmdLlrbWriterUpsert:
 			key, value := msg[1].([]byte), msg[2].([]byte)
@@ -331,13 +332,17 @@ loop:
 	}
 }
 
-func (writer *LLRBWriter) handlesnapshots(msg []interface{}) {
+func (writer *LLRBWriter) handlesnapshots(msg []interface{}) bool {
 	llrb := writer.llrb
 	switch msg[0].(byte) {
 	case cmdLlrbWriterMakeSnapshot:
 		id := msg[1].(string)
-		writer.purgesnapshot(llrb)
-		if len(writer.waiters) > 0 || llrb.mvcc.snapshot == nil {
+		writer.purgesnapshots(false /*all*/)
+		snapshot := llrb.mvcc.snapshot
+		// create a snapshot if,
+		// a. there are readers waiting for a new snapshot.
+		// b. if there are 0 or 1 active snapshots.
+		if len(writer.waiters) > 0 || snapshot == nil || snapshot.next == nil {
 			snapshot := llrb.newsnapshot(id)
 			for _, snapch := range writer.waiters {
 				snapshot.Refer()
@@ -363,8 +368,9 @@ func (writer *LLRBWriter) handlesnapshots(msg []interface{}) {
 		}
 
 	case cmdLlrbWriterPurgeSnapshot:
-		writer.purgesnapshot(llrb)
+		writer.purgesnapshots(false /*all*/)
 	}
+	return true
 }
 
 func (writer *LLRBWriter) mvccupsert(
@@ -854,31 +860,55 @@ func (writer *LLRBWriter) fixup(
 	return nd, reclaim
 }
 
-func (writer *LLRBWriter) purgesnapshot(llrb *LLRB) {
+func (writer *LLRBWriter) purgesnapshots(all bool) {
+	llrb := writer.llrb
 	snapshot := llrb.mvcc.snapshot
+	if snapshot == nil {
+		return
+	}
 
-loop:
-	for snapshot != nil {
-		refcount := atomic.LoadInt64(&snapshot.refcount)
-		if refcount < 0 {
-			panic("purgesnapshot(): snapshot refcount gone negative")
-		} else if refcount > 0 {
-			break loop
+	next := snapshot.next
+	if all {
+		for snapshot != nil {
+			if writer.purgesnapshot(snapshot) {
+				snapshot = snapshot.next
+				continue
+			}
+			break
 		}
-		llrb.mvcc.h_bulkfree.Add(int64(len(snapshot.reclaim)))
-		for _, nd := range snapshot.reclaim {
-			snapshot.llrb.freenode(nd)
+	} else {
+		for next != nil { // don't purge the last snapshot
+			if writer.purgesnapshot(snapshot) {
+				snapshot = next
+				next = snapshot.next
+				continue
+			}
+			break
 		}
-		atomic.AddInt64(&llrb.mvcc.n_activess, -1)
-		atomic.AddInt64(&llrb.mvcc.n_purgedss, 1)
-		log.Debugf("%v snapshot PURGED\n", snapshot.logprefix)
-		atomic.AddInt64(&llrb.n_lookups, snapshot.n_lookups)
-		atomic.AddInt64(&llrb.n_ranges, snapshot.n_ranges)
-		atomic.AddInt64(&llrb.mvcc.n_cclookups, snapshot.n_cclookups)
-		atomic.AddInt64(&llrb.mvcc.n_ccranges, snapshot.n_ccranges)
-		snapshot = snapshot.next
 	}
 	llrb.mvcc.snapshot = snapshot
+}
+
+func (writer *LLRBWriter) purgesnapshot(snapshot *LLRBSnapshot) bool {
+	refcount := atomic.LoadInt64(&snapshot.refcount)
+	if refcount < 0 {
+		panic("purgesnapshot(): snapshot refcount gone negative")
+	} else if refcount > 0 {
+		return false
+	}
+	llrb := snapshot.llrb
+	llrb.mvcc.h_bulkfree.Add(int64(len(snapshot.reclaim)))
+	for _, nd := range snapshot.reclaim {
+		snapshot.llrb.freenode(nd)
+	}
+	atomic.AddInt64(&llrb.mvcc.n_activess, -1)
+	atomic.AddInt64(&llrb.mvcc.n_purgedss, 1)
+	log.Debugf("%v snapshot PURGED\n", snapshot.logprefix)
+	atomic.AddInt64(&llrb.n_lookups, snapshot.n_lookups)
+	atomic.AddInt64(&llrb.n_ranges, snapshot.n_ranges)
+	atomic.AddInt64(&llrb.mvcc.n_cclookups, snapshot.n_cclookups)
+	atomic.AddInt64(&llrb.mvcc.n_ccranges, snapshot.n_ccranges)
+	return true
 }
 
 func (writer *LLRBWriter) cloneifdirty(nd *Llrbnode) (*Llrbnode, bool) {
