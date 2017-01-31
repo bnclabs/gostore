@@ -178,7 +178,11 @@ func (snapshot *LLRBSnapshot) Refer() {
 func (snapshot *LLRBSnapshot) Release() {
 	log.Debugf("%v snapshot DEREF\n", snapshot.logprefix)
 	refcount := atomic.AddInt64(&snapshot.refcount, -1)
-	if refcount < 0 {
+	if refcount == 0 {
+		if err := snapshot.llrb.mvcc.writer.purgeSnapshot(); err != nil {
+			log.Errorf("%v purgeSnapshot(): %v\n", snapshot.logprefix, err)
+		}
+	} else if refcount < 0 {
 		panic("Release(): snapshot refcount gone negative")
 	}
 }
