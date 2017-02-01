@@ -710,13 +710,9 @@ func (writer *LLRBWriter) mvccmutations(
 			reclaim = rfn(reclaim)
 		case api.CasCmd:
 			key, value, cas := mcmd.Key, mcmd.Value, mcmd.Cas
-			if cas > 0 { // only if cas is !zero, otherwsie fall back to upsert
-				reclaim = writer.mvccupsertcas(key, value, cas, lfn, reclaim)
-				reclaim = rfn(reclaim)
-			} else {
-				reclaim = writer.mvccupsert(mcmd.Key, mcmd.Value, lfn, reclaim)
-				reclaim = rfn(reclaim)
-			}
+			reclaim = writer.mvccupsertcas(key, value, cas, lfn, reclaim)
+			reclaim = rfn(reclaim)
+
 		case api.DelminCmd:
 			reclaim = writer.mvccdelmin(lfn, reclaim)
 			reclaim = rfn(reclaim)
