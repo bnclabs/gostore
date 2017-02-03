@@ -205,7 +205,6 @@ func (d *Dict) rangeover(lk, hk []byte, incl string, r bool, callb api.NodeCallb
 }
 
 func (d *Dict) rangeforward(lk, hk []byte, incl string, callb api.NodeCallb) {
-	hashks := d.hashks
 	if lk != nil && hk != nil && bytes.Compare(lk, hk) == 0 {
 		if incl == "none" {
 			return
@@ -213,41 +212,65 @@ func (d *Dict) rangeforward(lk, hk []byte, incl string, callb api.NodeCallb) {
 			incl = "both"
 		}
 	}
-	if len(hashks) == 0 {
+	if len(d.hashks) == 0 {
 		return
 	}
 
-	start, cmp, nd := 0, 1, d.dict[hashks[0]]
+	// fix the starting point
+	start := 0
 	if lk != nil {
-		if incl == "low" || incl == "both" {
-			cmp = 0
-		}
-		for start = 0; start < len(hashks); start++ {
-			nd = d.dict[hashks[start]]
-			if api.Binarycmp(nd.key, lk, cmp == 1) >= cmp {
-				break
+		switch incl {
+		case "low", "both":
+			for ; start < len(d.hashks); start++ {
+				nd := d.dict[d.hashks[start]]
+				if api.Binarycmp(nd.key, lk, true /*partial*/) >= 0 {
+					break
+				}
+			}
+		default:
+			for ; start < len(d.hashks); start++ {
+				nd := d.dict[d.hashks[start]]
+				if api.Binarycmp(nd.key, lk, true /*partial*/) > 0 {
+					break
+				}
 			}
 		}
 	}
 
-	cmp = 0
-	if incl == "high" || incl == "both" {
-		cmp = 1
-	}
-	for ; start < len(hashks); start++ {
-		nd = d.dict[hashks[start]]
-		if hk == nil || (api.Binarycmp(nd.key, hk, cmp == 1) < cmp) {
+	// range till high key
+	if hk != nil {
+		switch incl {
+		case "high", "both":
+			for ; start < len(d.hashks); start++ {
+				nd := d.dict[d.hashks[start]]
+				if api.Binarycmp(nd.key, hk, true /*partial*/) <= 0 {
+					if callb(d, 0, nd, nd, nil) == false {
+						break
+					}
+				}
+			}
+		default:
+			for ; start < len(d.hashks); start++ {
+				nd := d.dict[d.hashks[start]]
+				if api.Binarycmp(nd.key, hk, true /*partial*/) < 0 {
+					if callb(d, 0, nd, nd, nil) == false {
+						break
+					}
+				}
+			}
+		}
+
+	} else {
+		for ; start < len(d.hashks); start++ {
+			nd := d.dict[d.hashks[start]]
 			if callb(d, 0, nd, nd, nil) == false {
 				break
 			}
-			continue
 		}
-		break
 	}
 }
 
 func (d *Dict) rangebackward(lk, hk []byte, incl string, callb api.NodeCallb) {
-	hashks := d.hashks
 	if lk != nil && hk != nil && bytes.Compare(lk, hk) == 0 {
 		if incl == "none" {
 			return
@@ -255,36 +278,60 @@ func (d *Dict) rangebackward(lk, hk []byte, incl string, callb api.NodeCallb) {
 			incl = "both"
 		}
 	}
-	if len(hashks) == 0 {
+	if len(d.hashks) == 0 {
 		return
 	}
 
-	start, cmp, nd := len(hashks)-1, -1, d.dict[hashks[0]]
+	// fix the startpoint
+	start := len(d.hashks) - 1
 	if hk != nil {
-		if incl == "high" || incl == "both" {
-			cmp = 0
-		}
-		for start = len(hashks) - 1; start >= 0; start-- {
-			nd = d.dict[hashks[start]]
-			if api.Binarycmp(nd.key, hk, cmp == 0) <= cmp {
-				break
+		switch incl {
+		case "high", "both":
+			for ; start >= 0; start-- {
+				nd := d.dict[d.hashks[start]]
+				if api.Binarycmp(nd.key, hk, true /*partial*/) <= 0 {
+					break
+				}
+			}
+		default:
+			for ; start >= 0; start-- {
+				nd := d.dict[d.hashks[start]]
+				if api.Binarycmp(nd.key, hk, true /*partial*/) < 0 {
+					break
+				}
 			}
 		}
 	}
 
-	cmp = 0
-	if incl == "low" || incl == "both" {
-		cmp = -1
-	}
-	for ; start >= 0; start-- {
-		nd = d.dict[hashks[start]]
-		if lk == nil || (api.Binarycmp(nd.key, lk, cmp == 0) > cmp) {
+	// range till low key
+	if lk != nil {
+		switch incl {
+		case "low", "both":
+			for ; start >= 0; start-- {
+				nd := d.dict[d.hashks[start]]
+				if api.Binarycmp(nd.key, lk, true /*partial*/) >= 0 {
+					if callb(d, 0, nd, nd, nil) == false {
+						break
+					}
+				}
+			}
+		default:
+			for ; start >= 0; start-- {
+				nd := d.dict[d.hashks[start]]
+				if api.Binarycmp(nd.key, lk, true /*partial*/) > 0 {
+					if callb(d, 0, nd, nd, nil) == false {
+						break
+					}
+				}
+			}
+		}
+	} else {
+		for ; start >= 0; start-- {
+			nd := d.dict[d.hashks[start]]
 			if callb(d, 0, nd, nd, nil) == false {
 				break
 			}
-			continue
 		}
-		break
 	}
 }
 
