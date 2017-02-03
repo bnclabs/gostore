@@ -10,12 +10,9 @@ var _ = fmt.Sprintf("dummy")
 type iterator struct {
 	tree       api.IndexReader
 	dict       *Dict
-	continuate bool
-	nodes      []api.Node
 	index      int
-	limit      int
-	startkey   []byte
-	endkey     []byte
+	lkey       []byte
+	hkey       []byte
 	incl       string
 	reverse    bool
 	closed     bool
@@ -26,60 +23,50 @@ type iterator struct {
 func (iter *iterator) Next() api.Node {
 	if iter.closed {
 		panic("cannot iterate over a closed iterator")
-	} else if iter.index >= len(iter.nodes) && iter.continuate == false {
+	} else if iter.index >= len(iter.dict.hashks) {
+		return nil
+	} else if iter.index < 0 {
 		return nil
 	}
 
-	if iter.index < len(iter.nodes) {
-		nd := iter.nodes[iter.index]
+	nd := iter.dict.dict[iter.dict.hashks[iter.index]]
+	if iter.reverse == false {
 		iter.index++
-		return nd
+		if iter.hkey == nil {
+			return nd
+		}
+		switch iter.incl {
+		case "high", "both":
+			if api.Binarycmp(nd.key, iter.hkey, true /*partial*/) <= 0 {
+				return nd
+			}
+		default:
+			if api.Binarycmp(nd.key, iter.hkey, true /*partial*/) < 0 {
+				return nd
+			}
+		}
 
-	} else if iter.rangefill(); iter.index < len(iter.nodes) {
-		nd := iter.nodes[iter.index]
-		iter.index++
-		return nd
+	} else {
+		iter.index--
+		if iter.lkey == nil {
+			return nd
+		}
+		switch iter.incl {
+		case "low", "both":
+			if api.Binarycmp(nd.key, iter.lkey, true /*partial*/) >= 0 {
+				return nd
+			}
+		default:
+			if api.Binarycmp(nd.key, iter.lkey, true /*partial*/) > 0 {
+				return nd
+			}
+		}
 	}
 	return nil
 }
 
 func (iter *iterator) Close() {
-	iter.closed, iter.nodes = true, iter.nodes[:cap(iter.nodes)]
-	for i := range iter.nodes {
-		iter.nodes[i] = nil
-	}
-	iter.nodes = iter.nodes[:0]
-
+	iter.closed = true
 	// give it back to the pool if not overflowing.
 	atomic.AddInt64(iter.activeiter, -1)
-}
-
-func (iter *iterator) rangefill() {
-	var breakkey, prev []byte
-	iter.nodes, iter.index, iter.continuate = iter.nodes[:0], 0, false
-	count := 0
-	iter.dict.rangeover(iter.startkey, iter.endkey, iter.incl, iter.reverse,
-		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
-			if err != nil {
-				return false
-			}
-			breakkey = nd.Key()
-			if count < iter.limit || api.Binarycmp(prev, breakkey, true) == 0 {
-				prev = breakkey
-				iter.nodes = append(iter.nodes, nd)
-				count++
-				return true
-			}
-			iter.limit = count
-			if iter.limit < 10000 { // TODO: avoid magic numbers
-				iter.limit *= 2
-			}
-			iter.continuate = true
-			return false
-		})
-	if iter.reverse {
-		iter.endkey = breakkey
-	} else {
-		iter.startkey = breakkey
-	}
 }

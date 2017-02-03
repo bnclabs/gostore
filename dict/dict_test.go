@@ -693,6 +693,8 @@ func TestDictBasicIterate(t *testing.T) {
 				outs = append(outs, [2][]byte{nd.Key(), nd.Value()})
 			}
 			if !reflect.DeepEqual(outs, refs) {
+				t.Log(outs)
+				t.Log(refs)
 				t.Fatalf("failed %v", casenum)
 			}
 			iter.Close()

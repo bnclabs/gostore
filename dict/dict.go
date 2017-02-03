@@ -196,12 +196,14 @@ func (d *Dict) Range(lk, hk []byte, incl string, r bool, callb api.NodeCallb) {
 	d.rangeover(lk, hk, incl, r, callb)
 }
 
-func (d *Dict) rangeover(lk, hk []byte, incl string, r bool, callb api.NodeCallb) {
-	if r {
-		d.rangebackward(lk, hk, incl, callb)
+func (d *Dict) rangeover(
+	lk, hk []byte, incl string, r bool, callb api.NodeCallb) {
+
+	if r == false {
+		d.rangeforward(lk, hk, incl, callb)
 		return
 	}
-	d.rangeforward(lk, hk, incl, callb)
+	d.rangebackward(lk, hk, incl, callb)
 }
 
 func (d *Dict) rangeforward(lk, hk []byte, incl string, callb api.NodeCallb) {
@@ -219,24 +221,8 @@ func (d *Dict) rangeforward(lk, hk []byte, incl string, callb api.NodeCallb) {
 	// fix the starting point
 	start := 0
 	if lk != nil {
-		switch incl {
-		case "low", "both":
-			for ; start < len(d.hashks); start++ {
-				nd := d.dict[d.hashks[start]]
-				if api.Binarycmp(nd.key, lk, true /*partial*/) >= 0 {
-					break
-				}
-			}
-		default:
-			for ; start < len(d.hashks); start++ {
-				nd := d.dict[d.hashks[start]]
-				if api.Binarycmp(nd.key, lk, true /*partial*/) > 0 {
-					break
-				}
-			}
-		}
+		start = d.startforward(lk, incl)
 	}
-
 	// range till high key
 	if hk != nil {
 		switch incl {
@@ -270,6 +256,28 @@ func (d *Dict) rangeforward(lk, hk []byte, incl string, callb api.NodeCallb) {
 	}
 }
 
+func (d *Dict) startforward(lk []byte, incl string) (start int) {
+	start = 0
+	switch incl {
+	case "low", "both":
+		for ; start < len(d.hashks); start++ {
+			nd := d.dict[d.hashks[start]]
+			if api.Binarycmp(nd.key, lk, true /*partial*/) >= 0 {
+				break
+			}
+		}
+
+	default:
+		for ; start < len(d.hashks); start++ {
+			nd := d.dict[d.hashks[start]]
+			if api.Binarycmp(nd.key, lk, true /*partial*/) > 0 {
+				break
+			}
+		}
+	}
+	return
+}
+
 func (d *Dict) rangebackward(lk, hk []byte, incl string, callb api.NodeCallb) {
 	if lk != nil && hk != nil && bytes.Compare(lk, hk) == 0 {
 		if incl == "none" {
@@ -285,22 +293,7 @@ func (d *Dict) rangebackward(lk, hk []byte, incl string, callb api.NodeCallb) {
 	// fix the startpoint
 	start := len(d.hashks) - 1
 	if hk != nil {
-		switch incl {
-		case "high", "both":
-			for ; start >= 0; start-- {
-				nd := d.dict[d.hashks[start]]
-				if api.Binarycmp(nd.key, hk, true /*partial*/) <= 0 {
-					break
-				}
-			}
-		default:
-			for ; start >= 0; start-- {
-				nd := d.dict[d.hashks[start]]
-				if api.Binarycmp(nd.key, hk, true /*partial*/) < 0 {
-					break
-				}
-			}
-		}
+		start = d.startbackward(hk, incl)
 	}
 
 	// range till low key
@@ -325,6 +318,7 @@ func (d *Dict) rangebackward(lk, hk []byte, incl string, callb api.NodeCallb) {
 				}
 			}
 		}
+
 	} else {
 		for ; start >= 0; start-- {
 			nd := d.dict[d.hashks[start]]
@@ -333,6 +327,27 @@ func (d *Dict) rangebackward(lk, hk []byte, incl string, callb api.NodeCallb) {
 			}
 		}
 	}
+}
+
+func (d *Dict) startbackward(hk []byte, incl string) (start int) {
+	start = len(d.hashks) - 1
+	switch incl {
+	case "high", "both":
+		for ; start >= 0; start-- {
+			nd := d.dict[d.hashks[start]]
+			if api.Binarycmp(nd.key, hk, true /*partial*/) <= 0 {
+				break
+			}
+		}
+	default:
+		for ; start >= 0; start-- {
+			nd := d.dict[d.hashks[start]]
+			if api.Binarycmp(nd.key, hk, true /*partial*/) < 0 {
+				break
+			}
+		}
+	}
+	return
 }
 
 // Iterate implement IndexReader{} interface.
@@ -351,33 +366,24 @@ func (d *Dict) iterate(lkey, hkey []byte, incl string, r bool) api.IndexIterator
 		}
 	}
 
-	iter := &iterator{nodes: make([]api.Node, 0)}
+	iter := &iterator{}
 
 	// NOTE: always re-initialize, because we are getting it back from pool.
-	iter.tree, iter.dict = d, d
-	iter.nodes, iter.index, iter.limit = iter.nodes[:0], 0, 5
-	iter.continuate = false
-	iter.startkey, iter.endkey, iter.incl, iter.reverse = lkey, hkey, incl, r
+	iter.tree, iter.dict, iter.index = d, d, 0
+	iter.lkey, iter.hkey, iter.incl, iter.reverse = lkey, hkey, incl, r
 	iter.closed, iter.activeiter = false, &d.activeiter
-
-	iter.rangefill()
-	if r {
-		switch iter.incl {
-		case "none":
-			iter.incl = "high"
-		case "low":
-			iter.incl = "both"
-		}
-	} else {
-		switch iter.incl {
-		case "none":
-			iter.incl = "low"
-		case "high":
-			iter.incl = "both"
-		}
-	}
-
 	atomic.AddInt64(&d.activeiter, 1)
+
+	// fix the starting point
+	if r == false && lkey == nil {
+		iter.index = 0
+	} else if r == false {
+		iter.index = d.startforward(lkey, incl)
+	} else if hkey == nil {
+		iter.index = len(d.hashks) - 1
+	} else {
+		iter.index = d.startbackward(hkey, incl)
+	}
 	return iter
 }
 
