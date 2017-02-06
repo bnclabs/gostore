@@ -416,7 +416,9 @@ func (ss *Snapshot) Max(callb api.NodeCallb) bool {
 }
 
 // Range implement IndexReader{} interface.
-func (ss *Snapshot) Range(lkey, hkey []byte, incl string, reverse bool, callb api.NodeCallb) {
+func (ss *Snapshot) Range(
+	lkey, hkey []byte, incl string, reverse bool, callb api.NodeCallb) {
+
 	if ss.rootblock < 0 {
 		return
 	}
@@ -462,7 +464,9 @@ func (ss *Snapshot) Range(lkey, hkey []byte, incl string, reverse bool, callb ap
 }
 
 // Iterate implement IndexReader{} interface.
-func (ss *Snapshot) Iterate(lkey, hkey []byte, incl string, r bool) api.IndexIterator {
+func (ss *Snapshot) Iterate(
+	lkey, hkey []byte, incl string, r bool) api.IndexIterator {
+
 	lkey, hkey = ss.fixrangeargs(lkey, hkey)
 	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
 		if incl == "none" {
