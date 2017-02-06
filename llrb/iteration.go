@@ -4,6 +4,7 @@ import "sync/atomic"
 import "fmt"
 
 import "github.com/prataprc/storage.go/api"
+import "github.com/prataprc/storage.go/lib"
 
 var _ = fmt.Sprintf("dummy")
 
@@ -54,14 +55,9 @@ func (iter *iterator) Close() {
 	atomic.AddInt64(iter.n_activeiter, -1)
 
 	// give it back to the pool if not overflowing.
-	llrb := iter.llrb
-	if len(llrb.iterpool) < cap(llrb.iterpool) {
-		llrb.iterpool <- iter
-	}
-
-	if llrb.mvcc.enabled == false {
-		// NOTE: remember to see this reader unlock
-		llrb.rw.RUnlock()
+	iter.llrb.putiterator(iter)
+	if iter.llrb.mvcc.enabled == false { // NOTE: remember to reader unlock
+		iter.llrb.rw.RUnlock()
 	}
 }
 
@@ -90,8 +86,12 @@ func (iter *iterator) rangefill() {
 			return false
 		})
 	if iter.reverse {
-		iter.endkey = breakkey
+		iter.endkey = lib.Fixbuffer(iter.endkey, int64(len(breakkey)))
+		n := copy(iter.endkey, breakkey)
+		iter.endkey = iter.endkey[:n]
 	} else {
-		iter.startkey = breakkey
+		iter.startkey = lib.Fixbuffer(iter.startkey, int64(len(breakkey)))
+		n := copy(iter.startkey, breakkey)
+		iter.startkey = iter.startkey[:n]
 	}
 }

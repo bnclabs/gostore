@@ -62,7 +62,7 @@ func TestNewLLRB(t *testing.T) {
 	}
 }
 
-func TestNewLLRBNode(t *testing.T) {
+func TestNewNode(t *testing.T) {
 	setts := Defaultsettings()
 	setts["metadata.bornseqno"] = true
 	setts["metadata.deadseqno"] = true
@@ -100,7 +100,7 @@ func TestNewLLRBNode(t *testing.T) {
 	}
 }
 
-func TestNewLLRBNodePanic(t *testing.T) {
+func TestNewNodePanic(t *testing.T) {
 	setts := Defaultsettings()
 	setts["metadata.mvalue"] = false
 	llrb := NewLLRB("test", setts)
@@ -119,7 +119,7 @@ func TestNewLLRBNodePanic(t *testing.T) {
 	}
 }
 
-func TestCloneLLRBNode(t *testing.T) {
+func TestCloneNode(t *testing.T) {
 	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	llrb := NewLLRB("test", setts)
@@ -142,7 +142,7 @@ func TestCloneLLRBNode(t *testing.T) {
 	}
 }
 
-func TestLLRBBasicLookup(t *testing.T) {
+func TestBasicLookup(t *testing.T) {
 	inserts := [][2][]byte{
 		[2][]byte{[]byte("key1"), []byte("value1")},
 		[2][]byte{[]byte("key2"), []byte("value2")},
@@ -224,7 +224,7 @@ func TestLLRBBasicLookup(t *testing.T) {
 	}
 }
 
-func TestLLRBBasicUpdates(t *testing.T) {
+func TestBasicUpdates(t *testing.T) {
 	inserts := [][2][]byte{
 		[2][]byte{[]byte("key1"), []byte("value1")},
 		[2][]byte{[]byte("key2"), []byte("value2")},
@@ -370,7 +370,7 @@ func TestLLRBBasicUpdates(t *testing.T) {
 	}
 }
 
-func TestLLRBBasicRange(t *testing.T) {
+func TestBasicRange(t *testing.T) {
 	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.fpos"] = true
@@ -641,7 +641,7 @@ func TestPartialRange(t *testing.T) {
 	}
 }
 
-func TestLLRBRange(t *testing.T) {
+func TestRange(t *testing.T) {
 	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
@@ -761,7 +761,7 @@ func TestLLRBRange(t *testing.T) {
 	}
 }
 
-func TestLLRBIteratePool(t *testing.T) {
+func TestIteratePool(t *testing.T) {
 	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
@@ -787,7 +787,7 @@ func TestLLRBIteratePool(t *testing.T) {
 	}
 }
 
-func TestLLRBBasicIterate(t *testing.T) {
+func TestBasicIterate(t *testing.T) {
 	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
@@ -1001,7 +1001,7 @@ func TestPartialIterate(t *testing.T) {
 	}
 }
 
-func TestLLRBIterate(t *testing.T) {
+func TestIterate(t *testing.T) {
 	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
@@ -1122,7 +1122,7 @@ func TestLLRBIterate(t *testing.T) {
 	}
 }
 
-func TestLLRBInsert(t *testing.T) {
+func TestInsert(t *testing.T) {
 	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
@@ -1224,7 +1224,7 @@ func TestLLRBInsert(t *testing.T) {
 	}
 }
 
-func TestLLRBUpsert(t *testing.T) {
+func TestUpsert(t *testing.T) {
 	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
@@ -1328,7 +1328,7 @@ func TestLLRBUpsert(t *testing.T) {
 	}
 }
 
-func TestLLRBDelete(t *testing.T) {
+func TestDelete(t *testing.T) {
 	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
@@ -1460,7 +1460,7 @@ func TestLLRBDelete(t *testing.T) {
 	}
 }
 
-func TestLLRBClone(t *testing.T) {
+func TestClone(t *testing.T) {
 	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
@@ -1544,7 +1544,7 @@ func TestLLRBClone(t *testing.T) {
 	}
 }
 
-func BenchmarkLLRBCloneKey(b *testing.B) {
+func BenchmarkCloneKey(b *testing.B) {
 	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
@@ -1560,7 +1560,7 @@ func BenchmarkLLRBCloneKey(b *testing.B) {
 	}
 }
 
-func BenchmarkLLRBCloneSmall(b *testing.B) {
+func BenchmarkCloneSmall(b *testing.B) {
 	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
@@ -1576,7 +1576,7 @@ func BenchmarkLLRBCloneSmall(b *testing.B) {
 	}
 }
 
-func BenchmarkLLRBCloneLarge(b *testing.B) {
+func BenchmarkCloneLarge(b *testing.B) {
 	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
@@ -1589,6 +1589,63 @@ func BenchmarkLLRBCloneLarge(b *testing.B) {
 	nd := llrb.newnode(key, value)
 	for i := 0; i < b.N; i++ {
 		llrb.clonenode(nd)
+	}
+}
+
+func BenchmarkRange10000(b *testing.B) {
+	setts := Defaultsettings()
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
+	llrb := NewLLRB("test", setts)
+	// Insert 10000 items
+	for i := 0; i < 10000; i++ {
+		key, value := fmt.Sprintf("key%v", i), fmt.Sprintf("value%v", i)
+		llrb.Upsert(
+			[]byte(key), []byte(value),
+			func(_ api.Index, _ int64, nnd, ond api.Node, err error) bool {
+				if err != nil {
+					b.Error(err)
+				} else if ond != nil {
+					b.Errorf("expected old Llrbnode node is nil")
+				}
+				nnd.Setvbno(100).SetVbuuid(1000).SetBornseqno(uint64(i) + 1)
+				return true
+			})
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		llrb.Range(nil, nil, "both", false, nil)
+	}
+}
+
+func BenchmarkIter10000(b *testing.B) {
+	setts := Defaultsettings()
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.vbuuid"] = true
+	llrb := NewLLRB("test", setts)
+	// Insert 10000 items
+	for i := 0; i < 10000; i++ {
+		key, value := fmt.Sprintf("key%v", i), fmt.Sprintf("value%v", i)
+		llrb.Upsert(
+			[]byte(key), []byte(value),
+			func(_ api.Index, _ int64, nnd, ond api.Node, err error) bool {
+				if err != nil {
+					b.Error(err)
+				} else if ond != nil {
+					b.Errorf("expected old Llrbnode node is nil")
+				}
+				nnd.Setvbno(100).SetVbuuid(1000).SetBornseqno(uint64(i) + 1)
+				return true
+			})
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		iter := llrb.Iterate(nil, nil, "both", false)
+		for nd := iter.Next(); nd != nil; nd = iter.Next() {
+		}
+		iter.Close()
 	}
 }
 

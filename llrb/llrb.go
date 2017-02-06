@@ -428,7 +428,9 @@ func (llrb *LLRB) max(nd *Llrbnode) (api.Node, bool) {
 }
 
 // Range from lkey to hkey, incl can be "both", "low", "high", "none"
-func (llrb *LLRB) Range(lkey, hkey []byte, incl string, reverse bool, callb api.NodeCallb) {
+func (llrb *LLRB) Range(
+	lkey, hkey []byte, incl string, reverse bool, callb api.NodeCallb) {
+
 	if llrb.mvcc.enabled {
 		panic("Range(): mvcc enabled, use snapshots for reading")
 	}
@@ -474,7 +476,9 @@ func (llrb *LLRB) Range(lkey, hkey []byte, incl string, reverse bool, callb api.
 }
 
 // Iterate implement IndexReader{} interface.
-func (llrb *LLRB) Iterate(lkey, hkey []byte, incl string, r bool) api.IndexIterator {
+func (llrb *LLRB) Iterate(
+	lkey, hkey []byte, incl string, r bool) api.IndexIterator {
+
 	if llrb.mvcc.enabled {
 		panic("Iterate(): mvcc enabled, use snapshots for reading")
 	}
@@ -490,23 +494,22 @@ func (llrb *LLRB) Iterate(lkey, hkey []byte, incl string, r bool) api.IndexItera
 
 	llrb.rw.RLock()
 
-	var iter *iterator
-	select {
-	case iter = <-llrb.iterpool:
-	default:
-		iter = &iterator{}
-	}
-
 	// NOTE: always re-initialize, because we are getting it back from pool.
+	iter := llrb.getiterator()
 	iter.tree, iter.llrb = llrb, llrb
-	iter.nodes, iter.index, iter.limit = iter.nodes[:0], 0, 5
 	iter.continuate = false
-	iter.startkey, iter.endkey, iter.incl, iter.reverse = lkey, hkey, incl, r
+	iter.nodes, iter.index, iter.limit = iter.nodes[:0], 0, 5 // TODO: magicno.
+	// startkey
+	iter.startkey = lib.Fixbuffer(iter.startkey, llrb.maxkeysize)
+	n := copy(iter.startkey, lkey)
+	iter.startkey = iter.startkey[:n]
+	// endkey
+	iter.endkey = lib.Fixbuffer(iter.endkey, llrb.maxkeysize)
+	n = copy(iter.endkey, hkey)
+	iter.endkey = iter.endkey[:n]
+	// other params
+	iter.incl, iter.reverse = incl, r
 	iter.closed, iter.n_activeiter = false, &llrb.n_activeiter
-
-	if iter.nodes == nil {
-		iter.nodes = make([]api.Node, 0)
-	}
 
 	iter.rangefill()
 	if r {
@@ -1167,6 +1170,22 @@ func (llrb *LLRB) logarenasettings() {
 	pcp = humanize.Bytes(uint64(llrb.vapcapacity))
 	fmsg = "%v val arena %v blocks over {%v %v} cap %v poolcap %v\n"
 	log.Infof(fmsg, llrb.logprefix, vblocks, min, max, cp, pcp)
+}
+
+func (llrb *LLRB) getiterator() (iter *iterator) {
+	select {
+	case iter = <-llrb.iterpool:
+	default:
+		iter = &iterator{nodes: make([]api.Node, 0)}
+	}
+	return iter
+}
+
+func (llrb *LLRB) putiterator(iter *iterator) {
+	select {
+	case llrb.iterpool <- iter:
+	default: // Let iter be collected by GC
+	}
 }
 
 // rotation routines for 2-3-4 algorithm, not used.

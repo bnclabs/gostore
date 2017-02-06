@@ -315,7 +315,9 @@ func (snapshot *LLRBSnapshot) max(nd *Llrbnode) (api.Node, bool) {
 }
 
 // Range implement IndexReader{} interface.
-func (snapshot *LLRBSnapshot) Range(lkey, hkey []byte, incl string, reverse bool, callb api.NodeCallb) {
+func (snapshot *LLRBSnapshot) Range(
+	lkey, hkey []byte, incl string, reverse bool, callb api.NodeCallb) {
+
 	lkey, hkey = snapshot.llrb.fixrangeargs(lkey, hkey)
 	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
 		if incl == "none" {
@@ -357,7 +359,9 @@ func (snapshot *LLRBSnapshot) Range(lkey, hkey []byte, incl string, reverse bool
 }
 
 // Iterate implement IndexReader{} interface.
-func (snapshot *LLRBSnapshot) Iterate(lkey, hkey []byte, incl string, r bool) api.IndexIterator {
+func (snapshot *LLRBSnapshot) Iterate(
+	lkey, hkey []byte, incl string, r bool) api.IndexIterator {
+
 	lkey, hkey = snapshot.llrb.fixrangeargs(lkey, hkey)
 	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
 		if incl == "none" {
@@ -368,23 +372,23 @@ func (snapshot *LLRBSnapshot) Iterate(lkey, hkey []byte, incl string, r bool) ap
 	}
 
 	llrb := snapshot.llrb
-	var iter *iterator
-	select {
-	case iter = <-llrb.iterpool:
-	default:
-		iter = &iterator{}
-	}
 
 	// NOTE: always re-initialize, because we are getting it back from pool.
+	iter := llrb.getiterator()
 	iter.tree, iter.llrb = snapshot, llrb
-	iter.nodes, iter.index, iter.limit = iter.nodes[:0], 0, 5
 	iter.continuate = false
-	iter.startkey, iter.endkey, iter.incl, iter.reverse = lkey, hkey, incl, r
+	iter.nodes, iter.index, iter.limit = iter.nodes[:0], 0, 5 // TODO: magicno.
+	// startkey
+	iter.startkey = lib.Fixbuffer(iter.startkey, llrb.maxkeysize)
+	n := copy(iter.startkey, lkey)
+	iter.startkey = iter.startkey[:n]
+	// endkey
+	iter.endkey = lib.Fixbuffer(iter.endkey, llrb.maxkeysize)
+	n = copy(iter.endkey, hkey)
+	iter.endkey = iter.endkey[:n]
+	// other params
+	iter.incl, iter.reverse = incl, r
 	iter.closed, iter.n_activeiter = false, &llrb.n_activeiter
-
-	if iter.nodes == nil {
-		iter.nodes = make([]api.Node, 0)
-	}
 
 	iter.rangefill()
 	if r {
