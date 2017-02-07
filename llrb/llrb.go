@@ -667,10 +667,14 @@ func (llrb *LLRB) DeleteMin(callb api.NodeCallb) (e error) {
 	if llrb.markdelete {
 		llrb.Min(func(_ api.Index, i int64, _, nd api.Node, err error) bool {
 			e = err
-			if err != nil && callb != nil {
-				callb(llrb, 0, nd, nd, err)
-			} else if nd != nil && callb != nil {
-				callb(llrb, 0, nd, nd, nil)
+			if callb != nil {
+				if err != nil {
+					callb(llrb, 0, nd, nd, err)
+				} else if nd != nil {
+					llrbnd := nd.(*Llrbnode)
+					llrbnd.metadata().setdeleted()
+					callb(llrb, 0, nd, nd, nil)
+				}
 			}
 			return false
 		})
@@ -720,10 +724,14 @@ func (llrb *LLRB) DeleteMax(callb api.NodeCallb) (e error) {
 	if llrb.markdelete {
 		llrb.Max(func(_ api.Index, i int64, _, nd api.Node, err error) bool {
 			e = err
-			if err != nil && callb != nil {
-				callb(llrb, 0, nd, nd, err)
-			} else if nd != nil && callb != nil {
-				callb(llrb, 0, nd, nd, nil)
+			if callb != nil {
+				if err != nil {
+					callb(llrb, 0, nd, nd, err)
+				} else if nd != nil {
+					llrbnd := nd.(*Llrbnode)
+					llrbnd.metadata().setdeleted()
+					callb(llrb, 0, nd, nd, nil)
+				}
 			}
 			return false
 		})
@@ -778,10 +786,14 @@ func (llrb *LLRB) Delete(key []byte, callb api.NodeCallb) (e error) {
 			key,
 			func(_ api.Index, i int64, _, nd api.Node, err error) bool {
 				e = err
-				if err != nil && callb != nil {
-					callb(llrb, 0, nd, nd, err)
-				} else if nd != nil && callb != nil {
-					callb(llrb, 0, nd, nd, nil)
+				if callb != nil {
+					if err != nil {
+						callb(llrb, 0, nd, nd, err)
+					} else if nd != nil {
+						llrbnd := nd.(*Llrbnode)
+						llrbnd.metadata().setdeleted()
+						callb(llrb, 0, nd, nd, nil)
+					}
 				}
 				return false
 			})
