@@ -73,9 +73,13 @@ func panicerr(fmsg string, args ...interface{}) {
 }
 
 var poolblkinit = make([]byte, 1024)
+var zeroblkinit = make([]byte, 1024)
 
 func init() {
 	for i := 0; i < len(poolblkinit); i++ {
 		poolblkinit[i] = 0xff
+	}
+	for i := 0; i < len(zeroblkinit); i++ {
+		zeroblkinit[i] = 0x00
 	}
 }
