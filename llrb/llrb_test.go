@@ -1134,8 +1134,9 @@ func TestInsert(t *testing.T) {
 	// insert 10K items
 	count := 10 * 1000
 	for i := 0; i < count; i++ {
-		key, value := make([]byte, 100), make([]byte, 100)
-		key, value = makekeyvalue(key, value)
+		key, value := makekeyvalue(make([]byte, 100), make([]byte, 100))
+		keys = append(keys, key)
+		values = append(values, value)
 		llrb.Upsert(
 			key, value,
 			func(index api.Index, _ int64, nnd, ond api.Node, err error) bool {

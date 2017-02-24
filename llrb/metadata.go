@@ -232,6 +232,13 @@ func (md *metadata) setdeleted() *metadata {
 	return md
 }
 
+func (md *metadata) cleardeleted() *metadata {
+	hdr := atomic.LoadUint64(&md.hdr)
+	hdr = hdr & (^(uint64(mdFlagDeleted)))
+	atomic.StoreUint64(&md.hdr, hdr)
+	return md
+}
+
 //---- hdr write methods
 
 func (md *metadata) setvbno(vbno uint16) *metadata {

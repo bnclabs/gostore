@@ -51,7 +51,6 @@ func (nd *Llrbnode) SetBornseqno(seqno uint64) api.Node {
 // SetDeadseqno implement NodeSetter{}
 func (nd *Llrbnode) SetDeadseqno(seqno uint64) api.Node {
 	if nd != nil {
-		nd.metadata().setdeleted()
 		nd.metadata().setddseq(seqno)
 	}
 	return nd

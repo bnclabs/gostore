@@ -388,6 +388,12 @@ func (writer *LLRBWriter) mvccupsert(
 	root.metadata().setblack()
 	llrb.setroot(root)
 	llrb.upsertcounts(key, value, oldnd)
+
+	if llrb.markdelete && oldnd.IsDeleted() {
+		newnd.metadata().cleardeleted()
+		newnd.SetDeadseqno(0)
+	}
+
 	if callb != nil {
 		callb(llrb, 0, llndornil(newnd), llndornil(oldnd), nil)
 	}
@@ -425,6 +431,12 @@ func (writer *LLRBWriter) mvccupsertcas(
 	root.metadata().setblack()
 	llrb.setroot(root)
 	llrb.upsertcounts(key, value, oldnd)
+
+	if llrb.markdelete && oldnd.IsDeleted() {
+		newnd.metadata().cleardeleted()
+		newnd.SetDeadseqno(0)
+	}
+
 	if callb != nil {
 		callb(llrb, 0, llndornil(newnd), llndornil(oldnd), nil)
 	}
@@ -494,18 +506,14 @@ func (writer *LLRBWriter) mvccdelmin(
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
 
 	if llrb.markdelete {
-		llrb.Min(func(_ api.Index, i int64, _, nd api.Node, err error) bool {
-			if callb != nil {
-				if err != nil {
-					callb(llrb, i, nd, nd, err)
-				} else if nd != nil {
-					llrbnd := nd.(*Llrbnode)
-					llrbnd.metadata().setdeleted()
-					callb(llrb, i, nd, nd, nil)
-				}
-			}
-			return false
-		})
+		nd, _ := llrb.min(llrb.getroot())
+		if nd != nil {
+			llrbnd := nd.(*Llrbnode)
+			llrbnd.metadata().setdeleted()
+		}
+		if callb != nil {
+			callb(llrb, 0, nd, nd, nil)
+		}
 
 	} else {
 		root, deleted, reclaim = writer.deletemin(llrb.getroot(), reclaim)
@@ -563,18 +571,14 @@ func (writer *LLRBWriter) mvccdelmax(
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
 
 	if llrb.markdelete {
-		llrb.Max(func(_ api.Index, i int64, _, nd api.Node, err error) bool {
-			if callb != nil {
-				if err != nil {
-					callb(llrb, i, nd, nd, err)
-				} else if nd != nil {
-					llrbnd := nd.(*Llrbnode)
-					llrbnd.metadata().setdeleted()
-					callb(llrb, i, nd, nd, nil)
-				}
-			}
-			return false
-		})
+		nd, _ := llrb.max(llrb.getroot())
+		if nd != nil {
+			llrbnd := nd.(*Llrbnode)
+			llrbnd.metadata().setdeleted()
+		}
+		if callb != nil {
+			callb(llrb, 0, nd, nd, nil)
+		}
 
 	} else {
 		root, deleted, reclaim = writer.deletemax(llrb.getroot(), reclaim)
@@ -634,20 +638,26 @@ func (writer *LLRBWriter) mvccdelete(
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
 
 	if llrb.markdelete {
-		llrb.Get(
-			key,
-			func(_ api.Index, i int64, _, nd api.Node, err error) bool {
-				if callb != nil {
-					if err != nil {
-						callb(llrb, 0, nd, nd, err)
-					} else if nd != nil {
-						llrbnd := nd.(*Llrbnode)
-						llrbnd.metadata().setdeleted()
-						callb(llrb, 0, nd, nd, nil)
+		nd := llrb.get(key)
+		if nd != nil {
+			llrbnd := nd.(*Llrbnode)
+			llrbnd.metadata().setdeleted()
+			if callb != nil {
+				callb(llrb, 0, nd, nd, nil)
+			}
+		} else {
+			reclaim = writer.mvccupsert(
+				key, nil,
+				func(_ api.Index, _ int64, nnd, ond api.Node, err error) bool {
+					llrbnd := nnd.(*Llrbnode)
+					llrbnd.metadata().setdeleted()
+					if callb != nil {
+						callb(llrb, 0, nnd, ond, err)
 					}
-				}
-				return false
-			})
+					return false
+				},
+				reclaim)
+		}
 
 	} else {
 		root, deleted, reclaim = writer.delete(llrb.getroot(), key, reclaim)

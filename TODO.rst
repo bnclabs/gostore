@@ -9,6 +9,7 @@
 - replace panicerr() with panic()
 - optimize MergeIterator() to automatically discard keys (nodes) with older
   seqno.
+- optimize LSM merger logic, avoid repeated sort() calls.
 
 clock:
 

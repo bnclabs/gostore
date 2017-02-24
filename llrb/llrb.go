@@ -552,6 +552,11 @@ func (llrb *LLRB) Upsert(key, value []byte, callb api.NodeCallb) error {
 	llrb.setroot(root)
 	llrb.upsertcounts(key, value, oldnd)
 
+	if llrb.markdelete && oldnd.IsDeleted() {
+		newnd.metadata().cleardeleted()
+		newnd.SetDeadseqno(0)
+	}
+
 	if callb != nil {
 		callb(llrb, 0, llndornil(newnd), llndornil(oldnd), nil)
 	}
@@ -600,6 +605,11 @@ func (llrb *LLRB) UpsertCas(key, value []byte, cas uint64, callb api.NodeCallb) 
 	root.metadata().setblack()
 	llrb.setroot(root)
 	llrb.upsertcounts(key, value, oldnd)
+
+	if llrb.markdelete && oldnd.IsDeleted() {
+		newnd.metadata().cleardeleted()
+		newnd.SetDeadseqno(0)
+	}
 
 	if callb != nil {
 		callb(llrb, 0, llndornil(newnd), llndornil(oldnd), nil)
@@ -665,19 +675,14 @@ func (llrb *LLRB) DeleteMin(callb api.NodeCallb) (e error) {
 	llrb.rw.Lock()
 
 	if llrb.markdelete {
-		llrb.Min(func(_ api.Index, i int64, _, nd api.Node, err error) bool {
-			e = err
-			if callb != nil {
-				if err != nil {
-					callb(llrb, 0, nd, nd, err)
-				} else if nd != nil {
-					llrbnd := nd.(*Llrbnode)
-					llrbnd.metadata().setdeleted()
-					callb(llrb, 0, nd, nd, nil)
-				}
-			}
-			return false
-		})
+		nd, _ := llrb.min(llrb.getroot())
+		if nd != nil {
+			llrbnd := nd.(*Llrbnode)
+			llrbnd.metadata().setdeleted()
+		}
+		if callb != nil {
+			callb(llrb, 0, nd, nd, nil)
+		}
 
 	} else {
 		root, deleted := llrb.deletemin(llrb.getroot())
@@ -722,19 +727,14 @@ func (llrb *LLRB) DeleteMax(callb api.NodeCallb) (e error) {
 	llrb.rw.Lock()
 
 	if llrb.markdelete {
-		llrb.Max(func(_ api.Index, i int64, _, nd api.Node, err error) bool {
-			e = err
-			if callb != nil {
-				if err != nil {
-					callb(llrb, 0, nd, nd, err)
-				} else if nd != nil {
-					llrbnd := nd.(*Llrbnode)
-					llrbnd.metadata().setdeleted()
-					callb(llrb, 0, nd, nd, nil)
-				}
-			}
-			return false
-		})
+		nd, _ := llrb.max(llrb.getroot())
+		if nd != nil {
+			llrbnd := nd.(*Llrbnode)
+			llrbnd.metadata().setdeleted()
+		}
+		if callb != nil {
+			callb(llrb, 0, nd, nd, nil)
+		}
 
 	} else {
 		root, deleted := llrb.deletemax(llrb.getroot())
@@ -782,21 +782,27 @@ func (llrb *LLRB) Delete(key []byte, callb api.NodeCallb) (e error) {
 	llrb.rw.Lock()
 
 	if llrb.markdelete {
-		llrb.Get(
-			key,
-			func(_ api.Index, i int64, _, nd api.Node, err error) bool {
-				e = err
-				if callb != nil {
-					if err != nil {
-						callb(llrb, 0, nd, nd, err)
-					} else if nd != nil {
-						llrbnd := nd.(*Llrbnode)
-						llrbnd.metadata().setdeleted()
-						callb(llrb, 0, nd, nd, nil)
-					}
-				}
-				return false
-			})
+		nd := llrb.get(key)
+		if nd != nil {
+			llrbnd := nd.(*Llrbnode)
+			llrbnd.metadata().setdeleted()
+			if callb != nil {
+				callb(llrb, 0, nd, nd, nil)
+			}
+			//} else {
+			//	llrb.rw.Unlock()
+			//	llrb.Upsert(
+			//		key, nil,
+			//		func(_ api.Index, _ int64, nnd, ond api.Node, err error) bool {
+			//			llrbnd := nnd.(*Llrbnode)
+			//			llrbnd.metadata().setdeleted()
+			//			if callb != nil {
+			//				callb(llrb, 0, nnd, ond, err)
+			//			}
+			//			return false
+			//		})
+			//	llrb.rw.Lock()
+		}
 
 	} else {
 		root, deleted := llrb.delete(llrb.getroot(), key)
@@ -861,8 +867,9 @@ func (llrb *LLRB) delete(nd *Llrbnode, key []byte) (newnd, deleted *Llrbnode) {
 			} else {
 				newnd.metadata().setred()
 			}
-			if newnd.metadata().ismvalue() {
-				newnd.nodevalue().setvalue(subdeleted.nodevalue().value())
+			sdnv := subdeleted.nodevalue()
+			if newnd.metadata().ismvalue() && sdnv != nil {
+				newnd.nodevalue().setvalue(sdnv.value())
 			}
 			deleted, nd = nd, newnd
 			llrb.freenode(subdeleted)
@@ -1022,6 +1029,10 @@ func (llrb *LLRB) newnode(k, v []byte) *Llrbnode {
 	nd.setkey(llrb.mdsize, k)
 	nd.pool, nd.left, nd.right = mpool, nil, nil
 
+	if llrb.fmask.isDeadSeqno() {
+		nd.SetDeadseqno(0)
+	}
+
 	if v != nil && nd.metadata().ismvalue() {
 		ptr, mpool = llrb.valarena.Alloc(int64(nvaluesize + len(v)))
 		nv := (*nodevalue)(ptr)
@@ -1042,6 +1053,7 @@ func (llrb *LLRB) freenode(nd *Llrbnode) {
 			nv := nd.nodevalue()
 			if nv != nil {
 				nv.pool.Free(unsafe.Pointer(nv))
+				nd.setnodevalue(nil)
 			}
 		}
 		nd.pool.Free(unsafe.Pointer(nd))
