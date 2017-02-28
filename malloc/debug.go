@@ -10,11 +10,14 @@ func initblock(block uintptr, size int64) {
 	initsz := len(poolblkinit)
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&dst))
 	sl.Data, sl.Len = block, initsz
+	if size > 48 { // TODO: make sure that it is alteast metadata size.
+		size = 48
+	}
 	for i := int64(0); i < size/int64(initsz); i++ {
 		copy(dst, poolblkinit)
 		sl.Data = (uintptr)(uint64(sl.Data) + uint64(initsz))
 	}
-	if sl.Len = int(size) % len(poolblkinit); sl.Len > 0 {
+	if sl.Len = int(size) % initsz; sl.Len > 0 {
 		copy(dst, poolblkinit)
 	}
 }
