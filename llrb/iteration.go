@@ -55,9 +55,11 @@ func (iter *iterator) Close() {
 	atomic.AddInt64(iter.n_activeiter, -1)
 
 	// give it back to the pool if not overflowing.
-	iter.llrb.putiterator(iter)
 	if iter.llrb.mvcc.enabled == false { // NOTE: remember to reader unlock
+		iter.llrb.putiterator(iter)
 		iter.llrb.rw.RUnlock()
+	} else {
+		iter.llrb.putiterator(iter)
 	}
 }
 
