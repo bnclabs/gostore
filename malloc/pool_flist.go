@@ -6,6 +6,7 @@ package malloc
 import "C"
 
 import "unsafe"
+import "fmt"
 
 import "github.com/prataprc/storage.go/api"
 
@@ -94,7 +95,8 @@ func (pool *poolflist) Free(ptr unsafe.Pointer) {
 	}
 	diffptr := uint64(uintptr(ptr) - uintptr(pool.base))
 	if (diffptr % uint64(pool.size)) != 0 {
-		panic("poolflist.free(): unaligned pointer")
+		fmsg := "poolflist.free(): unaligned pointer: %x,%v"
+		panic(fmt.Errorf(fmsg, diffptr, pool.size))
 	}
 	nthblock := uint16(diffptr / uint64(pool.size))
 	pool.freelist = append(pool.freelist, nthblock)
