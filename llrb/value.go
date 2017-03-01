@@ -9,7 +9,7 @@ import "reflect"
 
 import "github.com/prataprc/storage.go/api"
 
-const nvaluesize = 24 // + valuesize
+const nvaluesize = int(unsafe.Sizeof(nodevalue{})) - 8 // + valuesize
 
 type nodevalue struct {
 	hdr1     uint64 // valuesize[39:]

@@ -8,7 +8,7 @@ import "io"
 
 import "github.com/prataprc/storage.go/api"
 
-const nodesize = 32 // + metadatasize + keysize
+const nodesize = int(unsafe.Sizeof(Llrbnode{})) - 8 // + metadatasize + keysize
 
 // Llrbnode defines a node in LLRB tree.
 type Llrbnode struct {
