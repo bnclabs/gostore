@@ -13,9 +13,9 @@ import "github.com/prataprc/storage.go/lib"
 var _ = fmt.Sprintf("dummy")
 
 func TestConstants(t *testing.T) {
-	if unsafe.Sizeof(Llrbnode{}) != (nodesize + 8) {
+	if int(unsafe.Sizeof(Llrbnode{})) != (nodesize + 8) {
 		t.Fatalf("Llrbnode{} size has changed")
-	} else if unsafe.Sizeof(nodevalue{}) != (nvaluesize + 8) {
+	} else if int(unsafe.Sizeof(nodevalue{})) != (nvaluesize + 8) {
 		t.Fatalf("nodevalue{} size has changed")
 	} else if api.MinKeymem != 32 {
 		t.Fatalf("MinKeymem has changed")

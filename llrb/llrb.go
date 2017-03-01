@@ -789,19 +789,19 @@ func (llrb *LLRB) Delete(key []byte, callb api.NodeCallb) (e error) {
 			if callb != nil {
 				callb(llrb, 0, nd, nd, nil)
 			}
-			//} else {
-			//	llrb.rw.Unlock()
-			//	llrb.Upsert(
-			//		key, nil,
-			//		func(_ api.Index, _ int64, nnd, ond api.Node, err error) bool {
-			//			llrbnd := nnd.(*Llrbnode)
-			//			llrbnd.metadata().setdeleted()
-			//			if callb != nil {
-			//				callb(llrb, 0, nnd, ond, err)
-			//			}
-			//			return false
-			//		})
-			//	llrb.rw.Lock()
+		} else {
+			llrb.rw.Unlock()
+			llrb.Upsert(
+				key, nil,
+				func(_ api.Index, _ int64, nnd, ond api.Node, err error) bool {
+					llrbnd := nnd.(*Llrbnode)
+					llrbnd.metadata().setdeleted()
+					if callb != nil {
+						callb(llrb, 0, nnd, ond, err)
+					}
+					return false
+				})
+			llrb.rw.Lock()
 		}
 
 	} else {
@@ -889,9 +889,9 @@ func (llrb *LLRB) Mutations(cmds []*api.MutationCmd, callb api.NodeCallb) error 
 	var i int
 	var mcmd *api.MutationCmd
 
-	localfn := func(index api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
+	localfn := func(idx api.Index, _ int64, nnd, ond api.Node, err error) bool {
 		if callb != nil {
-			callb(index, int64(i), newnd, oldnd, err)
+			callb(idx, int64(i), nnd, ond, err)
 		}
 		return false
 	}

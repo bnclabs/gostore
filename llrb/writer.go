@@ -734,8 +734,9 @@ func (writer *LLRBWriter) delete(
 			} else {
 				newnd.metadata().setred()
 			}
-			if newnd.metadata().ismvalue() {
-				newnd.nodevalue().setvalue(subd.nodevalue().value())
+			sdnv := subd.nodevalue().value()
+			if newnd.metadata().ismvalue() && sdnv != nil {
+				newnd.nodevalue().setvalue(sdnv)
 			}
 			deleted, ndmvcc = ndmvcc, newnd
 			reclaim = append(reclaim, deleted)
