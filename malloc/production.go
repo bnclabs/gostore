@@ -6,7 +6,6 @@ import "reflect"
 import "unsafe"
 
 func initblock(block uintptr, size int64) {
-	return
 	var dst []byte
 	initsz := len(zeroblkinit)
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&dst))
