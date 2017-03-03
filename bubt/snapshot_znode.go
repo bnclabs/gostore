@@ -113,10 +113,10 @@ func (z znode) searchbackward(hkey []byte, entries []byte, cmp int) int32 {
 	panic("unreachable code")
 }
 
-func (z znode) getentry(n uint32, entries []byte) zentry {
+func (z znode) getentry(n uint32, entries []byte) zsentry {
 	off := n * 4
 	koff := binary.BigEndian.Uint32(entries[off : off+4])
-	return zentry(z[koff:])
+	return zsentry(z[koff:])
 }
 
 func (z znode) entryslice() []byte {
@@ -133,9 +133,9 @@ func (z znode) dumpkeys(ss *Snapshot, prefix string) {
 	}
 }
 
-type zentry []byte
+type zsentry []byte
 
-func (z zentry) key() []byte {
+func (z zsentry) key() []byte {
 	klen := binary.BigEndian.Uint16(z[26 : 26+2])
 	return z[26+2 : 26+2+klen]
 }
