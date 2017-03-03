@@ -15,7 +15,7 @@ func TestZEntry(t *testing.T) {
 	ze.setflags(zentryFlags(ze.getflags()).setvalfile().setdeleted())
 	ze.setvbno(vbno).setvbuuid(vbuuid)
 	ze.setbornseqno(bornseqno).setdeadseqno(deadseqno)
-	ze.setkey([]byte(key))
+	ze.setkeylen(uint16(len(key)))
 	ze.setvaluenum(valnum)
 
 	// validate
@@ -31,8 +31,8 @@ func TestZEntry(t *testing.T) {
 		t.Errorf("expected %v, got %v", bornseqno, y)
 	} else if y = ze.getdeadseqno(); y != deadseqno {
 		t.Errorf("expected %v, got %v", deadseqno, y)
-	} else if k := ze.key(); string(key) != key {
-		t.Errorf("expected %v, got %v", key, k)
+	} else if k := ze.keylen(); k != uint16(len(key)) {
+		t.Errorf("expected %v, got %v", len(key), k)
 	} else if v := ze.valuenum(); v != valnum {
 		t.Errorf("expected %v, got %v", valnum, v)
 	}

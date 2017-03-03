@@ -17,6 +17,8 @@ const (
 	zeoffVlenEnd        = zeoffVlenStart + 8
 )
 
+const zentryLen = 42
+
 // zentry represents the binary layout of each entry in the leaf(z) block.
 // hdr:
 //     flags[32:16] vbno[16:0]
@@ -57,9 +59,8 @@ func (ze zentry) getdeadseqno() uint64 {
 	return binary.BigEndian.Uint64(ze[zeoffDeadseqnoStart:zeoffDeadseqnoEnd])
 }
 
-func (ze zentry) key() []byte {
-	klen := binary.BigEndian.Uint16(ze[zeoffKlenStart:zeoffKlenEnd])
-	return ze[zeoffVlenEnd : zeoffVlenStart+klen]
+func (ze zentry) keylen() uint16 {
+	return binary.BigEndian.Uint16(ze[zeoffKlenStart:zeoffKlenEnd])
 }
 
 func (ze zentry) valuenum() uint64 {
@@ -97,10 +98,8 @@ func (ze zentry) setdeadseqno(seqno uint64) zentry {
 	return ze
 }
 
-func (ze zentry) setkey(key []byte) zentry {
-	klen := uint16(len(key))
+func (ze zentry) setkeylen(klen uint16) zentry {
 	binary.BigEndian.PutUint16(ze[zeoffKlenStart:zeoffKlenEnd], klen)
-	copy(ze[zeoffVlenEnd:], key)
 	return ze
 }
 
