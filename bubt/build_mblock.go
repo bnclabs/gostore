@@ -3,7 +3,7 @@ package bubt
 import "encoding/binary"
 import "fmt"
 
-import "github.com/prataprc/storage.go/api"
+import "github.com/prataprc/storage.go/lib"
 
 var _ = fmt.Sprintf("dummy")
 
@@ -21,7 +21,7 @@ type mblock struct {
 func (f *Bubt) newmblock() (m *mblock) {
 	m = &mblock{
 		f:        f,
-		firstkey: make([]byte, 0, api.MaxKeymem),
+		firstkey: nil,
 		entries:  make([]uint32, 0, 16),
 		values:   make([][]byte, 0, 16),
 		kbuffer:  make([]byte, 0, f.mblocksize),
@@ -49,7 +49,7 @@ func (m *mblock) insert(block blocker) (ok bool) {
 
 	// remember first key
 	if len(m.firstkey) == 0 {
-		m.firstkey = m.firstkey[:len(key)]
+		m.firstkey = lib.Fixbuffer(m.firstkey, int64(len(key)))
 		copy(m.firstkey, key)
 	}
 

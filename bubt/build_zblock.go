@@ -4,6 +4,7 @@ import "encoding/binary"
 import "fmt"
 
 import "github.com/prataprc/storage.go/api"
+import "github.com/prataprc/storage.go/lib"
 
 var _ = fmt.Sprintf("dummy")
 
@@ -24,7 +25,7 @@ func (f *Bubt) newz(fpos [2]int64) (z *zblock) {
 	z = &zblock{
 		f:        f,
 		fpos:     fpos,
-		firstkey: make([]byte, 0, api.MaxKeymem),
+		firstkey: nil,
 		entries:  make([]uint32, 0, 16),
 		keys:     make([][]byte, 0, 16),
 		values:   make([][]byte, 0, 16),
@@ -61,7 +62,7 @@ func (z *zblock) insert(nd api.Node) (ok, fin bool) {
 	z.keys, z.values = append(z.keys, key), append(z.values, value)
 
 	if len(z.firstkey) == 0 {
-		z.firstkey = z.firstkey[:len(key)]
+		z.firstkey = lib.Fixbuffer(z.firstkey, int64(len(key)))
 		copy(z.firstkey, key)
 	}
 
