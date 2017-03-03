@@ -9,6 +9,24 @@ import "strings"
 import "sort"
 import "encoding/json"
 
+// Parsecsv convert a string of command seperated value into list of string of
+// values.
+func Parsecsv(input string) []string {
+	if input == "" {
+		return nil
+	}
+	ss := strings.Split(input, ",")
+	outs := make([]string, 0)
+	for _, s := range ss {
+		s = strings.Trim(s, " \t\r\n")
+		if s == "" {
+			continue
+		}
+		outs = append(outs, s)
+	}
+	return outs
+}
+
 // Memcpy copy memory block of length `ln` from `src` to `dst`. This
 // function is useful if memory block is obtained outside golang runtime.
 func Memcpy(dst, src unsafe.Pointer, ln int) int {
