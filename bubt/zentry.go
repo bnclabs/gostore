@@ -17,7 +17,7 @@ const (
 	zeoffVlenEnd        = zeoffVlenStart + 8
 )
 
-const zentryLen = 42
+const zentryLen = zeoffVlenEnd
 
 // zentry represents the binary layout of each entry in the leaf(z) block.
 // hdr:

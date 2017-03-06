@@ -23,7 +23,7 @@ func (f *Bubt) startflusher() *bubtflusher {
 	}
 
 	go flusher.run(indexname, f.indexfd, flusher.idxch, flusher.iquitch)
-	if f.hasdatafile() {
+	if f.hasdatafile {
 		go flusher.run(dataname, f.datafd, flusher.datach, flusher.dquitch)
 	}
 	return flusher
@@ -52,7 +52,7 @@ func (flusher *bubtflusher) writedata(data []byte) error {
 }
 
 func (flusher *bubtflusher) close() {
-	if flusher.f.hasdatafile() {
+	if flusher.f.hasdatafile {
 		log.Infof("%v closing %q flusher ...\n", flusher.f.logprefix, dataname)
 		close(flusher.datach)
 		<-flusher.dquitch

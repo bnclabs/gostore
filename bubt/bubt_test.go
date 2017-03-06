@@ -28,13 +28,13 @@ func TestEmpty(t *testing.T) {
 	os.Remove(path)
 	defer os.Remove(path)
 
-	llrb := refllrb(t, 0)
+	llrbi := refllrb(t, 0)
 
 	bsetts := Defaultsettings()
 	bsetts["datafile"] = true
 	name := fmt.Sprintf("unittest-empty-%v", 0)
 	bubt := NewBubt(name, path, bsetts)
-	llrbiter := llrb.Iterate(nil, nil, "both", false)
+	llrbiter := llrbi.Iterate(nil, nil, "both", false)
 	bubt.Build(llrbiter, nil)
 	llrbiter.Close()
 
@@ -48,7 +48,7 @@ func TestEmpty(t *testing.T) {
 		}
 	}
 
-	if err := llrb.Destroy(); err != nil {
+	if err := llrbi.Destroy(); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -59,19 +59,19 @@ func TestMissing(t *testing.T) {
 	defer os.Remove(path)
 
 	count := 1
-	llrb := refllrb(t, count)
+	llrbi := refllrb(t, count)
 
 	bsetts := Defaultsettings()
 	bsetts["datafile"] = true
 	name := fmt.Sprintf("unittest-empty-%v", count)
 	bubt := NewBubt(name, path, bsetts)
-	llrbiter := llrb.Iterate(nil, nil, "both", false)
+	llrbiter := llrbi.Iterate(nil, nil, "both", false)
 	bubt.Build(llrbiter, nil)
 	llrbiter.Close()
 
 	// gather reference list of nodes
 	refnds := make([]api.Node, 0)
-	llrb.Range(
+	llrbi.Range(
 		nil, nil, "both", false,
 		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
 			if err != nil {
@@ -80,8 +80,8 @@ func TestMissing(t *testing.T) {
 			refnds = append(refnds, nd)
 			return true
 		})
-	if llrb.Count() != int64(count) {
-		t.Fatalf("expected %v, got %v", count, llrb.Count())
+	if llrbi.Count() != int64(count) {
+		t.Fatalf("expected %v, got %v", count, llrbi.Count())
 	} else if len(refnds) != count {
 		t.Fatalf("expected %v, got %v", count, len(refnds))
 	}
@@ -126,7 +126,7 @@ func TestMissing(t *testing.T) {
 		t.Fatalf("expected %v to be removed", path)
 	}
 
-	if err := llrb.Destroy(); err != nil {
+	if err := llrbi.Destroy(); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -138,7 +138,7 @@ func TestLookup(t *testing.T) {
 	os.Remove(path)
 	defer os.Remove(path)
 
-	do := func(count int, llrb *llrb.LLRB, store *Snapshot, refnds []api.Node) {
+	do := func(count int, llrbi *llrb.LLRB, store *Snapshot, refnds []api.Node) {
 		snapch := make(chan api.IndexSnapshot, 1)
 		err := store.RSnapshot(snapch, true /*next*/)
 		if err != nil {
@@ -157,7 +157,7 @@ func TestLookup(t *testing.T) {
 		for j := 0; j < len(refnds); j++ {
 			key := refnds[j].Key()
 			if s.Has(key) == false {
-				t.Fatalf("missing key %v", string(key))
+				panic(fmt.Errorf("missing key %v", string(key)))
 			}
 			s.Get(
 				key,
@@ -190,11 +190,11 @@ func TestLookup(t *testing.T) {
 
 	for i := 1; i <= 2000; i += 7 {
 		//t.Logf("trying %v", i)
-		llrb := refllrb(t, i)
+		llrbi := refllrb(t, i)
 
 		// gather reference list of nodes
 		refnds := make([]api.Node, 0)
-		llrb.Range(
+		llrbi.Range(
 			nil, nil, "both", false,
 			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
 				if err != nil {
@@ -203,8 +203,8 @@ func TestLookup(t *testing.T) {
 				refnds = append(refnds, nd)
 				return true
 			})
-		if llrb.Count() != int64(i) {
-			t.Fatalf("expected %v, got %v", i, llrb.Count())
+		if llrbi.Count() != int64(i) {
+			t.Fatalf("expected %v, got %v", i, llrbi.Count())
 		} else if len(refnds) != i {
 			t.Fatalf("expected %v, got %v", i, len(refnds))
 		}
@@ -214,14 +214,14 @@ func TestLookup(t *testing.T) {
 
 		// with data file
 		bubt := NewBubt(name, path, bsetts)
-		llrbiter := llrb.Iterate(nil, nil, "both", false)
+		llrbiter := llrbi.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter, nil)
 		llrbiter.Close()
 		store, err := OpenBubtstore(name, path)
 		if err != nil {
 			t.Fatal(err)
 		}
-		do(i, llrb, store, refnds)
+		do(i, llrbi, store, refnds)
 		if err := store.Destroy(); err != nil {
 			t.Fatal(err)
 		}
@@ -229,14 +229,14 @@ func TestLookup(t *testing.T) {
 		// without data file
 		bsetts = Defaultsettings()
 		bubt = NewBubt(name, path, bsetts)
-		llrbiter = llrb.Iterate(nil, nil, "both", false)
+		llrbiter = llrbi.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter, nil)
 		llrbiter.Close()
 		store, err = OpenBubtstore(name, path)
 		if err != nil {
 			t.Fatal(err)
 		}
-		do(i, llrb, store, refnds)
+		do(i, llrbi, store, refnds)
 		if err := store.Destroy(); err != nil {
 			t.Fatal(err)
 		}
@@ -244,7 +244,7 @@ func TestLookup(t *testing.T) {
 		if _, err := os.Stat(path); err == nil {
 			t.Fatalf("expected %v to be removed", path)
 		}
-		if err := llrb.Destroy(); err != nil {
+		if err := llrbi.Destroy(); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -256,7 +256,7 @@ func TestPartialRange(t *testing.T) {
 	lsetts["metadata.deadseqno"] = true
 	lsetts["metadata.vbuuid"] = true
 	lsetts["metadata.fpos"] = true
-	llrb := llrb.NewLLRB("bubttest", lsetts)
+	llrbi := llrb.NewLLRB("bubttest", lsetts)
 	d := dict.NewDict()
 	// inserts
 	inserts, n, keys := make([][2][]byte, 0), 100000, []string{}
@@ -266,7 +266,7 @@ func TestPartialRange(t *testing.T) {
 		inserts = append(inserts, [2][]byte{[]byte(key), []byte(value)})
 	}
 	for _, kv := range inserts {
-		llrb.Upsert(
+		llrbi.Upsert(
 			kv[0], kv[1],
 			func(_ api.Index, _ int64, _, oldnd api.Node, err error) bool {
 				if err != nil {
@@ -299,7 +299,7 @@ func TestPartialRange(t *testing.T) {
 
 	// with datafile
 	bubt := NewBubt(name, path, bsetts)
-	llrbiter := llrb.Iterate(nil, nil, "both", false)
+	llrbiter := llrbi.Iterate(nil, nil, "both", false)
 	bubt.Build(llrbiter, nil)
 	llrbiter.Close()
 
@@ -342,7 +342,7 @@ func TestPartialRange(t *testing.T) {
 				}
 
 				refkeys, outkeys = refkeys[:0], outkeys[:0]
-				llrb.Range(
+				llrbi.Range(
 					lkey, hkey, incl, false,
 					func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
 						if err != nil {
@@ -400,7 +400,7 @@ func TestPartialRange(t *testing.T) {
 				}
 
 				refkeys, outkeys = refkeys[:0], outkeys[:0]
-				llrb.Range(
+				llrbi.Range(
 					lkey, hkey, incl, true,
 					func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
 						if err != nil {
@@ -437,7 +437,7 @@ func TestRange(t *testing.T) {
 	os.Remove(path)
 	defer os.Remove(path)
 
-	do := func(count int, llrb *llrb.LLRB, store *Snapshot, refnds []api.Node) {
+	do := func(count int, llrbi *llrb.LLRB, store *Snapshot, refnds []api.Node) {
 		snapch := make(chan api.IndexSnapshot, 1)
 		if err := store.RSnapshot(snapch, true /*next*/); err != nil {
 			t.Fatalf("acquiring snapshot: %v", err)
@@ -473,9 +473,9 @@ func TestRange(t *testing.T) {
 
 	for i := 1; i <= 2000; i += 7 {
 		//t.Logf("trying %v", i)
-		llrb := refllrb(t, i)
+		llrbi := refllrb(t, i)
 		refnds := make([]api.Node, 0)
-		llrb.Range(
+		llrbi.Range(
 			nil, nil, "both", false,
 			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
 				if err != nil {
@@ -490,28 +490,28 @@ func TestRange(t *testing.T) {
 
 		// with datafile
 		bubt := NewBubt(name, path, bsetts)
-		llrbiter := llrb.Iterate(nil, nil, "both", false)
+		llrbiter := llrbi.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter, nil)
 		llrbiter.Close()
 		store, err := OpenBubtstore(name, path)
 		if err != nil {
 			t.Fatal(err)
 		}
-		do(i, llrb, store, refnds)
+		do(i, llrbi, store, refnds)
 		if err := store.Destroy(); err != nil {
 			t.Fatal(err)
 		}
 		// without data file
 		bsetts = Defaultsettings()
 		bubt = NewBubt(name, path, bsetts)
-		llrbiter = llrb.Iterate(nil, nil, "both", false)
+		llrbiter = llrbi.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter, nil)
 		llrbiter.Close()
 		store, err = OpenBubtstore(name, path)
 		if err != nil {
 			t.Fatal(err)
 		}
-		do(i, llrb, store, refnds)
+		do(i, llrbi, store, refnds)
 		if err := store.Destroy(); err != nil {
 			t.Fatal(err)
 		}
@@ -520,7 +520,7 @@ func TestRange(t *testing.T) {
 			t.Fatalf("expected %v to be removed", path)
 		}
 
-		if err := llrb.Destroy(); err != nil {
+		if err := llrbi.Destroy(); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -532,7 +532,7 @@ func TestPartialIterate(t *testing.T) {
 	lsetts["metadata.deadseqno"] = true
 	lsetts["metadata.vbuuid"] = true
 	lsetts["metadata.fpos"] = true
-	llrb := llrb.NewLLRB("bubttest", lsetts)
+	llrbi := llrb.NewLLRB("bubttest", lsetts)
 	d := dict.NewDict()
 	// inserts
 	inserts, n, keys := make([][2][]byte, 0), 100000, []string{}
@@ -542,7 +542,7 @@ func TestPartialIterate(t *testing.T) {
 		inserts = append(inserts, [2][]byte{[]byte(key), []byte(value)})
 	}
 	for _, kv := range inserts {
-		llrb.Upsert(
+		llrbi.Upsert(
 			kv[0], kv[1],
 			func(_ api.Index, _ int64, _, oldnd api.Node, err error) bool {
 				if err != nil {
@@ -576,7 +576,7 @@ func TestPartialIterate(t *testing.T) {
 
 	// with datafile
 	bubt := NewBubt(name, path, bsetts)
-	llrbiter := llrb.Iterate(nil, nil, "both", false)
+	llrbiter := llrbi.Iterate(nil, nil, "both", false)
 	bubt.Build(llrbiter, nil)
 	llrbiter.Close()
 
@@ -613,13 +613,14 @@ func TestPartialIterate(t *testing.T) {
 					}
 					iter.Close()
 					lks, hks := string(lkey), string(hkey)
+					//t.Logf("%q %q %q", lks, hks, incl)
 					if !reflect.DeepEqual(refkeys, outkeys) {
 						x, y := len(refkeys), len(outkeys)
 						t.Fatalf("failed %q %q %v - %v %v", lks, hks, incl, x, y)
 					}
 
 					refkeys, outkeys = refkeys[:0], outkeys[:0]
-					iter = llrb.Iterate(lkey, hkey, incl, false)
+					iter = llrbi.Iterate(lkey, hkey, incl, false)
 					for nd := iter.Next(); nd != nil; nd = iter.Next() {
 						refkeys = append(refkeys, string(nd.Key()))
 					}
@@ -665,7 +666,7 @@ func TestPartialIterate(t *testing.T) {
 					}
 
 					refkeys, outkeys = refkeys[:0], outkeys[:0]
-					iter = llrb.Iterate(lkey, hkey, incl, true)
+					iter = llrbi.Iterate(lkey, hkey, incl, true)
 					for nd := iter.Next(); nd != nil; nd = iter.Next() {
 						refkeys = append(refkeys, string(nd.Key()))
 					}
@@ -695,7 +696,7 @@ func TestIterate(t *testing.T) {
 	os.Remove(path)
 	defer os.Remove(path)
 
-	do := func(count int, llrb *llrb.LLRB, store *Snapshot, refnds []api.Node) {
+	do := func(count int, llrbi *llrb.LLRB, store *Snapshot, refnds []api.Node) {
 		snapch := make(chan api.IndexSnapshot, 1)
 		if err := store.RSnapshot(snapch, true /*next*/); err != nil {
 			t.Fatalf("acquiring snapshot: %v", err)
@@ -726,9 +727,9 @@ func TestIterate(t *testing.T) {
 
 	for i := 1; i <= 2000; i += 7 {
 		//t.Logf("trying %v", i)
-		llrb := refllrb(t, i)
+		llrbi := refllrb(t, i)
 		refnds := make([]api.Node, 0)
-		llrb.Range(
+		llrbi.Range(
 			nil, nil, "both", false,
 			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
 				if err != nil {
@@ -743,28 +744,28 @@ func TestIterate(t *testing.T) {
 
 		// with datafile
 		bubt := NewBubt(name, path, bsetts)
-		llrbiter := llrb.Iterate(nil, nil, "both", false)
+		llrbiter := llrbi.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter, nil)
 		llrbiter.Close()
 		store, err := OpenBubtstore(name, path)
 		if err != nil {
 			t.Fatal(err)
 		}
-		do(i, llrb, store, refnds)
+		do(i, llrbi, store, refnds)
 		if err := store.Destroy(); err != nil {
 			t.Fatal(err)
 		}
 		// without datafile
 		bsetts = Defaultsettings()
 		bubt = NewBubt(name, path, bsetts)
-		llrbiter = llrb.Iterate(nil, nil, "both", false)
+		llrbiter = llrbi.Iterate(nil, nil, "both", false)
 		bubt.Build(llrbiter, nil)
 		llrbiter.Close()
 		store, err = OpenBubtstore(name, path)
 		if err != nil {
 			t.Fatal(err)
 		}
-		do(i, llrb, store, refnds)
+		do(i, llrbi, store, refnds)
 		if err := store.Destroy(); err != nil {
 			t.Fatal(err)
 		}
@@ -773,7 +774,7 @@ func TestIterate(t *testing.T) {
 			t.Fatalf("expected %v to be removed", path)
 		}
 
-		if err := llrb.Destroy(); err != nil {
+		if err := llrbi.Destroy(); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -801,33 +802,33 @@ func refllrb(t *testing.T, count int) *llrb.LLRB {
 	lsetts["metadata.deadseqno"] = true
 	lsetts["metadata.vbuuid"] = true
 	lsetts["metadata.fpos"] = true
-	llrb := llrb.NewLLRB("bubttest", lsetts)
+	llrbi := llrb.NewLLRB("bubttest", lsetts)
 
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
 	// insert 1 items
 	key, value := make([]byte, 100), make([]byte, 100)
 	for i := 0; i < count; i++ {
 		key, value = makekeyvalue(key, value)
-		llrb.Upsert(
+		llrbi.Upsert(
 			key, value,
-			func(index api.Index, _ int64, newnd, oldnd api.Node, err error) bool {
+			func(index api.Index, _ int64, nnd, ond api.Node, err error) bool {
 				if err != nil {
 					t.Error(err)
-				} else if oldnd != nil {
+				} else if ond != nil {
 					panic("expected nil")
 				} else if x := index.Count(); x != int64(i+1) {
 					panic(fmt.Errorf("expected %v, got %v", i, x))
 				}
-				newnd.Setvbno(vbno).SetVbuuid(vbuuid).SetBornseqno(seqno)
+				nnd.Setvbno(vbno).SetVbuuid(vbuuid).SetBornseqno(seqno)
 				if i%3 == 0 {
 					seqno++
-					newnd.SetDeadseqno(seqno)
+					nnd.SetDeadseqno(seqno)
 				}
 				return false
 			})
 		seqno++
 	}
-	return llrb
+	return llrbi
 }
 
 func verifynode(refnd, nd api.Node) {

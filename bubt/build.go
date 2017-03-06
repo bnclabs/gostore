@@ -48,6 +48,10 @@ type Bubt struct {
 	mreduce      bool
 	iterpoolsize int64
 	level        byte
+	hasdatafile  bool
+	hasvbuuid    bool
+	hasbornseqno bool
+	hasdeadseqno bool
 }
 
 type blocker interface {
@@ -71,6 +75,7 @@ func NewBubt(name, path string, setts lib.Settings) *Bubt {
 		a_redsize:  &lib.AverageInt64{},
 		h_depth:    lib.NewhistorgramInt64(0, mpoolSize, 1),
 	}
+	f.readsettings(setts)
 	f.logprefix = fmt.Sprintf("[BUBT-%s]", name)
 
 	if err := os.MkdirAll(path, 0770); err != nil {
@@ -80,33 +85,40 @@ func NewBubt(name, path string, setts lib.Settings) *Bubt {
 
 	indexfile, datafile := mkfilenames(path)
 	f.indexfile, f.indexfd = indexfile, createfile(indexfile)
-	if setts.Bool("datafile") {
+	if f.hasdatafile {
 		f.datafile, f.datafd = datafile, createfile(datafile)
 	} else {
 		f.datafile, f.datafd = "", nil
 	}
 
-	f.zblocksize = setts.Int64("zblocksize")
 	if f.zblocksize > maxBlock { // 1 TB
 		panic(fmt.Errorf("zblocksize %v > %v\n", f.zblocksize, maxBlock))
 	} else if f.zblocksize < minBlock { // 512 byte, HDD sector size.
 		panic(fmt.Errorf("zblocksize %v < %v\n", f.zblocksize, minBlock))
 	}
-	f.mblocksize = setts.Int64("mblocksize")
 	if f.mblocksize > maxBlock {
 		panic(fmt.Errorf("mblocksize %v > %v\n", f.mblocksize, maxBlock))
 	} else if f.mblocksize < minBlock {
 		panic(fmt.Errorf("mblocksize %v < %v\n", f.mblocksize, minBlock))
 	}
-	f.mreduce = setts.Bool("mreduce")
-	if f.hasdatafile() == false && f.mreduce == true {
+	if f.hasdatafile == false && f.mreduce == true {
 		panic("cannot mreduce without datafile")
 	}
-	f.iterpoolsize = setts.Int64("iterpool.size")
-	f.level = byte(setts.Int64("level"))
 
 	f.flusher = f.startflusher()
 	return f
+}
+
+func (f *Bubt) readsettings(setts lib.Settings) {
+	f.zblocksize = setts.Int64("zblocksize")
+	f.mblocksize = setts.Int64("mblocksize")
+	f.mreduce = setts.Bool("mreduce")
+	f.iterpoolsize = setts.Int64("iterpool.size")
+	f.level = byte(setts.Int64("level"))
+	f.hasdatafile = setts.Bool("datafile")
+	f.hasvbuuid = setts.Bool("metadata.vbuuid")
+	f.hasbornseqno = setts.Bool("metadata.bornseqno")
+	f.hasdeadseqno = setts.Bool("metadata.deadseqno")
 }
 
 // Setlevel will set the storage level.
@@ -278,13 +290,13 @@ func (f *Bubt) flush(block blocker, fpos [2]int64) (blocker, [2]int64) {
 	logprefix := f.logprefix
 	switch blk := block.(type) {
 	case *zblock:
-		if len(blk.entries) > 0 {
-			fmsg := "%v flush zblock %v entries\n"
-			log.Debugf(fmsg, logprefix, len(blk.entries))
+		ln := blk.index.length()
+		if ln > 0 {
+			log.Debugf("%v flush zblock %v entries\n", logprefix, ln)
 
 			f.znodes++
 
-			f.a_zentries.Add(int64(len(blk.entries)))
+			f.a_zentries.Add(ln)
 			blk.finalize()
 			// reduce
 			blk.rpos = fpos[1] + int64(len(blk.dbuffer))
@@ -305,8 +317,7 @@ func (f *Bubt) flush(block blocker, fpos [2]int64) (blocker, [2]int64) {
 			}
 			return blk, [2]int64{kpos, vpos}
 		}
-		fmsg := "%v flush skipping zblock %v entries\n"
-		log.Debugf(fmsg, logprefix, len(blk.entries))
+		log.Debugf("%v flush skipping zblock %v entries\n", logprefix, ln)
 		return nil, fpos
 
 	case *mblock:
@@ -356,10 +367,6 @@ func (f *Bubt) push(nd api.Node) {
 	f.nodes = append(f.nodes, nd)
 }
 
-func (f *Bubt) hasdatafile() bool {
-	return f.datafile != ""
-}
-
 func (f *Bubt) ismvpos(vpos int64) (int64, bool) {
 	if (vpos & 0x1) == 1 {
 		return int64(uint64(vpos) & 0xFFFFFFFFFFFFFFF8), true
@@ -369,12 +376,15 @@ func (f *Bubt) ismvpos(vpos int64) (int64, bool) {
 
 func (f *Bubt) setts2json() []byte {
 	setts := lib.Settings{
-		"zblocksize":    f.zblocksize,
-		"mblocksize":    f.mblocksize,
-		"mreduce":       f.mreduce,
-		"iterpool.size": f.iterpoolsize,
-		"level":         f.level,
-		"datafile":      f.datafile != "",
+		"zblocksize":         f.zblocksize,
+		"mblocksize":         f.mblocksize,
+		"mreduce":            f.mreduce,
+		"iterpool.size":      f.iterpoolsize,
+		"level":              f.level,
+		"datafile":           f.datafile != "",
+		"metadata.vbuuid":    f.hasvbuuid,
+		"metadata.bornseqno": f.hasbornseqno,
+		"metadata.deadseqno": f.hasdeadseqno,
 	}
 	data, err := json.Marshal(setts)
 	if err != nil {

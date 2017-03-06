@@ -4,10 +4,14 @@ import "sync/atomic"
 import "fmt"
 
 import "github.com/prataprc/storage.go/api"
+import "github.com/prataprc/storage.go/lib"
 
 var _ = fmt.Sprintf("dummy")
 
 type iterator struct {
+	// 64-bit aligned
+	activeiter *int64
+
 	tree       api.IndexReader
 	snapshot   *Snapshot
 	continuate bool
@@ -19,7 +23,6 @@ type iterator struct {
 	incl       string
 	reverse    bool
 	closed     bool
-	activeiter *int64
 }
 
 // Next implement IndexIterator{} interface.
@@ -49,13 +52,13 @@ func (iter *iterator) Close() {
 		iter.nodes[i] = nil
 	}
 	iter.nodes = iter.nodes[:0]
+	atomic.AddInt64(iter.activeiter, -1)
 
 	// give it back to the pool if not overflowing.
 	snapshot := iter.snapshot
 	if len(snapshot.iterpool) < cap(snapshot.iterpool) {
 		snapshot.iterpool <- iter
 	}
-	atomic.AddInt64(iter.activeiter, -1)
 }
 
 func (iter *iterator) rangefill() {
@@ -83,8 +86,10 @@ func (iter *iterator) rangefill() {
 			return false
 		})
 	if iter.reverse {
-		iter.endkey = breakkey
+		iter.endkey = lib.Fixbuffer(iter.endkey, int64(len(breakkey)))
+		copy(iter.endkey, breakkey)
 	} else {
-		iter.startkey = breakkey
+		iter.startkey = lib.Fixbuffer(iter.startkey, int64(len(breakkey)))
+		copy(iter.startkey, breakkey)
 	}
 }

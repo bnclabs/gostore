@@ -41,13 +41,17 @@ type Snapshot struct {
 	iterpool     chan *iterator
 	activeiter   int64
 
-	// settings, will be flushed to the tip of indexfile.
+	// settings, this must be consistent with Bubt{}.
 	name         string
 	mblocksize   int64
 	zblocksize   int64
 	mreduce      bool
 	iterpoolsize int64
 	level        byte
+	hasdatafile  bool
+	hasvbuuid    bool
+	hasbornseqno bool
+	hasdeadseqno bool
 }
 
 func OpenBubtstore(name, path string) (ss *Snapshot, err error) {
@@ -550,10 +554,6 @@ func (ss *Snapshot) Mutations(_ []*api.MutationCmd, callb api.NodeCallb) error {
 
 //---- helper methods.
 
-func (ss *Snapshot) hasdatafile() bool {
-	return ss.datafile != ""
-}
-
 func (ss Snapshot) ismvpos(vpos int64) (int64, bool) {
 	if (vpos & 0x1) == 1 {
 		return int64(uint64(vpos) & 0xFFFFFFFFFFFFFFF8), true
@@ -571,9 +571,13 @@ func (ss *Snapshot) json2setts(data []byte) error {
 	ss.mreduce = setts.Bool("mreduce")
 	ss.iterpoolsize = setts.Int64("iterpool.size")
 	ss.level = byte(setts.Int64("level"))
-	if !setts.Bool("datafile") {
+	ss.hasdatafile = setts.Bool("datafile")
+	if ss.hasdatafile == false {
 		ss.datafile = ""
 	}
+	ss.hasvbuuid = setts.Bool("metadata.vbuuid")
+	ss.hasbornseqno = setts.Bool("metadata.bornseqno")
+	ss.hasdeadseqno = setts.Bool("metadata.deadseqno")
 	return nil
 }
 
@@ -718,14 +722,14 @@ func (ss *Snapshot) loadSettings(statsat int64, statslen int64) error {
 	return nil
 }
 
-func (ss *Snapshot) loadStats(settsat int64, settslen int64) error {
-	block := make([]byte, settslen)
-	n, err := ss.indexfd.ReadAt(block, settsat)
+func (ss *Snapshot) loadStats(statsat int64, statslen int64) error {
+	block := make([]byte, statslen)
+	n, err := ss.indexfd.ReadAt(block, statsat)
 	if err != nil {
 		log.Errorf("%v settings ReadAt: %v\n", ss.logprefix, err)
 		return err
-	} else if int64(n) != settslen {
-		err := fmt.Errorf("partial read: %v != %v", n, settslen)
+	} else if int64(n) != statslen {
+		err := fmt.Errorf("partial read: %v != %v", n, statslen)
 		log.Errorf("%v %v\n", ss.logprefix, err)
 		return err
 	} else {

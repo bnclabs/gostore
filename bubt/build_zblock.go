@@ -8,17 +8,25 @@ import "github.com/prataprc/storage.go/lib"
 
 var _ = fmt.Sprintf("dummy")
 
+const znentriesSz = 4
+
+// zblock represents the leaf node in bubt tree.
+//   n_entries uint32 - 4-byte count of number entries in this zblock.
+//   zindex []uint32 - 4 byte offset into zblock for each entry.
+//   zentries - array of zentries.
 type zblock struct {
 	f        *Bubt
-	fpos     [2]int64 // kpos, vpos
+	fpos     [2]int64 // {kpos, vpos} where zblock starts in file.
 	rpos     int64
 	firstkey []byte
-	entries  []uint32
-	keys     [][]byte
-	values   [][]byte
-	reduced  []byte
-	kbuffer  []byte
-	dbuffer  []byte
+
+	index zindex
+
+	keys    [][]byte
+	values  [][]byte
+	reduced []byte
+	kbuffer []byte // leaf node block
+	dbuffer []byte
 }
 
 func (f *Bubt) newz(fpos [2]int64) (z *zblock) {
@@ -26,7 +34,7 @@ func (f *Bubt) newz(fpos [2]int64) (z *zblock) {
 		f:        f,
 		fpos:     fpos,
 		firstkey: nil,
-		entries:  make([]uint32, 0, 16),
+		index:    make([]uint32, 0),
 		keys:     make([][]byte, 0, 16),
 		values:   make([][]byte, 0, 16),
 		kbuffer:  make([]byte, 0, f.zblocksize),
@@ -36,26 +44,23 @@ func (f *Bubt) newz(fpos [2]int64) (z *zblock) {
 }
 
 func (z *zblock) insert(nd api.Node) (ok, fin bool) {
-	var key, value []byte
-	var scratch [26]byte
-
 	if nd == nil {
 		return false, true
-	} else if key, value = nd.Key(), nd.Value(); int64(len(key)) > api.MaxKeymem {
+	}
+	key, value := nd.Key(), nd.Value()
+	if int64(len(key)) > api.MaxKeymem {
 		panic(fmt.Errorf("key cannot exceed %v", api.MaxKeymem))
 	} else if int64(len(value)) > api.MaxValmem {
 		panic(fmt.Errorf("value cannot exceed %v", api.MaxValmem))
 	}
 
 	// check whether enough space available in the block.
-	entrysz := len(scratch) + 2 + len(key) // TODO: avoid magic numbers
-	if z.f.hasdatafile() {
-		entrysz += 8
-	} else {
-		entrysz += 2 + len(value) // TODO: avoid magic numbers
+	entrysz := int64(zentryLen + len(key))
+	if z.f.hasdatafile == false {
+		entrysz += int64(len(value))
 	}
-	arrayblock := 4 + ((len(z.entries) + 1) * 4)
-	if int64(arrayblock+len(z.kbuffer)+entrysz) > z.f.zblocksize {
+	index := znentriesSz + z.index.nextfootprint()
+	if int64(index+int64(len(z.kbuffer))+entrysz) > z.f.zblocksize {
 		return false, false
 	}
 
@@ -66,52 +71,76 @@ func (z *zblock) insert(nd api.Node) (ok, fin bool) {
 		copy(z.firstkey, key)
 	}
 
+	startoff, endoff := len(z.kbuffer), len(z.kbuffer)+zentryLen
+
 	z.f.n_count++
-	z.entries = append(z.entries, uint32(len(z.kbuffer)))
+	z.index = append(z.index, uint32(len(z.kbuffer)))
 	z.f.a_keysize.Add(int64(len(key)))
 	z.f.a_valsize.Add(int64(len(value)))
 
-	// encode metadadata {vbno(2), vbuuid(8), bornseqno(8), deadseqno(8)}
-	binary.BigEndian.PutUint16(scratch[:2], nd.Vbno())         // 2 bytes
-	binary.BigEndian.PutUint64(scratch[2:10], nd.Vbuuid())     // 8 bytes
-	binary.BigEndian.PutUint64(scratch[10:18], nd.Bornseqno()) // 8 bytes
-	binary.BigEndian.PutUint64(scratch[18:26], nd.Deadseqno()) // 8 bytes
-	z.kbuffer = append(z.kbuffer, scratch[:26]...)
-	// encode key {keylen(2-byte), key(n-byte)}
-	binary.BigEndian.PutUint16(scratch[:2], uint16(len(key)))
-	z.kbuffer = append(z.kbuffer, scratch[:2]...)
-	z.kbuffer = append(z.kbuffer, key...)
-	// encode value
-	if z.f.hasdatafile() {
-		vpos := z.fpos[1] + int64(len(z.dbuffer))
-		binary.BigEndian.PutUint16(scratch[:2], uint16(len(value)))
-		z.dbuffer = append(z.dbuffer, scratch[:2]...)
-		z.dbuffer = append(z.dbuffer, value...)
-		binary.BigEndian.PutUint64(scratch[:8], uint64(vpos))
-		z.kbuffer = append(z.kbuffer, scratch[:8]...)
+	z.kbuffer = z.kbuffer[0:endoff]
+	entry := zentry(z.kbuffer[startoff:endoff])
+
+	// encode metadadata
+	flags := zentryFlags(entry.getheader())
+	if nd.IsDeleted() {
+		flags = flags.setdeleted()
 	} else {
-		binary.BigEndian.PutUint16(scratch[:2], uint16(len(value)))
-		z.kbuffer = append(z.kbuffer, scratch[:2]...)
+		flags = flags.cleardeleted()
+	}
+	if z.f.hasdatafile {
+		flags = flags.setvalfile()
+	} else {
+		flags = flags.clearvalfile()
+	}
+	entry.setflags(flags)
+	entry.setvbno(nd.Vbno())
+	var vbuuid, bornseqno, deadseqno uint64
+	if z.f.hasvbuuid {
+		vbuuid = nd.Vbuuid()
+	}
+	if z.f.hasbornseqno {
+		bornseqno = nd.Bornseqno()
+	}
+	if z.f.hasdeadseqno {
+		deadseqno = nd.Deadseqno()
+	}
+	entry.setvbuuid(vbuuid).setbornseqno(bornseqno).setdeadseqno(deadseqno)
+	entry.setkeylen(uint16(len(key)))
+	if z.f.hasdatafile {
+		var scratch [8]byte
+		vpos := z.fpos[1] + int64(len(z.dbuffer))
+		binary.BigEndian.PutUint64(scratch[:8], uint64(len(value)))
+		z.dbuffer = append(z.dbuffer, scratch[:8]...)
+		z.dbuffer = append(z.dbuffer, value...)
+
+		entry.setvaluenum(uint64(vpos))
+	} else {
+		entry.setvaluenum(uint64(len(value)))
+	}
+
+	// encode key and value
+	z.kbuffer = append(z.kbuffer, key...)
+	if z.f.hasdatafile == false {
 		z.kbuffer = append(z.kbuffer, value...)
 	}
 	return true, false
 }
 
 func (z *zblock) finalize() {
-	arrayblock := 4 + (len(z.entries) * 4)
-	sz, ln := arrayblock+len(z.kbuffer), len(z.kbuffer)
+	index := znentriesSz + z.index.footprint()
+	sz, ln := index+int64(len(z.kbuffer)), len(z.kbuffer)
 	if zblksize := z.f.zblocksize; int64(sz) > zblksize {
 		fmsg := "zblock overflow %v > %v, call the programmer!"
 		panic(fmt.Errorf(fmsg, sz, zblksize))
 	}
 
-	z.kbuffer = makespace(z.kbuffer[:z.f.zblocksize], arrayblock, ln)
+	z.kbuffer = makespace(z.kbuffer[:z.f.zblocksize], int(index), ln)
 
-	n := 0
-	binary.BigEndian.PutUint32(z.kbuffer[n:], uint32(len(z.entries)))
-	n += 4
-	for _, koff := range z.entries {
-		binary.BigEndian.PutUint32(z.kbuffer[n:], uint32(arrayblock)+koff)
+	binary.BigEndian.PutUint32(z.kbuffer, uint32(z.index.length()))
+	n := znentriesSz
+	for _, koff := range z.index {
+		binary.BigEndian.PutUint32(z.kbuffer[n:], uint32(index)+koff)
 		n += 4
 	}
 }
@@ -132,7 +161,7 @@ func (z *zblock) reduce() []byte {
 }
 
 func (z *zblock) startkey() (int64, []byte) {
-	if len(z.entries) > 0 {
+	if z.index.length() > 0 {
 		koff := binary.BigEndian.Uint32(z.kbuffer[4:8])
 		return z.fpos[0] + int64(koff), z.firstkey
 	}

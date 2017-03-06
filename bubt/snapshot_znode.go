@@ -16,12 +16,13 @@ func (z znode) rangeforward(
 	entries := z.entryslice()
 	from := z.searchforward(lkey, entries, cmp[0])
 	for x := from; x < int32(len(entries)/4); x++ {
-		ekey := z.getentry(uint32(x), entries).key()
+		ekey := z.getentrykey(uint32(x), entries)
 		if hkey == nil || api.Binarycmp(ekey, hkey, cmp[1] == 0) <= cmp[1] {
 			koff := x * 4
 			entryoff := int64(binary.BigEndian.Uint32(entries[koff : koff+4]))
+			ze := zentry(z[entryoff : entryoff+zentryLen])
 			nd := new(node)
-			ss.newznode(nd, []byte(z[entryoff:]), fpos+entryoff)
+			ss.newznode(nd, ze)
 			if callb(ss, 0, nd, nd, nil) == false {
 				return false
 			}
@@ -44,7 +45,7 @@ func (z znode) searchforward(lkey []byte, entries []byte, cmp int) int32 {
 		panic("impossible code path, call the programmer!")
 
 	case 1:
-		ekey := z.getentry(0, entries).key()
+		ekey := z.getentrykey(0, entries)
 		if api.Binarycmp(ekey, lkey, cmp == 1) >= cmp {
 			return 0
 		}
@@ -52,7 +53,7 @@ func (z znode) searchforward(lkey []byte, entries []byte, cmp int) int32 {
 
 	default:
 		mid := int32(count / 2)
-		ekey := z.getentry(uint32(mid), entries).key()
+		ekey := z.getentrykey(uint32(mid), entries)
 		if api.Binarycmp(ekey, lkey, cmp == 1) >= cmp {
 			return z.searchforward(lkey, entries[:mid*4], cmp)
 		}
@@ -68,12 +69,13 @@ func (z znode) rangebackward(
 	entries := z.entryslice()
 	from := z.searchbackward(hkey, entries, cmp[1])
 	for x := from; x >= 0; x-- {
-		ekey := z.getentry(uint32(x), entries).key()
+		ekey := z.getentrykey(uint32(x), entries)
 		if lkey == nil || api.Binarycmp(ekey, lkey, cmp[0] == 1) >= cmp[0] {
 			koff := x * 4
 			entryoff := int64(binary.BigEndian.Uint32(entries[koff : koff+4]))
+			ze := zentry(z[entryoff : entryoff+zentryLen])
 			nd := new(node)
-			ss.newznode(nd, []byte(z[entryoff:]), fpos+entryoff)
+			ss.newznode(nd, ze)
 			if callb(ss, 0, nd, nd, nil) == false {
 				return false
 			}
@@ -96,7 +98,7 @@ func (z znode) searchbackward(hkey []byte, entries []byte, cmp int) int32 {
 		panic("impossible code path, call the programmer!")
 
 	case 1:
-		ekey := z.getentry(0, entries).key()
+		ekey := z.getentrykey(0, entries)
 		if api.Binarycmp(ekey, hkey, cmp == 0) > cmp {
 			return -1
 		}
@@ -104,7 +106,7 @@ func (z znode) searchbackward(hkey []byte, entries []byte, cmp int) int32 {
 
 	default:
 		mid := int32(count / 2)
-		ekey := z.getentry(uint32(mid), entries).key()
+		ekey := z.getentrykey(uint32(mid), entries)
 		if api.Binarycmp(ekey, hkey, cmp == 0) > cmp {
 			return z.searchbackward(hkey, entries[:mid*4], cmp)
 		}
@@ -113,10 +115,11 @@ func (z znode) searchbackward(hkey []byte, entries []byte, cmp int) int32 {
 	panic("unreachable code")
 }
 
-func (z znode) getentry(n uint32, entries []byte) zsentry {
+func (z znode) getentrykey(n uint32, entries []byte) []byte {
 	off := n * 4
-	koff := binary.BigEndian.Uint32(entries[off : off+4])
-	return zsentry(z[koff:])
+	eoff := binary.BigEndian.Uint32(entries[off : off+4])
+	klen := uint32(zentry(z[eoff : eoff+zentryLen]).keylen())
+	return z[eoff+zentryLen : eoff+zentryLen+klen]
 }
 
 func (z znode) entryslice() []byte {
@@ -131,11 +134,4 @@ func (z znode) dumpkeys(ss *Snapshot, prefix string) {
 		klen := uint32(binary.BigEndian.Uint16(z[koff+26:]))
 		fmt.Println(prefix, string(z[koff+28:koff+28+klen]))
 	}
-}
-
-type zsentry []byte
-
-func (z zsentry) key() []byte {
-	klen := binary.BigEndian.Uint16(z[26 : 26+2])
-	return z[26+2 : 26+2+klen]
 }
