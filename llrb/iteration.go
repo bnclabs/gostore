@@ -89,11 +89,9 @@ func (iter *iterator) rangefill() {
 		})
 	if iter.reverse {
 		iter.endkey = lib.Fixbuffer(iter.endkey, int64(len(breakkey)))
-		n := copy(iter.endkey, breakkey)
-		iter.endkey = iter.endkey[:n]
+		copy(iter.endkey, breakkey)
 	} else {
 		iter.startkey = lib.Fixbuffer(iter.startkey, int64(len(breakkey)))
-		n := copy(iter.startkey, breakkey)
-		iter.startkey = iter.startkey[:n]
+		copy(iter.startkey, breakkey)
 	}
 }
