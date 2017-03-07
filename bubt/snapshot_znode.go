@@ -20,7 +20,12 @@ func (z znode) rangeforward(
 		if hkey == nil || api.Binarycmp(ekey, hkey, cmp[1] == 0) <= cmp[1] {
 			koff := x * 4
 			entryoff := int64(binary.BigEndian.Uint32(entries[koff : koff+4]))
-			ze := zentry(z[entryoff : entryoff+zentryLen])
+			endoff := entryoff + zentryLen + int64(len(ekey))
+			ze := zentry(z[entryoff:endoff])
+			if ss.hasdatafile == false {
+				endoff += int64(ze.valuenum())
+				ze = zentry(z[entryoff:endoff])
+			}
 			nd := new(node)
 			ss.newznode(nd, ze)
 			if callb(ss, 0, nd, nd, nil) == false {
@@ -73,7 +78,12 @@ func (z znode) rangebackward(
 		if lkey == nil || api.Binarycmp(ekey, lkey, cmp[0] == 1) >= cmp[0] {
 			koff := x * 4
 			entryoff := int64(binary.BigEndian.Uint32(entries[koff : koff+4]))
-			ze := zentry(z[entryoff : entryoff+zentryLen])
+			endoff := entryoff + zentryLen + int64(len(ekey))
+			ze := zentry(z[entryoff:endoff])
+			if ss.hasdatafile == false {
+				endoff += int64(ze.valuenum())
+				ze = zentry(z[entryoff:endoff])
+			}
 			nd := new(node)
 			ss.newznode(nd, ze)
 			if callb(ss, 0, nd, nd, nil) == false {
@@ -123,15 +133,13 @@ func (z znode) getentrykey(n uint32, entries []byte) []byte {
 }
 
 func (z znode) entryslice() []byte {
-	count := binary.BigEndian.Uint32(z[:4])
-	return z[4 : 4+(count*4)]
+	count := binary.BigEndian.Uint32(z[:znentriesSz])
+	return z[znentriesSz : znentriesSz+(count*4)]
 }
 
 func (z znode) dumpkeys(ss *Snapshot, prefix string) {
 	entries := z.entryslice()
 	for off := 0; off < len(entries); off += 4 {
-		koff := binary.BigEndian.Uint32(entries[off : off+4])
-		klen := uint32(binary.BigEndian.Uint16(z[koff+26:]))
-		fmt.Println(prefix, string(z[koff+28:koff+28+klen]))
+		fmt.Printf("%s %q\n", prefix, z.getentrykey(uint32(off), entries))
 	}
 }

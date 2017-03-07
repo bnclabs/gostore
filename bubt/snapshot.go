@@ -491,7 +491,11 @@ func (ss *Snapshot) Iterate(
 	iter.tree, iter.snapshot = ss, ss
 	iter.nodes, iter.index, iter.limit = iter.nodes[:0], 0, 5
 	iter.continuate = false
-	iter.startkey, iter.endkey, iter.incl, iter.reverse = lkey, hkey, incl, r
+	iter.incl, iter.reverse = incl, r
+	iter.startkey = lib.Fixbuffer(iter.startkey, int64(len(lkey)))
+	copy(iter.startkey, lkey)
+	iter.endkey = lib.Fixbuffer(iter.endkey, int64(len(hkey)))
+	copy(iter.endkey, hkey)
 	iter.closed, iter.activeiter = false, &ss.activeiter
 
 	if iter.nodes == nil {

@@ -67,12 +67,14 @@ func (iter *iterator) rangefill() {
 	count := 0
 	iter.tree.Range(
 		iter.startkey, iter.endkey, iter.incl, iter.reverse,
-		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+		func(_ api.Index, _ int64, nd, _ api.Node, err error) bool {
+			// fmt.Printf("iter callb %q\n", nd.Key())
 			if err != nil {
 				return false
 			}
 			breakkey = nd.Key()
 			if count < iter.limit || api.Binarycmp(prev, breakkey, true) == 0 {
+				// fmt.Printf("iter fill key %q\n", nd.Key())
 				prev = breakkey
 				iter.nodes = append(iter.nodes, nd)
 				count++

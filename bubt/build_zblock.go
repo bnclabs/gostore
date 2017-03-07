@@ -128,19 +128,19 @@ func (z *zblock) insert(nd api.Node) (ok, fin bool) {
 }
 
 func (z *zblock) finalize() {
-	index := znentriesSz + z.index.footprint()
-	sz, ln := index+int64(len(z.kbuffer)), len(z.kbuffer)
+	indexsz := znentriesSz + z.index.footprint()
+	sz, ln := indexsz+int64(len(z.kbuffer)), len(z.kbuffer)
 	if zblksize := z.f.zblocksize; int64(sz) > zblksize {
 		fmsg := "zblock overflow %v > %v, call the programmer!"
 		panic(fmt.Errorf(fmsg, sz, zblksize))
 	}
 
-	z.kbuffer = makespace(z.kbuffer[:z.f.zblocksize], int(index), ln)
+	z.kbuffer = makespace(z.kbuffer[:z.f.zblocksize], int(indexsz), ln)
 
 	binary.BigEndian.PutUint32(z.kbuffer, uint32(z.index.length()))
 	n := znentriesSz
 	for _, koff := range z.index {
-		binary.BigEndian.PutUint32(z.kbuffer[n:], uint32(index)+koff)
+		binary.BigEndian.PutUint32(z.kbuffer[n:], uint32(indexsz)+koff)
 		n += 4
 	}
 }
