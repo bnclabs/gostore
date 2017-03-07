@@ -1,11 +1,13 @@
+* build_mblock and snapshot_mblock should not use magic numbers.
+* lsm testcase.
+* optimize allocation that are using make() and new().
+
 * catch all panic and gracefully recover.
-* is 2 byte enough for vlen ?
-* if value is nil, should we store value-length as ZERO ? Is there a way to
-  optimize that ?
 * test bubt for empty list of key,value pairs.
 * instead of repeating the key-content in the intermediate nodes,
   just refer them to znodes and cache all the references for future
   use.
+* buffercache for intermediate nodes.
 * useful types and interfaces from api/
   Index (panic on RSnapshot)
   IndexSnapshot (panic as not-implemented)
