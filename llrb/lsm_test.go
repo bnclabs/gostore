@@ -70,7 +70,7 @@ func TestLSMRange(t *testing.T) {
 	//	"both",
 	//})
 
-	destoryindexes(indexes, refllrb)
+	destroyindexes(indexes, refllrb)
 }
 
 func TestLSMMerge(t *testing.T) {
@@ -132,7 +132,7 @@ func TestLSMMerge(t *testing.T) {
 	//	"both",
 	//})
 
-	destoryindexes(indexes, refllrb)
+	destroyindexes(indexes, refllrb)
 }
 
 func TestLSMRangeMVCC(t *testing.T) {
@@ -196,7 +196,7 @@ func TestLSMRangeMVCC(t *testing.T) {
 	//	"both",
 	//})
 
-	destoryindexes(indexes, refllrb)
+	destroyindexes(indexes, refllrb)
 }
 
 func TestLSMMergeMVCC(t *testing.T) {
@@ -260,7 +260,7 @@ func TestLSMMergeMVCC(t *testing.T) {
 	//	"both",
 	//})
 
-	destoryindexes(indexes, refllrb)
+	destroyindexes(indexes, refllrb)
 }
 
 func buildlsmindexes(
@@ -597,7 +597,7 @@ func verifylsm(t *testing.T, iter, refiter api.IndexIterator, merge bool) {
 	}
 }
 
-func destoryindexes(indexes []api.Index, refindex api.Index) {
+func destroyindexes(indexes []api.Index, refindex api.Index) {
 	indexes = append(indexes, refindex)
 	for _, index := range indexes {
 		for err := index.Destroy(); err != nil; {
