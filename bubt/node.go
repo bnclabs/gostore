@@ -57,7 +57,7 @@ func (nd *node) Deadseqno() uint64 {
 
 // IsDeleted implement NodeGetter{} interface.
 func (nd *node) IsDeleted() bool {
-	return zentryFlags(nd.ze.getheader()).isdeleted()
+	return zentryFlags(nd.ze.getflags()).isdeleted()
 }
 
 // Key implement NodeGetter{} interface.
