@@ -28,9 +28,9 @@ func (flags zentryFlags) cleardeleted() zentryFlags {
 //---- get flags
 
 func (flags zentryFlags) isvalfile() bool {
-	return (flags & zentryValfile) == zentryFlags(zentryValfile)
+	return (flags & zentryValfile) != 0
 }
 
 func (flags zentryFlags) isdeleted() bool {
-	return (flags & zentryDeleted) == zentryFlags(zentryDeleted)
+	return (flags & zentryDeleted) != 0
 }
