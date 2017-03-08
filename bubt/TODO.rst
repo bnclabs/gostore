@@ -1,6 +1,7 @@
-* build_mblock and snapshot_mblock should not use magic numbers.
 * lsm testcase.
+* build_mblock and snapshot_mblock should not use magic numbers.
 * optimize allocation that are using make() and new().
+* rename `markdelete` settings to `lsm`.
 
 * catch all panic and gracefully recover.
 * test bubt for empty list of key,value pairs.
