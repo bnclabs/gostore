@@ -264,12 +264,14 @@ func (ss *Snapshot) destroy() error {
 	}
 
 	if err := ss.indexfd.Close(); err != nil {
-		log.Errorf("%v closing %q: %v\n", ss.logprefix, ss.indexfile, err)
+		fmsg := "%v closing indexfile %q: %v\n"
+		log.Errorf(fmsg, ss.logprefix, ss.indexfile, err)
 		return err
 	}
 	if ss.datafd != nil {
 		if err := ss.datafd.Close(); err != nil {
-			log.Errorf("%v closing %q %v\n", ss.logprefix, ss.datafile, err)
+			fmsg := "%v closing datafile %q: %v\n"
+			log.Errorf(fmsg, ss.logprefix, ss.datafile, err)
 			return err
 		}
 	}
