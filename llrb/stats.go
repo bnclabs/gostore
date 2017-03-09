@@ -95,10 +95,10 @@ func (llrb *LLRB) statsval(stats map[string]interface{}) map[string]interface{} 
 }
 
 func (llrb *LLRB) statsrd(stats map[string]interface{}) map[string]interface{} {
-	stats["n_lookups"] = llrb.n_lookups
-	stats["n_casgets"] = llrb.n_casgets
-	stats["n_ranges"] = llrb.n_ranges
-	stats["n_activeiter"] = llrb.n_activeiter
+	stats["n_lookups"] = atomic.LoadInt64(&llrb.n_lookups)
+	stats["n_casgets"] = atomic.LoadInt64(&llrb.n_casgets)
+	stats["n_ranges"] = atomic.LoadInt64(&llrb.n_ranges)
+	stats["n_activeiter"] = atomic.LoadInt64(&llrb.n_activeiter)
 	return stats
 }
 
@@ -115,7 +115,7 @@ func (llrb *LLRB) statswt(stats map[string]interface{}) map[string]interface{} {
 
 func (llrb *LLRB) statsmvcc(stats map[string]interface{}) map[string]interface{} {
 	stats["mvcc.n_snapshots"] = atomic.LoadInt64(&llrb.mvcc.n_snapshots)
-	stats["mvcc.n_purgedss"] = llrb.mvcc.n_purgedss
+	stats["mvcc.n_purgedss"] = atomic.LoadInt64(&llrb.mvcc.n_purgedss)
 	stats["mvcc.n_activess"] = atomic.LoadInt64(&llrb.mvcc.n_activess)
 	stats["mvcc.n_cclookups"] = llrb.mvcc.n_cclookups
 	stats["mvcc.n_ccranges"] = llrb.mvcc.n_ccranges
@@ -147,7 +147,7 @@ func (llrb *LLRB) validatestats() error {
 	}
 	// mvcc.n_snapshots should match (mvcc.n_activess + mvcc.n_purgedss)
 	n_snapshots := atomic.LoadInt64(&llrb.mvcc.n_snapshots)
-	n_purgedss := llrb.mvcc.n_purgedss
+	n_purgedss := atomic.LoadInt64(&llrb.mvcc.n_purgedss)
 	n_activess := atomic.LoadInt64(&llrb.mvcc.n_activess)
 	if n_snapshots != (n_purgedss + n_activess) {
 		fmsg := "validatestats(): " +
