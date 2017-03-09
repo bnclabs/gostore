@@ -9,7 +9,7 @@ func (llrb *LLRB) readsettings(setts lib.Settings) {
 	mdsize := int64((&metadata{}).initMetadata(0, fmask).sizeof())
 
 	llrb.iterpoolsize = setts.Int64("iterpool.size")
-	llrb.markdelete = setts.Bool("markdelete")
+	llrb.lsm = setts.Bool("lsm")
 	llrb.minkeysize = setts.Int64("minkeysize")
 	llrb.maxkeysize = setts.Int64("maxkeysize")
 	llrb.naminblock = (llrb.minkeysize / 32) * 32 // floor minsize

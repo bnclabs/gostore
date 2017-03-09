@@ -8,7 +8,7 @@ import "github.com/prataprc/storage.go/malloc"
 func Defaultsettings() lib.Settings {
 	setts := lib.Settings{
 		"iterpool.size":           int64(100),
-		"markdelete":              false,
+		"lsm":                     false,
 		"memutilization":          float64(0.4),
 		"minkeysize":              int64(96),
 		"maxkeysize":              int64(1024),

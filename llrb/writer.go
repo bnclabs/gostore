@@ -389,7 +389,7 @@ func (writer *LLRBWriter) mvccupsert(
 	llrb.setroot(root)
 	llrb.upsertcounts(key, value, oldnd)
 
-	if llrb.markdelete && oldnd.IsDeleted() {
+	if llrb.lsm && oldnd.IsDeleted() {
 		newnd.metadata().cleardeleted()
 		newnd.SetDeadseqno(0)
 	}
@@ -432,7 +432,7 @@ func (writer *LLRBWriter) mvccupsertcas(
 	llrb.setroot(root)
 	llrb.upsertcounts(key, value, oldnd)
 
-	if llrb.markdelete && oldnd.IsDeleted() {
+	if llrb.lsm && oldnd.IsDeleted() {
 		newnd.metadata().cleardeleted()
 		newnd.SetDeadseqno(0)
 	}
@@ -505,7 +505,7 @@ func (writer *LLRBWriter) mvccdelmin(
 
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
 
-	if llrb.markdelete {
+	if llrb.lsm {
 		nd, _ := llrb.min(llrb.getroot())
 		if nd != nil {
 			llrbnd := nd.(*Llrbnode)
@@ -570,7 +570,7 @@ func (writer *LLRBWriter) mvccdelmax(
 
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
 
-	if llrb.markdelete {
+	if llrb.lsm {
 		nd, _ := llrb.max(llrb.getroot())
 		if nd != nil {
 			llrbnd := nd.(*Llrbnode)
@@ -637,7 +637,7 @@ func (writer *LLRBWriter) mvccdelete(
 
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
 
-	if llrb.markdelete {
+	if llrb.lsm {
 		nd := llrb.get(key)
 		if nd != nil {
 			llrbnd := nd.(*Llrbnode)

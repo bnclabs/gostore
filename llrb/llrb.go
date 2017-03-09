@@ -51,7 +51,7 @@ type LLRB struct { // tree container
 	fmask          metadataMask // only 12 bits
 	mdsize         int
 	iterpoolsize   int64 // iterpool.size
-	markdelete     bool
+	lsm            bool
 	minkeysize     int64
 	maxkeysize     int64
 	minvalsize     int64
@@ -552,7 +552,7 @@ func (llrb *LLRB) Upsert(key, value []byte, callb api.NodeCallb) error {
 	llrb.setroot(root)
 	llrb.upsertcounts(key, value, oldnd)
 
-	if llrb.markdelete && oldnd.IsDeleted() {
+	if llrb.lsm && oldnd.IsDeleted() {
 		newnd.metadata().cleardeleted()
 		newnd.SetDeadseqno(0)
 	}
@@ -606,7 +606,7 @@ func (llrb *LLRB) UpsertCas(key, value []byte, cas uint64, callb api.NodeCallb) 
 	llrb.setroot(root)
 	llrb.upsertcounts(key, value, oldnd)
 
-	if llrb.markdelete && oldnd.IsDeleted() {
+	if llrb.lsm && oldnd.IsDeleted() {
 		newnd.metadata().cleardeleted()
 		newnd.SetDeadseqno(0)
 	}
@@ -674,7 +674,7 @@ func (llrb *LLRB) DeleteMin(callb api.NodeCallb) (e error) {
 
 	llrb.rw.Lock()
 
-	if llrb.markdelete {
+	if llrb.lsm {
 		nd, _ := llrb.min(llrb.getroot())
 		if nd != nil {
 			llrbnd := nd.(*Llrbnode)
@@ -726,7 +726,7 @@ func (llrb *LLRB) DeleteMax(callb api.NodeCallb) (e error) {
 
 	llrb.rw.Lock()
 
-	if llrb.markdelete {
+	if llrb.lsm {
 		nd, _ := llrb.max(llrb.getroot())
 		if nd != nil {
 			llrbnd := nd.(*Llrbnode)
@@ -781,7 +781,7 @@ func (llrb *LLRB) Delete(key []byte, callb api.NodeCallb) (e error) {
 
 	llrb.rw.Lock()
 
-	if llrb.markdelete {
+	if llrb.lsm {
 		nd := llrb.get(key)
 		if nd != nil {
 			llrbnd := nd.(*Llrbnode)

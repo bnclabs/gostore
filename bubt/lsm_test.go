@@ -20,14 +20,14 @@ func TestLSMRange(t *testing.T) {
 	setts["metadata.bornseqno"] = true
 	setts["metadata.deadseqno"] = true
 	setts["metadata.vbuuid"] = true
-	setts["markdelete"] = true
+	setts["lsm"] = true
 	llrb1 := llrb.NewLLRB("first", setts)
 	llrb2 := llrb.NewLLRB("second", setts)
 	llrb3 := llrb.NewLLRB("third", setts)
 	llrb4 := llrb.NewLLRB("fourth", setts)
 
 	refsetts := setts.Section("")
-	refsetts["markdelete"] = false
+	refsetts["lsm"] = false
 	refllrb := llrb.NewLLRB("reference", refsetts)
 
 	indexes := []api.Index{llrb1, llrb2, llrb3, llrb4}
@@ -105,14 +105,14 @@ func TestLSMMerge(t *testing.T) {
 	setts["metadata.bornseqno"] = true
 	setts["metadata.deadseqno"] = true
 	setts["metadata.vbuuid"] = true
-	setts["markdelete"] = true
+	setts["lsm"] = true
 	llrb1 := llrb.NewLLRB("first", setts)
 	llrb2 := llrb.NewLLRB("second", setts)
 	llrb3 := llrb.NewLLRB("third", setts)
 	llrb4 := llrb.NewLLRB("fourth", setts)
 
 	refsetts := setts.Section("")
-	refsetts["markdelete"] = false
+	refsetts["lsm"] = false
 	refllrb := llrb.NewLLRB("reference", refsetts)
 
 	indexes := []api.Index{llrb1, llrb2, llrb3, llrb4}
@@ -191,14 +191,14 @@ func TestLSMRangeMVCC(t *testing.T) {
 	setts["metadata.bornseqno"] = true
 	setts["metadata.deadseqno"] = true
 	setts["metadata.vbuuid"] = true
-	setts["markdelete"] = true
+	setts["lsm"] = true
 	llrb1 := llrb.NewLLRB("first", setts)
 	llrb2 := llrb.NewLLRB("second", setts)
 	llrb3 := llrb.NewLLRB("third", setts)
 	llrb4 := llrb.NewLLRB("fourth", setts)
 
 	refsetts := setts.Section("")
-	refsetts["markdelete"] = false
+	refsetts["lsm"] = false
 	refsetts["mvcc.enable"] = false
 	refllrb := llrb.NewLLRB("reference", refsetts)
 
@@ -278,7 +278,7 @@ func TestLSMMergeMVCC(t *testing.T) {
 	setts["metadata.bornseqno"] = true
 	setts["metadata.deadseqno"] = true
 	setts["metadata.vbuuid"] = true
-	setts["markdelete"] = true
+	setts["lsm"] = true
 	llrb1 := llrb.NewLLRB("first", setts)
 	llrb2 := llrb.NewLLRB("second", setts)
 	llrb3 := llrb.NewLLRB("third", setts)
@@ -286,7 +286,7 @@ func TestLSMMergeMVCC(t *testing.T) {
 
 	refsetts := setts.Section("")
 	refsetts["mvcc.enable"] = false
-	refsetts["markdelete"] = false
+	refsetts["lsm"] = false
 	refllrb := llrb.NewLLRB("reference", refsetts)
 
 	indexes := []api.Index{llrb1, llrb2, llrb3, llrb4}
