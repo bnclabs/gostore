@@ -4,8 +4,6 @@
 package llrb
 
 import "fmt"
-import "math"
-import "bytes"
 
 import "github.com/prataprc/storage.go/api"
 import "github.com/prataprc/storage.go/lib"
@@ -170,85 +168,6 @@ func (llrb *LLRB) rvrsltht(nd *Llrbnode, lk, hk []byte, callb api.NodeCallb) boo
 		return false
 	}
 	return llrb.rvrsltht(nd.left, lk, hk, callb)
-}
-
-func (llrb *LLRB) validate(root *Llrbnode) {
-	h := lib.NewhistorgramInt64(1, 256, 1)
-
-	_, km, vm := llrb.validatetree(root, isred(root), 0 /*blck*/, 1 /*dep*/, h)
-	if km != llrb.keymemory {
-		fmsg := "validate(): keymemory:%v != actual:%v"
-		panic(fmt.Errorf(fmsg, llrb.keymemory, km))
-	} else if vm != llrb.valmemory {
-		fmsg := "validate(): valmemory:%v != actual:%v"
-		panic(fmt.Errorf(fmsg, llrb.valmemory, vm))
-	}
-
-	// `h_height`.max should not exceed certain limit
-	if h.Samples() > 8 {
-		nf := float64(llrb.Count())
-		if float64(h.Max()) > (3 * (math.Log2(nf) + 1)) {
-			fmsg := "validate(): max height %v exceeds log2(%v)"
-			panic(fmt.Errorf(fmsg, float64(h.Max()), nf))
-		}
-	}
-
-	llrb.validatemem()
-	llrb.validatestats()
-}
-
-func (llrb *LLRB) validatemem() {
-	stats := llrb.statsval(llrb.statskey(make(map[string]interface{})))
-	memory := float64(llrb.keymemory)
-	allocated := float64(stats["node.allocated"].(int64))
-	ratio := memory / allocated
-	if ratio < llrb.memutilization {
-		fmsg := "validatemem(): ratio: %v {%v/%v}"
-		panic(fmt.Errorf(fmsg, ratio, memory, allocated))
-	}
-	memory = float64(llrb.valmemory)
-	allocated = float64(stats["value.allocated"].(int64))
-	ratio = memory / allocated
-	if ratio < llrb.memutilization {
-		fmsg := "validatemem(): ratio: %v {%v/%v}"
-		panic(fmt.Errorf(fmsg, ratio, memory, allocated))
-	}
-}
-
-func (llrb *LLRB) validatetree(
-	nd *Llrbnode, fromred bool, blacks, depth int64,
-	h *lib.HistogramInt64) (nblacks, keymem, valmem int64) {
-
-	if nd != nil {
-		h.Add(depth)
-		if fromred && isred(nd) {
-			panic("validate(): consequetive red spotted")
-		}
-		if !isred(nd) {
-			blacks++
-		}
-		lblacks, lkm, lvm := llrb.validatetree(
-			nd.left, isred(nd), blacks, depth+1, h)
-		rblacks, rkm, rvm := llrb.validatetree(
-			nd.right, isred(nd), blacks, depth+1, h)
-		if lblacks != rblacks {
-			fmsg := "validate(): no. of blacks {left,right} is {%v,%v}\n"
-			panic(fmt.Errorf(fmsg, lblacks, rblacks))
-		}
-		key := nd.Key()
-		if nd.left != nil && bytes.Compare(nd.left.Key(), key) >= 0 {
-			fmsg := "validate(): sort order, left node %v is >= node %v"
-			panic(fmt.Errorf(fmsg, nd.left.Key(), key))
-		}
-		if nd.left != nil && bytes.Compare(nd.left.Key(), key) >= 0 {
-			fmsg := "validate(): sort order, node %v is >= right node %v"
-			panic(fmt.Errorf(fmsg, nd.right.Key(), key))
-		}
-		keymem = lkm + rkm + int64(len(nd.Key()))
-		valmem = lvm + rvm + int64(len(nd.Value()))
-		return lblacks, keymem, valmem
-	}
-	return blacks, 0, 0
 }
 
 func (llrb *LLRB) heightStats(nd *Llrbnode, depth int64, h *lib.HistogramInt64) {
