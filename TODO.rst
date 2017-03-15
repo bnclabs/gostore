@@ -1,3 +1,4 @@
+- rename `storage.go` to `gostore`
 - lsm.go, test with IsDelete() returning true or false based on Deadseqno().
 - update store/ test cases to create and update clocks for dict and llrb
   structure.
