@@ -73,3 +73,7 @@ func (this Scalarclock) Marshal(buf []byte) []byte {
 func (this Scalarclock) Unmarshal(data []byte) Clock {
 	return Scalarclock(binary.BigEndian.Uint64(data))
 }
+
+func (this Scalarclock) String() string {
+	return fmt.Sprintf("%v", this)
+}
