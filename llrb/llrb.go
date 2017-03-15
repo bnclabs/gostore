@@ -251,7 +251,6 @@ func (llrb *LLRB) Destroy() error {
 	if llrb.dead == false {
 		if llrb.mvcc.enabled {
 			llrb.mvcc.writer.destroy()
-			llrb.mvcc.reclaim, llrb.mvcc.writer = nil, nil
 			llrb.mvcc.h_reclaims = nil
 		}
 		llrb.nodearena.Release()
