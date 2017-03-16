@@ -335,7 +335,7 @@ loop:
 func (writer *LLRBWriter) handlesnapshots(msg []interface{}) bool {
 	llrb := writer.llrb
 	switch msg[0].(byte) {
-	case cmdLlrbWriterMakeSnapshot:
+	case cmdLlrbWriterMakeSnapshot: // every snapshot tick
 		id := msg[1].(string)
 		writer.purgesnapshots(false /*all*/)
 		snapshot := llrb.mvcc.snapshot
@@ -925,7 +925,6 @@ func (writer *LLRBWriter) purgesnapshots(all bool) {
 		return
 	}
 
-	next := snapshot.next
 	if all {
 		for snapshot != nil {
 			if writer.purgesnapshot(snapshot) {
@@ -935,6 +934,7 @@ func (writer *LLRBWriter) purgesnapshots(all bool) {
 			break
 		}
 	} else {
+		next := snapshot.next
 		for next != nil { // don't purge the last snapshot
 			if writer.purgesnapshot(snapshot) {
 				snapshot = next
@@ -943,6 +943,7 @@ func (writer *LLRBWriter) purgesnapshots(all bool) {
 			}
 			break
 		}
+		snapshot.next = next
 	}
 	llrb.mvcc.snapshot = snapshot
 }
