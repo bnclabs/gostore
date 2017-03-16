@@ -6,7 +6,9 @@ import "bytes"
 import "errors"
 import "sync/atomic"
 
+import "github.com/prataprc/storage.go/log"
 import "github.com/prataprc/storage.go/lib"
+import gohumanize "github.com/dustin/go-humanize"
 
 // height of the tree cannot exceed a certain limit. For example if the tree
 // holds 1-million entries, a fully balanced tree shall have a height of 20
@@ -21,13 +23,13 @@ func maxheight(entries int64) float64 {
 // in mvcc mode, a single mutation op can create several garbage nodes due to
 // CoW, set an upper limit on that.
 func maxreclaim(entries int64) float64 {
-	return 10 * math.Log2(float64(entries)) // 10x the height
+	return 7 * math.Log2(float64(entries)) // 7x the height
 }
 
 // in mvcc mode, a single mutation op can create several garbage nodes due to
 // CoW, set an average limit on that.
 func meanreclaim(entries int64) float64 {
-	return 2 * math.Log2(float64(entries)) // 2x the height
+	return 3 * math.Log2(float64(entries)) // 3x the height
 }
 
 // LLRB rule, from sedgewick's paper.
@@ -54,7 +56,7 @@ func (llrb *LLRB) validate(root *Llrbnode) {
 	if h.Samples() > 8 {
 		entries := llrb.Count()
 		if float64(h.Max()) > maxheight(entries) {
-			fmsg := "validate(): max height %v exceeds log2(%v)"
+			fmsg := "validate(): max height %v exceeds <factor>*log2(%v)"
 			panic(fmt.Errorf(fmsg, float64(h.Max()), entries))
 		}
 	}
@@ -64,21 +66,39 @@ func (llrb *LLRB) validate(root *Llrbnode) {
 }
 
 func (llrb *LLRB) validatemem() {
+	dohumanize := func(val interface{}) interface{} {
+		return gohumanize.Bytes(uint64(val.(int64)))
+	}
+
 	stats := llrb.statsval(llrb.statskey(make(map[string]interface{})))
 	memory := float64(llrb.keymemory)
 	allocated := float64(stats["node.allocated"].(int64))
 	entries := llrb.Count()
 	ratio := memory / allocated
 	if ratio < llrb.memutilization {
-		fmsg := "keyutilization(%v): ratio: %v {%v/%v}"
-		panic(fmt.Errorf(fmsg, entries, ratio, memory, allocated))
+		overh := dohumanize(stats["node.overhead"])
+		use := dohumanize(stats["node.useful"])
+		alloc := dohumanize(stats["node.allocated"])
+		avail := dohumanize(stats["node.available"])
+		kmem := dohumanize(stats["keymemory"])
+		fmsg := "%v keymem(%v): avail %v {allocated:%v,useful:%v,overhd,%v}\n"
+		log.Infof(fmsg, llrb.logprefix, kmem, avail, alloc, use, overh)
+		fmsg = "keyutilization(%v): ratio: %0.2f%% %v {%v/%v}"
+		panic(fmt.Errorf(fmsg, entries, ratio*100, llrb.memutilization, memory, allocated))
 	}
 	memory = float64(llrb.valmemory)
 	allocated = float64(stats["value.allocated"].(int64))
 	ratio = memory / allocated
 	if ratio < llrb.memutilization {
-		fmsg := "valueutilization(%v): ratio: %v {%v/%v}"
-		panic(fmt.Errorf(fmsg, entries, ratio, memory, allocated))
+		overh := dohumanize(stats["value.overhead"])
+		use := dohumanize(stats["value.useful"])
+		alloc := dohumanize(stats["value.allocated"])
+		avail := dohumanize(stats["value.available"])
+		vmem := dohumanize(stats["valmemory"])
+		fmsg := "%v valmem(%v): avail %v {allocated:%v,useful:%v,overhd:%v}\n"
+		log.Infof(fmsg, llrb.logprefix, vmem, avail, alloc, use, overh)
+		fmsg = "valueutilization(%v): ratio: %0.2f%% {%v/%v}"
+		panic(fmt.Errorf(fmsg, entries, ratio*100, memory, allocated))
 	}
 }
 
@@ -158,13 +178,13 @@ func (llrb *LLRB) validatestats() error {
 	for k, h_reclaim := range llrb.mvcc.h_reclaims {
 		if max := float64(h_reclaim.Max()); max > 0 {
 			if max > maxreclaim(entries) {
-				fmsg := "validatestats(): max %v reclaim %v exceeds 10*log2(%v)"
+				fmsg := "validatestats(): max %v reclaim %v exceeds 7*log2(%v)"
 				panic(fmt.Errorf(fmsg, k, max, entries))
 			}
 		}
 		if mean := float64(h_reclaim.Mean()); mean > 0 {
 			if mean > meanreclaim(entries) {
-				fmsg := "validatestats(): mean %v reclaim %v exceeds 10*log2(%v)"
+				fmsg := "validatestats(): mean %v reclaim %v exceeds 3*log2(%v)"
 				panic(fmt.Errorf(fmsg, k, mean, entries))
 			}
 		}
