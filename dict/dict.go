@@ -47,7 +47,7 @@ func (d *Dict) Count() int64 {
 
 // Isactive implement api.Index{} / api.IndexSnapshot{} interface.
 func (d *Dict) Isactive() bool {
-	return atomic.LoadUint32(&d.dead) == 1
+	return atomic.LoadUint32(&d.dead) == 0
 }
 
 // RSnapshot implement api.Index{} interface.
@@ -407,7 +407,22 @@ func (d *Dict) Upsert(key, value []byte, callb api.NodeCallb) error {
 
 // Upsert implement IndexWriter{} interface.
 func (d *Dict) UpsertCas(key, value []byte, cas uint64, callb api.NodeCallb) error {
-	return d.Upsert(key, value, callb) // TODO: CAS is ignore.
+	ndcas := uint64(0)
+	d.Get(key, func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+		if err == nil {
+			ndcas = nd.Bornseqno()
+			if ndcas != cas {
+				if callb != nil {
+					callb(d, 0, nd, nd, api.ErrorInvalidCAS)
+				}
+			}
+		}
+		return true
+	})
+	if ndcas == cas {
+		return d.Upsert(key, value, callb)
+	}
+	return api.ErrorInvalidCAS
 }
 
 // DeleteMin implement IndexWriter{} interface.

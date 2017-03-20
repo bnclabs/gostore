@@ -10,7 +10,11 @@ import "github.com/prataprc/storage.go/api"
 var _ = fmt.Sprintf("dummy")
 
 func TestDict(t *testing.T) {
-	d := NewDict("testdict")
+	id := "testdict"
+	d := NewDict(id)
+	if d.ID() != id {
+		t.Errorf("expected %v, got %v", id, d.ID())
+	}
 	if d.Count() != 0 {
 		t.Fatalf("expected an empty dict")
 	}
@@ -56,7 +60,15 @@ func TestDict(t *testing.T) {
 		t.Errorf("expected %v, got %v", string(inserts[2][1]), string(nd.Value()))
 	}
 
-	if rc := d.Get([]byte("missingkey"), nil); rc == true {
+	rc = d.Get(
+		[]byte("missingkey"),
+		func(_ api.Index, _ int64, _, _ api.Node, err error) bool {
+			if err.Error() != api.ErrorKeyMissing.Error() {
+				t.Errorf("expected missing key")
+			}
+			return true
+		})
+	if rc == true {
 		t.Errorf("expected %v", nil)
 	}
 
@@ -149,10 +161,22 @@ func TestDict(t *testing.T) {
 	// test corner cases for Min, Max, DeleteMin, DeleteMax
 	d.DeleteMin(nil)
 	d.DeleteMin(nil)
-	if d.Min(nil) == true {
+	rc = d.Min(func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+		if err.Error() != api.ErrorKeyMissing.Error() {
+			t.Errorf("expected missing key")
+		}
+		return true
+	})
+	if rc == true {
 		t.Errorf("expected false")
 	}
-	if d.Max(nil) == true {
+	rc = d.Max(func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+		if err.Error() != api.ErrorKeyMissing.Error() {
+			t.Errorf("expected missing key")
+		}
+		return true
+	})
+	if rc == true {
 		t.Errorf("expected false")
 	}
 	d.DeleteMin(
@@ -195,9 +219,54 @@ func TestClock(t *testing.T) {
 
 func TestDestroy(t *testing.T) {
 	d := NewDict("testdict")
-	d.Destroy()
+	if err := d.Destroy(); err != nil {
+		t.Error(err)
+	}
 	if d.Isactive() {
 		t.Errorf("expected false")
+	}
+}
+
+func TestUpsertCas(t *testing.T) {
+	d := NewDict("testdict")
+	key, value := []byte("testkey"), []byte("testvalue")
+	// initial case
+	err := d.UpsertCas(
+		key, value, 0,
+		func(_ api.Index, _ int64, nd, _ api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			}
+			nd.SetBornseqno(1)
+			return true
+		})
+	if err != nil {
+		t.Error(err)
+	}
+	// next case
+	err = d.UpsertCas(
+		key, value, 1,
+		func(_ api.Index, _ int64, nd, _ api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			}
+			nd.SetBornseqno(2)
+			return true
+		})
+	if err != nil {
+		t.Error(err)
+	}
+	// negative case
+	err = d.UpsertCas(
+		key, value, 1,
+		func(_ api.Index, _ int64, nd, _ api.Node, err error) bool {
+			if err.Error() != api.ErrorInvalidCAS.Error() {
+				t.Errorf("expected ErrorInvalidCAS, got %v", err)
+			}
+			return true
+		})
+	if err.Error() != api.ErrorInvalidCAS.Error() {
+		t.Errorf("expected ErrorInvalidCAS, got %v", err)
 	}
 }
 
