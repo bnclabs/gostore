@@ -29,9 +29,9 @@ type Dict struct {
 }
 
 // NewDict create a new golang map for indexing key,value.
-func NewDict() *Dict {
+func NewDict(id string) *Dict {
 	return &Dict{
-		id:       "dict",
+		id:       id,
 		dict:     make(map[uint64]*dictnode),
 		sortkeys: make([]string, 0, 10000),
 		hashks:   make([]uint64, 0, 10000),
@@ -68,8 +68,8 @@ func (d *Dict) Setclock(clock api.Clock) {
 
 // Clone implement api.Index{} interface.
 func (d *Dict) Clone(name string) api.Index {
-	newd := NewDict()
-	newd.id, newd.dead, newd.snapn = name, d.dead, d.snapn
+	newd := NewDict(name)
+	newd.dead, newd.snapn = d.dead, d.snapn
 	newd.clock, newd.activeiter = d.clock, d.activeiter
 	for hash, dn := range d.dict {
 		newd.dict[hash] = dn.clone()

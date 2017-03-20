@@ -17,7 +17,9 @@ type DictSnapshot struct {
 func (d *Dict) NewDictSnapshot() api.IndexSnapshot {
 	d.snapn++
 	snapshot := &DictSnapshot{
-		Dict:  Dict{snapn: d.snapn, dead: atomic.LoadUint32(&d.dead)},
+		Dict: Dict{
+			id: d.id, snapn: d.snapn, dead: atomic.LoadUint32(&d.dead),
+		},
 		clock: d.clock,
 	}
 	snapshot.dict = make(map[uint64]*dictnode)

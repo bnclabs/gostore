@@ -10,7 +10,7 @@ import "github.com/prataprc/storage.go/api"
 var _ = fmt.Sprintf("dummy")
 
 func TestDict(t *testing.T) {
-	d := NewDict()
+	d := NewDict("testdict")
 	if d.Count() != 0 {
 		t.Fatalf("expected an empty dict")
 	}
@@ -184,8 +184,25 @@ func TestDict(t *testing.T) {
 		})
 }
 
+func TestClock(t *testing.T) {
+	d := NewDict("testdict")
+	refclock := api.Scalarclock(0)
+	d.Setclock(refclock)
+	if clock := d.Getclock(); clock != refclock {
+		t.Errorf("expected %v, got %v", refclock, clock)
+	}
+}
+
+func TestDestroy(t *testing.T) {
+	d := NewDict("testdict")
+	d.Destroy()
+	if d.Isactive() {
+		t.Errorf("expected false")
+	}
+}
+
 func TestDictBasicRange(t *testing.T) {
-	d := NewDict()
+	d := NewDict("testdict")
 	if d.Count() != 0 {
 		t.Fatalf("expected an empty dict")
 	}
@@ -326,7 +343,7 @@ func TestDictBasicRange(t *testing.T) {
 }
 
 func TestPartialRange(t *testing.T) {
-	d := NewDict()
+	d := NewDict("testdict")
 	if d.Count() != 0 {
 		t.Fatalf("expected an empty dict")
 	}
@@ -478,7 +495,7 @@ func TestPartialRange(t *testing.T) {
 }
 
 func TestDictRange(t *testing.T) {
-	d := NewDict()
+	d := NewDict("testdict")
 	if d.Count() != 0 {
 		t.Fatalf("expected an empty dict")
 	}
@@ -617,7 +634,7 @@ func TestDictRange(t *testing.T) {
 }
 
 func TestDictBasicIterate(t *testing.T) {
-	d := NewDict()
+	d := NewDict("testdict")
 	if d.Count() != 0 {
 		t.Fatalf("expected an empty dict")
 	}
@@ -729,7 +746,7 @@ func TestDictBasicIterate(t *testing.T) {
 }
 
 func TestPartialIterate(t *testing.T) {
-	d := NewDict()
+	d := NewDict("testdict")
 	if d.Count() != 0 {
 		t.Fatalf("expected an empty dict")
 	}
@@ -856,7 +873,7 @@ func TestPartialIterate(t *testing.T) {
 }
 
 func TestDictIterate(t *testing.T) {
-	d := NewDict()
+	d := NewDict("testdict")
 	if d.Count() != 0 {
 		t.Fatalf("expected an empty dict")
 	}
@@ -945,7 +962,7 @@ func TestDictIterate(t *testing.T) {
 }
 
 func TestDictRsnapshot(t *testing.T) {
-	d := NewDict()
+	d := NewDict("testdict")
 	inserts := [][2][]byte{
 		[2][]byte{[]byte("key1"), []byte("value1")},
 		[2][]byte{[]byte("key2"), []byte("value2")},
@@ -987,7 +1004,7 @@ func TestDictRsnapshot(t *testing.T) {
 }
 
 func TestDictClone(t *testing.T) {
-	d := NewDict()
+	d := NewDict("testdict")
 	if d.Count() != 0 {
 		t.Fatalf("expected an empty dict")
 	}
@@ -1066,7 +1083,7 @@ func TestDictClone(t *testing.T) {
 }
 
 func BenchmarkDictSnapshot(b *testing.B) {
-	d := NewDict()
+	d := NewDict("testdict")
 	for i := 0; i < 10000; i++ {
 		key, value := fmt.Sprintf("key%v", i), fmt.Sprintf("value%v", i)
 		d.Upsert([]byte(key), []byte(value), nil)

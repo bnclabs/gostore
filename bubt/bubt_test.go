@@ -257,7 +257,7 @@ func TestPartialRange(t *testing.T) {
 	lsetts["metadata.vbuuid"] = true
 	lsetts["metadata.fpos"] = true
 	llrbi := llrb.NewLLRB("bubttest", lsetts)
-	d := dict.NewDict()
+	d := dict.NewDict("dict-partialrange")
 	// inserts
 	inserts, n, keys := make([][2][]byte, 0), 100000, []string{}
 	for i := 0; i < n; i += 2 {
@@ -533,7 +533,7 @@ func TestPartialIterate(t *testing.T) {
 	lsetts["metadata.vbuuid"] = true
 	lsetts["metadata.fpos"] = true
 	llrbi := llrb.NewLLRB("bubttest", lsetts)
-	d := dict.NewDict()
+	d := dict.NewDict("dict-partialiterate")
 	// inserts
 	inserts, n, keys := make([][2][]byte, 0), 100000, []string{}
 	for i := 0; i < n; i += 2 {

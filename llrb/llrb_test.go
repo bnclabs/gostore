@@ -524,7 +524,7 @@ func TestBasicRange(t *testing.T) {
 }
 
 func TestPartialRange(t *testing.T) {
-	d := dict.NewDict()
+	d := dict.NewDict("testdict")
 
 	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
@@ -647,7 +647,7 @@ func TestRange(t *testing.T) {
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
 	llrb := NewLLRB("test", setts)
-	d := dict.NewDict()
+	d := dict.NewDict("testdict")
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
 	keys, values := make([][]byte, 0), make([][]byte, 0)
 	// insert 10K items
@@ -904,7 +904,7 @@ func TestBasicIterate(t *testing.T) {
 }
 
 func TestPartialIterate(t *testing.T) {
-	d := dict.NewDict()
+	d := dict.NewDict("testdict")
 
 	setts := Defaultsettings()
 	setts["metadata.mvalue"] = true
@@ -1007,7 +1007,7 @@ func TestIterate(t *testing.T) {
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
 	llrb := NewLLRB("test", setts)
-	d := dict.NewDict()
+	d := dict.NewDict("testdict")
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
 	keys, values := make([][]byte, 0), make([][]byte, 0)
 	// insert 10K items

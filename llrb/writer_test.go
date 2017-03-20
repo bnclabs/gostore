@@ -548,7 +548,7 @@ func TestPartialMvccRange(t *testing.T) {
 	llrb := makellrbmvcc(t, "mvccrange", nil, setts)
 	writer := llrb.mvcc.writer
 
-	d := dict.NewDict()
+	d := dict.NewDict("testdict")
 
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(0x12345678)
 	keys, values := make([][]byte, 0), make([][]byte, 0)
@@ -679,7 +679,7 @@ func TestLLRBMvccRange(t *testing.T) {
 	llrb := makellrbmvcc(t, "mvccrange", nil, setts)
 	writer := llrb.mvcc.writer
 
-	d := dict.NewDict()
+	d := dict.NewDict("testdict")
 
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(0x12345678)
 	keys, values := make([][]byte, 0), make([][]byte, 0)
@@ -919,7 +919,7 @@ func TestPartialMvccIterate(t *testing.T) {
 	llrb := makellrbmvcc(t, "mvcciterate", nil, setts)
 	writer := llrb.mvcc.writer
 
-	d := dict.NewDict()
+	d := dict.NewDict("testdict")
 
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
 	keys, values := make([][]byte, 0), make([][]byte, 0)
@@ -1052,7 +1052,7 @@ func TestLLRBMvccIterate(t *testing.T) {
 	llrb := makellrbmvcc(t, "mvcciterate", nil, setts)
 	writer := llrb.mvcc.writer
 
-	d := dict.NewDict()
+	d := dict.NewDict("testdict")
 
 	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
 	keys, values := make([][]byte, 0), make([][]byte, 0)
