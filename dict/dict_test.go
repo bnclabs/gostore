@@ -208,6 +208,78 @@ func TestDict(t *testing.T) {
 		})
 }
 
+func TestMutations(t *testing.T) {
+	d := NewDict("testdict")
+	mcmds := []*api.MutationCmd{
+		&api.MutationCmd{
+			Cmd: api.CasCmd, Cas: 0,
+			Key: []byte("key1"), Value: []byte("value1"),
+		},
+		&api.MutationCmd{
+			Cmd: api.CasCmd, Cas: 1,
+			Key: []byte("key1"), Value: []byte("value11"),
+		},
+		&api.MutationCmd{
+			Cmd: api.UpsertCmd, Key: []byte("key2"), Value: []byte("value2"),
+		},
+		&api.MutationCmd{
+			Cmd: api.UpsertCmd, Key: []byte("key3"), Value: []byte("value3"),
+		},
+		&api.MutationCmd{
+			Cmd: api.UpsertCmd, Key: []byte("key4"), Value: []byte("value4"),
+		},
+		&api.MutationCmd{
+			Cmd: api.UpsertCmd, Key: []byte("key5"), Value: []byte("value5"),
+		},
+		&api.MutationCmd{
+			Cmd: api.UpsertCmd, Key: []byte("key6"), Value: []byte("value6"),
+		},
+		&api.MutationCmd{Cmd: api.DelminCmd},
+		&api.MutationCmd{Cmd: api.DelmaxCmd},
+		&api.MutationCmd{Cmd: api.DeleteCmd, Key: []byte("key5")},
+	}
+
+	refkeys := [][]byte{[]byte("key2"), []byte("key3"), []byte("key4")}
+	refvals := [][]byte{[]byte("value2"), []byte("value3"), []byte("value4")}
+
+	seqno := uint64(0)
+	d.Mutations(
+		mcmds,
+		func(_ api.Index, i int64, nd, _ api.Node, err error) bool {
+			if err != nil {
+				t.Error(err)
+			}
+			seqno++
+			switch mcmds[i].Cmd {
+			case api.CasCmd:
+				nd.SetBornseqno(seqno)
+			case api.UpsertCmd:
+				nd.SetBornseqno(seqno)
+			case api.DelminCmd:
+				nd.SetDeadseqno(seqno)
+			case api.DelmaxCmd:
+				nd.SetDeadseqno(seqno)
+			case api.DeleteCmd:
+				nd.SetDeadseqno(seqno)
+			}
+			return true
+		})
+	iter, i := d.Iterate(nil, nil, "both", false /*reverse*/), 0
+	for nd := iter.Next(); nd != nil; nd = iter.Next() {
+		key, value := nd.Key(), nd.Value()
+		if bytes.Compare(key, refkeys[i]) != 0 {
+			t.Errorf("expected %q, got %q", refkeys[i], key)
+		} else if bytes.Compare(value, refvals[i]) != 0 {
+			t.Errorf("expected %q, got %q", refvals[i], value)
+		}
+		i++
+	}
+	if i != 3 {
+		t.Errorf("expected %v, got %v", 3, i)
+	}
+	iter.Close()
+}
+
 func TestClock(t *testing.T) {
 	d := NewDict("testdict")
 	refclock := api.Scalarclock(0)
