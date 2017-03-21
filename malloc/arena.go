@@ -76,10 +76,6 @@ func NewArena(setts lib.Settings) *Arena {
 
 // Alloc implement api.Mallocer{} interface.
 func (arena *Arena) Alloc(n int64) (unsafe.Pointer, api.Mallocer) {
-	if arena.mpools == nil {
-		panicerr("arena released")
-	}
-
 	// check argument
 	if largest := arena.blocksizes[len(arena.blocksizes)-1]; n > largest {
 		panicerr("Alloc size %v exceeds maxblock size %v", n, largest)
