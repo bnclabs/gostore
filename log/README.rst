@@ -1,4 +1,4 @@
-packages can import log and use its methods like,
+packages can import log and use its methods:
 
 .. code-block:: go
 
@@ -13,15 +13,13 @@ packages can import log and use its methods like,
         log.Debugf(...)
     }
 
-note here that *log* is not a object name, it resolves to the imported *log*
+note here that *log* is not an object name, it resolves to the imported *log*
 package that has exported methods *Fatalf()* *Warnf()* etc ... For more
-information please the godoc-umentation for log package.
+information please read the godoc-umentation for *log* package.
 
 By default, importing the package will initialize the logger to
-default-logger that shall log to standard output.
-
-To use custom logger use the following initializer function in your package or
-application
+default-logger that shall log to standard output. To use custom logger
+use the following initializer function in your package or application:
 
 .. code-block:: go
 
@@ -37,4 +35,4 @@ application
         SetLogger(mylogger, setts)
     }
 
-*mylogger* should implement the *Logger* interface{}.
+*mylogger* should implement the *log.Logger* interface{}.
