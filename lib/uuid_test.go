@@ -29,6 +29,12 @@ func TestNewuuid(t *testing.T) {
 			ref[suuid] = true
 		}
 	}
+	// check negative case
+	if _, err := Newuuid(make([]byte, 7)); err == nil {
+		t.Errorf("expected error")
+	} else if _, err := Allocuuid(3); err == nil {
+		t.Errorf("expected error")
+	}
 }
 
 func TestFormatuuid(t *testing.T) {

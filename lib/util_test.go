@@ -118,13 +118,49 @@ func TestFailsafePost(t *testing.T) {
 
 func TestResponseError(t *testing.T) {
 	err := errors.New("error")
-	resp := []interface{}{err, errors.New("resperr")}
+	resp := []interface{}{err, errors.New("resperr"), nil}
+
 	if e := ResponseError(err, resp, 0).Error(); e != "error" {
 		t.Errorf("expected error, got %v", e)
 	}
-	resp = []interface{}{err, errors.New("resperr")}
 	if e := ResponseError(nil, resp, 1).Error(); e != "resperr" {
 		t.Errorf("expected resperr, got %v", e)
+	}
+	if e := ResponseError(nil, resp, 2); e != nil {
+		t.Errorf("expected nil, got %v", e)
+	}
+	if e := ResponseError(nil, nil, 2); e != nil {
+		t.Errorf("expected nil, got %v", e)
+	}
+}
+
+func TestBytes2str(t *testing.T) {
+	in := []byte("input")
+	if out := Bytes2str(in); out != "input" {
+		t.Errorf("expected `input`, got %v", out)
+	} else if out = Bytes2str(nil); out != "" {
+		t.Errorf("expected ``, got %v", out)
+	}
+}
+
+func TestStr2Bytes(t *testing.T) {
+	in := "input"
+	if out := Str2bytes(in); bytes.Compare(out, []byte("input")) != 0 {
+		t.Errorf("expected `input`, got %s", out)
+	} else if out = Str2bytes(""); out != nil {
+		t.Errorf("expected nil, got %s", out)
+	}
+}
+
+func TestAbsInt64(t *testing.T) {
+	if x := AbsInt64(10); x != 10 {
+		t.Errorf("expected 10, got %v", x)
+	} else if x = AbsInt64(0); x != 0 {
+		t.Errorf("expected 0, got %v", x)
+	} else if x = AbsInt64(-0); x != 0 {
+		t.Errorf("expected 0, got %v", x)
+	} else if x = AbsInt64(-10); x != 10 {
+		t.Errorf("expected 10, got %v", x)
 	}
 }
 
@@ -135,6 +171,14 @@ func TestFixbuffer(t *testing.T) {
 		t.Errorf("expected %v, got %v", 0, ln)
 	} else if ln = len(Fixbuffer([]byte{10, 20}, 0)); ln != 0 {
 		t.Errorf("expected %v, got %v", 0, ln)
+	}
+}
+
+func TestParsecsv(t *testing.T) {
+	res := Parsecsv("a, b, r , x\n, \ty \n")
+	ref := []string{"a", "b", "r", "x", "y"}
+	if !reflect.DeepEqual(res, ref) {
+		t.Errorf("expected %v, got %v", ref, res)
 	}
 }
 

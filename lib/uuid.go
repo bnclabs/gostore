@@ -26,7 +26,8 @@ func Allocuuid(size int) (Uuid, error) {
 
 // Format uuid hyphenated string.
 func (uuid Uuid) Format(out []byte) int {
-	if ln := len(uuid); ln >= 10 {
+	ln := len(uuid)
+	if ln >= 10 {
 		n := Uuid(uuid[:4]).format4(out)
 		for i := 4; i < ln-6; i += 2 {
 			n += Uuid(uuid[i : i+2]).format2(out[n:])
@@ -39,14 +40,12 @@ func (uuid Uuid) Format(out []byte) int {
 		n += Uuid(uuid[2:8]).format6(out[n:])
 		return n
 
-	} else {
-		n := 0
-		for i := 0; i < ln; i += 2 {
-			n += Uuid(uuid[i : i+2]).format2(out[n:])
-		}
-		return n
 	}
-	panic("unreachable path")
+	n := 0
+	for i := 0; i < ln; i += 2 {
+		n += Uuid(uuid[i : i+2]).format2(out[n:])
+	}
+	return n
 }
 
 var hexlookup = [16]byte{
