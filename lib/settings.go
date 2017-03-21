@@ -57,14 +57,15 @@ func (setts Settings) Mixin(settings ...interface{}) Settings {
 
 // Bool return the boolean value for key.
 func (setts Settings) Bool(key string) bool {
-	if value, ok := setts[key]; !ok {
+	value, ok := setts[key]
+	if !ok {
 		panicerr("missing settings %q", key)
-	} else if val, ok := value.(bool); !ok {
-		panicerr("settings %q not a bool: %T", key, value)
-	} else {
-		return val
 	}
-	panic("unreachable code")
+	val, ok := value.(bool)
+	if !ok {
+		panicerr("settings %q not a bool: %T", key, value)
+	}
+	return val
 }
 
 // Float64 return the int64 value for key.
@@ -177,12 +178,13 @@ func (setts Settings) Uint64(key string) uint64 {
 
 // String return the string value for key.
 func (setts Settings) String(key string) string {
-	if value, ok := setts[key]; !ok {
+	value, ok := setts[key]
+	if !ok {
 		panicerr("missing settings %q", key)
-	} else if val, ok := value.(string); !ok {
-		panicerr("settings %v not a number: %T", key, value)
-	} else {
-		return val
 	}
-	panic("unreachable code")
+	val, ok := value.(string)
+	if !ok {
+		panicerr("settings %v not a number: %T", key, value)
+	}
+	return val
 }
