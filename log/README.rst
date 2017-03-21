@@ -1,6 +1,7 @@
 packages can import log and use its methods like,
 
 .. code-block:: go
+
     import github.com/prataprc/log
 
     func myfunc() {
@@ -12,8 +13,8 @@ packages can import log and use its methods like,
         log.Debugf(...)
     }
 
-note here that `log` is not a object name, it resolves to the imported `log`
-package that has exported methods `Fatalf()` `Warnf()` etc ... For more
+note here that *log* is not a object name, it resolves to the imported *log*
+package that has exported methods *Fatalf()* *Warnf()* etc ... For more
 information please the godoc-umentation for log package.
 
 By default, importing the package will initialize the logger to
@@ -23,6 +24,7 @@ To use custom logger use the following initializer function in your package or
 application
 
 .. code-block:: go
+
     import github.com/prataprc/log
 
     var mylogger = newmylogger()
@@ -35,4 +37,4 @@ application
         SetLogger(mylogger, setts)
     }
 
-`mylogger` should implement the `Logger` interface{}.
+*mylogger* should implement the *Logger* interface{}.
