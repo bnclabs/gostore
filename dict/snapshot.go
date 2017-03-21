@@ -10,6 +10,7 @@ import "github.com/prataprc/storage.go/api"
 // DictSnapshot provides a read-only snapshot of Dict map.
 type DictSnapshot struct {
 	Dict
+	wd    *Dict
 	clock api.Clock
 }
 
@@ -20,6 +21,7 @@ func (d *Dict) NewDictSnapshot() api.IndexSnapshot {
 		Dict: Dict{
 			id: d.id, snapn: d.snapn, dead: atomic.LoadUint32(&d.dead),
 		},
+		wd:    d,
 		clock: d.clock,
 	}
 	snapshot.dict = make(map[uint64]*dictnode)
@@ -48,11 +50,6 @@ func (d *DictSnapshot) ID() string {
 	return d.id
 }
 
-// Isactive implement api.IndexSnapshot{} interface.
-func (d *DictSnapshot) Isactive() bool {
-	return atomic.LoadUint32(&d.dead) == 0
-}
-
 // Getclock implement api.IndexSnapshot{} interface.
 func (d *DictSnapshot) Getclock() api.Clock {
 	return d.clock
@@ -61,6 +58,11 @@ func (d *DictSnapshot) Getclock() api.Clock {
 // Refer implement api.IndexSnapshot{} interface.
 func (d *DictSnapshot) Refer() {
 	return
+}
+
+// Isactive implement api.IndexSnapshot{} interface.
+func (d *DictSnapshot) Isactive() bool {
+	return atomic.LoadUint32(&d.wd.dead) == 0
 }
 
 // Release implement api.IndexSnapshot{} interface.
