@@ -42,19 +42,10 @@ type Arena struct {
 
 // NewArena create a new memory arena.
 func NewArena(setts lib.Settings) *Arena {
-	minblock, maxblock := setts.Int64("minblock"), setts.Int64("maxblock")
-	arena := &Arena{
-		blocksizes: Blocksizes(minblock, maxblock),
-		mpools:     make(map[int64]Mpoolers),
-		// settings
-		minblock:  minblock,
-		maxblock:  maxblock,
-		capacity:  setts.Int64("capacity"),
-		pcapacity: setts.Int64("pool.capacity"),
-		maxpools:  setts.Int64("maxpools"),
-		maxchunks: setts.Int64("maxchunks"),
-		allocator: setts.String("allocator"),
-	}
+	arena := (&Arena{}).readsettings(setts)
+	arena.blocksizes = Blocksizes(arena.minblock, arena.maxblock)
+	arena.mpools = make(map[int64]Mpoolers)
+
 	if int64(len(arena.blocksizes)) > arena.maxpools {
 		panicerr("number of pools in arena exeeds %v", arena.maxpools)
 	} else if cp := arena.capacity; cp > Maxarenasize {
@@ -69,6 +60,17 @@ func NewArena(setts lib.Settings) *Arena {
 	for _, size := range arena.blocksizes {
 		arena.mpools[size] = make(Mpoolers, 0, arena.maxpools/2)
 	}
+	return arena
+}
+
+func (arena *Arena) readsettings(setts lib.Settings) *Arena {
+	arena.capacity = setts.Int64("capacity")
+	arena.minblock = setts.Int64("minblock")
+	arena.maxblock = setts.Int64("maxblock")
+	arena.pcapacity = setts.Int64("pool.capacity")
+	arena.maxpools = setts.Int64("maxpools")
+	arena.maxchunks = setts.Int64("maxchunks")
+	arena.allocator = setts.String("allocator")
 	return arena
 }
 
