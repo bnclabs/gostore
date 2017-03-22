@@ -82,8 +82,10 @@ func (pool *poolflist) Allocchunk() (unsafe.Pointer, bool) {
 	ptr := uintptr(pool.base) + uintptr(nthblock*pool.size)
 	initblock(ptr, pool.size)
 	pool.mallocated += pool.size
-	if ptr&0x3 != 0 { // TODO: this check can be removed later.
-		panic("allocated pointer is not 8 byte aligned")
+	mask := uintptr(Alignment - 1)
+	if (ptr & mask) != 0 {
+		fmsg := "allocated pointer is not %v byte aligned"
+		panic(fmt.Errorf(fmsg, Alignment))
 	}
 	return unsafe.Pointer(ptr), true
 }

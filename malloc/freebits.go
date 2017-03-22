@@ -1,6 +1,5 @@
 package malloc
 
-//import "fmt" // TODO: remove this fmt
 import "unsafe"
 
 import "github.com/prataprc/storage.go/lib"
