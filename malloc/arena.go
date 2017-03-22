@@ -9,8 +9,8 @@ import "github.com/prataprc/storage.go/api"
 // MEMUtilization expected in an arenas.
 const MEMUtilization = float64(0.95)
 
-// Sizeinterval minblock and maxblocks should be multiples of Sizeinterval.
-const Sizeinterval = int64(32)
+// Alignment minblock and maxblocks should be multiples of Alignment.
+const Alignment = int64(8)
 
 // Maxarenasize maximum size of a memory arena. Can be used as default for
 // settings-parameter `capacity`.
@@ -18,7 +18,7 @@ const Maxarenasize = int64(1024 * 1024 * 1024 * 1024) // 1TB
 
 // Maxpools maximum number of pools allowed in an arena. Can be used as
 // default for settings-parameter `maxpools`.
-const Maxpools = int64(256)
+const Maxpools = int64(512)
 
 // Maxchunks maximum number of chunks allowed in a pool. Can be used as
 // default for settings-parameter `maxchunks`.

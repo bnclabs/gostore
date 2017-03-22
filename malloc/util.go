@@ -37,32 +37,36 @@ func SuitableSize(blocksizes []int64, size int64) int64 {
 func Blocksizes(minblock, maxblock int64) []int64 {
 	if maxblock < minblock { // validate and cure the input params
 		panic("minblock < maxblock")
-	} else if (minblock % Sizeinterval) != 0 {
+	} else if (minblock % Alignment) != 0 {
 		fmsg := "minblock %v is not multiple of %v"
-		panic(fmt.Errorf(fmsg, minblock, Sizeinterval))
-	} else if (maxblock % Sizeinterval) != 0 {
+		panic(fmt.Errorf(fmsg, minblock, Alignment))
+	} else if (maxblock % Alignment) != 0 {
 		fmsg := "maxblock %v is not multiple of %v"
-		panic(fmt.Errorf(fmsg, maxblock, Sizeinterval))
+		panic(fmt.Errorf(fmsg, maxblock, Alignment))
 	}
 
 	nextsize := func(from int64) int64 {
 		addby := int64(float64(from) * (1.0 - MEMUtilization))
-		if addby <= 32 {
-			addby = 32
-		} else if addby&0x1f != 0 {
-			addby = (addby >> 5) << 5
+		if addby <= Alignment {
+			addby = Alignment
+		} else if mod := (addby % Alignment); mod != 0 {
+			addby += Alignment - mod
 		}
 		size := from + addby
-		for (float64(from+size)/2.0)/float64(size) > MEMUtilization {
-			size += addby
-		}
+		// NOTE: TestBlocksizes() experiment indicates that addby is
+		// sufficiently close to MEMUtilization.
+		//for (float64(from+size)/2.0)/float64(size) > MEMUtilization {
+		//	fmt.Println("nextsize", from, size,
+		//		(float64(from+size)/2.0)/float64(size))
+		//	size += Alignment
+		//}
 		return size
 	}
 
 	sizes := make([]int64, 0, 64)
-	for size := minblock; size < maxblock; {
-		sizes = append(sizes, size)
-		size = nextsize(size)
+	for from := minblock + Alignment; from < maxblock; {
+		sizes = append(sizes, from)
+		from = nextsize(from)
 	}
 	sizes = append(sizes, maxblock)
 	return sizes
