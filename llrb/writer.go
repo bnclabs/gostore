@@ -17,6 +17,9 @@ type LLRBWriter struct {
 	reqch   chan []interface{}
 	snapwt  chan []interface{}
 	finch   chan bool
+
+	// settings
+	tryexitafter time.Duration
 }
 
 // Only one writer routine is allowed for each LLRB instance.
@@ -33,6 +36,8 @@ func (llrb *LLRB) spawnwriter() *LLRBWriter {
 		reqch:   make(chan []interface{}, llrb.writechansz),
 		snapwt:  make(chan []interface{}, llrb.writechansz),
 		finch:   make(chan bool),
+		// settings
+		tryexitafter: 100 * time.Millisecond,
 	}
 	log.Infof("%v starting mvcc writer ...\n", llrb.logprefix)
 	go llrb.mvcc.writer.run()
@@ -174,7 +179,7 @@ func (writer *LLRBWriter) run() {
 	dodestroy := func(ch chan bool) {
 		for llrb.mvcc.snapshot != nil {
 			writer.purgesnapshots(true /*all*/)
-			time.Sleep(100 * time.Millisecond) // TODO: no magic
+			time.Sleep(writer.tryexitafter /* 100ms ? */)
 		}
 		close(ch)
 	}
