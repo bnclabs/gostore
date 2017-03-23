@@ -3,7 +3,9 @@ package malloc
 import "fmt"
 import "errors"
 
-var ErrorOutofMemory = errors.New("llrb.outofmemory")
+var ErrorExceedCapacity = errors.New("malloc.exceedCapacity")
+
+var ErrorOutofMemory = errors.New("malloc.outofmemory")
 
 // SuitableSize picks an optimal block-size for given size,
 // to achieve MEMUtilization.

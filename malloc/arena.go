@@ -90,6 +90,9 @@ func (arena *Arena) Alloc(n int64) (unsafe.Pointer, api.Mallocer) {
 		}
 	}
 	// pool exhausted, figure the dimensions and create a new pool.
+	if arena.pcapacity <= size {
+		panic(ErrorExceedCapacity)
+	}
 	numblocks := (arena.capacity / int64(len(arena.blocksizes))) / size
 	if int64(numblocks*size) > arena.pcapacity {
 		numblocks = arena.pcapacity / size
