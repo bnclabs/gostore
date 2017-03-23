@@ -379,7 +379,7 @@ func (snapshot *LLRBSnapshot) Iterate(
 	iter := llrb.getiterator()
 	iter.tree, iter.llrb = snapshot, llrb
 	iter.continuate = false
-	iter.nodes, iter.index, iter.limit = iter.nodes[:0], 0, 5 // TODO: magicno.
+	iter.nodes, iter.index, iter.limit = iter.nodes[:0], 0, llrb.maxlimit
 	// startkey
 	iter.startkey = lib.Fixbuffer(iter.startkey, llrb.maxkeysize)
 	n := copy(iter.startkey, lkey)

@@ -59,6 +59,7 @@ func (iter *iterator) Close() {
 	// give it back to the pool if not overflowing.
 	if iter.llrb.mvcc.enabled == false { // NOTE: remember to reader unlock
 		iter.llrb.putiterator(iter)
+		// This is nasty :(
 		iter.llrb.rw.RUnlock()
 	} else {
 		iter.llrb.putiterator(iter)
