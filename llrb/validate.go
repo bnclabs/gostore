@@ -84,7 +84,9 @@ func (llrb *LLRB) validatemem() {
 		fmsg := "%v keymem(%v): avail %v {allocated:%v,useful:%v,overhd,%v}\n"
 		log.Infof(fmsg, llrb.logprefix, kmem, avail, alloc, use, overh)
 		fmsg = "keyutilization(%v): ratio: %0.2f%% %v {%v/%v}"
-		panic(fmt.Errorf(fmsg, entries, ratio*100, llrb.memutilization, memory, allocated))
+		panic(fmt.Errorf(
+			fmsg, entries, ratio*100, llrb.memutilization*100,
+			memory, allocated))
 	}
 	memory = float64(llrb.valmemory)
 	allocated = float64(stats["value.allocated"].(int64))
@@ -97,8 +99,10 @@ func (llrb *LLRB) validatemem() {
 		vmem := dohumanize(stats["valmemory"])
 		fmsg := "%v valmem(%v): avail %v {allocated:%v,useful:%v,overhd:%v}\n"
 		log.Infof(fmsg, llrb.logprefix, vmem, avail, alloc, use, overh)
-		fmsg = "valueutilization(%v): ratio: %0.2f%% {%v/%v}"
-		panic(fmt.Errorf(fmsg, entries, ratio*100, memory, allocated))
+		fmsg = "valueutilization(%v): ratio: %0.2f%% %v {%v/%v}"
+		panic(fmt.Errorf(
+			fmsg, entries, ratio*100, llrb.memutilization*100,
+			memory, allocated))
 	}
 }
 

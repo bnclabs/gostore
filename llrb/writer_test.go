@@ -33,8 +33,8 @@ func TestNewLLRBMvcc(t *testing.T) {
 		t.Errorf("expected %v, got %v", 616, overhead)
 	} else if useful := stats["node.useful"].(int64); useful != 0 {
 		t.Errorf("expected %v, got %v", 0, useful)
-	} else if overhead = stats["value.overhead"].(int64); overhead != 1128 {
-		t.Errorf("expected %v, got %v", 1128, overhead)
+	} else if overhead = stats["value.overhead"].(int64); overhead != 2152 {
+		t.Errorf("expected %v, got %v", 2152, overhead)
 	} else if useful = stats["value.useful"].(int64); useful != 0 {
 		t.Errorf("expected %v, got %v", 0, overhead)
 	} else if x, y := int64(0), stats["node.allocated"].(int64); x != y {
@@ -900,7 +900,7 @@ func TestLLRBMvccBasicIterate(t *testing.T) {
 	}
 
 	snapshot.Release()
-	llrb.ExpectedUtilization(0.04)
+	llrb.ExpectedUtilization(0.03)
 	llrb.Validate()
 
 	time.Sleep(100 * time.Millisecond)
@@ -1209,7 +1209,7 @@ func TestLLRBMvccInsert(t *testing.T) {
 	//if x := stats["node.useful"].(int64); x != useful {
 	//	t.Errorf("expected %v, got %v", useful, x)
 	//}
-	allocated, avail := int64(960000), int64(1072781824)
+	allocated, avail := int64(1040000), int64(1072701824)
 	if x := stats["node.allocated"].(int64); x != allocated {
 		t.Errorf("expected %v, got %v", allocated, x)
 	}
