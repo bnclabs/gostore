@@ -123,7 +123,8 @@ type Index interface {
 
 	// RSnapshot return snapshot that shan't be disturbed by subsequent writes.
 	// Caller should make sure to call snapshot.Release() once it is done with
-	// the snapshot. If `next` is true block till next snapshot is made.
+	// the snapshot, which also implies that all iterators on the snapshot are
+	// closed. If `next` is true block till next snapshot is made.
 	RSnapshot(snapch chan IndexSnapshot, next bool) error
 
 	// Getclock return current clock attached to the index.
