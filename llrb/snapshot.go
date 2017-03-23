@@ -26,8 +26,10 @@ func (writer *LLRBWriter) snapshotticker(interval int64, finch chan bool) {
 		if r := recover(); r != nil {
 			log.Errorf("%v snapshotticker() crashed: %v\n", llrb.logprefix, r)
 			log.Errorf("\n%s", lib.GetStacktrace(2, debug.Stack()))
-			// TODO: what if there are active snapshots and active iterators.
-			llrb.Destroy()
+			for err := llrb.Destroy(); err != nil; { // handle active iterators.
+				err = llrb.Destroy()
+				time.Sleep(writer.tryexitafter /* 100ms ? */)
+			}
 		}
 		tick.Stop()
 	}()
