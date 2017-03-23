@@ -14,6 +14,7 @@ func Defaultsettings() lib.Settings {
 		"maxkeysize":              int64(1024),
 		"minvalsize":              int64(96),
 		"maxvalsize":              int64(1024 * 1024),
+		"maxlimit":                int64(100),
 		"metadata.bornseqno":      false,
 		"metadata.deadseqno":      false,
 		"metadata.mvalue":         true,

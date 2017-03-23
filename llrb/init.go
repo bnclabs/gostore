@@ -25,6 +25,7 @@ func (llrb *LLRB) readsettings(setts lib.Settings) {
 		llrb.vamaxblock = ((llrb.vamaxblock / 32) + 1) * 32
 	}
 
+	llrb.maxlimit = setts.Int64("maxlimit")
 	llrb.nacapacity = setts.Int64("nodearena.capacity")
 	llrb.napcapacity = setts.Int64("nodearena.pool.capacity")
 	llrb.namaxpools = setts.Int64("nodearena.maxpools")

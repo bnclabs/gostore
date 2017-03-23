@@ -8,6 +8,8 @@ import "github.com/prataprc/storage.go/lib"
 
 var _ = fmt.Sprintf("dummy")
 
+const startlimit = 5
+
 type iterator struct {
 	// 64-bit aligned
 	n_activeiter *int64
@@ -81,12 +83,13 @@ func (iter *iterator) rangefill() {
 				return true
 			}
 			iter.limit = count
-			if iter.limit < 100 { // TODO: avoid magic numbers
+			if int64(iter.limit) < iter.llrb.maxlimit {
 				iter.limit *= 2
 			}
 			iter.continuate = true
 			return false
 		})
+
 	if iter.reverse {
 		iter.endkey = lib.Fixbuffer(iter.endkey, int64(len(breakkey)))
 		copy(iter.endkey, breakkey)

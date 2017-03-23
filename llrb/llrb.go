@@ -56,6 +56,7 @@ type LLRB struct { // tree container
 	maxkeysize     int64
 	minvalsize     int64
 	maxvalsize     int64
+	maxlimit       int64
 	naminblock     int64
 	namaxblock     int64
 	nacapacity     int64
@@ -501,7 +502,7 @@ func (llrb *LLRB) Iterate(
 	iter := llrb.getiterator()
 	iter.tree, iter.llrb = llrb, llrb
 	iter.continuate = false
-	iter.nodes, iter.index, iter.limit = iter.nodes[:0], 0, 5 // TODO: magicno.
+	iter.nodes, iter.index, iter.limit = iter.nodes[:0], 0, startlimit
 	// startkey
 	iter.startkey = lib.Fixbuffer(iter.startkey, llrb.maxkeysize)
 	n := copy(iter.startkey, lkey)
