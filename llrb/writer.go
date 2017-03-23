@@ -665,10 +665,16 @@ func (writer *LLRBWriter) mvccdelete(
 			root.metadata().setblack()
 		}
 		llrb.setroot(root)
+
 		llrb.delcount(deleted)
+
 		if callb != nil {
-			nd := llndornil(deleted)
-			callb(llrb, 0, nd, nd, nil)
+			if deleted == nil {
+				callb(llrb, 0, nil, nil, api.ErrorKeyMissing)
+			} else {
+				nd := llndornil(deleted)
+				callb(llrb, 0, nd, nd, nil)
+			}
 		}
 	}
 

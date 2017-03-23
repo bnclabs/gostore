@@ -1,5 +1,5 @@
 * check for whether stats values need to be atomically protected.
-* handle KeyMissing for Delete(), DeleteMin(), DeleteMax()
+* writer.go, respch is []interface{}, should we change that ?
 * run `make test` and `snaptools.go:/run.sh mvcc` simultaneously there seem to
   be some data race.
 * IndexReader{} and IndexWriter{} APIs now include error arguments. Update the

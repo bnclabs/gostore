@@ -788,6 +788,7 @@ func (llrb *LLRB) Delete(key []byte, callb api.NodeCallb) (e error) {
 			if callb != nil {
 				callb(llrb, 0, nd, nd, nil)
 			}
+
 		} else {
 			llrb.rw.Unlock()
 			llrb.Upsert(
@@ -812,7 +813,13 @@ func (llrb *LLRB) Delete(key []byte, callb api.NodeCallb) (e error) {
 
 		llrb.delcount(deleted)
 
-		if callb != nil {
+		if deleted == nil { // handle key-missing
+			if callb != nil {
+				callb(llrb, 0, nil, nil, api.ErrorKeyMissing)
+			}
+			e = api.ErrorKeyMissing
+
+		} else if callb != nil {
 			nd := llndornil(deleted)
 			callb(llrb, 0, nd, nd, nil)
 		}

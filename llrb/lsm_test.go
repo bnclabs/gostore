@@ -341,7 +341,7 @@ func buildlsmindexes(
 			refllrb.Delete(
 				key,
 				func(_ api.Index, _ int64, nnd, ond api.Node, err error) bool {
-					if err != nil {
+					if err != nil && err.Error() != api.ErrorKeyMissing.Error() {
 						t.Error(err)
 					} else if nnd != nil {
 						nnd.Setvbno(100).SetVbuuid(1000).SetDeadseqno(seqno)
