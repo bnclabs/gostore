@@ -1,4 +1,3 @@
-- rename `storage.go` to `gostore`
 - lsm.go, test with IsDelete() returning true or false based on Deadseqno().
 - update store/ test cases to create and update clocks for dict and llrb
   structure.
@@ -20,6 +19,24 @@ llrb:
 * if there are no outstanding snapshots, may be we can do non-mvcc
   upserts and deletes ?
 * YCSB test cases.
+
+bubt:
+
+* build_mblock and snapshot_mblock should not use magic numbers.
+* optimize allocation that are using make() and new().
+* do one round of review and refactoring.
+* catch all panic and gracefully recover.
+* test bubt for empty list of key,value pairs.
+* instead of repeating the key-content in the intermediate nodes,
+  just refer them to znodes and cache all the references for future
+  use.
+* buffercache for intermediate nodes.
+* useful types and interfaces from api/
+  Index (panic on RSnapshot)
+  IndexSnapshot (panic as not-implemented)
+  IndexReader
+  IndexIterator
+  IndexWriter (panic as not-implemented)
 
 clock:
 
