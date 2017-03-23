@@ -363,6 +363,7 @@ func TestBasicUpdates(t *testing.T) {
 		t.Errorf("expected missing key")
 	}
 
+	llrb.ExpectedUtilization(0.03)
 	llrb.Validate()
 
 	if err := llrb.Destroy(); err != nil {
@@ -634,7 +635,8 @@ func TestPartialRange(t *testing.T) {
 		}
 	}
 
-	//llrb.Validate() : TODO: get this working.
+	llrb.ExpectedUtilization(0.04)
+	llrb.Validate()
 
 	if err := llrb.Destroy(); err != nil {
 		t.Fatal(err)
