@@ -13,6 +13,7 @@
 
 llrb:
 
+* `memutilization` param should be configurable ? What is it used for ?
 * test marked deletes in mvcc mode.
 * check for whether stats values need to be atomically protected.
 * writer.go, respch is []interface{}, should we change that ?
