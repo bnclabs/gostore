@@ -11,6 +11,15 @@
   seqno.
 - optimize LSM merger logic, avoid repeated sort() calls.
 
+llrb:
+
+* test marked deletes in mvcc mode.
+* check for whether stats values need to be atomically protected.
+* writer.go, respch is []interface{}, should we change that ?
+* if there are no outstanding snapshots, may be we can do non-mvcc
+  upserts and deletes ?
+* YCSB test cases.
+
 clock:
 
 * exhaust all possible combination of clock comparision TestVectorclockOrder.
