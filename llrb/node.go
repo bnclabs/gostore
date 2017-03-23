@@ -12,8 +12,8 @@ const nodesize = int(unsafe.Sizeof(Llrbnode{})) - 8 // + metadatasize + keysize
 
 // Llrbnode defines a node in LLRB tree.
 type Llrbnode struct {
-	left     *Llrbnode // TODO: unsafe.Pointer ???
-	right    *Llrbnode // TODO: unsafe.Pointer ???
+	left     *Llrbnode
+	right    *Llrbnode
 	pool     api.Mallocer
 	mdmarker unsafe.Pointer
 }
