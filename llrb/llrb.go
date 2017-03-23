@@ -100,17 +100,18 @@ func NewLLRB(name string, setts lib.Settings) *LLRB {
 
 	// statistics
 	llrb.h_upsertdepth = lib.NewhistorgramInt64(10, 100, 10)
+	llrb.initmvccstats()
 
 	// scratch pads
 	llrb.strsl = make([]string, 0)
 
+	log.Infof("%v started ...\n", llrb.logprefix)
+	llrb.logarenasettings()
 	// mvcc
 	if llrb.mvcc.enabled {
 		llrb.enableMVCC()
 	}
 
-	log.Infof("%v started ...\n", llrb.logprefix)
-	llrb.logarenasettings()
 	return llrb
 }
 
@@ -167,7 +168,7 @@ func (llrb *LLRB) EnableMVCC() {
 	llrb.enableMVCC()
 }
 
-func (llrb *LLRB) enableMVCC() {
+func (llrb *LLRB) initmvccstats() {
 	llrb.mvcc.reclaim = make([]*Llrbnode, 0, 64)
 	llrb.mvcc.h_bulkfree = lib.NewhistorgramInt64(100, 1000, 1000)
 	llrb.mvcc.h_reclaims = map[string]*lib.HistogramInt64{
@@ -179,6 +180,9 @@ func (llrb *LLRB) enableMVCC() {
 		"delete":    lib.NewhistorgramInt64(10, 200, 20),
 	}
 	llrb.mvcc.h_versions = lib.NewhistorgramInt64(1, 30, 10)
+}
+
+func (llrb *LLRB) enableMVCC() {
 	llrb.spawnwriter()
 }
 
