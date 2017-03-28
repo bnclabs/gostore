@@ -1,6 +1,6 @@
 package bubt
 
-import "github.com/prataprc/storage.go/lib"
+import "github.com/prataprc/gostore/lib"
 
 // Defaultsettings provides an initial set of settings, tuned for
 // SSD without map-reduce.

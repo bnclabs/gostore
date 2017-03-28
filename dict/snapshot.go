@@ -3,7 +3,7 @@ package dict
 import "sync/atomic"
 import "strconv"
 
-import "github.com/prataprc/storage.go/api"
+import "github.com/prataprc/gostore/api"
 
 // NOTE: sorted() cannot be called on DictSnapshot !!
 

@@ -1,1 +1,1 @@
-** Shall not import storage.go package or any of its sub-packages. **
+** Shall not import gostore package or any of its sub-packages. **

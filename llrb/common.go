@@ -5,8 +5,8 @@ package llrb
 
 import "fmt"
 
-import "github.com/prataprc/storage.go/api"
-import "github.com/prataprc/storage.go/lib"
+import "github.com/prataprc/gostore/api"
+import "github.com/prataprc/gostore/lib"
 
 // low <= (keys) <= high
 func (llrb *LLRB) rangehele(nd *Llrbnode, lk, hk []byte, callb api.NodeCallb) bool {

@@ -4,8 +4,8 @@ import "testing"
 import "bytes"
 import "fmt"
 
-import "github.com/prataprc/storage.go/lib"
-import "github.com/prataprc/storage.go/malloc"
+import "github.com/prataprc/gostore/lib"
+import "github.com/prataprc/gostore/malloc"
 
 var _ = fmt.Sprintf("dummy")
 

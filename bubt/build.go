@@ -6,9 +6,9 @@ import "fmt"
 import "path/filepath"
 import "os"
 
-import "github.com/prataprc/storage.go/api"
-import "github.com/prataprc/storage.go/lib"
-import "github.com/prataprc/storage.go/log"
+import "github.com/prataprc/gostore/api"
+import "github.com/prataprc/gostore/lib"
+import "github.com/prataprc/gostore/log"
 
 // Bubt manages sorted {key,value} entries in persisted, immutable btree
 // built bottoms up and not updated there after.

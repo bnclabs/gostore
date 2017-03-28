@@ -8,7 +8,7 @@ import "C"
 import "unsafe"
 import "fmt"
 
-import "github.com/prataprc/storage.go/api"
+import "github.com/prataprc/gostore/api"
 
 // poolflist manages a memory block sliced up into equal sized chunks.
 type poolflist struct {

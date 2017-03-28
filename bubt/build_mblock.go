@@ -3,7 +3,7 @@ package bubt
 import "encoding/binary"
 import "fmt"
 
-import "github.com/prataprc/storage.go/lib"
+import "github.com/prataprc/gostore/lib"
 
 var _ = fmt.Sprintf("dummy")
 

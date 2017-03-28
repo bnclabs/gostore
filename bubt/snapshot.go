@@ -8,9 +8,9 @@ import "sync/atomic"
 import "encoding/json"
 import "encoding/binary"
 
-import "github.com/prataprc/storage.go/api"
-import "github.com/prataprc/storage.go/lib"
-import "github.com/prataprc/storage.go/log"
+import "github.com/prataprc/gostore/api"
+import "github.com/prataprc/gostore/lib"
+import "github.com/prataprc/gostore/log"
 
 var readmu sync.Mutex
 var openstores = make(map[string]*Snapshot)

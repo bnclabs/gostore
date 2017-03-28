@@ -1,7 +1,7 @@
 package llrb
 
-import "github.com/prataprc/storage.go/lib"
-import "github.com/prataprc/storage.go/malloc"
+import "github.com/prataprc/gostore/lib"
+import "github.com/prataprc/gostore/malloc"
 
 // Defaultsettings provides an initial set of settings tuned for in-memory
 // key,value of 1TB storage.

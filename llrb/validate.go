@@ -6,8 +6,8 @@ import "bytes"
 import "errors"
 import "sync/atomic"
 
-import "github.com/prataprc/storage.go/log"
-import "github.com/prataprc/storage.go/lib"
+import "github.com/prataprc/gostore/log"
+import "github.com/prataprc/gostore/lib"
 import gohumanize "github.com/dustin/go-humanize"
 
 // height of the tree cannot exceed a certain limit. For example if the tree

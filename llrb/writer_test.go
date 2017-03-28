@@ -7,9 +7,9 @@ import "bytes"
 import "math/rand"
 import "time"
 
-import "github.com/prataprc/storage.go/lib"
-import "github.com/prataprc/storage.go/api"
-import "github.com/prataprc/storage.go/dict"
+import "github.com/prataprc/gostore/lib"
+import "github.com/prataprc/gostore/api"
+import "github.com/prataprc/gostore/dict"
 
 var _ = fmt.Sprintf("dummy")
 

@@ -7,7 +7,7 @@ package llrb
 import "unsafe"
 import "reflect"
 
-import "github.com/prataprc/storage.go/api"
+import "github.com/prataprc/gostore/api"
 
 const nvaluesize = int(unsafe.Sizeof(nodevalue{})) - 8 // + valuesize
 

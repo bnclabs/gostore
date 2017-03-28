@@ -6,8 +6,8 @@ import "strings"
 import "sync/atomic"
 
 import gohumanize "github.com/dustin/go-humanize"
-import "github.com/prataprc/storage.go/lib"
-import "github.com/prataprc/storage.go/log"
+import "github.com/prataprc/gostore/lib"
+import "github.com/prataprc/gostore/log"
 
 type llrbstats struct {
 	// 64-bit aligned reader statistics

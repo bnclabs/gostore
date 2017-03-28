@@ -7,7 +7,7 @@ import "math/rand"
 import "testing"
 import "reflect"
 
-import "github.com/prataprc/storage.go/api"
+import "github.com/prataprc/gostore/api"
 
 var _ = fmt.Sprintf("dummy")
 

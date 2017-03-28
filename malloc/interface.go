@@ -2,7 +2,7 @@ package malloc
 
 import "unsafe"
 
-import "github.com/prataprc/storage.go/api"
+import "github.com/prataprc/gostore/api"
 
 // Mpooler to manage chunk pool
 type Mpooler interface {

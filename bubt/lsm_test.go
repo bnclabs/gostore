@@ -9,8 +9,8 @@ import "os"
 import "math/rand"
 import "path/filepath"
 
-import "github.com/prataprc/storage.go/api"
-import "github.com/prataprc/storage.go/llrb"
+import "github.com/prataprc/gostore/api"
+import "github.com/prataprc/gostore/llrb"
 
 var _ = fmt.Sprintf("dummy")
 
@@ -436,7 +436,7 @@ func buildlsmindexes(
 			refllrb.Delete(
 				key,
 				func(_ api.Index, _ int64, nnd, ond api.Node, err error) bool {
-					if err != nil {
+					if err != nil && err.Error() != api.ErrorKeyMissing.Error() {
 						t.Error(err)
 					} else if nnd != nil {
 						nnd.Setvbno(100).SetVbuuid(1000).SetDeadseqno(seqno)

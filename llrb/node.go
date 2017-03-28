@@ -6,7 +6,7 @@ import "strings"
 import "fmt"
 import "io"
 
-import "github.com/prataprc/storage.go/api"
+import "github.com/prataprc/gostore/api"
 
 const nodesize = int(unsafe.Sizeof(Llrbnode{})) - 8 // + metadatasize + keysize
 

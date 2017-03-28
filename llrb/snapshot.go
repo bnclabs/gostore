@@ -12,9 +12,9 @@ import "fmt"
 import "strconv"
 import "runtime/debug"
 
-import "github.com/prataprc/storage.go/lib"
-import "github.com/prataprc/storage.go/log"
-import "github.com/prataprc/storage.go/api"
+import "github.com/prataprc/gostore/lib"
+import "github.com/prataprc/gostore/log"
+import "github.com/prataprc/gostore/api"
 
 //---- snapshot ticker
 
@@ -379,7 +379,7 @@ func (snapshot *LLRBSnapshot) Iterate(
 	iter := llrb.getiterator()
 	iter.tree, iter.llrb = snapshot, llrb
 	iter.continuate = false
-	iter.nodes, iter.index, iter.limit = iter.nodes[:0], 0, llrb.maxlimit
+	iter.nodes, iter.index, iter.limit = iter.nodes[:0], 0, int(llrb.maxlimit)
 	// startkey
 	iter.startkey = lib.Fixbuffer(iter.startkey, llrb.maxkeysize)
 	n := copy(iter.startkey, lkey)

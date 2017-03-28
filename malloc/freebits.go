@@ -2,7 +2,7 @@ package malloc
 
 import "unsafe"
 
-import "github.com/prataprc/storage.go/lib"
+import "github.com/prataprc/gostore/lib"
 
 // should always be power of 2.
 const cacheline = 64

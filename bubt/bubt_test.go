@@ -7,11 +7,11 @@ import "fmt"
 import "os"
 import "path/filepath"
 
-import "github.com/prataprc/storage.go/api"
-import "github.com/prataprc/storage.go/log"
-import "github.com/prataprc/storage.go/llrb"
-import "github.com/prataprc/storage.go/dict"
-import "github.com/prataprc/storage.go/lib"
+import "github.com/prataprc/gostore/api"
+import "github.com/prataprc/gostore/log"
+import "github.com/prataprc/gostore/llrb"
+import "github.com/prataprc/gostore/dict"
+import "github.com/prataprc/gostore/lib"
 
 var _ = fmt.Sprintf("dummy")
 

@@ -9,8 +9,8 @@ import "fmt"
 import "sync/atomic"
 import "hash/crc64"
 
-import "github.com/prataprc/storage.go/api"
-import "github.com/prataprc/storage.go/lib"
+import "github.com/prataprc/gostore/api"
+import "github.com/prataprc/gostore/lib"
 
 var _ = fmt.Sprintf("dummy")
 

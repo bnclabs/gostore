@@ -1,8 +1,8 @@
 package llrb
 
-import "github.com/prataprc/storage.go/malloc"
-import "github.com/prataprc/storage.go/api"
-import "github.com/prataprc/storage.go/lib"
+import "github.com/prataprc/gostore/malloc"
+import "github.com/prataprc/gostore/api"
+import "github.com/prataprc/gostore/lib"
 
 func (llrb *LLRB) readsettings(setts lib.Settings) {
 	fmask := llrb.setupfmask(setts)

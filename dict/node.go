@@ -1,6 +1,6 @@
 package dict
 
-import "github.com/prataprc/storage.go/api"
+import "github.com/prataprc/gostore/api"
 
 type dictnode struct {
 	key     []byte

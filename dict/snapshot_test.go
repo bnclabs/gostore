@@ -5,7 +5,7 @@ import "reflect"
 import "bytes"
 import "fmt"
 
-import "github.com/prataprc/storage.go/api"
+import "github.com/prataprc/gostore/api"
 
 var _ = fmt.Sprintf("dummy")
 
