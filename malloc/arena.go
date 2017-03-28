@@ -3,8 +3,8 @@ package malloc
 import "unsafe"
 import "sort"
 
-import "github.com/prataprc/gostore/lib"
 import "github.com/prataprc/gostore/api"
+import s "github.com/prataprc/gosettings"
 
 // MEMUtilization expected in an arenas.
 const MEMUtilization = float64(0.95)
@@ -41,7 +41,7 @@ type Arena struct {
 }
 
 // NewArena create a new memory arena.
-func NewArena(setts lib.Settings) *Arena {
+func NewArena(setts s.Settings) *Arena {
 	arena := (&Arena{}).readsettings(setts)
 	arena.blocksizes = Blocksizes(arena.minblock, arena.maxblock)
 	arena.mpools = make(map[int64]Mpoolers)
@@ -63,7 +63,7 @@ func NewArena(setts lib.Settings) *Arena {
 	return arena
 }
 
-func (arena *Arena) readsettings(setts lib.Settings) *Arena {
+func (arena *Arena) readsettings(setts s.Settings) *Arena {
 	arena.capacity = setts.Int64("capacity")
 	arena.minblock = setts.Int64("minblock")
 	arena.maxblock = setts.Int64("maxblock")

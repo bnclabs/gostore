@@ -11,6 +11,7 @@ import "encoding/binary"
 import "github.com/prataprc/gostore/api"
 import "github.com/prataprc/gostore/lib"
 import "github.com/prataprc/gostore/log"
+import s "github.com/prataprc/gosettings"
 
 var readmu sync.Mutex
 var openstores = make(map[string]*Snapshot)
@@ -568,7 +569,7 @@ func (ss Snapshot) ismvpos(vpos int64) (int64, bool) {
 }
 
 func (ss *Snapshot) json2setts(data []byte) error {
-	var setts lib.Settings
+	var setts s.Settings
 	if err := json.Unmarshal(data, &setts); err != nil {
 		return err
 	}

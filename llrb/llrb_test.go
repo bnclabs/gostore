@@ -10,7 +10,7 @@ import "bytes"
 
 import "github.com/prataprc/gostore/api"
 import "github.com/prataprc/gostore/dict"
-import "github.com/prataprc/gostore/lib"
+import s "github.com/prataprc/gosettings"
 
 var _ = fmt.Sprintf("dummy")
 
@@ -1669,7 +1669,7 @@ func makekeyvalue(key, value []byte) ([]byte, []byte) {
 }
 
 func makellrb(
-	t *testing.T, nm string, inserts [][2][]byte, setts lib.Settings) *LLRB {
+	t *testing.T, nm string, inserts [][2][]byte, setts s.Settings) *LLRB {
 
 	llrb := NewLLRB(nm, setts)
 	if llrb.Count() != 0 {

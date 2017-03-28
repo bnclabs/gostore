@@ -11,12 +11,12 @@ import "github.com/prataprc/gostore/api"
 import "github.com/prataprc/gostore/log"
 import "github.com/prataprc/gostore/llrb"
 import "github.com/prataprc/gostore/dict"
-import "github.com/prataprc/gostore/lib"
+import s "github.com/prataprc/gosettings"
 
 var _ = fmt.Sprintf("dummy")
 
 func init() {
-	setts := lib.Settings{
+	setts := s.Settings{
 		"log.level": "error",
 		"log.file":  "",
 	}

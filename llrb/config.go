@@ -1,12 +1,12 @@
 package llrb
 
-import "github.com/prataprc/gostore/lib"
 import "github.com/prataprc/gostore/malloc"
+import s "github.com/prataprc/gosettings"
 
 // Defaultsettings provides an initial set of settings tuned for in-memory
 // key,value of 1TB storage.
-func Defaultsettings() lib.Settings {
-	setts := lib.Settings{
+func Defaultsettings() s.Settings {
+	setts := s.Settings{
 		"iterpool.size":           int64(100),
 		"lsm":                     false,
 		"memutilization":          float64(0.4),

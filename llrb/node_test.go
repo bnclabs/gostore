@@ -8,7 +8,7 @@ import "unsafe"
 
 import "github.com/prataprc/gostore/malloc"
 import "github.com/prataprc/gostore/api"
-import "github.com/prataprc/gostore/lib"
+import s "github.com/prataprc/gosettings"
 
 var _ = fmt.Sprintf("dummy")
 
@@ -29,7 +29,7 @@ func TestConstants(t *testing.T) {
 }
 
 func TestNode(t *testing.T) {
-	marena := malloc.NewArena(lib.Settings{
+	marena := malloc.NewArena(s.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 10),
 		"capacity":      int64(1024 * 1024 * 1024),
@@ -94,7 +94,7 @@ func TestNode(t *testing.T) {
 }
 
 func TestNodeFields(t *testing.T) {
-	marena := malloc.NewArena(lib.Settings{
+	marena := malloc.NewArena(s.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 10),
 		"capacity":      int64(1024 * 1024 * 1024),
@@ -171,7 +171,7 @@ func TestNodeFields(t *testing.T) {
 }
 
 func TestLtkey(t *testing.T) {
-	marena := malloc.NewArena(lib.Settings{
+	marena := malloc.NewArena(s.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 10),
 		"capacity":      int64(1024 * 1024 * 1024),
@@ -210,7 +210,7 @@ func TestLtkey(t *testing.T) {
 }
 
 func TestLekey(t *testing.T) {
-	marena := malloc.NewArena(lib.Settings{
+	marena := malloc.NewArena(s.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 10),
 		"capacity":      int64(1024 * 1024 * 1024),
@@ -251,7 +251,7 @@ func TestLekey(t *testing.T) {
 }
 
 func TestGtkey(t *testing.T) {
-	marena := malloc.NewArena(lib.Settings{
+	marena := malloc.NewArena(s.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 10),
 		"capacity":      int64(1024 * 1024 * 1024),
@@ -292,7 +292,7 @@ func TestGtkey(t *testing.T) {
 }
 
 func TestGekey(t *testing.T) {
-	marena := malloc.NewArena(lib.Settings{
+	marena := malloc.NewArena(s.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 10),
 		"capacity":      int64(1024 * 1024 * 1024),
@@ -333,7 +333,7 @@ func TestGekey(t *testing.T) {
 }
 
 func BenchmarkNodefields(b *testing.B) {
-	marena := malloc.NewArena(lib.Settings{
+	marena := malloc.NewArena(s.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 10),
 		"capacity":      int64(1024 * 1024 * 1024),
@@ -369,7 +369,7 @@ func BenchmarkNodefields(b *testing.B) {
 }
 
 func BenchmarkNodeSetKey(b *testing.B) {
-	marena := malloc.NewArena(lib.Settings{
+	marena := malloc.NewArena(s.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 10),
 		"capacity":      int64(1024 * 1024 * 1024),
@@ -395,7 +395,7 @@ func BenchmarkNodeSetKey(b *testing.B) {
 }
 
 func BenchmarkNodeGetKey(b *testing.B) {
-	marena := malloc.NewArena(lib.Settings{
+	marena := malloc.NewArena(s.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 10),
 		"capacity":      int64(1024 * 1024 * 1024),
@@ -420,7 +420,7 @@ func BenchmarkNodeGetKey(b *testing.B) {
 }
 
 func BenchmarkCompareLtkey(b *testing.B) {
-	marena := malloc.NewArena(lib.Settings{
+	marena := malloc.NewArena(s.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 10),
 		"capacity":      int64(1024 * 1024 * 1024),
@@ -448,7 +448,7 @@ func BenchmarkCompareLtkey(b *testing.B) {
 }
 
 func BenchmarkCompareLekey(b *testing.B) {
-	marena := malloc.NewArena(lib.Settings{
+	marena := malloc.NewArena(s.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 10),
 		"capacity":      int64(1024 * 1024 * 1024),
@@ -476,7 +476,7 @@ func BenchmarkCompareLekey(b *testing.B) {
 }
 
 func BenchmarkCompareGtkey(b *testing.B) {
-	marena := malloc.NewArena(lib.Settings{
+	marena := malloc.NewArena(s.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 10),
 		"capacity":      int64(1024 * 1024 * 1024),
@@ -504,7 +504,7 @@ func BenchmarkCompareGtkey(b *testing.B) {
 }
 
 func BenchmarkCompareGekey(b *testing.B) {
-	marena := malloc.NewArena(lib.Settings{
+	marena := malloc.NewArena(s.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 10),
 		"capacity":      int64(1024 * 1024 * 1024),

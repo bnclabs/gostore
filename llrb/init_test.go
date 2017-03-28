@@ -3,9 +3,9 @@ package llrb
 import "fmt"
 import "testing"
 
-import "github.com/prataprc/gostore/lib"
 import "github.com/prataprc/gostore/api"
 import "github.com/prataprc/gostore/log"
+import s "github.com/prataprc/gosettings"
 
 var _ = fmt.Sprintf("dummy")
 
@@ -18,7 +18,7 @@ func init() {
 }
 
 func TestLLRBValidate(t *testing.T) {
-	dotest := func(setts lib.Settings) {
+	dotest := func(setts s.Settings) {
 		defer func() {
 			if r := recover(); r == nil {
 				t.Errorf("expected panic")

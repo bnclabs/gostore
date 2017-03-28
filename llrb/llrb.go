@@ -12,6 +12,7 @@ import "sync/atomic"
 import "github.com/prataprc/gostore/lib"
 import "github.com/prataprc/gostore/api"
 import "github.com/prataprc/gostore/log"
+import s "github.com/prataprc/gosettings"
 import humanize "github.com/dustin/go-humanize"
 
 // LLRB to manage in-memory sorted index using left-leaning-red-black trees.
@@ -74,7 +75,7 @@ type LLRB struct { // tree container
 	writechansz    int64 // mvcc settings
 	snaptick       int64 // mvcc settings
 	memutilization float64
-	setts          lib.Settings
+	setts          s.Settings
 	logprefix      string
 
 	// scratch pad
@@ -82,8 +83,8 @@ type LLRB struct { // tree container
 }
 
 // NewLLRB a new instance of in-memory sorted index.
-func NewLLRB(name string, setts lib.Settings) *LLRB {
-	setts = make(lib.Settings).Mixin(Defaultsettings(), setts)
+func NewLLRB(name string, setts s.Settings) *LLRB {
+	setts = make(s.Settings).Mixin(Defaultsettings(), setts)
 	llrb := &LLRB{name: name, borntime: time.Now()}
 	llrb.readsettings(setts)
 	llrb.iterpool = make(chan *iterator, llrb.iterpoolsize)
@@ -161,9 +162,9 @@ func (llrb *LLRB) Release() {
 }
 
 func (llrb *LLRB) EnableMVCC() {
-	llrb.setts = (lib.Settings{}).Mixin(
+	llrb.setts = (s.Settings{}).Mixin(
 		llrb.setts,
-		lib.Settings{"mvcc.enable": true},
+		s.Settings{"mvcc.enable": true},
 	)
 	llrb.mvcc.enabled = true
 	llrb.enableMVCC()

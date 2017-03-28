@@ -2,9 +2,9 @@ package llrb
 
 import "github.com/prataprc/gostore/malloc"
 import "github.com/prataprc/gostore/api"
-import "github.com/prataprc/gostore/lib"
+import s "github.com/prataprc/gosettings"
 
-func (llrb *LLRB) readsettings(setts lib.Settings) {
+func (llrb *LLRB) readsettings(setts s.Settings) {
 	fmask := llrb.setupfmask(setts)
 	mdsize := int64((&metadata{}).initMetadata(0, fmask).sizeof())
 
@@ -56,21 +56,21 @@ func (llrb *LLRB) readsettings(setts lib.Settings) {
 	llrb.memutilization = setts.Float64("memutilization")
 }
 
-func (llrb *LLRB) newnodearena(setts lib.Settings) *malloc.Arena {
+func (llrb *LLRB) newnodearena(setts s.Settings) *malloc.Arena {
 	memsetts := setts.Section("nodearena").Trim("nodearena.")
 	memsetts["minblock"] = llrb.naminblock
 	memsetts["maxblock"] = llrb.namaxblock
 	return malloc.NewArena(memsetts)
 }
 
-func (llrb *LLRB) newvaluearena(setts lib.Settings) *malloc.Arena {
+func (llrb *LLRB) newvaluearena(setts s.Settings) *malloc.Arena {
 	memsetts := setts.Section("valarena").Trim("valarena.")
 	memsetts["minblock"] = llrb.vaminblock
 	memsetts["maxblock"] = llrb.vamaxblock
 	return malloc.NewArena(memsetts)
 }
 
-func (llrb *LLRB) setupfmask(setts lib.Settings) metadataMask {
+func (llrb *LLRB) setupfmask(setts s.Settings) metadataMask {
 	fmask := metadataMask(0)
 	if setts.Bool("metadata.bornseqno") {
 		fmask = fmask.enableBornSeqno()

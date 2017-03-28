@@ -4,13 +4,13 @@ import "testing"
 import "bytes"
 import "fmt"
 
-import "github.com/prataprc/gostore/lib"
 import "github.com/prataprc/gostore/malloc"
+import s "github.com/prataprc/gosettings"
 
 var _ = fmt.Sprintf("dummy")
 
 func TestNodeValue(t *testing.T) {
-	marena := malloc.NewArena(lib.Settings{
+	marena := malloc.NewArena(s.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 10),
 		"capacity":      int64(1024 * 1024 * 1024),
@@ -35,7 +35,7 @@ func TestNodeValue(t *testing.T) {
 }
 
 func BenchmarkValueSize(b *testing.B) {
-	marena := malloc.NewArena(lib.Settings{
+	marena := malloc.NewArena(s.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 10),
 		"capacity":      int64(1024 * 1024 * 1024),
@@ -60,7 +60,7 @@ func BenchmarkValueSize(b *testing.B) {
 }
 
 func BenchmarkSetValue(b *testing.B) {
-	marena := malloc.NewArena(lib.Settings{
+	marena := malloc.NewArena(s.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 10),
 		"capacity":      int64(1024 * 1024 * 1024),
@@ -84,7 +84,7 @@ func BenchmarkSetValue(b *testing.B) {
 }
 
 func BenchmarkGetValue(b *testing.B) {
-	marena := malloc.NewArena(lib.Settings{
+	marena := malloc.NewArena(s.Settings{
 		"minblock":      int64(96),
 		"maxblock":      int64(1024 * 1024 * 10),
 		"capacity":      int64(1024 * 1024 * 1024),

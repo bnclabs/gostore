@@ -9,6 +9,7 @@ import "os"
 import "github.com/prataprc/gostore/api"
 import "github.com/prataprc/gostore/lib"
 import "github.com/prataprc/gostore/log"
+import s "github.com/prataprc/gosettings"
 
 // Bubt manages sorted {key,value} entries in persisted, immutable btree
 // built bottoms up and not updated there after.
@@ -63,7 +64,7 @@ type blocker interface {
 }
 
 // NewBubt create a Bubt instance to build a new bottoms-up btree.
-func NewBubt(name, path string, setts lib.Settings) *Bubt {
+func NewBubt(name, path string, setts s.Settings) *Bubt {
 	f := &Bubt{
 		name:       name,
 		path:       path,
@@ -109,7 +110,7 @@ func NewBubt(name, path string, setts lib.Settings) *Bubt {
 	return f
 }
 
-func (f *Bubt) readsettings(setts lib.Settings) {
+func (f *Bubt) readsettings(setts s.Settings) {
 	f.zblocksize = setts.Int64("zblocksize")
 	f.mblocksize = setts.Int64("mblocksize")
 	f.mreduce = setts.Bool("mreduce")
@@ -375,7 +376,7 @@ func (f *Bubt) ismvpos(vpos int64) (int64, bool) {
 }
 
 func (f *Bubt) setts2json() []byte {
-	setts := lib.Settings{
+	setts := s.Settings{
 		"zblocksize":         f.zblocksize,
 		"mblocksize":         f.mblocksize,
 		"mreduce":            f.mreduce,

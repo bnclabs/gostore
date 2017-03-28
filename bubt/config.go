@@ -1,16 +1,16 @@
 package bubt
 
-import "github.com/prataprc/gostore/lib"
+import s "github.com/prataprc/gosettings"
 
 // Defaultsettings provides an initial set of settings, tuned for
 // SSD without map-reduce.
-func Defaultsettings() lib.Settings {
+func Defaultsettings() s.Settings {
 	// when changing this also change in other places,
 	// Bubt{}, Snapshot{} strucutres
 	// readsettings()
 	// setts2json()
 	// json2setts()
-	return lib.Settings{
+	return s.Settings{
 		"zblocksize":         4096,
 		"mblocksize":         4096,
 		"mreduce":            false,
