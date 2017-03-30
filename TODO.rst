@@ -13,6 +13,7 @@
 
 llrb:
 
+* block diagram of go-routines.
 * `memutilization` param should be configurable ? What is it used for ?
 * test marked deletes in mvcc mode.
 * check for whether stats values need to be atomically protected.
@@ -23,6 +24,7 @@ llrb:
 
 bubt:
 
+* block diagram of go-routines.
 * build_mblock and snapshot_mblock should not use magic numbers.
 * optimize allocation that are using make() and new().
 * do one round of review and refactoring.
