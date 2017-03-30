@@ -2,7 +2,7 @@ package bubt
 
 import "os"
 
-import "github.com/prataprc/gostore/log"
+import "github.com/prataprc/golog"
 
 func (flusher *bubtflusher) run(
 	name string, fd *os.File, ch chan []byte, quitch chan struct{}) {

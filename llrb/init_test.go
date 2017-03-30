@@ -4,7 +4,7 @@ import "fmt"
 import "testing"
 
 import "github.com/prataprc/gostore/api"
-import "github.com/prataprc/gostore/log"
+import "github.com/prataprc/golog"
 import s "github.com/prataprc/gosettings"
 
 var _ = fmt.Sprintf("dummy")

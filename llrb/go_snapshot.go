@@ -13,7 +13,7 @@ import "strconv"
 import "runtime/debug"
 
 import "github.com/prataprc/gostore/lib"
-import "github.com/prataprc/gostore/log"
+import "github.com/prataprc/golog"
 import "github.com/prataprc/gostore/api"
 
 //---- snapshot ticker

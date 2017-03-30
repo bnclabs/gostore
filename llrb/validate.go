@@ -6,7 +6,7 @@ import "bytes"
 import "errors"
 import "sync/atomic"
 
-import "github.com/prataprc/gostore/log"
+import "github.com/prataprc/golog"
 import "github.com/prataprc/gostore/lib"
 import gohumanize "github.com/dustin/go-humanize"
 

@@ -7,7 +7,7 @@ import "sync/atomic"
 import "runtime/debug"
 
 import "github.com/prataprc/gostore/api"
-import "github.com/prataprc/gostore/log"
+import "github.com/prataprc/golog"
 import "github.com/prataprc/gostore/lib"
 
 // LLRBWriter defines writer routine in mvcc mode.

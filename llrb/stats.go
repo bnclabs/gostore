@@ -7,7 +7,7 @@ import "sync/atomic"
 
 import gohumanize "github.com/dustin/go-humanize"
 import "github.com/prataprc/gostore/lib"
-import "github.com/prataprc/gostore/log"
+import "github.com/prataprc/golog"
 
 type llrbstats struct {
 	// 64-bit aligned reader statistics

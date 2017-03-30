@@ -2,7 +2,7 @@ package bubt
 
 import "fmt"
 
-import "github.com/prataprc/gostore/log"
+import "github.com/prataprc/golog"
 
 var indexname, dataname = "index", "data"
 

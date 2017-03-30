@@ -8,7 +8,7 @@ import "os"
 import "path/filepath"
 
 import "github.com/prataprc/gostore/api"
-import "github.com/prataprc/gostore/log"
+import "github.com/prataprc/golog"
 import "github.com/prataprc/gostore/llrb"
 import "github.com/prataprc/gostore/dict"
 import s "github.com/prataprc/gosettings"
@@ -16,11 +16,8 @@ import s "github.com/prataprc/gosettings"
 var _ = fmt.Sprintf("dummy")
 
 func init() {
-	setts := s.Settings{
-		"log.level": "error",
-		"log.file":  "",
-	}
-	log.SetLogger(nil, setts)
+	logsetts := s.Settings{"log.level": "error", "log.file": ""}
+	log.SetLogger(nil, logsetts)
 }
 
 func TestEmpty(t *testing.T) {
