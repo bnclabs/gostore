@@ -14,6 +14,8 @@
 llrb:
 
 * block diagram of go-routines.
+* document statistics information and organise them between memory, llrb,
+  mvcc, snapshots.
 * `memutilization` param should be configurable ? What is it used for ?
 * test marked deletes in mvcc mode.
 * check for whether stats values need to be atomically protected.

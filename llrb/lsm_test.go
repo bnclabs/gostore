@@ -12,7 +12,7 @@ import "github.com/prataprc/gostore/api"
 var _ = fmt.Sprintf("dummy")
 
 func TestLSMRange(t *testing.T) {
-	setts := Defaultsettings()
+	setts := testsetts(Defaultsettings())
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.deadseqno"] = true
@@ -74,7 +74,7 @@ func TestLSMRange(t *testing.T) {
 }
 
 func TestLSMMerge(t *testing.T) {
-	setts := Defaultsettings()
+	setts := testsetts(Defaultsettings())
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.deadseqno"] = true
@@ -136,7 +136,7 @@ func TestLSMMerge(t *testing.T) {
 }
 
 func TestLSMRangeMVCC(t *testing.T) {
-	setts := Defaultsettings()
+	setts := testsetts(Defaultsettings())
 	setts["mvcc.enable"] = true
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
@@ -200,7 +200,7 @@ func TestLSMRangeMVCC(t *testing.T) {
 }
 
 func TestLSMMergeMVCC(t *testing.T) {
-	setts := Defaultsettings()
+	setts := testsetts(Defaultsettings())
 	setts["mvcc.enable"] = true
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true

@@ -48,11 +48,6 @@ func (z *zblock) insert(nd api.Node) (ok, fin bool) {
 		return false, true
 	}
 	key, value := nd.Key(), nd.Value()
-	if int64(len(key)) > api.MaxKeymem {
-		panic(fmt.Errorf("key cannot exceed %v", api.MaxKeymem))
-	} else if int64(len(value)) > api.MaxValmem {
-		panic(fmt.Errorf("value cannot exceed %v", api.MaxValmem))
-	}
 
 	// check whether enough space available in the block.
 	entrysz := int64(zentryLen + len(key))

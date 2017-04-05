@@ -100,8 +100,11 @@ func (arena *Arena) Alloc(n int64) (unsafe.Pointer, api.Mallocer) {
 	if numblocks > arena.maxchunks {
 		numblocks = arena.maxchunks
 	}
-	if (numblocks & 0x7) > 0 {
-		numblocks = (numblocks >> 3) << 3
+	if numblocks < Alignment {
+		numblocks = Alignment
+	}
+	if mod := numblocks % Alignment; mod != 0 {
+		numblocks += Alignment - mod
 	}
 	// check whether we are exceeding memory.
 	allocated := int64(numblocks * size)

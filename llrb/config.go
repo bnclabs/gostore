@@ -1,38 +1,91 @@
 package llrb
 
+import "github.com/prataprc/gostore/api"
 import "github.com/prataprc/gostore/malloc"
 import s "github.com/prataprc/gosettings"
 
-// Defaultsettings provides an initial set of settings tuned for in-memory
-// key,value of 1TB storage.
+// Defaultsettings for llrb instance along with node arena and value arena.
+//
+// Configuration parameters:
+//
+// "iterpool.size":        int64(100),
+//		maximum number of active iterators.
+//
+// "lsm":                  false,
+//		handle deletes using log-structured-merge.
+//
+// "memutilization":       float64(0.4),
+//		allowable memory utilization.
+//
+// "minkeysize" (int64, default: <api.MinKeymem>),
+//		minimum size allowed for key.
+//
+// "maxkeysize" (int64, default: <api.MaxKeymem>),
+//		maximum size allowed for key.
+//
+// "minvalsize" (int64, default: <api.MinValmem>),
+//		minimum size allowed for value, valid only if
+//		"metadata.mvalue" is true.
+//
+// "maxvalsize" (int64, default: <api.MaxValmem>),
+//		maximum size allowed for value, valid only if
+//		"metadata.mvalue" is true.
+//
+// "maxlimit" (int64, default: 100),
+//		limit number of entries to batch read during iteration.
+//
+// "metadata.bornseqno" (bool, default: false),
+//		if true, use metadata field to book-keep node's born
+//		sequence number.
+//
+// "metadata.deadseqno": (bool,  default: false),
+//		if true, use metadata field to book-keep node's dead
+//		sequence number.
+//
+// "metadata.mvalue": (bool, default: true),
+//		store value pointer, as metadata, for each entry, passing this as
+//		false.
+//
+// "metadata.vbuuid": (bool, default: false),
+//		if true, use metadata field to book-keep node's vbuuid.
+//
+// "metadata.fpos": (bool, default: false),
+//		if true, use file position in disk files where value is
+//		stored.
+//
+// "mvcc.enable" (bool, default: false),
+//		manage LLRB as Multi-Version-Concurrency-Control tree.
+//
+// "mvcc.snapshot.tick" (int64, default: 5),
+//		time period, in millisecond, for generating read-snapshots.
+//
+// "mvcc.writer.chansize" (int64, default: 1000),
+//		buffered channel's size, if "mvcc.enable" is true, to batch write
+//		operations.
+//
 func Defaultsettings() s.Settings {
 	setts := s.Settings{
-		"iterpool.size":           int64(100),
-		"lsm":                     false,
-		"memutilization":          float64(0.4),
-		"minkeysize":              int64(96),
-		"maxkeysize":              int64(1024),
-		"minvalsize":              int64(96),
-		"maxvalsize":              int64(1024 * 1024),
-		"maxlimit":                int64(100),
-		"metadata.bornseqno":      false,
-		"metadata.deadseqno":      false,
-		"metadata.mvalue":         true,
-		"metadata.vbuuid":         false,
-		"metadata.fpos":           false,
-		"mvcc.enable":             false,
-		"mvcc.snapshot.tick":      int64(5), // 5 millisecond
-		"mvcc.writer.chansize":    int64(1000),
-		"nodearena.capacity":      int64(1024 * 1024 * 1024),
-		"nodearena.pool.capacity": int64(2 * 1024 * 1024),
-		"nodearena.maxpools":      malloc.Maxpools,
-		"nodearena.maxchunks":     malloc.Maxchunks,
-		"nodearena.allocator":     "flist",
-		"valarena.capacity":       int64(1024 * 1024 * 1024 * 1024),
-		"valarena.pool.capacity":  int64(10 * 1024 * 1024),
-		"valarena.maxpools":       malloc.Maxpools,
-		"valarena.maxchunks":      malloc.Maxchunks,
-		"valarena.allocator":      "flist",
+		"iterpool.size":        int64(100),
+		"lsm":                  false,
+		"memutilization":       float64(0.4),
+		"minkeysize":           api.MinKeymem,
+		"maxkeysize":           api.MaxKeymem,
+		"minvalsize":           api.MinValmem,
+		"maxvalsize":           api.MaxValmem,
+		"maxlimit":             int64(100),
+		"metadata.bornseqno":   false,
+		"metadata.deadseqno":   false,
+		"metadata.mvalue":      true,
+		"metadata.vbuuid":      false,
+		"metadata.fpos":        false,
+		"mvcc.enable":          false,
+		"mvcc.snapshot.tick":   int64(5), // 5 millisecond
+		"mvcc.writer.chansize": int64(1000),
 	}
+	nodesetts := malloc.Defaultsettings(api.MinKeymem, api.MaxKeymem)
+	nodesetts = nodesetts.AddPrefix("nodearena.")
+	valsetts := malloc.Defaultsettings(api.MinValmem, api.MaxValmem)
+	valsetts = valsetts.AddPrefix("valarena.")
+	setts = setts.Mixin(nodesetts, valsetts)
 	return setts
 }

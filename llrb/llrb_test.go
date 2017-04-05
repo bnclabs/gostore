@@ -15,7 +15,7 @@ import s "github.com/prataprc/gosettings"
 var _ = fmt.Sprintf("dummy")
 
 func TestNewLLRB(t *testing.T) {
-	setts := Defaultsettings()
+	setts := testsetts(Defaultsettings())
 
 	llrb := NewLLRB("test", setts)
 	if llrb == nil {
@@ -63,7 +63,7 @@ func TestNewLLRB(t *testing.T) {
 }
 
 func TestNewNode(t *testing.T) {
-	setts := Defaultsettings()
+	setts := testsetts(Defaultsettings())
 	setts["metadata.bornseqno"] = true
 	setts["metadata.deadseqno"] = true
 	setts["metadata.mvalue"] = true
@@ -101,7 +101,7 @@ func TestNewNode(t *testing.T) {
 }
 
 func TestNewNodePanic(t *testing.T) {
-	setts := Defaultsettings()
+	setts := testsetts(Defaultsettings())
 	setts["metadata.mvalue"] = false
 	llrb := NewLLRB("test", setts)
 	key, value := makekeyvalue(make([]byte, 128), make([]byte, 1024))
@@ -120,7 +120,7 @@ func TestNewNodePanic(t *testing.T) {
 }
 
 func TestCloneNode(t *testing.T) {
-	setts := Defaultsettings()
+	setts := testsetts(Defaultsettings())
 	setts["metadata.mvalue"] = true
 	llrb := NewLLRB("test", setts)
 
@@ -151,7 +151,7 @@ func TestBasicLookup(t *testing.T) {
 		[2][]byte{[]byte("key5"), []byte("value5")},
 	}
 
-	setts := Defaultsettings()
+	setts := testsetts(Defaultsettings())
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
@@ -233,7 +233,7 @@ func TestBasicUpdates(t *testing.T) {
 		[2][]byte{[]byte("key5"), []byte("value5")},
 	}
 
-	setts := Defaultsettings()
+	setts := testsetts(Defaultsettings())
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
@@ -372,7 +372,7 @@ func TestBasicUpdates(t *testing.T) {
 }
 
 func TestBasicRange(t *testing.T) {
-	setts := Defaultsettings()
+	setts := testsetts(Defaultsettings())
 	setts["metadata.mvalue"] = true
 	setts["metadata.fpos"] = true
 	setts["metadata.bornseqno"] = true
@@ -527,7 +527,7 @@ func TestBasicRange(t *testing.T) {
 func TestPartialRange(t *testing.T) {
 	d := dict.NewDict("testdict")
 
-	setts := Defaultsettings()
+	setts := testsetts(Defaultsettings())
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
@@ -644,7 +644,7 @@ func TestPartialRange(t *testing.T) {
 }
 
 func TestRange(t *testing.T) {
-	setts := Defaultsettings()
+	setts := testsetts(Defaultsettings())
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
@@ -764,7 +764,7 @@ func TestRange(t *testing.T) {
 }
 
 func TestIteratePool(t *testing.T) {
-	setts := Defaultsettings()
+	setts := testsetts(Defaultsettings())
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
@@ -790,7 +790,7 @@ func TestIteratePool(t *testing.T) {
 }
 
 func TestBasicIterate(t *testing.T) {
-	setts := Defaultsettings()
+	setts := testsetts(Defaultsettings())
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
@@ -908,7 +908,7 @@ func TestBasicIterate(t *testing.T) {
 func TestPartialIterate(t *testing.T) {
 	d := dict.NewDict("testdict")
 
-	setts := Defaultsettings()
+	setts := testsetts(Defaultsettings())
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
@@ -1004,7 +1004,7 @@ func TestPartialIterate(t *testing.T) {
 }
 
 func TestIterate(t *testing.T) {
-	setts := Defaultsettings()
+	setts := testsetts(Defaultsettings())
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
@@ -1125,7 +1125,7 @@ func TestIterate(t *testing.T) {
 }
 
 func TestInsert(t *testing.T) {
-	setts := Defaultsettings()
+	setts := testsetts(Defaultsettings())
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.deadseqno"] = false
@@ -1163,7 +1163,7 @@ func TestInsert(t *testing.T) {
 		t.Error(err)
 	}
 
-	useful := int64(2096640)
+	useful := int64(2097984)
 	allocated, avail := int64(1680000), int64(1072061824)
 	if x := stats["node.useful"].(int64); x != useful {
 		t.Errorf("expected %v, got %v", useful, x)
@@ -1174,8 +1174,8 @@ func TestInsert(t *testing.T) {
 	if x := stats["node.available"].(int64); x != avail {
 		t.Errorf("expected %v, got %v", avail, x)
 	}
-	useful = int64(8388608)
-	allocated, avail = int64(1280000), int64(1099510347776)
+	useful = int64(2097152)
+	allocated, avail = int64(1280000), int64(1072461824)
 	if x := stats["value.useful"].(int64); x != useful {
 		t.Errorf("expected %v, got %v", useful, x)
 	}
@@ -1228,7 +1228,7 @@ func TestInsert(t *testing.T) {
 }
 
 func TestUpsert(t *testing.T) {
-	setts := Defaultsettings()
+	setts := testsetts(Defaultsettings())
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.deadseqno"] = false
@@ -1299,11 +1299,11 @@ func TestUpsert(t *testing.T) {
 		t.Error(err)
 	}
 
-	if useful := stats["node.useful"].(int64); useful != 2096640 {
-		t.Errorf("expected %v, got %v", 2096640, useful)
+	if useful := stats["node.useful"].(int64); useful != 2097984 {
+		t.Errorf("expected %v, got %v", 2097984, useful)
 	}
-	if useful := stats["value.useful"].(int64); useful != 18873152 {
-		t.Errorf("expected %v, got %v", 18873152, useful)
+	if useful := stats["value.useful"].(int64); useful != 6291712 {
+		t.Errorf("expected %v, got %v", 6291712, useful)
 	}
 	x, y := int64(1680000), stats["node.allocated"].(int64)
 	if x != y {
@@ -1317,7 +1317,7 @@ func TestUpsert(t *testing.T) {
 	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
-	x, y = int64(1099509307776), stats["value.available"].(int64)
+	x, y = int64(1071421824), stats["value.available"].(int64)
 	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	} else if x, y = int64(1000000), stats["keymemory"].(int64); x != y {
@@ -1332,7 +1332,7 @@ func TestUpsert(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	setts := Defaultsettings()
+	setts := testsetts(Defaultsettings())
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
@@ -1435,11 +1435,11 @@ func TestDelete(t *testing.T) {
 		t.Error(err)
 	}
 
-	if useful := stats["node.useful"].(int64); useful != 2096640 {
-		t.Errorf("expected %v, got %v", 2096640, useful)
+	if useful := stats["node.useful"].(int64); useful != 2097984 {
+		t.Errorf("expected %v, got %v", 2097984, useful)
 	}
-	if useful := stats["value.useful"].(int64); useful != 8388608 {
-		t.Errorf("expected %v, got %v", 8388608, useful)
+	if useful := stats["value.useful"].(int64); useful != 2097152 {
+		t.Errorf("expected %v, got %v", 2097152, useful)
 	} else if x, y := int64(0), stats["node.allocated"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	} else if x, y = int64(0), stats["value.allocated"].(int64); x != y {
@@ -1449,7 +1449,7 @@ func TestDelete(t *testing.T) {
 	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
-	x, y = int64(1099511627776), stats["value.available"].(int64)
+	x, y = int64(1073741824), stats["value.available"].(int64)
 	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	} else if x, y = int64(0), stats["keymemory"].(int64); x != y {
@@ -1464,7 +1464,7 @@ func TestDelete(t *testing.T) {
 }
 
 func TestClone(t *testing.T) {
-	setts := Defaultsettings()
+	setts := testsetts(Defaultsettings())
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.deadseqno"] = false
@@ -1548,7 +1548,7 @@ func TestClone(t *testing.T) {
 }
 
 func BenchmarkCloneKey(b *testing.B) {
-	setts := Defaultsettings()
+	setts := testsetts(Defaultsettings())
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
@@ -1564,7 +1564,7 @@ func BenchmarkCloneKey(b *testing.B) {
 }
 
 func BenchmarkCloneSmall(b *testing.B) {
-	setts := Defaultsettings()
+	setts := testsetts(Defaultsettings())
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
@@ -1580,7 +1580,7 @@ func BenchmarkCloneSmall(b *testing.B) {
 }
 
 func BenchmarkCloneLarge(b *testing.B) {
-	setts := Defaultsettings()
+	setts := testsetts(Defaultsettings())
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
@@ -1596,7 +1596,7 @@ func BenchmarkCloneLarge(b *testing.B) {
 }
 
 func BenchmarkRange10000(b *testing.B) {
-	setts := Defaultsettings()
+	setts := testsetts(Defaultsettings())
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
@@ -1623,7 +1623,7 @@ func BenchmarkRange10000(b *testing.B) {
 }
 
 func BenchmarkIter10000(b *testing.B) {
-	setts := Defaultsettings()
+	setts := testsetts(Defaultsettings())
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
@@ -1698,4 +1698,12 @@ func makellrb(
 			return true
 		})
 	return llrb
+}
+
+func testsetts(setts s.Settings) s.Settings {
+	setts["minkeysize"] = int64(96)
+	setts["maxkeysize"] = int64(1024)
+	setts["minvalsize"] = int64(96)
+	setts["maxvalsize"] = int64(10 * 1024 * 1024)
+	return setts
 }
