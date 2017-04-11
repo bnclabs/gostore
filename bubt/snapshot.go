@@ -216,7 +216,7 @@ func (ss *Snapshot) Setclock(clock api.Clock) {
 }
 
 // Clone Index{} interface is not supported
-func (ss *Snapshot) Clone(name string) api.Index {
+func (ss *Snapshot) Clone(name string) (api.Index, error) {
 	panic("not supported")
 }
 

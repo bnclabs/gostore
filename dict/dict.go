@@ -67,7 +67,7 @@ func (d *Dict) Setclock(clock api.Clock) {
 }
 
 // Clone implement api.Index{} interface.
-func (d *Dict) Clone(name string) api.Index {
+func (d *Dict) Clone(name string) (api.Index, error) {
 	newd := NewDict(name)
 	newd.dead, newd.snapn = d.dead, d.snapn
 	newd.clock, newd.activeiter = d.clock, d.activeiter
@@ -78,7 +78,7 @@ func (d *Dict) Clone(name string) api.Index {
 		newd.sortkeys = append(newd.sortkeys, key)
 	}
 	newd.hashks = newd.sorted()
-	return newd
+	return newd, nil
 }
 
 // Destroy implement api.Index{} interface.

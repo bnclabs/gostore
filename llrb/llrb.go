@@ -215,13 +215,13 @@ func (llrb *LLRB) Setclock(clock api.Clock) {
 }
 
 // Clone implement Index{} interface.
-func (llrb *LLRB) Clone(name string) api.Index {
+func (llrb *LLRB) Clone(name string) (api.Index, error) {
 	if llrb.mvcc.enabled {
 		newllrb, err := llrb.mvcc.writer.clone(name)
 		if err != nil {
 			log.Errorf("%v Clone(): %v\n", llrb.logprefix, err)
 		}
-		return newllrb
+		return newllrb, err
 	}
 
 	llrb.rw.Lock()
@@ -230,7 +230,7 @@ func (llrb *LLRB) Clone(name string) api.Index {
 	return llrb.doclone(name)
 }
 
-func (llrb *LLRB) doclone(name string) *LLRB {
+func (llrb *LLRB) doclone(name string) (*LLRB, error) {
 	n_activeiter := atomic.LoadInt64(&llrb.n_activeiter)
 	if n_activeiter > 0 {
 		fmsg := "Clone(): unexpected active-iterators %v"
@@ -244,7 +244,7 @@ func (llrb *LLRB) doclone(name string) *LLRB {
 
 	newllrb.setroot(newllrb.clonetree(llrb.getroot()))
 
-	return newllrb
+	return newllrb, nil
 }
 
 // Destroy implement Index{} interface.

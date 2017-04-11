@@ -135,7 +135,7 @@ type Index interface {
 
 	// Clone will do a deep copy of the underlying data structure and
 	// return the new copy.
-	Clone(name string) Index
+	Clone(name string) (Index, error)
 
 	// Stats return a set of index statistics.
 	Stats() (map[string]interface{}, error)

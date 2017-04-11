@@ -1639,7 +1639,10 @@ func TestLLRBMvccClone(t *testing.T) {
 			})
 	}
 
-	newllrb := llrb.Clone(llrb.name + "-clone")
+	newllrb, err := llrb.Clone(llrb.name + "-clone")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	snapch = make(chan api.IndexSnapshot, 1)
 	if err := newllrb.RSnapshot(snapch, true /*next*/); err != nil {

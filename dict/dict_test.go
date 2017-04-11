@@ -1194,7 +1194,10 @@ func TestDictClone(t *testing.T) {
 			})
 	}
 
-	newd := d.Clone(d.id + "-clone")
+	newd, err := d.Clone(d.id + "-clone")
+	if err != nil {
+		t.Error(err)
+	}
 
 	keys, values := make([][]byte, 0), make([][]byte, 0)
 	newd.Range(

@@ -71,6 +71,9 @@ func (this Scalarclock) Marshal(buf []byte) []byte {
 }
 
 func (this Scalarclock) Unmarshal(data []byte) Clock {
+	if data == nil || len(data) == 0 {
+		return Scalarclock(0)
+	}
 	return Scalarclock(binary.BigEndian.Uint64(data))
 }
 

@@ -1518,7 +1518,10 @@ func TestClone(t *testing.T) {
 			})
 	}
 
-	newllrb := llrb.Clone(llrb.name + "-clone")
+	newllrb, err := llrb.Clone(llrb.name + "-clone")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	keys, values := make([][]byte, 0), make([][]byte, 0)
 	newllrb.Range(

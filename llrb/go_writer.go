@@ -156,13 +156,16 @@ func (writer *LLRBWriter) log(involved string, humanize bool) {
 }
 
 func (writer *LLRBWriter) clone(name string) (*LLRB, error) {
-	respch := make(chan []interface{}, 0)
+	respch := make(chan []interface{}, 1)
 	cmd := []interface{}{cmdLlrbWriterClone, name, respch}
 	resp, err := lib.FailsafeRequest(writer.reqch, respch, cmd, writer.finch)
 	if err != nil {
 		return nil, err
 	}
-	return resp[0].(*LLRB), nil
+	if resp[1] == nil {
+		return resp[0].(*LLRB), nil
+	}
+	return nil, resp[1].(error)
 }
 
 func (writer *LLRBWriter) destroy() error {
@@ -301,8 +304,8 @@ loop:
 
 		case cmdLlrbWriterClone:
 			name, respch := msg[1].(string), msg[2].(chan []interface{})
-			newllrb := writer.llrb.doclone(name)
-			respch <- []interface{}{newllrb}
+			newllrb, err := writer.llrb.doclone(name)
+			respch <- []interface{}{newllrb, err}
 
 		case cmdLlrbWriterDestroy:
 			ch := make(chan bool)
