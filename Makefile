@@ -12,6 +12,12 @@ test:
 		$(MAKE) -C $$dir test; \
 	done
 
+bench:
+	@for dir in $(SUBDIRS); do \
+		echo $$dir "..."; \
+		$(MAKE) -C $$dir bench; \
+	done
+
 vet:
 	@go vet ./...
 
