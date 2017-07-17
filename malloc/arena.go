@@ -77,7 +77,7 @@ func (arena *Arena) readsettings(setts s.Settings) *Arena {
 //---- operations
 
 // Alloc implement api.Mallocer{} interface.
-func (arena *Arena) Alloc(n int64) (unsafe.Pointer, api.Mallocer) {
+func (arena *Arena) Alloc(n int64) (unsafe.Pointer, api.MemoryPool) {
 	// check argument
 	if largest := arena.blocksizes[len(arena.blocksizes)-1]; n > largest {
 		panicerr("Alloc size %v exceeds maxblock size %v", n, largest)

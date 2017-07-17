@@ -13,7 +13,7 @@ const nvaluesize = int(unsafe.Sizeof(nodevalue{})) - 8 // + valuesize
 
 type nodevalue struct {
 	hdr1     uint64 // valuesize[39:]
-	pool     api.Mallocer
+	pool     api.MemoryPool
 	valstart unsafe.Pointer // just a place-holder
 }
 

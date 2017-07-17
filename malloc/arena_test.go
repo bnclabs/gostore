@@ -6,6 +6,7 @@ import "unsafe"
 import "fmt"
 
 import s "github.com/prataprc/gosettings"
+import "github.com/prataprc/gostore/api"
 
 var _ = fmt.Sprintf("dummy")
 
@@ -88,7 +89,7 @@ func TestArenaAlloc(t *testing.T) {
 		"maxchunks":     Maxchunks,
 		"allocator":     "flist",
 	})
-	ptrs, mpools := make([]unsafe.Pointer, 1024), make([]Mpooler, 1024)
+	ptrs, mpools := make([]unsafe.Pointer, 1024), make([]api.MemoryPool, 1024)
 	for i := 0; i < 1024; i++ {
 		ptrs[i], mpools[i] = marena.Alloc(1024)
 		if ptrs[i] == nil || mpools[i] == nil {
