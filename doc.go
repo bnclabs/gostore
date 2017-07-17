@@ -1,5 +1,9 @@
 // Package storage implement a collection of storage algorithm.
 //
+// api:
+//
+// Interface specification to access gostore datastructures.
+//
 // dict:
 //
 // Implement a simple in-memory hash map based on golang map. Primary used
