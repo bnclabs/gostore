@@ -3,13 +3,31 @@
 package api
 
 const (
+	// UpsertCmd to insert or update a key,value pair in index. Part of
+	// MutationCmd.
 	UpsertCmd byte = iota + 1
+
+	// CasCmd to insert or update a key,value pair in index, if CAS matches.
+	// To enforce a fresh insert of key,value pair CAS should be ZERO.
+	// Part of MutationCmd.
 	CasCmd
+
+	// DelminCmd to delete the first key, and its value, from index.
+	// Part of MutationCmd.
 	DelminCmd
+
+	// DelmaxCmd to delete the last key, and its value, from index.
+	// Part of MutationCmd.
 	DelmaxCmd
+
+	// DeleteCmd to delete a key,value pair in index. Part of
+	// MutationCmd.
 	DeleteCmd
 )
 
+// MutationCmd for write operation. Each instance of MutationCmd is for
+// a single write operation in index. Multiple MutationCmd can be
+// batched for efficiency.
 type MutationCmd struct {
 	Cmd        byte
 	Cas        uint64
@@ -17,21 +35,21 @@ type MutationCmd struct {
 }
 
 // NodeCallb callback from IndexReader and IndexWriter.
-// * Don't keep any reference to newnd and oldnd:
-// * oldnd can only be read.
-// * newnd can be read or, for Upsert calls, updated.
-// * Other than Mutations and Range API, `i` will always be ZERO.
-// * for IndexReader API, newnd and oldnd will be SAME.
-// * for Delete APIs, newnd and oldnd will be SAME and point to DELETED node.
+//  * Don't keep any reference to newnd and oldnd:
+//  * oldnd can only be read.
+//  * newnd can be read or, for Upsert calls, updated.
+//  * Other than Mutations and Range API, `i` will always be ZERO.
+//  * for IndexReader API, newnd and oldnd will be SAME.
+//  * for Delete APIs, newnd and oldnd will be SAME and point to DELETED node.
 type NodeCallb func(index Index, i int64, newnd, oldnd Node, err error) bool
 
-// Node interface methods to access node attributes.
+// Node accessor methods.
 type Node interface {
 	NodeSetter
 	NodeGetter
 }
 
-// NodeGetter interface methods to get node attributes.
+// NodeGetter to read node attributes.
 type NodeGetter interface {
 	// Vbno return entry's vbucket number.
 	Vbno() (vbno uint16)
@@ -70,21 +88,22 @@ type NodeSetter interface {
 	// Setaccess to set access timestamp for this entry.
 	Setaccess(access uint64) Node
 
-	// SetVbuuid to set unique vbucket id for this entry
-	SetVbuuid(uuid uint64) Node
-
-	// SetFpos to set unique vbucket id for this entry
-	SetFpos(level byte, offset uint64) Node
-
 	// SetBornseqno to set vbucket-seqno at which this entry was upserted.
 	SetBornseqno(seqno uint64) Node
 
 	// SetDeadseqno to set vbucket-seqno at which this entry was deleted.
 	SetDeadseqno(seqno uint64) Node
+
+	// SetVbuuid to set unique vbucket id for this entry
+	SetVbuuid(uuid uint64) Node
+
+	// SetFpos to set unique vbucket id for this entry
+	SetFpos(level byte, offset uint64) Node
 }
 
 type Clock interface {
-	// Update clock upto latest msg.
+	// Update clock to latest write operation. Typically `msg` indicates
+	// a write operation.
 	Update(msg interface{}) Clock
 
 	// Clone creates a copy of the clock.

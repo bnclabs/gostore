@@ -5,6 +5,9 @@ import "unsafe"
 // Mallocer interface for custom memory management. Typical library
 // implementing this interface will
 type Mallocer interface {
+	// Chunksizes allocatable chunk-sizes.
+	Chunksizes() (sizes []int64)
+
 	// Alloc allocate a chunk of `n` bytes from `pool`.
 	Alloc(n int64) (ptr unsafe.Pointer, pool MemoryPool)
 
@@ -20,9 +23,6 @@ type Mallocer interface {
 	// Available memory from arena.
 	Available() (available int64)
 
-	// Chunksizes allocatable chunk-sizes.
-	Chunksizes() (sizes []int64)
-
 	// Utilization map of chunk-size and its utilization
 	Utilization() ([]int, []float64)
 
@@ -36,10 +36,4 @@ type MemoryPool interface {
 
 	// Free pointer back to the pool.
 	Free(ptr unsafe.Pointer)
-
-	// Less alias for alloc:Mpooler interface.
-	//Less(pool interface{}) bool
-
-	// Allocate alias for alloc:Mpooler interface.
-	//Allocchunk() (ptr unsafe.Pointer, ok bool)
 }

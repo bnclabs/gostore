@@ -36,6 +36,12 @@ func TestFixbuffer(t *testing.T) {
 	}
 }
 
+func TestBytes2str(t *testing.T) {
+	if Bytes2str(nil) != "" {
+		t.Errorf("unexpected %v", Bytes2str(nil))
+	}
+}
+
 func BenchmarkBinarycmp(b *testing.B) {
 	x, y := make([]byte, 256), make([]byte, 256)
 	for i := 0; i < b.N; i++ {

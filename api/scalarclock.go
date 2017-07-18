@@ -50,11 +50,13 @@ func (this Scalarclock) LessEqual(other Clock) bool {
 	return this <= other.(Scalarclock)
 }
 
+// JSONMarshal implement Clock{} interface.
 func (this Scalarclock) JSONMarshal(buf []byte) []byte {
 	buf = Fixbuffer(buf, 64)
 	return strconv.AppendUint(buf[:0], uint64(this), 16)
 }
 
+// JSONUnmarshal implement Clock{} interface.
 func (this Scalarclock) JSONUnmarshal(data []byte) Clock {
 	sdata := Bytes2str(data)
 	clk, err := strconv.ParseUint(sdata, 16, 64)
@@ -64,12 +66,14 @@ func (this Scalarclock) JSONUnmarshal(data []byte) Clock {
 	return Scalarclock(clk)
 }
 
+// Marshal implement Clock{} interface.
 func (this Scalarclock) Marshal(buf []byte) []byte {
 	buf = Fixbuffer(buf, 64)
 	binary.BigEndian.PutUint64(buf, uint64(this))
 	return buf[:8]
 }
 
+// Unmarshal implement Clock{} interface.
 func (this Scalarclock) Unmarshal(data []byte) Clock {
 	if data == nil || len(data) == 0 {
 		return Scalarclock(0)
@@ -78,5 +82,7 @@ func (this Scalarclock) Unmarshal(data []byte) Clock {
 }
 
 func (this Scalarclock) String() string {
-	return fmt.Sprintf("%v", this)
+	var dst [16]byte
+	out := strconv.AppendUint(dst[:0], (uint64(this)), 10)
+	return fmt.Sprintf("%s", out)
 }

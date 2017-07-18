@@ -12,15 +12,22 @@ type lsmiterator struct {
 	reverse   bool
 }
 
+// LSMRange take one or more input iterators, where each iterator return items
+// in sort order, and return a new iterator that can merge results from
+// input iterators and return items in sort order.
 func LSMRange(reverse bool, iterators ...IndexIterator) IndexIterator {
-	return LSMIterator(reverse, false /*merge*/, iterators...)
+	return newLSMIterator(reverse, false /*merge*/, iterators...)
 }
 
+// LSMMerge is same as LSMRange, except that deleted items from input
+// iterators are included in the output.
 func LSMMerge(reverse bool, iterators ...IndexIterator) IndexIterator {
-	return LSMIterator(reverse, true /*merge*/, iterators...)
+	return newLSMIterator(reverse, true /*merge*/, iterators...)
 }
 
-func LSMIterator(reverse, merge bool, iterators ...IndexIterator) IndexIterator {
+func newLSMIterator(
+	reverse, merge bool, iterators ...IndexIterator) IndexIterator {
+
 	miter := &lsmiterator{merge: merge, reverse: reverse}
 	if miter.iterators == nil || cap(miter.iterators) < len(iterators) {
 		miter.iterators = make([]IndexIterator, len(iterators))
@@ -42,6 +49,7 @@ func LSMIterator(reverse, merge bool, iterators ...IndexIterator) IndexIterator 
 	return miter.sort().dedup()
 }
 
+// Next implement IndexIterator interface.
 func (miter *lsmiterator) Next() (n Node) {
 	if miter == nil {
 		//fmt.Println("Next", nil)
@@ -54,6 +62,7 @@ func (miter *lsmiterator) Next() (n Node) {
 	return n
 }
 
+// Close implement IndexIterator interface.
 func (miter *lsmiterator) Close() {
 	if miter == nil {
 		return

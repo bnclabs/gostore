@@ -1,12 +1,14 @@
 package api
 
 import "bytes"
-import "fmt"
 import "reflect"
 import "unsafe"
 
-var _ = fmt.Sprintf("dummy")
-
+// Binarycmp is same as bytes.Compare expect for partial matches. For EG:
+// bytes.Compare([]byte("aaa"), []byte("aa")) shall return 1, whereas
+// Binarycmp will return 0. Note that partial comparison is applicable only
+// for limit. That is, Binarycmp([]byte("aa"), []byte("aaa")) will return -1,
+// same as bytes.Compare.
 func Binarycmp(key, limit []byte, partial bool) int {
 	if ln := len(limit); partial && ln < len(key) {
 		return bytes.Compare(key[:ln], limit[:ln])
@@ -14,6 +16,8 @@ func Binarycmp(key, limit []byte, partial bool) int {
 	return bytes.Compare(key, limit)
 }
 
+// Fixbuffer will expand the buffer, if its capacity is less than size and
+// return the buffer of size length.
 func Fixbuffer(buffer []byte, size int64) []byte {
 	if buffer == nil || int64(cap(buffer)) < size {
 		buffer = make([]byte, size)
