@@ -265,8 +265,156 @@ func TestLSMMergeMVCC(t *testing.T) {
 	destroyindexes(indexes, refllrb)
 }
 
+func BenchmarkLSMRange500x2(b *testing.B) {
+	setts := llrbsetts(llrb.Defaultsettings())
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.deadseqno"] = true
+	setts["metadata.vbuuid"] = true
+	setts["lsm"] = true
+	llrb1 := llrb.NewLLRB("first", setts)
+	llrb2 := llrb.NewLLRB("second", setts)
+
+	refsetts := setts.Section("")
+	refsetts["lsm"] = false
+	refllrb := llrb.NewLLRB("reference", refsetts)
+
+	indexes := []api.Index{llrb1, llrb2}
+	entries, ops := 500, 1000
+	buildlsmindexes(b, indexes, refllrb, ops, entries, false /*mvcc*/)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		iterators := []api.IndexIterator{}
+		for _, index := range indexes {
+			iterator := index.Iterate(nil, nil, "both", false /*reverse*/)
+			iterators = append(iterators, iterator)
+		}
+		lsmiter, count := LSMRange(false /*reverse*/, iterators...), 0
+		for node := lsmiter.Next(); node != nil; node = lsmiter.Next() {
+			count++
+		}
+		lsmiter.Close()
+	}
+
+	destroyindexes(indexes, refllrb)
+}
+
+func BenchmarkLSMRange500x4(b *testing.B) {
+	setts := llrbsetts(llrb.Defaultsettings())
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.deadseqno"] = true
+	setts["metadata.vbuuid"] = true
+	setts["lsm"] = true
+	llrb1 := llrb.NewLLRB("first", setts)
+	llrb2 := llrb.NewLLRB("second", setts)
+	llrb3 := llrb.NewLLRB("third", setts)
+	llrb4 := llrb.NewLLRB("fourth", setts)
+
+	refsetts := setts.Section("")
+	refsetts["lsm"] = false
+	refllrb := llrb.NewLLRB("reference", refsetts)
+
+	indexes := []api.Index{llrb1, llrb2, llrb3, llrb4}
+	entries, ops := 500, 1000
+	buildlsmindexes(b, indexes, refllrb, ops, entries, false /*mvcc*/)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		iterators := []api.IndexIterator{}
+		for _, index := range indexes {
+			iterator := index.Iterate(nil, nil, "both", false /*reverse*/)
+			iterators = append(iterators, iterator)
+		}
+		lsmiter, count := LSMRange(false /*reverse*/, iterators...), 0
+		for node := lsmiter.Next(); node != nil; node = lsmiter.Next() {
+			count++
+		}
+		lsmiter.Close()
+	}
+
+	destroyindexes(indexes, refllrb)
+}
+
+func BenchmarkLSMMerge500x2(b *testing.B) {
+	setts := llrbsetts(llrb.Defaultsettings())
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.deadseqno"] = true
+	setts["metadata.vbuuid"] = true
+	setts["lsm"] = true
+	llrb1 := llrb.NewLLRB("first", setts)
+	llrb2 := llrb.NewLLRB("second", setts)
+
+	refsetts := setts.Section("")
+	refsetts["lsm"] = false
+	refllrb := llrb.NewLLRB("reference", refsetts)
+
+	indexes := []api.Index{llrb1, llrb2}
+	entries, ops := 500, 1000
+	buildlsmindexes(b, indexes, refllrb, ops, entries, false /*mvcc*/)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		iterators := []api.IndexIterator{}
+		for _, index := range indexes {
+			iterator := index.Iterate(nil, nil, "both", false /*reverse*/)
+			iterators = append(iterators, iterator)
+		}
+		lsmiter, count := LSMMerge(false /*reverse*/, iterators...), 0
+		for node := lsmiter.Next(); node != nil; node = lsmiter.Next() {
+			count++
+		}
+		lsmiter.Close()
+	}
+
+	destroyindexes(indexes, refllrb)
+}
+
+func BenchmarkLSMMerge500x4(b *testing.B) {
+	setts := llrbsetts(llrb.Defaultsettings())
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.deadseqno"] = true
+	setts["metadata.vbuuid"] = true
+	setts["lsm"] = true
+	llrb1 := llrb.NewLLRB("first", setts)
+	llrb2 := llrb.NewLLRB("second", setts)
+	llrb3 := llrb.NewLLRB("third", setts)
+	llrb4 := llrb.NewLLRB("fourth", setts)
+
+	refsetts := setts.Section("")
+	refsetts["lsm"] = false
+	refllrb := llrb.NewLLRB("reference", refsetts)
+
+	indexes := []api.Index{llrb1, llrb2, llrb3, llrb4}
+	entries, ops := 500, 1000
+	buildlsmindexes(b, indexes, refllrb, ops, entries, false /*mvcc*/)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		iterators := []api.IndexIterator{}
+		for _, index := range indexes {
+			iterator := index.Iterate(nil, nil, "both", false /*reverse*/)
+			iterators = append(iterators, iterator)
+		}
+		lsmiter, count := LSMMerge(false /*reverse*/, iterators...), 0
+		for node := lsmiter.Next(); node != nil; node = lsmiter.Next() {
+			count++
+		}
+		lsmiter.Close()
+	}
+
+	destroyindexes(indexes, refllrb)
+}
+
 func buildlsmindexes(
-	t *testing.T, indexes []api.Index, refllrb api.Index,
+	tb testing.TB, indexes []api.Index, refllrb api.Index,
 	ops, entries int, mvcc bool) {
 
 	seqno := uint64(0)
@@ -286,7 +434,7 @@ func buildlsmindexes(
 				key, value,
 				func(_ api.Index, _ int64, nnd, ond api.Node, err error) bool {
 					if err != nil {
-						t.Error(err)
+						tb.Error(err)
 					}
 					nnd.Setvbno(100).SetVbuuid(1000).SetBornseqno(seqno)
 					return true
@@ -295,7 +443,7 @@ func buildlsmindexes(
 				key, value,
 				func(_ api.Index, _ int64, nnd, ond api.Node, err error) bool {
 					if err != nil {
-						t.Error(err)
+						tb.Error(err)
 					}
 					nnd.Setvbno(100).SetVbuuid(1000).SetBornseqno(seqno)
 					return true
@@ -307,7 +455,7 @@ func buildlsmindexes(
 				index.DeleteMin(
 					func(_ api.Index, _ int64, nnd, _ api.Node, err error) bool {
 						if err != nil {
-							t.Error(err)
+							tb.Error(err)
 						} else if nnd != nil {
 							key = nnd.Key()
 							nnd.Setvbno(100).SetVbuuid(1000).SetDeadseqno(seqno)
@@ -319,7 +467,7 @@ func buildlsmindexes(
 				index.DeleteMax(
 					func(_ api.Index, _ int64, nnd, _ api.Node, err error) bool {
 						if err != nil {
-							t.Error(err)
+							tb.Error(err)
 						} else if nnd != nil {
 							key = nnd.Key()
 							nnd.Setvbno(100).SetVbuuid(1000).SetDeadseqno(seqno)
@@ -333,7 +481,7 @@ func buildlsmindexes(
 					key,
 					func(_ api.Index, _ int64, nnd, _ api.Node, err error) bool {
 						if err != nil {
-							t.Error(err)
+							tb.Error(err)
 						} else if nnd != nil {
 							nnd.Setvbno(100).SetVbuuid(1000).SetDeadseqno(seqno)
 						}
@@ -344,7 +492,7 @@ func buildlsmindexes(
 				key,
 				func(_ api.Index, _ int64, nnd, ond api.Node, err error) bool {
 					if err != nil && err.Error() != api.ErrorKeyMissing.Error() {
-						t.Error(err)
+						tb.Error(err)
 					} else if nnd != nil {
 						nnd.Setvbno(100).SetVbuuid(1000).SetDeadseqno(seqno)
 					}
@@ -363,7 +511,7 @@ func buildlsmindexes(
 			key,
 			func(_ api.Index, _ int64, nnd, ond api.Node, err error) bool {
 				if err != nil {
-					t.Error(err)
+					tb.Error(err)
 				}
 				if nnd != nil {
 					nnd.Setvbno(100).SetVbuuid(1000).SetDeadseqno(seqno)
@@ -379,7 +527,7 @@ func buildlsmindexes(
 			snapch := make(chan api.IndexSnapshot, 1)
 			err := index.RSnapshot(snapch, true /*next*/)
 			if err != nil {
-				t.Fatal(err)
+				tb.Fatal(err)
 			}
 			reader = <-snapch
 		}
@@ -388,10 +536,10 @@ func buildlsmindexes(
 			key,
 			func(_ api.Index, _ int64, nnd, ond api.Node, err error) bool {
 				if nnd == nil {
-					t.Errorf("missing lsm delete for key %s", key)
+					tb.Errorf("missing lsm delete for key %s", key)
 				}
 				if nnd.IsDeleted() == false {
-					t.Errorf("expected lsm delete mark %s", nnd.Key())
+					tb.Errorf("expected lsm delete mark %s", nnd.Key())
 				}
 				return true
 			})
@@ -404,7 +552,7 @@ func buildlsmindexes(
 			key,
 			func(_ api.Index, _ int64, nnd, ond api.Node, err error) bool {
 				if nnd != nil {
-					t.Errorf("expected key missing %s", key)
+					tb.Errorf("expected key missing %s", key)
 				}
 				return true
 			})
