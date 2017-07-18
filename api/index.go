@@ -3,24 +3,24 @@
 package api
 
 const (
-	// UpsertCmd to insert or update a key,value pair in index. Part of
-	// MutationCmd.
+	// UpsertCmd to insert or update a key,value pair in index. To be
+	// used with MutationCmd.
 	UpsertCmd byte = iota + 1
 
 	// CasCmd to insert or update a key,value pair in index, if CAS matches.
 	// To enforce a fresh insert of key,value pair CAS should be ZERO.
-	// Part of MutationCmd.
+	// To be used with MutationCmd.
 	CasCmd
 
 	// DelminCmd to delete the first key, and its value, from index.
-	// Part of MutationCmd.
+	// To be used with MutationCmd.
 	DelminCmd
 
 	// DelmaxCmd to delete the last key, and its value, from index.
-	// Part of MutationCmd.
+	// To be used with MutationCmd.
 	DelmaxCmd
 
-	// DeleteCmd to delete a key,value pair in index. Part of
+	// DeleteCmd to delete a key,value pair in index. To be used with
 	// MutationCmd.
 	DeleteCmd
 )
