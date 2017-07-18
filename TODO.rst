@@ -1,3 +1,7 @@
+- README: brief description of all sub-packages, links to godocs and articles.
+  use the template from goparsec.
+- Test lsm on large dataset using llrb and bubt iterators. Try with 1,2,4,8
+  iterators. Include validate, benchmark and profiling.
 - proof read README.rst
 - lsm.go, test with IsDelete() returning true or false based on Deadseqno().
 - update store/ test cases to create and update clocks for dict and llrb
