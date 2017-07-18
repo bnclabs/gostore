@@ -11,6 +11,7 @@ import "path/filepath"
 
 import "github.com/prataprc/gostore/api"
 import "github.com/prataprc/gostore/llrb"
+import "github.com/prataprc/gostore/lsm"
 
 var _ = fmt.Sprintf("dummy")
 
@@ -556,7 +557,7 @@ func applyranges(
 			iters = append(iters, iter)
 			readers = append(readers, reader)
 		}
-		iter := api.LSMRange(false /*reverse*/, iters...)
+		iter := lsm.LSMRange(false /*reverse*/, iters...)
 		refiter := refllrb.Iterate(low, high, incl, false)
 		if err := verifylsm(t, iter, refiter, false /*merge*/); err != nil {
 			fmsg := "low:%q high:%q incl:%q"
@@ -583,7 +584,7 @@ func applyranges(
 			iters = append(iters, iter)
 			readers = append(readers, reader)
 		}
-		iter = api.LSMRange(true /*reverse*/, iters...)
+		iter = lsm.LSMRange(true /*reverse*/, iters...)
 		refiter = refllrb.Iterate(low, high, incl, true)
 		if err := verifylsm(t, iter, refiter, false /*merge*/); err != nil {
 			fmsg := "low:%q high:%q incl:%q"
@@ -623,7 +624,7 @@ func applymerges(
 			iters = append(iters, iter)
 			readers = append(readers, reader)
 		}
-		iter := api.LSMMerge(false /*reverse*/, iters...)
+		iter := lsm.LSMMerge(false /*reverse*/, iters...)
 		refiter := refllrb.Iterate(low, high, incl, false)
 		if err := verifylsm(t, iter, refiter, true /*merge*/); err != nil {
 			fmsg := "low:%q high:%q incl:%q"
@@ -650,7 +651,7 @@ func applymerges(
 			iters = append(iters, iter)
 			readers = append(readers, reader)
 		}
-		iter = api.LSMMerge(true /*reverse*/, iters...)
+		iter = lsm.LSMMerge(true /*reverse*/, iters...)
 		refiter = refllrb.Iterate(low, high, incl, true)
 		if err := verifylsm(t, iter, refiter, true /*merge*/); err != nil {
 			fmsg := "low:%q high:%q incl:%q"

@@ -1,4 +1,4 @@
-package llrb
+package lsm
 
 import "fmt"
 import "bytes"
@@ -8,24 +8,26 @@ import "testing"
 import "reflect"
 
 import "github.com/prataprc/gostore/api"
+import "github.com/prataprc/gostore/llrb"
+import s "github.com/prataprc/gosettings"
 
 var _ = fmt.Sprintf("dummy")
 
 func TestLSMRange(t *testing.T) {
-	setts := testsetts(Defaultsettings())
+	setts := llrbsetts(llrb.Defaultsettings())
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.deadseqno"] = true
 	setts["metadata.vbuuid"] = true
 	setts["lsm"] = true
-	llrb1 := NewLLRB("first", setts)
-	llrb2 := NewLLRB("second", setts)
-	llrb3 := NewLLRB("third", setts)
-	llrb4 := NewLLRB("fourth", setts)
+	llrb1 := llrb.NewLLRB("first", setts)
+	llrb2 := llrb.NewLLRB("second", setts)
+	llrb3 := llrb.NewLLRB("third", setts)
+	llrb4 := llrb.NewLLRB("fourth", setts)
 
 	refsetts := setts.Section("")
 	refsetts["lsm"] = false
-	refllrb := NewLLRB("reference", refsetts)
+	refllrb := llrb.NewLLRB("reference", refsetts)
 
 	indexes := []api.Index{llrb1, llrb2, llrb3, llrb4}
 	entries, ops, n_testcases := 50, 1000, 100000
@@ -74,20 +76,20 @@ func TestLSMRange(t *testing.T) {
 }
 
 func TestLSMMerge(t *testing.T) {
-	setts := testsetts(Defaultsettings())
+	setts := llrbsetts(llrb.Defaultsettings())
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.deadseqno"] = true
 	setts["metadata.vbuuid"] = true
 	setts["lsm"] = true
-	llrb1 := NewLLRB("first", setts)
-	llrb2 := NewLLRB("second", setts)
-	llrb3 := NewLLRB("third", setts)
-	llrb4 := NewLLRB("fourth", setts)
+	llrb1 := llrb.NewLLRB("first", setts)
+	llrb2 := llrb.NewLLRB("second", setts)
+	llrb3 := llrb.NewLLRB("third", setts)
+	llrb4 := llrb.NewLLRB("fourth", setts)
 
 	refsetts := setts.Section("")
 	refsetts["lsm"] = false
-	refllrb := NewLLRB("reference", refsetts)
+	refllrb := llrb.NewLLRB("reference", refsetts)
 
 	indexes := []api.Index{llrb1, llrb2, llrb3, llrb4}
 	entries, ops, n_testcases := 50, 1000, 100000
@@ -136,22 +138,22 @@ func TestLSMMerge(t *testing.T) {
 }
 
 func TestLSMRangeMVCC(t *testing.T) {
-	setts := testsetts(Defaultsettings())
+	setts := llrbsetts(llrb.Defaultsettings())
 	setts["mvcc.enable"] = true
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.deadseqno"] = true
 	setts["metadata.vbuuid"] = true
 	setts["lsm"] = true
-	llrb1 := NewLLRB("first", setts)
-	llrb2 := NewLLRB("second", setts)
-	llrb3 := NewLLRB("third", setts)
-	llrb4 := NewLLRB("fourth", setts)
+	llrb1 := llrb.NewLLRB("first", setts)
+	llrb2 := llrb.NewLLRB("second", setts)
+	llrb3 := llrb.NewLLRB("third", setts)
+	llrb4 := llrb.NewLLRB("fourth", setts)
 
 	refsetts := setts.Section("")
 	refsetts["lsm"] = false
 	refsetts["mvcc.enable"] = false
-	refllrb := NewLLRB("reference", refsetts)
+	refllrb := llrb.NewLLRB("reference", refsetts)
 
 	indexes := []api.Index{llrb1, llrb2, llrb3, llrb4}
 	entries, ops, n_testcases := 50, 1000, 100000
@@ -200,22 +202,22 @@ func TestLSMRangeMVCC(t *testing.T) {
 }
 
 func TestLSMMergeMVCC(t *testing.T) {
-	setts := testsetts(Defaultsettings())
+	setts := llrbsetts(llrb.Defaultsettings())
 	setts["mvcc.enable"] = true
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.deadseqno"] = true
 	setts["metadata.vbuuid"] = true
 	setts["lsm"] = true
-	llrb1 := NewLLRB("first", setts)
-	llrb2 := NewLLRB("second", setts)
-	llrb3 := NewLLRB("third", setts)
-	llrb4 := NewLLRB("fourth", setts)
+	llrb1 := llrb.NewLLRB("first", setts)
+	llrb2 := llrb.NewLLRB("second", setts)
+	llrb3 := llrb.NewLLRB("third", setts)
+	llrb4 := llrb.NewLLRB("fourth", setts)
 
 	refsetts := setts.Section("")
 	refsetts["mvcc.enable"] = false
 	refsetts["lsm"] = false
-	refllrb := NewLLRB("reference", refsetts)
+	refllrb := llrb.NewLLRB("reference", refsetts)
 
 	indexes := []api.Index{llrb1, llrb2, llrb3, llrb4}
 	entries, ops, n_testcases := 50, 1000, 100000
@@ -427,7 +429,7 @@ func applyranges(
 			iters = append(iters, iter)
 			readers = append(readers, reader)
 		}
-		iter := api.LSMRange(false /*reverse*/, iters...)
+		iter := LSMRange(false /*reverse*/, iters...)
 		refiter := refllrb.Iterate(low, high, incl, false)
 		verifylsm(t, iter, refiter, false /*merge*/)
 		if iter != nil {
@@ -450,7 +452,7 @@ func applyranges(
 			iters = append(iters, iter)
 			readers = append(readers, reader)
 		}
-		iter = api.LSMRange(true /*reverse*/, iters...)
+		iter = LSMRange(true /*reverse*/, iters...)
 		refiter = refllrb.Iterate(low, high, incl, true)
 		verifylsm(t, iter, refiter, false /*merge*/)
 		if iter != nil {
@@ -486,7 +488,7 @@ func applymerges(
 			iters = append(iters, iter)
 			readers = append(readers, reader)
 		}
-		iter := api.LSMMerge(false /*reverse*/, iters...)
+		iter := LSMMerge(false /*reverse*/, iters...)
 		refiter := refllrb.Iterate(low, high, incl, false)
 		verifylsm(t, iter, refiter, true /*merge*/)
 		if iter != nil {
@@ -509,7 +511,7 @@ func applymerges(
 			iters = append(iters, iter)
 			readers = append(readers, reader)
 		}
-		iter = api.LSMMerge(true /*reverse*/, iters...)
+		iter = LSMMerge(true /*reverse*/, iters...)
 		refiter = refllrb.Iterate(low, high, incl, true)
 		verifylsm(t, iter, refiter, true /*merge*/)
 		if iter != nil {
@@ -619,4 +621,12 @@ func getreader(t *testing.T, index api.Index, mvcc bool) api.IndexReader {
 		return snapshot
 	}
 	return index
+}
+
+func llrbsetts(setts s.Settings) s.Settings {
+	setts["minkeysize"] = int64(96)
+	setts["maxkeysize"] = int64(1024)
+	setts["minvalsize"] = int64(96)
+	setts["maxvalsize"] = int64(10 * 1024 * 1024)
+	return setts
 }

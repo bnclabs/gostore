@@ -1,37 +1,42 @@
-package api
+package lsm
 
 import "bytes"
 import "sort"
 import "strings"
 import "fmt"
 
+import "github.com/prataprc/gostore/api"
+
+// TODO: Implement LSMPool as make(chan *lsmiterator, N) to recycle
+// lsmiterator object.
+
 type lsmiterator struct {
 	merge     bool
-	iterators []IndexIterator
-	nexts     []Node
+	iterators []api.IndexIterator
+	nexts     []api.Node
 	reverse   bool
 }
 
 // LSMRange take one or more input iterators, where each iterator return items
 // in sort order, and return a new iterator that can merge results from
 // input iterators and return items in sort order.
-func LSMRange(reverse bool, iterators ...IndexIterator) IndexIterator {
+func LSMRange(reverse bool, iterators ...api.IndexIterator) api.IndexIterator {
 	return newLSMIterator(reverse, false /*merge*/, iterators...)
 }
 
 // LSMMerge is same as LSMRange, except that deleted items from input
 // iterators are included in the output.
-func LSMMerge(reverse bool, iterators ...IndexIterator) IndexIterator {
+func LSMMerge(reverse bool, iterators ...api.IndexIterator) api.IndexIterator {
 	return newLSMIterator(reverse, true /*merge*/, iterators...)
 }
 
 func newLSMIterator(
-	reverse, merge bool, iterators ...IndexIterator) IndexIterator {
+	reverse, merge bool, iterators ...api.IndexIterator) api.IndexIterator {
 
 	miter := &lsmiterator{merge: merge, reverse: reverse}
 	if miter.iterators == nil || cap(miter.iterators) < len(iterators) {
-		miter.iterators = make([]IndexIterator, len(iterators))
-		miter.nexts = make([]Node, len(iterators))
+		miter.iterators = make([]api.IndexIterator, len(iterators))
+		miter.nexts = make([]api.Node, len(iterators))
 	}
 	miter.iterators, miter.nexts = miter.iterators[:0], miter.nexts[:0]
 
@@ -49,8 +54,8 @@ func newLSMIterator(
 	return miter.sort().dedup()
 }
 
-// Next implement IndexIterator interface.
-func (miter *lsmiterator) Next() (n Node) {
+// Next implement api.IndexIterator interface.
+func (miter *lsmiterator) Next() (n api.Node) {
 	if miter == nil {
 		//fmt.Println("Next", nil)
 		return nil
@@ -62,7 +67,7 @@ func (miter *lsmiterator) Next() (n Node) {
 	return n
 }
 
-// Close implement IndexIterator interface.
+// Close implement api.IndexIterator interface.
 func (miter *lsmiterator) Close() {
 	if miter == nil {
 		return
@@ -83,7 +88,7 @@ func (miter *lsmiterator) sort() *lsmiterator {
 	return miter
 }
 
-func (miter *lsmiterator) nextnode() (node Node) {
+func (miter *lsmiterator) nextnode() (node api.Node) {
 	if miter.merge {
 		// if lsm is used for merging two orders, then return deleted nodes.
 		// as well.
@@ -99,7 +104,7 @@ func (miter *lsmiterator) nextnode() (node Node) {
 	return
 }
 
-func (miter *lsmiterator) next() Node {
+func (miter *lsmiterator) next() api.Node {
 	if miter.nexts[0] == nil {
 		return nil
 	}
@@ -130,7 +135,7 @@ func (miter *lsmiterator) next() Node {
 
 func (miter *lsmiterator) dedup() *lsmiterator {
 	var till, cmpafter int
-	var iternode Node
+	var iternode api.Node
 
 	firstnode := miter.nexts[0]
 	if firstnode != nil && len(miter.iterators) > 1 {
@@ -152,7 +157,7 @@ func (miter *lsmiterator) dedup() *lsmiterator {
 	return miter
 }
 
-func (miter *lsmiterator) compare(nodei, nodej Node) int {
+func (miter *lsmiterator) compare(nodei, nodej api.Node) int {
 	keyi, keyj := nodei.Key(), nodej.Key()
 	if miter.reverse {
 		return bytes.Compare(keyj, keyi)
@@ -160,10 +165,12 @@ func (miter *lsmiterator) compare(nodei, nodej Node) int {
 	return bytes.Compare(keyi, keyj)
 }
 
+// Len implement sort.Sort interface{}
 func (miter *lsmiterator) Len() int {
 	return len(miter.iterators)
 }
 
+// Less implement sort.Sort interface{}
 func (miter *lsmiterator) Less(i, j int) bool {
 	nodei, nodej := miter.nexts[i], miter.nexts[j]
 	if miter.reverse {
@@ -207,11 +214,14 @@ func (miter *lsmiterator) Less(i, j int) bool {
 	return false
 }
 
+// Swap implement sort.Sort interface{}
 func (miter *lsmiterator) Swap(i, j int) {
 	miter.iterators[i], miter.iterators[j] =
 		miter.iterators[j], miter.iterators[i]
 	miter.nexts[i], miter.nexts[j] = miter.nexts[j], miter.nexts[i]
 }
+
+//---- debug functions
 
 func (miter *lsmiterator) printnexts(prefix string) {
 	ss := []string{}
