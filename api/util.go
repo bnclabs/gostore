@@ -16,7 +16,7 @@ func Binarycmp(key, limit []byte, partial bool) int {
 	return bytes.Compare(key, limit)
 }
 
-// Fixbuffer will expand the buffer, if its capacity is less than size and
+// Fixbuffer will expand the buffer if its capacity is less than size and
 // return the buffer of size length.
 func Fixbuffer(buffer []byte, size int64) []byte {
 	if buffer == nil || int64(cap(buffer)) < size {
