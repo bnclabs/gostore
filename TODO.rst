@@ -15,6 +15,7 @@
   seqno.
 - optimize LSM merger logic, avoid repeated sort() calls.
 - move all TODO to github-issues.
+- link default-settings for bubt,llrb,malloc in README page.
 
 llrb:
 
