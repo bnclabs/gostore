@@ -12,6 +12,7 @@ import "encoding/json"
 // methods. That way we can be specific about the channel type instead of
 // typing it as `chan []interface{}`.
 // TODO: ResponseError can also be localized to gen-server routine.
+// TODO: remove panicerr.
 
 // Parsecsv convert a string of command seperated value into list of string of
 // values.
