@@ -16,6 +16,10 @@
 - optimize LSM merger logic, avoid repeated sort() calls.
 - move all TODO to github-issues.
 - link default-settings for bubt,llrb,malloc in README page.
+- lsm test case. Delete an entry and insert a new one. Check whether it
+  is present in the new set.
+- create a pkg for jemalloc and use that as alternative for malloc.
+  compare and contrast them both for llrb.
 
 llrb:
 

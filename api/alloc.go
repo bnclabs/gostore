@@ -40,7 +40,7 @@ type MemoryPool interface {
 	// Release this pool and all its resources.
 	Release()
 
-	// Chunksize alias for alloc:Mpooler{} interface.
+	// Chunksize return size of memory chunks managed by this pool.
 	Chunksize() int64
 
 	// Allocated return memory allocated from `useful` memory.

@@ -1,4 +1,5 @@
-// Package storage implement a collection of storage algorithm.
+// Package storage implement a collection of storage algorithm and
+// necessary tools and libraries.
 //
 // api:
 //
@@ -17,4 +18,14 @@
 // bubt:
 //
 // Implement a version of Bayer-Tree for sorting and retrieving {key,value}.
+//
+// lsm:
+//
+// Implement Log-structured-merge between two indexes. Accounts for deleted
+// entries, bornseqno of a new entry, deadseqno of deleted entries.
+// Deduplicate older mutations for the same entry.
+//
+// malloc:
+//
+// Custom memory management for storage algorithms.
 package storage
