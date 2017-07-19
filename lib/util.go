@@ -6,7 +6,6 @@ import "fmt"
 import "errors"
 import "bytes"
 import "strings"
-import "sort"
 import "encoding/json"
 
 // TODO: FailsafeRequest and FailsafePost can be localized as gen-server
