@@ -177,10 +177,27 @@ func TestFixbuffer(t *testing.T) {
 }
 
 func TestParsecsv(t *testing.T) {
-	res := Parsecsv("a, b, r , x\n, \ty \n")
+	res := Parsecsv("a, b, r , x\n, \n, \ty \n")
 	ref := []string{"a", "b", "r", "x", "y"}
 	if !reflect.DeepEqual(res, ref) {
 		t.Errorf("expected %v, got %v", ref, res)
+	}
+	if x := Parsecsv(""); x != nil {
+		t.Errorf("unexpected %v", x)
+	}
+}
+
+func TestPrettystats(t *testing.T) {
+	m := map[string]interface{}{"a": 10, "b": 20}
+	out := Prettystats(m, false /*pretty*/)
+	ref := `{"a":10,"b":20}`
+	if out != ref {
+		t.Errorf("expected %v, got %v", ref, out)
+	}
+	out = Prettystats(m, true /*pretty*/)
+	ref = "{\n  \"a\": 10,\n  \"b\": 20\n}"
+	if out != ref {
+		t.Errorf("expected %q, got %q", ref, out)
 	}
 }
 
