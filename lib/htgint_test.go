@@ -28,6 +28,12 @@ func TestHistogramInt(t *testing.T) {
 		t.Errorf("SD() expected %v, got %v", x, y)
 	}
 
+	// test Clone
+	hclone := h.Clone()
+	if reflect.DeepEqual(h, hclone) == false {
+		t.Errorf("clone failed")
+	}
+
 	// check histogram
 	samples := []int64{0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17}
 
@@ -49,13 +55,45 @@ func TestHistogramInt(t *testing.T) {
 		t.Errorf("expected %v, got %v", ref, data)
 	}
 
+	// test Stats, Fullstats, Logstring
 	ref = map[string]int64{"9": 8, "12": 11, "0": 0, "3": 3, "6": 6, "+": 17}
 	h = NewhistorgramInt64(2, 14, 3)
 	for _, sample := range samples {
 		h.Add(sample)
 	}
-	if data := h.Stats(); !reflect.DeepEqual(ref, data) {
-		t.Errorf("expected %v, got %v", ref, data)
+	if m := h.Stats(); !reflect.DeepEqual(ref, m) {
+		t.Errorf("expected %v, got %v", ref, m)
+	}
+	ref1 := map[string]interface{}{
+		"histogram": map[string]interface{}{
+			"9": int64(8), "12": int64(11), "0": int64(0), "3": int64(3),
+			"6": int64(6), "+": int64(17),
+		},
+		"mean": int64(8), "variance": int64(37), "stddeviance": int64(6),
+		"samples": int64(17), "min": int64(0), "max": int64(17),
+	}
+	m := h.Fullstats()
+	if !reflect.DeepEqual(ref1, m) {
+		t.Errorf("expected %v, got %v", ref1, m)
+	}
+	ref2 := `{"max": 17,"mean": 8,"min": 0,"samples": 17,"stddeviance": 6,` +
+		`"variance": 37,` +
+		`"histogram": {"0": 0,"3": 3,"6": 6,"9": 8,"12": 11,"+": 17}}`
+	if !reflect.DeepEqual(ref2, h.Logstring()) {
+		t.Errorf("expected %v, got %v", ref2, h.Logstring())
+	}
+}
+
+func TestHistogramIntEmpty(t *testing.T) {
+	h := NewhistorgramInt64(3, 97, 3)
+	if h.Mean() != 0 {
+		t.Errorf("unexpected %v", h.Mean())
+	}
+	if h.Variance() != 0 {
+		t.Errorf("unexpected %v", h.Variance())
+	}
+	if h.SD() != 0 {
+		t.Errorf("unexpected %v", h.SD())
 	}
 }
 
