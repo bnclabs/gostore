@@ -9,6 +9,8 @@ import "reflect"
 import "sort"
 import "fmt"
 
+import "github.com/prataprc/gostore/api"
+
 var _ = fmt.Sprintf("dummy")
 
 func TestNewpoolfbit(t *testing.T) {

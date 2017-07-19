@@ -23,12 +23,12 @@ type poolfbit struct {
 	fbits    *freebits
 }
 
-func fbitfactory() func(size, n int64) Mpooler {
+func fbitfactory() func(size, n int64) api.MemoryPool {
 	return newpoolfbit
 }
 
 // size of each chunk in the block and no. of chunks in the block.
-func newpoolfbit(size, n int64) Mpooler {
+func newpoolfbit(size, n int64) api.MemoryPool {
 	if (n & 0x7) != 0 {
 		panic("number of blocks in a pool should be multiple of 8")
 	}
@@ -42,18 +42,12 @@ func newpoolfbit(size, n int64) Mpooler {
 	return pool
 }
 
-// Chunksize implement Mpooler{} interface.
+// Chunksize implement api.MemoryPool{} interface.
 func (pool *poolfbit) Chunksize() int64 {
 	return pool.size
 }
 
-// Chunksizes alias for Mallocer{} interface.
-func (pool *poolfbit) Chunksizes() []int64 {
-	panicerr("cannot use this API on Mpooler.")
-	return nil
-}
-
-// Less implement Mpooler{} interface.
+// Less implement api.MemoryPool{} interface.
 func (pool *poolfbit) Less(other interface{}) bool {
 	if oth, ok := other.(*poolfbit); ok {
 		return uintptr(pool.base) < uintptr(oth.base)
@@ -62,13 +56,7 @@ func (pool *poolfbit) Less(other interface{}) bool {
 	return false
 }
 
-// Alloc implement Mallocer{} interface.
-func (pool *poolfbit) Alloc(n int64) (unsafe.Pointer, api.Mallocer) {
-	panicerr("use Allocchunk")
-	return nil, nil
-}
-
-// Allocchunk implement Mpooler{} interface.
+// Allocchunk implement api.MemoryPool{} interface.
 func (pool *poolfbit) Allocchunk() (unsafe.Pointer, bool) {
 	if pool.base == nil {
 		panicerr("pool already released")
@@ -90,7 +78,7 @@ func (pool *poolfbit) Allocchunk() (unsafe.Pointer, bool) {
 	return unsafe.Pointer(ptr), true
 }
 
-// Free implement Mpooler{} interface.
+// Free implement api.MemoryPool{} interface.
 func (pool *poolfbit) Free(ptr unsafe.Pointer) {
 	if ptr == nil {
 		panic("poolfbit.free(): nil pointer")
@@ -103,34 +91,29 @@ func (pool *poolfbit) Free(ptr unsafe.Pointer) {
 	pool.mallocated -= pool.size
 }
 
-// Memory implement Mpooler{} interface.
+// Memory implement api.MemoryPool{} interface.
 func (pool *poolfbit) Memory() (overhead, useful int64) {
 	self := int64(unsafe.Sizeof(*pool))
 	slicesz := int64(pool.fbits.sizeof())
 	return slicesz + self, pool.capacity
 }
 
-// Allocated implement Mpooler{} interface.
+// Allocated implement api.MemoryPool{} interface.
 func (pool *poolfbit) Allocated() int64 {
 	return pool.mallocated
 }
 
-// Available implement Mpooler{} interface.
+// Available implement api.MemoryPool{} interface.
 func (pool *poolfbit) Available() int64 {
 	return pool.capacity - pool.Allocated()
 }
 
-// Release implement Mpooler{} interface.
+// Release implement api.MemoryPool{} interface.
 func (pool *poolfbit) Release() {
 	C.free(pool.base)
 	pool.fbits = nil
 	pool.capacity, pool.base = 0, nil
 	pool.mallocated = 0
-}
-
-func (pool *poolfbit) Utilization() ([]int, []float64) {
-	panicerr("call this method on arena object")
-	return nil, nil
 }
 
 //---- local functions

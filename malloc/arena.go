@@ -1,34 +1,24 @@
 package malloc
 
-import "unsafe"
 import "sort"
+import "unsafe"
+import "errors"
 
 import "github.com/prataprc/gostore/api"
 import s "github.com/prataprc/gosettings"
 
-// MEMUtilization expected in an arenas.
-const MEMUtilization = float64(0.95)
+// TODO: is this error really required ?
+var ErrorExceedCapacity = errors.New("malloc.exceedCapacity")
 
-// Alignment minblock and maxblocks should be multiples of Alignment.
-const Alignment = int64(8)
+// ErrorOutofMemory when arena's capacity is exhausted and it cannot
+// manage new allocations.
+var ErrorOutofMemory = errors.New("malloc.outofmemory")
 
-// Maxarenasize maximum size of a memory arena. Can be used as default for
-// settings-parameter `capacity`.
-const Maxarenasize = int64(1024 * 1024 * 1024 * 1024) // 1TB
-
-// Maxpools maximum number of pools allowed in an arena. Can be used as
-// default for settings-parameter `maxpools`.
-const Maxpools = int64(512)
-
-// Maxchunks maximum number of chunks allowed in a pool. Can be used as
-// default for settings-parameter `maxchunks`.
-const Maxchunks = int64(65536)
-
-// Arena defines a large memory block that can be divided into memory pools.
+// Arena of memory.
 type Arena struct {
-	blocksizes []int64            // sorted list of block-sizes in this arena
-	mpools     map[int64]Mpoolers // size -> list of Mpooler
-	poolmaker  func(size, numblocks int64) Mpooler
+	blocksizes []int64                   // sorted list of block-sizes in this arena
+	mpools     map[int64]api.MemoryPools // size -> list of api.MemoryPool
+	poolmaker  func(size, numblocks int64) api.MemoryPool
 
 	// settings
 	capacity  int64  // memory capacity to be managed by this arena
@@ -44,7 +34,7 @@ type Arena struct {
 func NewArena(setts s.Settings) *Arena {
 	arena := (&Arena{}).readsettings(setts)
 	arena.blocksizes = Blocksizes(arena.minblock, arena.maxblock)
-	arena.mpools = make(map[int64]Mpoolers)
+	arena.mpools = make(map[int64]api.MemoryPools)
 
 	if int64(len(arena.blocksizes)) > arena.maxpools {
 		panicerr("number of pools in arena exeeds %v", arena.maxpools)
@@ -58,7 +48,7 @@ func NewArena(setts s.Settings) *Arena {
 		arena.poolmaker = fbitfactory()
 	}
 	for _, size := range arena.blocksizes {
-		arena.mpools[size] = make(Mpoolers, 0, arena.maxpools/2)
+		arena.mpools[size] = make(api.MemoryPools, 0, arena.maxpools/2)
 	}
 	return arena
 }
@@ -137,26 +127,17 @@ func (arena *Arena) Release() {
 	arena.blocksizes, arena.mpools = nil, nil
 }
 
-// Free object.
+// Free does not implement Mallocer{} interface. Use api.MemoryPool
+// to free allocated memory chunk.
 func (arena *Arena) Free(ptr unsafe.Pointer) {
-	panicerr("Free cannot be called on arena, use Mpooler")
+	panicerr("Free cannot be called on arena, use api.MemoryPool")
 }
 
 //---- statistics and maintenance
 
-// Memory implement Mallocer{} interface.
-func (arena *Arena) Memory() (overhead, useful int64) {
-	self := int64(unsafe.Sizeof(*arena))
-	slicesz := int64(cap(arena.blocksizes) * int(unsafe.Sizeof(int64(1))))
-	overhead += self + slicesz
-	for _, mpools := range arena.mpools {
-		for _, mpool := range mpools {
-			x, y := mpool.Memory()
-			overhead += x
-			useful += y
-		}
-	}
-	return
+// Chunksizes implement Mallocer{} interface.
+func (arena *Arena) Chunksizes() []int64 {
+	return arena.blocksizes
 }
 
 // Allocated implement Mallocer{} interface.
@@ -175,9 +156,19 @@ func (arena *Arena) Available() int64 {
 	return arena.capacity - arena.Allocated()
 }
 
-// Chunksizes implement Mallocer{} interface.
-func (arena *Arena) Chunksizes() []int64 {
-	return arena.blocksizes
+// Memory implement Mallocer{} interface.
+func (arena *Arena) Memory() (overhead, useful int64) {
+	self := int64(unsafe.Sizeof(*arena))
+	slicesz := int64(cap(arena.blocksizes) * int(unsafe.Sizeof(int64(1))))
+	overhead += self + slicesz
+	for _, mpools := range arena.mpools {
+		for _, mpool := range mpools {
+			x, y := mpool.Memory()
+			overhead += x
+			useful += y
+		}
+	}
+	return
 }
 
 // Utilization implement Mallocer{} interface.
@@ -202,37 +193,4 @@ func (arena *Arena) Utilization() ([]int, []float64) {
 		}
 	}
 	return ss, zs
-}
-
-// Chunksize alias for Mpooler{} interface.
-func (arena *Arena) Chunksize() int64 {
-	panicerr("Chunksize() cannot be applied on arena")
-	return 0
-}
-
-// Less alias for Mpooler{} interface.
-func (arena *Arena) Less(pool interface{}) bool {
-	panicerr("Less() cannot be applied on arena")
-	return false
-}
-
-// Allocchunk alias for Mpooler{} interface.
-func (arena *Arena) Allocchunk() (ptr unsafe.Pointer, ok bool) {
-	panicerr("Allocchunk() cannot be applied on arena")
-	return nil, false
-}
-
-// Mpoolers sortable based on base-pointer.
-type Mpoolers []Mpooler
-
-func (pools Mpoolers) Len() int {
-	return len(pools)
-}
-
-func (pools Mpoolers) Less(i, j int) bool {
-	return pools[i].Less(pools[j])
-}
-
-func (pools Mpoolers) Swap(i, j int) {
-	pools[i], pools[j] = pools[j], pools[i]
 }

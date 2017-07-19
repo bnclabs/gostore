@@ -1,15 +1,19 @@
 package malloc
 
 import "fmt"
-import "errors"
 
-var ErrorExceedCapacity = errors.New("malloc.exceedCapacity")
+// TODO: remove panicerr.
+// TODO: create a slab structure that maintains the blocksizes
+// and provides suitable-size method.
 
-var ErrorOutofMemory = errors.New("malloc.outofmemory")
-
-// SuitableSize picks an optimal block-size for given size,
-// to achieve MEMUtilization.
+// SuitableSize return an optimal block-size for required size.
+// Argument blocksizes should be sorted array of int64. Will panic
+// if requested size is greated than configured range of size.
 func SuitableSize(blocksizes []int64, size int64) int64 {
+	if size > blocksizes[len(blocksizes)-1] {
+		panic("size greater than configured")
+	}
+
 	for {
 		switch len(blocksizes) {
 		case 1:
@@ -35,7 +39,9 @@ func SuitableSize(blocksizes []int64, size int64) int64 {
 }
 
 // Blocksizes generate suitable block-sizes between minblock-size and
-// maxblock-size, to acheive MEMUtilization.
+// maxblock-size. This is to achieve optimal memory-utilization. If
+// minblock is less than or equal to maxblock, or minblock and maxblock
+// are not aligned, this function will panic.
 func Blocksizes(minblock, maxblock int64) []int64 {
 	if maxblock < minblock { // validate and cure the input params
 		panic("minblock < maxblock")
@@ -55,13 +61,6 @@ func Blocksizes(minblock, maxblock int64) []int64 {
 			addby += Alignment - mod
 		}
 		size := from + addby
-		// NOTE: TestBlocksizes() experiment indicates that addby is
-		// sufficiently close to MEMUtilization.
-		//for (float64(from+size)/2.0)/float64(size) > MEMUtilization {
-		//	fmt.Println("nextsize", from, size,
-		//		(float64(from+size)/2.0)/float64(size))
-		//	size += Alignment
-		//}
 		return size
 	}
 

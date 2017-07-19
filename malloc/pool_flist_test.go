@@ -8,6 +8,8 @@ import "math/rand"
 import "sort"
 import "fmt"
 
+import "github.com/prataprc/gostore/api"
+
 var _ = fmt.Sprintf("dummy")
 
 func TestNewpoolflist(t *testing.T) {
@@ -131,7 +133,7 @@ func TestPoolMemory(t *testing.T) {
 
 func TestMpools(t *testing.T) {
 	size, n := int64(96), int64(8)
-	mpools := make(Mpoolers, 0)
+	mpools := make(api.MemoryPools, 0)
 	for i := 0; i < 1024*1024; i++ {
 		mpool := newpoolflist(size, n).(*poolflist)
 		mpools = append(mpools, mpool)
