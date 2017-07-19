@@ -161,6 +161,8 @@ func TestAbsInt64(t *testing.T) {
 		t.Errorf("expected 0, got %v", x)
 	} else if x = AbsInt64(-10); x != 10 {
 		t.Errorf("expected 10, got %v", x)
+	} else if x = AbsInt64(-9223372036854775808); x != -9223372036854775808 {
+		t.Errorf("unexpected %v", x)
 	}
 }
 

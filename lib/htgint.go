@@ -31,6 +31,7 @@ func NewhistorgramInt64(from, till, width int64) *HistogramInt64 {
 	return h
 }
 
+// Add a sample to this histogram.
 func (h *HistogramInt64) Add(sample int64) {
 	h.n++
 	h.sum += sample
@@ -53,22 +54,27 @@ func (h *HistogramInt64) Add(sample int64) {
 	}
 }
 
+// Min return minimum value from sample.
 func (h *HistogramInt64) Min() int64 {
 	return h.minval
 }
 
+// Max return maximum value from sample.
 func (h *HistogramInt64) Max() int64 {
 	return h.maxval
 }
 
+// Samples return total number of samples in the set.
 func (h *HistogramInt64) Samples() int64 {
 	return h.n
 }
 
+// Sum return the sum of all sample values.
 func (h *HistogramInt64) Sum() int64 {
 	return h.sum
 }
 
+// Mean return the average value of all samples.
 func (h *HistogramInt64) Mean() int64 {
 	if h.n == 0 {
 		return 0
@@ -76,6 +82,8 @@ func (h *HistogramInt64) Mean() int64 {
 	return int64(float64(h.sum) / float64(h.n))
 }
 
+// Variance return the squared deviation of a random sample from
+// its mean.
 func (h *HistogramInt64) Variance() int64 {
 	if h.n == 0 {
 		return 0
@@ -84,6 +92,8 @@ func (h *HistogramInt64) Variance() int64 {
 	return int64((h.sumsq / nF) - (meanF * meanF))
 }
 
+// SD return by how much the samples differ from the mean value of
+// sample set.
 func (h *HistogramInt64) SD() int64 {
 	if h.n == 0 {
 		return 0
@@ -91,6 +101,15 @@ func (h *HistogramInt64) SD() int64 {
 	return int64(math.Sqrt(float64(h.Variance())))
 }
 
+// Clone copies the entire instance.
+func (h *HistogramInt64) Clone() *HistogramInt64 {
+	newh := *h
+	newh.histogram = make([]int64, len(h.histogram))
+	copy(newh.histogram, h.histogram)
+	return &newh
+}
+
+// Stats return a map of histogram.
 func (h *HistogramInt64) Stats() map[string]int64 {
 	m := make(map[string]int64)
 	cumm := int64(0)
@@ -113,6 +132,7 @@ func (h *HistogramInt64) Stats() map[string]int64 {
 	return m
 }
 
+// Fullstats includes mean,variance,stddeviance in the Stats().
 func (h *HistogramInt64) Fullstats() map[string]interface{} {
 	hmap := make(map[string]interface{})
 	for k, v := range h.Stats() {
@@ -129,13 +149,7 @@ func (h *HistogramInt64) Fullstats() map[string]interface{} {
 	}
 }
 
-func (h *HistogramInt64) Clone() *HistogramInt64 {
-	newh := *h
-	newh.histogram = make([]int64, len(h.histogram))
-	copy(newh.histogram, h.histogram)
-	return &newh
-}
-
+// Logstring return Fullstats as loggable string.
 func (h *HistogramInt64) Logstring() string {
 	stats, keys := h.Fullstats(), []string{}
 	// everything except histogram

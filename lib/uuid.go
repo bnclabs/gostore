@@ -24,7 +24,7 @@ func Allocuuid(size int) (Uuid, error) {
 	return Newuuid(make([]byte, size))
 }
 
-// Format uuid hyphenated string.
+// Format uuid to hyphenated string.
 func (uuid Uuid) Format(out []byte) int {
 	ln := len(uuid)
 	if ln >= 10 {

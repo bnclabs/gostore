@@ -9,6 +9,11 @@ import "strings"
 import "sort"
 import "encoding/json"
 
+// TODO: FailsafeRequest and FailsafePost can be localized as gen-server
+// methods. That way we can be specific about the channel type instead of
+// typing it as `chan []interface{}`.
+// TODO: ResponseError can also be localized to gen-server routine.
+
 // Parsecsv convert a string of command seperated value into list of string of
 // values.
 func Parsecsv(input string) []string {
@@ -40,11 +45,12 @@ func Memcpy(dst, src unsafe.Pointer, ln int) int {
 	return copy(dstnd, srcnd)
 }
 
-// FailsafeRequest gen-server api abstraction.
-func FailsafeRequest(
-	reqch, respch chan []interface{},
-	cmd []interface{}, finch chan bool) ([]interface{}, error) {
-
+// FailsafeRequest for gen-server design pattern. While posting a request to
+// reqch channel, if channel is full but gen-server has exited or crashed,
+// prevent caller from blocking. Similarly, while waiting for a response from
+// respch channel, if gen-server has exited or crashed, prevent caller from
+// blocking.
+func FailsafeRequest(reqch, respch chan []interface{}, cmd []interface{}, finch chan bool) ([]interface{}, error) {
 	select {
 	case reqch <- cmd:
 		if respch != nil {
@@ -61,10 +67,10 @@ func FailsafeRequest(
 	return nil, nil
 }
 
-// FailsafePost gen-server api abstraction.
-func FailsafePost(
-	reqch chan []interface{}, cmd []interface{}, finch chan bool) error {
-
+// FailsafePost for gen-server design pattern. While posting a message to
+// reqch channel, if i/p channel is full but gen-server has exited or crashed,
+// prevent caller from blocking.
+func FailsafePost(reqch chan []interface{}, cmd []interface{}, finch chan bool) error {
 	select {
 	case reqch <- cmd:
 	case <-finch:
@@ -73,13 +79,14 @@ func FailsafePost(
 	return nil
 }
 
-// ResponseError gen-server api abstraction.
-func ResponseError(err error, resp []interface{}, idx int) error {
+// ResponseError for gen-server design pattern. Return err is not nil, else
+// type-cast idx-th element in response to error and return the same.
+func ResponseError(err error, response []interface{}, idx int) error {
 	if err != nil {
 		return err
-	} else if resp != nil {
-		if resp[idx] != nil {
-			return resp[idx].(error)
+	} else if response != nil {
+		if response[idx] != nil {
+			return response[idx].(error)
 		}
 		return nil
 	}
@@ -118,6 +125,8 @@ func GetStacktrace(skip int, stack []byte) string {
 	return buf.String()
 }
 
+// Fixbuffer will expand the buffer if its capacity is less than size and
+// return the buffer of size length.
 func Fixbuffer(buffer []byte, size int64) []byte {
 	if buffer == nil || int64(cap(buffer)) < size {
 		buffer = make([]byte, size)
@@ -125,26 +134,25 @@ func Fixbuffer(buffer []byte, size int64) []byte {
 	return buffer[:size]
 }
 
+// Prettystats uses json.MarshalIndent, if pretty is true, instead of
+// json.Marshal. If Marshal return error Prettystats will panic.
 func Prettystats(stats map[string]interface{}, pretty bool) string {
-	if pretty == false {
-		data, err := json.Marshal(stats)
+	if pretty {
+		data, err := json.MarshalIndent(stats, "", "  ")
 		if err != nil {
 			panic(err)
 		}
 		return string(data)
 	}
-	keys := make([]string, 0)
-	for k := range stats {
-		keys = append(keys, k)
+	data, err := json.Marshal(stats)
+	if err != nil {
+		panic(err)
 	}
-	sort.Strings(keys)
-	ss := []string{}
-	for _, k := range keys {
-		ss = append(ss, fmt.Sprintf("%v: %v", k, stats[k]))
-	}
-	return "{\n" + strings.Join(ss, ",\n") + "}\n"
+	return string(data)
 }
 
+// AbsInt64 absolute value of int64 number. Except for -2^63, where
+// returned value will be same as input.
 func AbsInt64(x int64) int64 {
 	if x < 0 {
 		return -x
