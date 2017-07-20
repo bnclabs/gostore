@@ -57,13 +57,13 @@ func (this Scalarclock) JSONMarshal(buf []byte) []byte {
 }
 
 // JSONUnmarshal implement Clock{} interface.
-func (this Scalarclock) JSONUnmarshal(data []byte) Clock {
+func (this Scalarclock) JSONUnmarshal(data []byte) (Clock, error) {
 	sdata := Bytes2str(data)
 	clk, err := strconv.ParseUint(sdata, 16, 64)
 	if err != nil {
-		panic(fmt.Errorf("Scalarclock.JSONUnmarshal(%v): %v", sdata, err))
+		return nil, err
 	}
-	return Scalarclock(clk)
+	return Scalarclock(clk), nil
 }
 
 // Marshal implement Clock{} interface.

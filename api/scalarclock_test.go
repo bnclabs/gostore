@@ -39,8 +39,10 @@ func TestScalarClock(t *testing.T) {
 func TestScalarClockJson(t *testing.T) {
 	ref := Scalarclock(10)
 	buf := ref.JSONMarshal(nil)
-	clock := ref.JSONUnmarshal(buf)
-	if clock != ref {
+	clock, err := ref.JSONUnmarshal(buf)
+	if err != nil {
+		t.Error(err)
+	} else if clock != ref {
 		t.Errorf("expected %v, got %v", ref, clock)
 	}
 }
