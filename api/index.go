@@ -1,27 +1,28 @@
-// Package api define types and interfaces common to all storage
-// algorithms implemented by this package.
 package api
 
 const (
-	// UpsertCmd to insert or update a key,value pair in index. To be
-	// used with MutationCmd.
+	// UpsertCmd to insert or update a key,value pair in index.
+	// To be used with MutationCmd.
 	UpsertCmd byte = iota + 1
 
 	// CasCmd to insert or update a key,value pair in index, if CAS matches.
 	// To enforce a fresh insert of key,value pair CAS should be ZERO.
+	// Don't use CASCmd on index instance that holds a subset of full dataset.
 	// To be used with MutationCmd.
 	CasCmd
 
 	// DelminCmd to delete the first key, and its value, from index.
-	// To be used with MutationCmd.
+	// Don't use DelminCmd on index instance that holds a subset of full
+	// dataset. To be used with MutationCmd.
 	DelminCmd
 
 	// DelmaxCmd to delete the last key, and its value, from index.
-	// To be used with MutationCmd.
+	// Don't use DelmaxCmd on index instance that holds a subset of full
+	// dataset. To be used with MutationCmd.
 	DelmaxCmd
 
-	// DeleteCmd to delete a key,value pair in index. To be used with
-	// MutationCmd.
+	// DeleteCmd to delete a key,value pair in index.
+	// To be used with MutationCmd.
 	DeleteCmd
 )
 
