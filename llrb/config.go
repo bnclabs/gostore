@@ -17,17 +17,17 @@ import s "github.com/prataprc/gosettings"
 // "memutilization":       float64(0.4),
 //		allowable memory utilization.
 //
-// "minkeysize" (int64, default: <api.MinKeymem>),
+// "minkeysize" (int64, default: <api.MinKeysize>),
 //		minimum size allowed for key.
 //
-// "maxkeysize" (int64, default: <api.MaxKeymem>),
+// "maxkeysize" (int64, default: <api.MaxKeysize>),
 //		maximum size allowed for key.
 //
-// "minvalsize" (int64, default: <api.MinValmem>),
+// "minvalsize" (int64, default: <api.MinValsize>),
 //		minimum size allowed for value, valid only if
 //		"metadata.mvalue" is true.
 //
-// "maxvalsize" (int64, default: <api.MaxValmem>),
+// "maxvalsize" (int64, default: <api.MaxValsize>),
 //		maximum size allowed for value, valid only if
 //		"metadata.mvalue" is true.
 //
@@ -68,10 +68,10 @@ func Defaultsettings() s.Settings {
 		"iterpool.size":        int64(100),
 		"lsm":                  false,
 		"memutilization":       float64(0.4),
-		"minkeysize":           api.MinKeymem,
-		"maxkeysize":           api.MaxKeymem,
-		"minvalsize":           api.MinValmem,
-		"maxvalsize":           api.MaxValmem,
+		"minkeysize":           api.MinKeysize,
+		"maxkeysize":           api.MaxKeysize,
+		"minvalsize":           api.MinValsize,
+		"maxvalsize":           api.MaxValsize,
 		"maxlimit":             int64(100),
 		"metadata.bornseqno":   false,
 		"metadata.deadseqno":   false,
@@ -82,9 +82,9 @@ func Defaultsettings() s.Settings {
 		"mvcc.snapshot.tick":   int64(5), // 5 millisecond
 		"mvcc.writer.chansize": int64(1000),
 	}
-	nodesetts := malloc.Defaultsettings(api.MinKeymem, api.MaxKeymem)
+	nodesetts := malloc.Defaultsettings(api.MinKeysize, api.MaxKeysize)
 	nodesetts = nodesetts.AddPrefix("nodearena.")
-	valsetts := malloc.Defaultsettings(api.MinValmem, api.MaxValmem)
+	valsetts := malloc.Defaultsettings(api.MinValsize, api.MaxValsize)
 	valsetts = valsetts.AddPrefix("valarena.")
 	setts = setts.Mixin(nodesetts, valsetts)
 	return setts

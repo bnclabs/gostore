@@ -17,14 +17,14 @@ func TestConstants(t *testing.T) {
 		t.Fatalf("Llrbnode{} size has changed")
 	} else if int(unsafe.Sizeof(nodevalue{})) != (nvaluesize + 8) {
 		t.Fatalf("nodevalue{} size has changed")
-	} else if api.MinKeymem != 32 {
-		t.Fatalf("MinKeymem has changed")
-	} else if api.MaxKeymem != 4096 {
-		t.Fatalf("MaxKeymem has changed")
-	} else if api.MinValmem != 0 {
-		t.Fatalf("MinValmem has changed")
-	} else if api.MaxValmem != 10*1024*1024 {
-		t.Fatalf("MaxValmem has changed")
+	} else if api.MinKeysize != 32 {
+		t.Fatalf("MinKeysize has changed")
+	} else if api.MaxKeysize != 4096 {
+		t.Fatalf("MaxKeysize has changed")
+	} else if api.MinValsize != 0 {
+		t.Fatalf("MinValsize has changed")
+	} else if api.MaxValsize != 10*1024*1024 {
+		t.Fatalf("MaxValsize has changed")
 	}
 }
 

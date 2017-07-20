@@ -18,14 +18,14 @@ var ErrorKeyMissing = errors.New("keyMissing")
 // match with the document.
 var ErrorInvalidCAS = errors.New("invalidCAS")
 
-// MinKeymem minimum key size.
-const MinKeymem = int64(32)
+// MinKeysize minimum key size.
+const MinKeysize = int64(32)
 
-// MaxKeymem maximum key size.
-const MaxKeymem = int64(4096)
+// MaxKeysize maximum key size.
+const MaxKeysize = int64(4096)
 
-// MinValmem minimum value size.
-const MinValmem = int64(0)
+// MinValsize minimum value size.
+const MinValsize = int64(0)
 
-// MaxValmem maximum value size.
-const MaxValmem = int64(10 * 1024 * 1024)
+// MaxValsize maximum value size.
+const MaxValsize = int64(10 * 1024 * 1024)
