@@ -234,6 +234,8 @@ type IndexReader interface {
 	//	"low"  - include lowkey but ignore highkey
 	//	"high" - ignore lowkey but include highkey
 	//	"both" - include both lowkey and highkey
+	//
+	// If LSM is enabled, Range should include deleted entries.
 	Range(lowkey, highkey []byte, incl string, reverse bool, iter NodeCallb)
 
 	// Iterate over entries between lowkey and highkey
@@ -242,6 +244,8 @@ type IndexReader interface {
 	//  "low"  - include lowkey but ignore highkey
 	//  "high" - ignore lowkey but include highkey
 	//  "both" - include both lowkey and highkey
+	//
+	// If LSM is enabled, Iterate should include deleted entries.
 	Iterate(lowkey, highkey []byte, incl string, reverse bool) IndexIterator
 }
 

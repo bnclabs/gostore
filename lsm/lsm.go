@@ -1,9 +1,14 @@
-// Package lsm implements log structured merge between two or more indexes.
+// Package lsm implements Log-Structured-Merge between two or more indexes.
 // LSM algorithm uses following attributes for merging entries:
 //
+//  * For LSM to work, application should maintain a monotonically increasing
+//    sequence number for every mutation. And update the node metadata for
+//    Bornseqno or Deadseqno.
+//  * Input index, which needs to be merged, should implement api.IndexReader
+//    and api.IndexIterator interfaces.
 //  * If same key is found in more than one index, one with higher born-seqno
 //    or higher dead-seqno is picked.
-//  * After the lastest mutation on the key is picked remaining entries for
+//  * After the lastest mutation for the key is picked remaining entries for
 //    the same key are de-duplicated.
 //  * If entry is found deleted, after applying above logic, it won't be
 //    included in output of LSMRange. But included in output of LSMMerge.

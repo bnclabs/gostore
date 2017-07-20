@@ -37,7 +37,7 @@ for building storage application**.
 **NOTE:** Check out `Scalarclock` implementation to get an idea on
 implementing timestamps for index write-operations.
 
-Panics and Recovery
--------------------
+Panic and Recovery
+------------------
 
 **Package api/ never panics.**
