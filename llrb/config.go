@@ -12,7 +12,7 @@ import s "github.com/prataprc/gosettings"
 //		maximum number of active iterators.
 //
 // "lsm":                  false,
-//		handle deletes using log-structured-merge.
+//		Enable Log-Structured-Merge feature.
 //
 // "memutilization":       float64(0.4),
 //		allowable memory utilization.
