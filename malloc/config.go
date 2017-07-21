@@ -31,7 +31,7 @@ const Maxchunks = int64(65536)
 //
 // "allocator" (string, default: "flist")
 //		Allocater algorithm, can be "flist" or "fbit".
-func Defaultsettings(minblock, maxblock) s.Settings {
+func Defaultsettings(minblock, maxblock int64) s.Settings {
 	if minblock > maxblock {
 		panic(fmt.Errorf("minblock(%v) > maxblock(%v)", minblock, maxblock))
 	}

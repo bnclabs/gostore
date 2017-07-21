@@ -105,8 +105,8 @@ func TestArenaMemory(t *testing.T) {
 		"maxblock":  int64(1024 * 1024 * 1024),
 		"allocator": "flist",
 	})
-	if x, y := marena.Memory(); x != 4200 {
-		t.Errorf("expected %v, got %v", 4200, x)
+	if x, y := marena.Memory(); x != 4184 {
+		t.Errorf("expected %v, got %v", 4184, x)
 	} else if y != 0 {
 		t.Errorf("expected %v, got %v", 0, y)
 	}
