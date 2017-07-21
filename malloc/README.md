@@ -62,4 +62,16 @@ always greater than or equal to the requested memory by application.
 Panic and Recovery
 ------------------
 
-TODO:
+Panics are to expected when APIs are misused. Programmers might choose
+to ignore the errors, but not panics. For example:
+
+* When minblock is confured as greated than maxblock.
+* When configured minblock and maxblock are unaligned.
+* When number of slabs exceeds Maxpools. Adjust minblock and maxblock
+  parameters to reduce the number of slabs.
+* When arena's requested capacity exceeds Maxarenasize, which is typically
+  1TB.
+* When memory is requested via Alloc, that is more than configured maxblock.
+* When Free() is called on arena, call Free on the pool.
+* When Arena runs Out-Of-Memory.
+* When trying to free a nil pointer.
