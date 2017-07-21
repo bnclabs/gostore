@@ -2,18 +2,12 @@ package malloc
 
 import "fmt"
 
-// TODO: remove panicerr.
 // TODO: create a slab structure that maintains the all slabs
 // and provides suitable-size method.
 
 // SuitableSlab return an optimal block-size for required size.
-// Argument slabs should be sorted array of int64. Will panic
-// if requested size is greated than configured range of size.
+// Argument slabs should be sorted array of int64.
 func SuitableSlab(slabs []int64, size int64) int64 {
-	if size > slabs[len(slabs)-1] {
-		panic("size greater than configured")
-	}
-
 	for {
 		switch len(slabs) {
 		case 1:
@@ -25,7 +19,7 @@ func SuitableSlab(slabs []int64, size int64) int64 {
 			} else if size <= slabs[1] {
 				return slabs[1]
 			}
-			panic("size greater than configured")
+			panic("unreachable code")
 
 		default:
 			pivot := len(slabs) / 2
@@ -90,10 +84,6 @@ func ChunksPerPool(slabs []int64, capacity int64) int64 {
 		fairchunks += Alignment - mod
 	}
 	return fairchunks
-}
-
-func panicerr(fmsg string, args ...interface{}) {
-	panic(fmt.Errorf(fmsg, args...))
 }
 
 var poolblkinit = make([]byte, 1024)

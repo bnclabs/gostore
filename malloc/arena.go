@@ -1,5 +1,6 @@
 package malloc
 
+import "fmt"
 import "sort"
 import "unsafe"
 import "errors"
@@ -33,9 +34,9 @@ func NewArena(capacity int64, setts s.Settings) *Arena {
 	arena.fairchunks = ChunksPerPool(arena.slabs, capacity)
 
 	if int64(len(arena.slabs)) > Maxpools {
-		panicerr("number of pools in arena exeeds %v", Maxpools)
+		panic(fmt.Errorf("number of pools in arena exeeds %v", Maxpools))
 	} else if cp := arena.capacity; cp > Maxarenasize {
-		panicerr("arena cannot exceed %v bytes (%v)", cp, Maxarenasize)
+		panic(fmt.Errorf("arena cannot exceed %v bytes (%v)", cp, Maxarenasize))
 	}
 	switch arena.allocator {
 	case "flist":
@@ -62,7 +63,7 @@ func (arena *Arena) readsettings(setts s.Settings) *Arena {
 func (arena *Arena) Alloc(n int64) (unsafe.Pointer, api.MemoryPool) {
 	// check argument
 	if largest := arena.slabs[len(arena.slabs)-1]; n > largest {
-		panicerr("Alloc size %v exceeds maxblock size %v", n, largest)
+		panic(fmt.Errorf("Alloc size %v exceeds maxblock size %v", n, largest))
 	}
 	// try to get from existing pool
 	size := SuitableSlab(arena.slabs, n)
@@ -105,7 +106,7 @@ func (arena *Arena) Release() {
 // Free does not implement Mallocer{} interface. Use api.MemoryPool
 // to free allocated memory chunk.
 func (arena *Arena) Free(ptr unsafe.Pointer) {
-	panicerr("Free cannot be called on arena, use api.MemoryPool")
+	panic(fmt.Errorf("Free cannot be called on arena, use api.MemoryPool"))
 }
 
 //---- statistics and maintenance

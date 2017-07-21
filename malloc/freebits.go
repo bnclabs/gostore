@@ -16,10 +16,6 @@ type freebits struct {
 }
 
 func newfreebits(cacheline int64, nblocks int64) *freebits {
-	if (nblocks & 0x7) != 0 {
-		panic("should be multiples of 8")
-	}
-
 	fbits := &freebits{
 		cacheline: cacheline, cachemask: cacheline - 1, nblocks: nblocks,
 	}

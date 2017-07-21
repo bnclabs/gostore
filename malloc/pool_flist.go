@@ -28,9 +28,6 @@ func flistfactory() func(size, n int64) api.MemoryPool {
 
 // size of each chunk in the block and no. of chunks in the block.
 func newpoolflist(size, n int64) api.MemoryPool {
-	if (n & 0x7) != 0 {
-		panic("number of chunks in a pool should be multiple of 8")
-	}
 	capacity := size * n
 	pool := &poolflist{
 		capacity: capacity,
@@ -52,11 +49,8 @@ func (pool *poolflist) Chunksize() int64 {
 
 // Less import api.MemoryPool{} interface.
 func (pool *poolflist) Less(other interface{}) bool {
-	if oth, ok := other.(*poolflist); ok {
-		return uintptr(pool.base) < uintptr(oth.base)
-	}
-	panicerr("unexpected type pool %T", other)
-	return false
+	oth := other.(*poolflist)
+	return uintptr(pool.base) < uintptr(oth.base)
 }
 
 // Allocchunk implement api.MemoryPool{} interface.

@@ -5,8 +5,8 @@ package malloc
 //#include <stdlib.h>
 import "C"
 
-import "unsafe"
 import "fmt"
+import "unsafe"
 
 import "github.com/prataprc/gostore/api"
 
@@ -29,9 +29,6 @@ func fbitfactory() func(size, n int64) api.MemoryPool {
 
 // size of each chunk in the block and no. of chunks in the block.
 func newpoolfbit(size, n int64) api.MemoryPool {
-	if (n & 0x7) != 0 {
-		panic("number of blocks in a pool should be multiple of 8")
-	}
 	capacity := size * n
 	pool := &poolfbit{
 		capacity: capacity,
@@ -49,17 +46,14 @@ func (pool *poolfbit) Chunksize() int64 {
 
 // Less implement api.MemoryPool{} interface.
 func (pool *poolfbit) Less(other interface{}) bool {
-	if oth, ok := other.(*poolfbit); ok {
-		return uintptr(pool.base) < uintptr(oth.base)
-	}
-	panicerr("unexpected type pool %T", other)
-	return false
+	oth := other.(*poolfbit)
+	return uintptr(pool.base) < uintptr(oth.base)
 }
 
 // Allocchunk implement api.MemoryPool{} interface.
 func (pool *poolfbit) Allocchunk() (unsafe.Pointer, bool) {
 	if pool.base == nil {
-		panicerr("pool already released")
+		panic(fmt.Errorf("pool already released"))
 	} else if pool.mallocated == pool.capacity {
 		return nil, false
 	}
