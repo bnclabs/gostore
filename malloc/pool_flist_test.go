@@ -20,15 +20,6 @@ func TestNewpoolflist(t *testing.T) {
 	} else if mpool.size != size {
 		t.Errorf("expected %v, got %v", size, mpool.size)
 	}
-	// panic case
-	func() {
-		defer func() {
-			if r := recover(); r == nil {
-				t.Errorf("expected panic")
-			}
-		}()
-		newpoolflist(size, 9)
-	}()
 }
 
 func TestMpoolAlloc(t *testing.T) {
