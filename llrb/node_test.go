@@ -29,14 +29,11 @@ func TestConstants(t *testing.T) {
 }
 
 func TestNode(t *testing.T) {
-	marena := malloc.NewArena(s.Settings{
-		"minblock":      int64(96),
-		"maxblock":      int64(1024 * 1024 * 10),
-		"capacity":      int64(1024 * 1024 * 1024),
-		"pool.capacity": int64(1024 * 1024),
-		"maxpools":      malloc.Maxpools,
-		"maxchunks":     malloc.Maxchunks,
-		"allocator":     "flist",
+	capacity := int64(1024 * 1024 * 1024)
+	marena := malloc.NewArena(capacity, s.Settings{
+		"minblock":  int64(96),
+		"maxblock":  int64(1024 * 1024 * 10),
+		"allocator": "flist",
 	})
 	blocksize, key := int64(1024), make([]byte, 512)
 	copy(key, "hello world")
@@ -94,14 +91,11 @@ func TestNode(t *testing.T) {
 }
 
 func TestNodeFields(t *testing.T) {
-	marena := malloc.NewArena(s.Settings{
-		"minblock":      int64(96),
-		"maxblock":      int64(1024 * 1024 * 10),
-		"capacity":      int64(1024 * 1024 * 1024),
-		"pool.capacity": int64(1024 * 1024),
-		"maxpools":      malloc.Maxpools,
-		"maxchunks":     malloc.Maxchunks,
-		"allocator":     "flist",
+	capacity := int64(1024 * 1024 * 1024)
+	marena := malloc.NewArena(capacity, s.Settings{
+		"minblock":  int64(96),
+		"maxblock":  int64(1024 * 1024 * 10),
+		"allocator": "flist",
 	})
 	blocksize, key := int64(1024), make([]byte, 512)
 	copy(key, "hello world")
@@ -171,14 +165,11 @@ func TestNodeFields(t *testing.T) {
 }
 
 func TestLtkey(t *testing.T) {
-	marena := malloc.NewArena(s.Settings{
-		"minblock":      int64(96),
-		"maxblock":      int64(1024 * 1024 * 10),
-		"capacity":      int64(1024 * 1024 * 1024),
-		"pool.capacity": int64(1024 * 1024),
-		"maxpools":      malloc.Maxpools,
-		"maxchunks":     malloc.Maxchunks,
-		"allocator":     "flist",
+	capacity := int64(1024 * 1024 * 1024)
+	marena := malloc.NewArena(capacity, s.Settings{
+		"minblock":  int64(96),
+		"maxblock":  int64(1024 * 1024 * 10),
+		"allocator": "flist",
 	})
 	blocksize, key := int64(1024), []byte("abcdef")
 
@@ -210,14 +201,11 @@ func TestLtkey(t *testing.T) {
 }
 
 func TestLekey(t *testing.T) {
-	marena := malloc.NewArena(s.Settings{
-		"minblock":      int64(96),
-		"maxblock":      int64(1024 * 1024 * 10),
-		"capacity":      int64(1024 * 1024 * 1024),
-		"pool.capacity": int64(1024 * 1024),
-		"maxpools":      malloc.Maxpools,
-		"maxchunks":     malloc.Maxchunks,
-		"allocator":     "flist",
+	capacity := int64(1024 * 1024 * 1024)
+	marena := malloc.NewArena(capacity, s.Settings{
+		"minblock":  int64(96),
+		"maxblock":  int64(1024 * 1024 * 10),
+		"allocator": "flist",
 	})
 	blocksize, key := int64(1024), []byte("abcdef")
 
@@ -251,14 +239,11 @@ func TestLekey(t *testing.T) {
 }
 
 func TestGtkey(t *testing.T) {
-	marena := malloc.NewArena(s.Settings{
-		"minblock":      int64(96),
-		"maxblock":      int64(1024 * 1024 * 10),
-		"capacity":      int64(1024 * 1024 * 1024),
-		"pool.capacity": int64(1024 * 1024),
-		"maxpools":      malloc.Maxpools,
-		"maxchunks":     malloc.Maxchunks,
-		"allocator":     "flist",
+	capacity := int64(1024 * 1024 * 1024)
+	marena := malloc.NewArena(capacity, s.Settings{
+		"minblock":  int64(96),
+		"maxblock":  int64(1024 * 1024 * 10),
+		"allocator": "flist",
 	})
 	blocksize, key := int64(1024), []byte("abcdef")
 
@@ -292,14 +277,11 @@ func TestGtkey(t *testing.T) {
 }
 
 func TestGekey(t *testing.T) {
-	marena := malloc.NewArena(s.Settings{
-		"minblock":      int64(96),
-		"maxblock":      int64(1024 * 1024 * 10),
-		"capacity":      int64(1024 * 1024 * 1024),
-		"pool.capacity": int64(1024 * 1024),
-		"maxpools":      malloc.Maxpools,
-		"maxchunks":     malloc.Maxchunks,
-		"allocator":     "flist",
+	capacity := int64(1024 * 1024 * 1024)
+	marena := malloc.NewArena(capacity, s.Settings{
+		"minblock":  int64(96),
+		"maxblock":  int64(1024 * 1024 * 10),
+		"allocator": "flist",
 	})
 	blocksize, key := int64(1024), []byte("abcdef")
 
@@ -333,14 +315,11 @@ func TestGekey(t *testing.T) {
 }
 
 func BenchmarkNodefields(b *testing.B) {
-	marena := malloc.NewArena(s.Settings{
-		"minblock":      int64(96),
-		"maxblock":      int64(1024 * 1024 * 10),
-		"capacity":      int64(1024 * 1024 * 1024),
-		"pool.capacity": int64(1024 * 1024),
-		"maxpools":      malloc.Maxpools,
-		"maxchunks":     malloc.Maxchunks,
-		"allocator":     "flist",
+	capacity := int64(1024 * 1024 * 1024)
+	marena := malloc.NewArena(capacity, s.Settings{
+		"minblock":  int64(96),
+		"maxblock":  int64(1024 * 1024 * 10),
+		"allocator": "flist",
 	})
 	blocksize, key := int64(1024), []byte("abcdef")
 
@@ -369,14 +348,11 @@ func BenchmarkNodefields(b *testing.B) {
 }
 
 func BenchmarkNodeSetKey(b *testing.B) {
-	marena := malloc.NewArena(s.Settings{
-		"minblock":      int64(96),
-		"maxblock":      int64(1024 * 1024 * 10),
-		"capacity":      int64(1024 * 1024 * 1024),
-		"pool.capacity": int64(1024 * 1024),
-		"maxpools":      malloc.Maxpools,
-		"maxchunks":     malloc.Maxchunks,
-		"allocator":     "flist",
+	capacity := int64(1024 * 1024 * 1024)
+	marena := malloc.NewArena(capacity, s.Settings{
+		"minblock":  int64(96),
+		"maxblock":  int64(1024 * 1024 * 10),
+		"allocator": "flist",
 	})
 	blocksize, key := int64(1024), make([]byte, 215)
 
@@ -395,14 +371,11 @@ func BenchmarkNodeSetKey(b *testing.B) {
 }
 
 func BenchmarkNodeGetKey(b *testing.B) {
-	marena := malloc.NewArena(s.Settings{
-		"minblock":      int64(96),
-		"maxblock":      int64(1024 * 1024 * 10),
-		"capacity":      int64(1024 * 1024 * 1024),
-		"pool.capacity": int64(1024 * 1024),
-		"maxpools":      malloc.Maxpools,
-		"maxchunks":     malloc.Maxchunks,
-		"allocator":     "flist",
+	capacity := int64(1024 * 1024 * 1024)
+	marena := malloc.NewArena(capacity, s.Settings{
+		"minblock":  int64(96),
+		"maxblock":  int64(1024 * 1024 * 10),
+		"allocator": "flist",
 	})
 	blocksize, key := int64(1024), make([]byte, 512)
 
@@ -420,14 +393,11 @@ func BenchmarkNodeGetKey(b *testing.B) {
 }
 
 func BenchmarkCompareLtkey(b *testing.B) {
-	marena := malloc.NewArena(s.Settings{
-		"minblock":      int64(96),
-		"maxblock":      int64(1024 * 1024 * 10),
-		"capacity":      int64(1024 * 1024 * 1024),
-		"pool.capacity": int64(1024 * 1024),
-		"maxpools":      malloc.Maxpools,
-		"maxchunks":     malloc.Maxchunks,
-		"allocator":     "flist",
+	capacity := int64(1024 * 1024 * 1024)
+	marena := malloc.NewArena(capacity, s.Settings{
+		"minblock":  int64(96),
+		"maxblock":  int64(1024 * 1024 * 10),
+		"allocator": "flist",
 	})
 	blocksize, key := int64(1024), make([]byte, 512)
 	otherkey := make([]byte, 512)
@@ -448,14 +418,11 @@ func BenchmarkCompareLtkey(b *testing.B) {
 }
 
 func BenchmarkCompareLekey(b *testing.B) {
-	marena := malloc.NewArena(s.Settings{
-		"minblock":      int64(96),
-		"maxblock":      int64(1024 * 1024 * 10),
-		"capacity":      int64(1024 * 1024 * 1024),
-		"pool.capacity": int64(1024 * 1024),
-		"maxpools":      malloc.Maxpools,
-		"maxchunks":     malloc.Maxchunks,
-		"allocator":     "flist",
+	capacity := int64(1024 * 1024 * 1024)
+	marena := malloc.NewArena(capacity, s.Settings{
+		"minblock":  int64(96),
+		"maxblock":  int64(1024 * 1024 * 10),
+		"allocator": "flist",
 	})
 	blocksize, key := int64(1024), make([]byte, 512)
 	otherkey := make([]byte, 512)
@@ -476,14 +443,11 @@ func BenchmarkCompareLekey(b *testing.B) {
 }
 
 func BenchmarkCompareGtkey(b *testing.B) {
-	marena := malloc.NewArena(s.Settings{
-		"minblock":      int64(96),
-		"maxblock":      int64(1024 * 1024 * 10),
-		"capacity":      int64(1024 * 1024 * 1024),
-		"pool.capacity": int64(1024 * 1024),
-		"maxpools":      malloc.Maxpools,
-		"maxchunks":     malloc.Maxchunks,
-		"allocator":     "flist",
+	capacity := int64(1024 * 1024 * 1024)
+	marena := malloc.NewArena(capacity, s.Settings{
+		"minblock":  int64(96),
+		"maxblock":  int64(1024 * 1024 * 10),
+		"allocator": "flist",
 	})
 	blocksize, key := int64(1024), make([]byte, 512)
 	otherkey := make([]byte, 512)
@@ -504,14 +468,11 @@ func BenchmarkCompareGtkey(b *testing.B) {
 }
 
 func BenchmarkCompareGekey(b *testing.B) {
-	marena := malloc.NewArena(s.Settings{
-		"minblock":      int64(96),
-		"maxblock":      int64(1024 * 1024 * 10),
-		"capacity":      int64(1024 * 1024 * 1024),
-		"pool.capacity": int64(1024 * 1024),
-		"maxpools":      malloc.Maxpools,
-		"maxchunks":     malloc.Maxchunks,
-		"allocator":     "flist",
+	capacity := int64(1024 * 1024 * 1024)
+	marena := malloc.NewArena(capacity, s.Settings{
+		"minblock":  int64(96),
+		"maxblock":  int64(1024 * 1024 * 10),
+		"allocator": "flist",
 	})
 	blocksize, key := int64(1024), make([]byte, 512)
 	otherkey := make([]byte, 512)

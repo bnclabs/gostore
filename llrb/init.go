@@ -24,43 +24,32 @@ func (llrb *LLRB) readsettings(setts s.Settings) {
 		llrb.vamaxblock = ((llrb.vamaxblock / 32) + 1) * 32
 	}
 
+	llrb.keycapacity = setts.Int64("keycapacity")
+	llrb.valcapacity = setts.Int64("valcapacity")
 	llrb.maxlimit = setts.Int64("maxlimit")
-	llrb.nacapacity = setts.Int64("nodearena.capacity")
-	llrb.napcapacity = setts.Int64("nodearena.pool.capacity")
-	llrb.namaxpools = setts.Int64("nodearena.maxpools")
-	llrb.namaxchunks = setts.Int64("nodearena.maxchunks")
 	llrb.naallocator = setts.String("nodearena.allocator")
 	if llrb.minkeysize <= 0 {
 		panicerr("invalid nodearena.minblock settings %v", llrb.minkeysize)
-	} else if llrb.nacapacity == 0 {
-		panicerr("nodearena.capacity cannot be ZERO")
 	}
-	llrb.vacapacity = setts.Int64("valarena.capacity")
-	llrb.vapcapacity = setts.Int64("valarena.pool.capacity")
-	llrb.vamaxpools = setts.Int64("valarena.maxpools")
-	llrb.vamaxchunks = setts.Int64("valarena.maxchunks")
 	llrb.vaallocator = setts.String("valarena.allocator")
-	if llrb.vacapacity == 0 {
-		panicerr("valarena.capacity cannot be ZERO")
-	}
 	llrb.mvcc.enabled = setts.Bool("mvcc.enable")
 	llrb.writechansz = setts.Int64("mvcc.writer.chansize")
 	llrb.snaptick = setts.Int64("mvcc.snapshot.tick")
 	llrb.memutilization = setts.Float64("memutilization")
 }
 
-func (llrb *LLRB) newnodearena(setts s.Settings) *malloc.Arena {
+func (llrb *LLRB) newnodearena(capacity int64, setts s.Settings) *malloc.Arena {
 	memsetts := setts.Section("nodearena").Trim("nodearena.")
 	memsetts["minblock"] = llrb.naminblock
 	memsetts["maxblock"] = llrb.namaxblock
-	return malloc.NewArena(memsetts)
+	return malloc.NewArena(capacity, memsetts)
 }
 
-func (llrb *LLRB) newvaluearena(setts s.Settings) *malloc.Arena {
+func (llrb *LLRB) newvaluearena(capacity int64, setts s.Settings) *malloc.Arena {
 	memsetts := setts.Section("valarena").Trim("valarena.")
 	memsetts["minblock"] = llrb.vaminblock
 	memsetts["maxblock"] = llrb.vamaxblock
-	return malloc.NewArena(memsetts)
+	return malloc.NewArena(capacity, memsetts)
 }
 
 func (llrb *LLRB) setupfmask(setts s.Settings) metadataMask {

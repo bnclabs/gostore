@@ -57,20 +57,16 @@ type LLRB struct { // tree container
 	maxkeysize     int64
 	minvalsize     int64
 	maxvalsize     int64
+	keycapacity    int64
+	valcapacity    int64
 	maxlimit       int64
 	naminblock     int64
 	namaxblock     int64
 	nacapacity     int64
-	napcapacity    int64
-	namaxpools     int64
-	namaxchunks    int64
 	naallocator    string
 	vaminblock     int64
 	vamaxblock     int64
 	vacapacity     int64
-	vapcapacity    int64
-	vamaxpools     int64
-	vamaxchunks    int64
 	vaallocator    string
 	writechansz    int64 // mvcc settings
 	snaptick       int64 // mvcc settings
@@ -90,8 +86,8 @@ func NewLLRB(name string, setts s.Settings) *LLRB {
 	llrb.iterpool = make(chan *iterator, llrb.iterpoolsize)
 
 	// setup arena for nodes and node-values.
-	llrb.nodearena = llrb.newnodearena(setts)
-	llrb.valarena = llrb.newvaluearena(setts)
+	llrb.nodearena = llrb.newnodearena(llrb.keycapacity, setts)
+	llrb.valarena = llrb.newvaluearena(llrb.valcapacity, setts)
 
 	llrb.logprefix = fmt.Sprintf("LLRB [%s]", name)
 
@@ -1194,18 +1190,16 @@ func (llrb *LLRB) logarenasettings() {
 	min := humanize.Bytes(uint64(llrb.naminblock))
 	max := humanize.Bytes(uint64(llrb.namaxblock))
 	cp := humanize.Bytes(uint64(llrb.nacapacity))
-	pcp := humanize.Bytes(uint64(llrb.napcapacity))
-	fmsg := "%v key arena %v blocks over {%v %v} cap %v poolcap %v\n"
-	log.Infof(fmsg, llrb.logprefix, kblocks, min, max, cp, pcp)
+	fmsg := "%v key arena %v blocks over {%v %v} cap %v\n"
+	log.Infof(fmsg, llrb.logprefix, kblocks, min, max, cp)
 
 	// value arena
 	vblocks := len(stats["value.blocks"].([]int64))
 	min = humanize.Bytes(uint64(llrb.vaminblock))
 	max = humanize.Bytes(uint64(llrb.vamaxblock))
 	cp = humanize.Bytes(uint64(llrb.vacapacity))
-	pcp = humanize.Bytes(uint64(llrb.vapcapacity))
-	fmsg = "%v val arena %v blocks over {%v %v} cap %v poolcap %v\n"
-	log.Infof(fmsg, llrb.logprefix, vblocks, min, max, cp, pcp)
+	fmsg = "%v val arena %v blocks over {%v %v} cap %v\n"
+	log.Infof(fmsg, llrb.logprefix, vblocks, min, max, cp)
 }
 
 func (llrb *LLRB) getiterator() (iter *iterator) {

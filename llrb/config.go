@@ -3,6 +3,7 @@ package llrb
 import "github.com/prataprc/gostore/api"
 import "github.com/prataprc/gostore/malloc"
 import s "github.com/prataprc/gosettings"
+import "github.com/cloudfoundry/gosigar"
 
 // Defaultsettings for llrb instance along with node arena and value arena.
 //
@@ -30,6 +31,14 @@ import s "github.com/prataprc/gosettings"
 // "maxvalsize" (int64, default: <api.MaxValsize>),
 //		maximum size allowed for value, valid only if
 //		"metadata.mvalue" is true.
+//
+// "keycapacity" (int64)
+//		memory capacity required for keys, default will be
+//		(avgkeysize / (avgkeysize+avgvalsize)) * freeRAM
+//
+// "valcapacity" (int64)
+//		memory capacity required for values, default will be
+//		(avgvalsize / (avgkeysize+avgvalsize)) * freeRAM
 //
 // "maxlimit" (int64, default: 100),
 //		limit number of entries to batch read during iteration.
@@ -64,6 +73,11 @@ import s "github.com/prataprc/gosettings"
 //		operations.
 //
 func Defaultsettings() s.Settings {
+	_, _, free := getsysmem()
+	avgksize := float64(api.MinKeysize + (api.MaxKeysize-api.MinKeysize)/2)
+	avgvsize := float64(api.MinValsize + (api.MaxValsize-api.MinValsize)/2)
+	keycapacity := (avgksize / (avgksize + avgksize)) * float64(free)
+	valcapacity := (avgvsize / (avgksize + avgksize)) * float64(free)
 	setts := s.Settings{
 		"iterpool.size":        int64(100),
 		"lsm":                  false,
@@ -72,6 +86,8 @@ func Defaultsettings() s.Settings {
 		"maxkeysize":           api.MaxKeysize,
 		"minvalsize":           api.MinValsize,
 		"maxvalsize":           api.MaxValsize,
+		"keycapacity":          int64(keycapacity),
+		"valcapacity":          int64(valcapacity),
 		"maxlimit":             int64(100),
 		"metadata.bornseqno":   false,
 		"metadata.deadseqno":   false,
@@ -88,4 +104,10 @@ func Defaultsettings() s.Settings {
 	valsetts = valsetts.AddPrefix("valarena.")
 	setts = setts.Mixin(nodesetts, valsetts)
 	return setts
+}
+
+func getsysmem() (total, used, free uint64) {
+	mem := sigar.Mem{}
+	mem.Get()
+	return mem.Total, mem.Used, mem.Free
 }
