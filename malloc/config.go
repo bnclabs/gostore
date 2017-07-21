@@ -24,10 +24,10 @@ const Maxchunks = int64(65536)
 // Malloc configurable parameters and default settings.
 //
 // "minblock" (int64, default: <minblock>)
-//		Minimum size of a chunk.
+//		Minimum size of a chunk. Must be confirm to 8-byte alignment.
 //
 // "maxblock" (int64, default: <maxblock>)
-//		Maximum size of a chunk.
+//		Maximum size of a chunk. Must be confirm to 8-byte alignment.
 //
 // "allocator" (string, default: "flist")
 //		Allocater algorithm, can be "flist" or "fbit".

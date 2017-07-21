@@ -10,6 +10,8 @@
 //    is Released.
 //  * There is no pointer re-write, if copying garbage collector is
 //    necessary it can be implemented on top of this implementation.
+//  * Memory-chunks allocated by this package will always be 64-bit
+//    aligned.
 //
 // Arena is a bucket space of memory, with a maximum capacity, that
 // is empty to begin with and starts filling up as and when new
