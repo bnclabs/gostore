@@ -11,8 +11,6 @@ import "github.com/prataprc/gostore/api"
 import "github.com/prataprc/gostore/llrb"
 import s "github.com/prataprc/gosettings"
 
-var _ = fmt.Sprintf("dummy")
-
 func TestLSMRange(t *testing.T) {
 	setts := llrbsetts(llrb.Defaultsettings())
 	setts["metadata.mvalue"] = true
