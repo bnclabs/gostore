@@ -3,46 +3,46 @@ package malloc
 import "fmt"
 
 // TODO: remove panicerr.
-// TODO: create a slab structure that maintains the blocksizes
+// TODO: create a slab structure that maintains the all slabs
 // and provides suitable-size method.
 
-// SuitableSize return an optimal block-size for required size.
-// Argument blocksizes should be sorted array of int64. Will panic
+// SuitableSlab return an optimal block-size for required size.
+// Argument slabs should be sorted array of int64. Will panic
 // if requested size is greated than configured range of size.
-func SuitableSize(blocksizes []int64, size int64) int64 {
-	if size > blocksizes[len(blocksizes)-1] {
+func SuitableSlab(slabs []int64, size int64) int64 {
+	if size > slabs[len(slabs)-1] {
 		panic("size greater than configured")
 	}
 
 	for {
-		switch len(blocksizes) {
+		switch len(slabs) {
 		case 1:
-			return blocksizes[0]
+			return slabs[0]
 
 		case 2:
-			if size <= blocksizes[0] {
-				return blocksizes[0]
-			} else if size <= blocksizes[1] {
-				return blocksizes[1]
+			if size <= slabs[0] {
+				return slabs[0]
+			} else if size <= slabs[1] {
+				return slabs[1]
 			}
 			panic("size greater than configured")
 
 		default:
-			pivot := len(blocksizes) / 2
-			if blocksizes[pivot] < size {
-				blocksizes = blocksizes[pivot+1:]
+			pivot := len(slabs) / 2
+			if slabs[pivot] < size {
+				slabs = slabs[pivot+1:]
 			} else {
-				blocksizes = blocksizes[0 : pivot+1]
+				slabs = slabs[0 : pivot+1]
 			}
 		}
 	}
 }
 
-// Blocksizes generate suitable block-sizes between minblock-size and
+// Computeslabs generate suitable block-sizes between minblock-size and
 // maxblock-size. This is to achieve optimal memory-utilization. If
 // minblock is less than or equal to maxblock, or minblock and maxblock
 // are not aligned, this function will panic.
-func Blocksizes(minblock, maxblock int64) []int64 {
+func Computeslabs(minblock, maxblock int64) []int64 {
 	if maxblock < minblock { // validate and cure the input params
 		panic("minblock < maxblock")
 	} else if (minblock % Alignment) != 0 {
@@ -71,6 +71,25 @@ func Blocksizes(minblock, maxblock int64) []int64 {
 	}
 	sizes = append(sizes, maxblock)
 	return sizes
+}
+
+// ChunksPerPool calculates the fair number of entries to each slab.
+func ChunksPerPool(slabs []int64, capacity int64) int64 {
+	sum := int64(0)
+	for _, x := range slabs {
+		sum += x
+	}
+	fairchunks := capacity / sum
+	if fairchunks > Maxchunks {
+		fairchunks = Maxchunks
+	}
+	if fairchunks < Alignment {
+		fairchunks = Alignment
+	}
+	if mod := fairchunks % Alignment; mod != 0 {
+		fairchunks += Alignment - mod
+	}
+	return fairchunks
 }
 
 func panicerr(fmsg string, args ...interface{}) {

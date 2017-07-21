@@ -11,19 +11,16 @@ import "github.com/prataprc/gostore/api"
 var _ = fmt.Sprintf("dummy")
 
 func TestNewmarena(t *testing.T) {
-	marena := NewArena(s.Settings{
-		"minblock":      int64(96),
-		"maxblock":      int64(1024 * 1024 * 1024),
-		"capacity":      int64(1024 * 1024 * 1024 * 1024),
-		"pool.capacity": int64(1024 * 1024),
-		"maxpools":      Maxpools,
-		"maxchunks":     Maxchunks,
-		"allocator":     "flist",
+	capacity := int64(1024 * 1024 * 1024 * 1024)
+	marena := NewArena(capacity, s.Settings{
+		"minblock":  int64(96),
+		"maxblock":  int64(1024 * 1024),
+		"allocator": "flist",
 	})
-	if x := len(marena.blocksizes); x != 324 {
-		t.Errorf("expected %v, got %v", 118, x)
+	if x := len(marena.slabs); x != 182 {
+		t.Errorf("expected %v, got %v", 182, x)
 	}
-	if x, y := len(marena.blocksizes), len(marena.mpools); x != y {
+	if x, y := len(marena.slabs), len(marena.mpools); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
 	marena.Release()
@@ -35,14 +32,11 @@ func TestNewmarena(t *testing.T) {
 				t.Errorf("expected panic")
 			}
 		}()
-		NewArena(s.Settings{
-			"minblock":      int64(0),
-			"maxblock":      int64(0x1234567812344556),
-			"capacity":      int64(1024 * 1024 * 1024),
-			"pool.capacity": int64(1024 * 1024),
-			"maxpools":      Maxpools,
-			"maxchunks":     Maxchunks,
-			"allocator":     "flist",
+		capacity := int64(1024 * 1024 * 1024)
+		NewArena(capacity, s.Settings{
+			"minblock":  int64(0),
+			"maxblock":  int64(0x1234567812344556),
+			"allocator": "flist",
 		})
 	}()
 	func() {
@@ -51,14 +45,11 @@ func TestNewmarena(t *testing.T) {
 				t.Errorf("expected panic")
 			}
 		}()
-		NewArena(s.Settings{
-			"minblock":      int64(0),
-			"maxblock":      int64(359399435061660672),
-			"capacity":      int64(1024 * 1024 * 1024),
-			"pool.capacity": int64(1024 * 1024),
-			"maxpools":      Maxpools,
-			"maxchunks":     Maxchunks,
-			"allocator":     "flist",
+		capacity := int64(1024 * 1024 * 1024)
+		NewArena(capacity, s.Settings{
+			"minblock":  int64(0),
+			"maxblock":  int64(359399435061660672),
+			"allocator": "flist",
 		})
 	}()
 	func() {
@@ -67,27 +58,21 @@ func TestNewmarena(t *testing.T) {
 				t.Errorf("expected panic")
 			}
 		}()
-		NewArena(s.Settings{
-			"minblock":      int64(32),
-			"maxblock":      int64(1024),
-			"capacity":      Maxarenasize + 1,
-			"pool.capacity": int64(1024 * 1024),
-			"maxpools":      Maxpools,
-			"maxchunks":     Maxchunks,
-			"allocator":     "flist",
+		capacity := Maxarenasize + 1
+		NewArena(capacity, s.Settings{
+			"minblock":  int64(32),
+			"maxblock":  int64(1024),
+			"allocator": "flist",
 		})
 	}()
 }
 
 func TestArenaAlloc(t *testing.T) {
-	marena := NewArena(s.Settings{
-		"minblock":      int64(96),
-		"maxblock":      int64(1024),
-		"capacity":      int64(1024 * 1024 * 1024),
-		"pool.capacity": int64(1024 * 1024),
-		"maxpools":      Maxpools,
-		"maxchunks":     Maxchunks,
-		"allocator":     "flist",
+	capacity := int64(1024 * 1024 * 1024)
+	marena := NewArena(capacity, s.Settings{
+		"minblock":  int64(96),
+		"maxblock":  int64(1024),
+		"allocator": "flist",
 	})
 	ptrs, mpools := make([]unsafe.Pointer, 1024), make([]api.MemoryPool, 1024)
 	for i := 0; i < 1024; i++ {
@@ -114,14 +99,11 @@ func TestArenaAlloc(t *testing.T) {
 }
 
 func TestArenaMemory(t *testing.T) {
-	marena := NewArena(s.Settings{
-		"minblock":      int64(96),
-		"maxblock":      int64(1024 * 1024 * 1024),
-		"capacity":      int64(1024 * 1024 * 1024 * 1024),
-		"pool.capacity": int64(1024 * 1024),
-		"maxpools":      Maxpools,
-		"maxchunks":     Maxchunks,
-		"allocator":     "flist",
+	capacity := int64(1024 * 1024 * 1024 * 1024)
+	marena := NewArena(capacity, s.Settings{
+		"minblock":  int64(96),
+		"maxblock":  int64(1024 * 1024 * 1024),
+		"allocator": "flist",
 	})
 	if x, y := marena.Memory(); x != 4200 {
 		t.Errorf("expected %v, got %v", 4200, x)
@@ -132,29 +114,23 @@ func TestArenaMemory(t *testing.T) {
 }
 
 func BenchmarkNewarena(b *testing.B) {
+	capacity := int64(1024 * 1024 * 1024 * 1024)
 	setts := s.Settings{
-		"minblock":      int64(96),
-		"maxblock":      int64(1024 * 1024 * 1024),
-		"capacity":      int64(1024 * 1024 * 1024 * 1024),
-		"pool.capacity": int64(1024 * 1024),
-		"maxpools":      Maxpools,
-		"maxchunks":     Maxchunks,
-		"allocator":     "flist",
+		"minblock":  int64(96),
+		"maxblock":  int64(1024 * 1024 * 1024),
+		"allocator": "flist",
 	}
 	for i := 0; i < b.N; i++ {
-		NewArena(setts)
+		NewArena(capacity, setts)
 	}
 }
 
 func BenchmarkArenaAlloc(b *testing.B) {
-	marena := NewArena(s.Settings{
-		"minblock":      int64(96),
-		"maxblock":      int64(1024 * 1024 * 1024),
-		"capacity":      int64(1024 * 1024 * 1024 * 1024),
-		"pool.capacity": int64(1024 * 1024),
-		"maxpools":      Maxpools,
-		"maxchunks":     Maxchunks,
-		"allocator":     "flist",
+	capacity := int64(1024 * 1024 * 1024 * 1024)
+	marena := NewArena(capacity, s.Settings{
+		"minblock":  int64(96),
+		"maxblock":  int64(1024 * 1024 * 1024),
+		"allocator": "flist",
 	})
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -165,14 +141,11 @@ func BenchmarkArenaAlloc(b *testing.B) {
 }
 
 func BenchmarkArenaMemory(b *testing.B) {
-	marena := NewArena(s.Settings{
-		"minblock":      int64(96),
-		"maxblock":      int64(1024 * 1024 * 1024),
-		"capacity":      int64(3 * 1024 * 1024 * 1024),
-		"pool.capacity": int64(1024 * 1024),
-		"maxpools":      Maxpools,
-		"maxchunks":     Maxchunks,
-		"allocator":     "flist",
+	capacity := int64(3 * 1024 * 1024 * 1024)
+	marena := NewArena(capacity, s.Settings{
+		"minblock":  int64(96),
+		"maxblock":  int64(1024 * 1024 * 1024),
+		"allocator": "flist",
 	})
 	for i := 0; i < 1024*1024; i++ {
 		marena.Alloc(int64(rand.Intn(2048)))
@@ -186,14 +159,11 @@ func BenchmarkArenaMemory(b *testing.B) {
 }
 
 func BenchmarkArenaAllocated(b *testing.B) {
-	marena := NewArena(s.Settings{
-		"minblock":      int64(96),
-		"maxblock":      int64(1024 * 1024 * 1024),
-		"capacity":      int64(3 * 1024 * 1024 * 1024),
-		"pool.capacity": int64(1024 * 1024),
-		"maxpools":      Maxpools,
-		"maxchunks":     Maxchunks,
-		"allocator":     "flist",
+	capacity := int64(3 * 1024 * 1024 * 1024)
+	marena := NewArena(capacity, s.Settings{
+		"minblock":  int64(96),
+		"maxblock":  int64(1024 * 1024 * 1024),
+		"allocator": "flist",
 	})
 	for i := 0; i < 1024*1024; i++ {
 		marena.Alloc(int64(rand.Intn(2048)))

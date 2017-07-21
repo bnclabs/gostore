@@ -6,7 +6,7 @@ import "fmt"
 
 var _ = fmt.Sprintf("dummy")
 
-func TestBlocksizes(t *testing.T) {
+func TestComputeslabs(t *testing.T) {
 	minblock, maxblock := int64(Alignment), int64(1024*1024*1024)
 	ref := []int64{
 		16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 96, 104, 112, 120, 128, 136,
@@ -49,7 +49,7 @@ func TestBlocksizes(t *testing.T) {
 		803848672, 844041112, 886243168, 930555328, 977083096, 1025937256,
 		1073741824}
 
-	sizes := Blocksizes(minblock, maxblock)
+	sizes := Computeslabs(minblock, maxblock)
 
 	if len(sizes) != len(ref) {
 		t.Errorf("expected %v, got %v", len(ref), len(sizes))
@@ -69,20 +69,20 @@ func TestBlocksizes(t *testing.T) {
 				t.Errorf("expected panic")
 			}
 		}()
-		Blocksizes(minblock, maxblock)
+		Computeslabs(minblock, maxblock)
 	}
 	fn(1024, 96)
 	fn(100, 1024)
 	fn(96, 1001)
 }
 
-func TestSuitableSize(t *testing.T) {
+func TestSuitableSlab(t *testing.T) {
 	minblock, maxblock := int64(96), int64(1024*1024)
-	sizes := Blocksizes(minblock, maxblock)
+	sizes := Computeslabs(minblock, maxblock)
 	x := sizes[1]
 	for _, y := range sizes[1:] {
 		for i := x + 1; i <= y; i++ {
-			if z := SuitableSize(sizes, i); z != y {
+			if z := SuitableSlab(sizes, i); z != y {
 				t.Errorf("for %v expected %v, got %v", i, y, z)
 			}
 		}
@@ -90,16 +90,16 @@ func TestSuitableSize(t *testing.T) {
 	}
 }
 
-func BenchmarkBlocksizes(b *testing.B) {
+func BenchmarkComputeslabs(b *testing.B) {
 	minblock, maxblock := int64(96), int64(1024*1024*0124*1024)
 	for i := 0; i < b.N; i++ {
-		Blocksizes(minblock, maxblock)
+		Computeslabs(minblock, maxblock)
 	}
 }
 
-func BenchmarkSuitableSize(b *testing.B) {
+func BenchmarkSuitableSlab(b *testing.B) {
 	minblock, maxblock := int64(96), int64(1024*1024*1024*10)
-	sizes := Blocksizes(minblock, maxblock)
+	sizes := Computeslabs(minblock, maxblock)
 	rsizes := make([]int64, b.N)
 
 	for i := 0; i < b.N; i++ {
@@ -109,6 +109,6 @@ func BenchmarkSuitableSize(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		SuitableSize(sizes, rsizes[i])
+		SuitableSlab(sizes, rsizes[i])
 	}
 }

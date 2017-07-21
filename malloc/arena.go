@@ -7,37 +7,33 @@ import "errors"
 import "github.com/prataprc/gostore/api"
 import s "github.com/prataprc/gosettings"
 
-// TODO: is this error really required ?
-var ErrorExceedCapacity = errors.New("malloc.exceedCapacity")
-
 // ErrorOutofMemory when arena's capacity is exhausted and it cannot
 // manage new allocations.
 var ErrorOutofMemory = errors.New("malloc.outofmemory")
 
 // Arena of memory.
 type Arena struct {
-	blocksizes []int64                   // sorted list of block-sizes in this arena
-	mpools     map[int64]api.MemoryPools // size -> list of api.MemoryPool
-	poolmaker  func(size, numblocks int64) api.MemoryPool
+	slabs     []int64                   // sorted list of block-sizes in this arena
+	mpools    map[int64]api.MemoryPools // size -> list of api.MemoryPool
+	poolmaker func(size, numchunks int64) api.MemoryPool
 
 	// settings
-	capacity  int64  // memory capacity to be managed by this arena
-	minblock  int64  // minimum block size allocatable by arena
-	maxblock  int64  // maximum block size allocatable by arena
-	pcapacity int64  // maximum capacity for a single pool
-	maxpools  int64  // maximum number of pools
-	maxchunks int64  // maximum number of chunks allowed in a pool
-	allocator string // allocator algorithm
+	capacity   int64  // memory capacity to be managed by this arena
+	minblock   int64  // minimum block size allocatable by arena
+	maxblock   int64  // maximum block size allocatable by arena
+	allocator  string // allocator algorithm
+	fairchunks int64  // fair number of chunks per pool.
 }
 
 // NewArena create a new memory arena.
-func NewArena(setts s.Settings) *Arena {
-	arena := (&Arena{}).readsettings(setts)
-	arena.blocksizes = Blocksizes(arena.minblock, arena.maxblock)
+func NewArena(capacity int64, setts s.Settings) *Arena {
+	arena := (&Arena{capacity: capacity}).readsettings(setts)
+	arena.slabs = Computeslabs(arena.minblock, arena.maxblock)
 	arena.mpools = make(map[int64]api.MemoryPools)
+	arena.fairchunks = ChunksPerPool(arena.slabs, capacity)
 
-	if int64(len(arena.blocksizes)) > arena.maxpools {
-		panicerr("number of pools in arena exeeds %v", arena.maxpools)
+	if int64(len(arena.slabs)) > Maxpools {
+		panicerr("number of pools in arena exeeds %v", Maxpools)
 	} else if cp := arena.capacity; cp > Maxarenasize {
 		panicerr("arena cannot exceed %v bytes (%v)", cp, Maxarenasize)
 	}
@@ -47,19 +43,15 @@ func NewArena(setts s.Settings) *Arena {
 	case "fbit":
 		arena.poolmaker = fbitfactory()
 	}
-	for _, size := range arena.blocksizes {
-		arena.mpools[size] = make(api.MemoryPools, 0, arena.maxpools/2)
+	for _, size := range arena.slabs {
+		arena.mpools[size] = make(api.MemoryPools, 0, Maxpools/2)
 	}
 	return arena
 }
 
 func (arena *Arena) readsettings(setts s.Settings) *Arena {
-	arena.capacity = setts.Int64("capacity")
 	arena.minblock = setts.Int64("minblock")
 	arena.maxblock = setts.Int64("maxblock")
-	arena.pcapacity = setts.Int64("pool.capacity")
-	arena.maxpools = setts.Int64("maxpools")
-	arena.maxchunks = setts.Int64("maxchunks")
 	arena.allocator = setts.String("allocator")
 	return arena
 }
@@ -69,35 +61,18 @@ func (arena *Arena) readsettings(setts s.Settings) *Arena {
 // Alloc implement api.Mallocer{} interface.
 func (arena *Arena) Alloc(n int64) (unsafe.Pointer, api.MemoryPool) {
 	// check argument
-	if largest := arena.blocksizes[len(arena.blocksizes)-1]; n > largest {
+	if largest := arena.slabs[len(arena.slabs)-1]; n > largest {
 		panicerr("Alloc size %v exceeds maxblock size %v", n, largest)
 	}
 	// try to get from existing pool
-	size := SuitableSize(arena.blocksizes, n)
+	size := SuitableSlab(arena.slabs, n)
 	for _, mpool := range arena.mpools[size] {
 		if ptr, ok := mpool.Allocchunk(); ok {
 			return ptr, mpool
 		}
 	}
-	// pool exhausted, figure the dimensions and create a new pool.
-	if arena.pcapacity <= size {
-		panic(ErrorExceedCapacity)
-	}
-	numblocks := (arena.capacity / int64(len(arena.blocksizes))) / size
-	if int64(numblocks*size) > arena.pcapacity {
-		numblocks = arena.pcapacity / size
-	}
-	if numblocks > arena.maxchunks {
-		numblocks = arena.maxchunks
-	}
-	if numblocks < Alignment {
-		numblocks = Alignment
-	}
-	if mod := numblocks % Alignment; mod != 0 {
-		numblocks += Alignment - mod
-	}
 	// check whether we are exceeding memory.
-	allocated := int64(numblocks * size)
+	allocated := int64(arena.fairchunks * size)
 	for _, mpools := range arena.mpools {
 		if len(mpools) == 0 {
 			continue
@@ -108,7 +83,7 @@ func (arena *Arena) Alloc(n int64) (unsafe.Pointer, api.MemoryPool) {
 		panic(ErrorOutofMemory)
 	}
 	// go ahead, create a new pool.
-	mpool := arena.poolmaker(size, numblocks)
+	mpool := arena.poolmaker(size, arena.fairchunks)
 	ln := len(arena.mpools[size])
 	arena.mpools[size] = append(arena.mpools[size], nil)
 	copy(arena.mpools[size][1:], arena.mpools[size][:ln])
@@ -124,7 +99,7 @@ func (arena *Arena) Release() {
 			mpool.Release()
 		}
 	}
-	arena.blocksizes, arena.mpools = nil, nil
+	arena.slabs, arena.mpools = nil, nil
 }
 
 // Free does not implement Mallocer{} interface. Use api.MemoryPool
@@ -137,7 +112,7 @@ func (arena *Arena) Free(ptr unsafe.Pointer) {
 
 // Chunksizes implement Mallocer{} interface.
 func (arena *Arena) Chunksizes() []int64 {
-	return arena.blocksizes
+	return arena.slabs
 }
 
 // Allocated implement Mallocer{} interface.
@@ -159,7 +134,7 @@ func (arena *Arena) Available() int64 {
 // Memory implement Mallocer{} interface.
 func (arena *Arena) Memory() (overhead, useful int64) {
 	self := int64(unsafe.Sizeof(*arena))
-	slicesz := int64(cap(arena.blocksizes) * int(unsafe.Sizeof(int64(1))))
+	slicesz := int64(cap(arena.slabs) * int(unsafe.Sizeof(int64(1))))
 	overhead += self + slicesz
 	for _, mpools := range arena.mpools {
 		for _, mpool := range mpools {
@@ -174,7 +149,7 @@ func (arena *Arena) Memory() (overhead, useful int64) {
 // Utilization implement Mallocer{} interface.
 func (arena *Arena) Utilization() ([]int, []float64) {
 	var sizes []int
-	for _, size := range arena.blocksizes {
+	for _, size := range arena.slabs {
 		sizes = append(sizes, int(size))
 	}
 	sort.Ints(sizes)
