@@ -5,7 +5,8 @@ import "unsafe"
 // Mallocer interface for custom memory management. Typical library
 // implementing this interface will
 type Mallocer interface {
-	// Alloc allocate a chunk of `n` bytes from `pool`.
+	// Alloc allocate a chunk of `n` bytes from `pool`. Allocated
+	// memory is always 64-bit aligned.
 	Alloc(n int64) (ptr unsafe.Pointer, pool MemoryPool)
 
 	// Release arena, all its pools and resources.
