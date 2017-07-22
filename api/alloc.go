@@ -12,9 +12,6 @@ type Mallocer interface {
 	// Release arena, all its pools and resources.
 	Release()
 
-	// Free pointer back to the pool.
-	Free(ptr unsafe.Pointer)
-
 	// Chunksizes allocatable chunk-sizes.
 	Chunksizes() (sizes []int64)
 
@@ -60,14 +57,17 @@ type MemoryPool interface {
 // MemoryPools sortable based on base-pointer.
 type MemoryPools []MemoryPool
 
+// Len implement sort.Sort interface.
 func (pools MemoryPools) Len() int {
 	return len(pools)
 }
 
+// Less implement sort.Sort interface.
 func (pools MemoryPools) Less(i, j int) bool {
 	return pools[i].Less(pools[j])
 }
 
+// Swap implement sort.Sort interface.
 func (pools MemoryPools) Swap(i, j int) {
 	pools[i], pools[j] = pools[j], pools[i]
 }

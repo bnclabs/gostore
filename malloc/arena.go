@@ -8,6 +8,8 @@ import "errors"
 import "github.com/prataprc/gostore/api"
 import s "github.com/prataprc/gosettings"
 
+var _ api.Mallocer = &Arena{}
+
 // ErrorOutofMemory when arena's capacity is exhausted and it cannot
 // manage new allocations.
 var ErrorOutofMemory = errors.New("malloc.outofmemory")
@@ -36,7 +38,8 @@ func NewArena(capacity int64, setts s.Settings) *Arena {
 	if int64(len(arena.slabs)) > Maxpools {
 		panic(fmt.Errorf("number of pools in arena exeeds %v", Maxpools))
 	} else if cp := arena.capacity; cp > Maxarenasize {
-		panic(fmt.Errorf("arena cannot exceed %v bytes (%v)", cp, Maxarenasize))
+		fmsg := "capacity cannot exceed %v bytes (%v)"
+		panic(fmt.Errorf(fmsg, cp, Maxarenasize))
 	}
 	switch arena.allocator {
 	case "flist":
@@ -101,12 +104,6 @@ func (arena *Arena) Release() {
 		}
 	}
 	arena.slabs, arena.mpools = nil, nil
-}
-
-// Free does not implement Mallocer{} interface. Use api.MemoryPool
-// to free allocated memory chunk.
-func (arena *Arena) Free(ptr unsafe.Pointer) {
-	panic(fmt.Errorf("Free cannot be called on arena, use api.MemoryPool"))
 }
 
 //---- statistics and maintenance
