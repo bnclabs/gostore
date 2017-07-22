@@ -76,8 +76,8 @@ func Defaultsettings() s.Settings {
 	_, _, free := getsysmem()
 	avgksize := float64(api.MinKeysize + (api.MaxKeysize-api.MinKeysize)/2)
 	avgvsize := float64(api.MinValsize + (api.MaxValsize-api.MinValsize)/2)
-	keycapacity := (avgksize / (avgksize + avgksize)) * float64(free)
-	valcapacity := (avgvsize / (avgksize + avgksize)) * float64(free)
+	keycapacity := (avgksize / (avgksize + avgvsize)) * float64(free)
+	valcapacity := (avgvsize / (avgksize + avgvsize)) * float64(free)
 	setts := s.Settings{
 		"iterpool.size":        int64(100),
 		"lsm":                  false,
