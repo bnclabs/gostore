@@ -71,24 +71,24 @@ func (llrb *LLRB) fullstats() (map[string]interface{}, error) {
 
 // memory statistics for keys: node-arena, total-keysize
 func (llrb *LLRB) statskey(stats map[string]interface{}) map[string]interface{} {
-	overhead, useful := llrb.nodearena.Memory()
+	capacity, heap, alloc, overhead := llrb.nodearena.Info()
 	stats["keymemory"] = llrb.keymemory
+	stats["node.capacity"] = capacity
+	stats["node.heap"] = heap
+	stats["node.alloc"] = alloc
 	stats["node.overhead"] = overhead
-	stats["node.useful"] = useful
-	stats["node.allocated"] = llrb.nodearena.Allocated()
-	stats["node.available"] = llrb.nodearena.Available()
 	stats["node.blocks"] = llrb.nodearena.Slabs()
 	return stats
 }
 
 // memory statistics for keys: value.arena, total-valuesize
 func (llrb *LLRB) statsval(stats map[string]interface{}) map[string]interface{} {
-	overhead, useful := llrb.valarena.Memory()
+	capacity, heap, alloc, overhead := llrb.valarena.Info()
 	stats["valmemory"] = llrb.valmemory
+	stats["value.capacity"] = capacity
+	stats["value.heap"] = heap
+	stats["value.alloc"] = alloc
 	stats["value.overhead"] = overhead
-	stats["value.useful"] = useful
-	stats["value.allocated"] = llrb.valarena.Allocated()
-	stats["value.available"] = llrb.valarena.Available()
 	stats["value.blocks"] = llrb.valarena.Slabs()
 	return stats
 }
@@ -150,13 +150,13 @@ func (llrb *LLRB) log(involved string, humanize bool) {
 	}
 
 	if humanize {
+		capac := dohumanize(stats["node.capacity"])
 		overh := dohumanize(stats["node.overhead"])
-		use := dohumanize(stats["node.useful"])
-		alloc := dohumanize(stats["node.allocated"])
-		avail := dohumanize(stats["node.available"])
+		heap := dohumanize(stats["node.heap"])
+		alloc := dohumanize(stats["node.alloc"])
 		kmem := dohumanize(stats["keymemory"])
-		fmsg := "%v keymem(%v): avail %v {allocated:%v,useful:%v,overhd,%v}\n"
-		log.Infof(fmsg, llrb.logprefix, kmem, avail, alloc, use, overh)
+		fmsg := "%v keymem(%v): cap: %v {heap:%v,alloc:%v,overhd,%v}\n"
+		log.Infof(fmsg, llrb.logprefix, kmem, capac, heap, alloc, overh)
 
 		// node utilization
 		outs := []string{}
@@ -169,13 +169,13 @@ func (llrb *LLRB) log(involved string, humanize bool) {
 		log.Infof("%v key utilization:\n%v\n", llrb.logprefix, out)
 
 		// value memory
+		capac = dohumanize(stats["value.capacity"])
 		overh = dohumanize(stats["value.overhead"])
-		use = dohumanize(stats["value.useful"])
-		alloc = dohumanize(stats["value.allocated"])
-		avail = dohumanize(stats["value.available"])
+		heap = dohumanize(stats["value.heap"])
+		alloc = dohumanize(stats["value.alloc"])
 		vmem := dohumanize(stats["valmemory"])
-		fmsg = "%v valmem(%v): avail %v {allocated:%v,useful:%v,overhd:%v}\n"
-		log.Infof(fmsg, llrb.logprefix, vmem, avail, alloc, use, overh)
+		fmsg = "%v valmem(%v): cap: %v {heap:%v,alloc:%v,overhd:%v}\n"
+		log.Infof(fmsg, llrb.logprefix, vmem, capac, heap, alloc, overh)
 
 		// value utilization
 		outs = []string{}

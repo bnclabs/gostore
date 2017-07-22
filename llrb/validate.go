@@ -72,37 +72,35 @@ func (llrb *LLRB) validatemem() {
 
 	stats := llrb.statsval(llrb.statskey(make(map[string]interface{})))
 	memory := float64(llrb.keymemory)
-	allocated := float64(stats["node.allocated"].(int64))
+	heap := float64(stats["node.heap"].(int64))
 	entries := llrb.Count()
-	ratio := memory / allocated
+	ratio := memory / heap
 	if ratio < llrb.memutilization {
+		capac := dohumanize(stats["node.capacity"])
 		overh := dohumanize(stats["node.overhead"])
-		use := dohumanize(stats["node.useful"])
-		alloc := dohumanize(stats["node.allocated"])
-		avail := dohumanize(stats["node.available"])
+		heap := dohumanize(stats["node.heap"])
+		alloc := dohumanize(stats["node.alloc"])
 		kmem := dohumanize(stats["keymemory"])
-		fmsg := "%v keymem(%v): avail %v {allocated:%v,useful:%v,overhd,%v}\n"
-		log.Infof(fmsg, llrb.logprefix, kmem, avail, alloc, use, overh)
-		fmsg = "keyutilization(%v): ratio: %0.2f%% %v {%v/%v}"
+		fmsg := "%v keymem(%v): cap: %v {heap:%v,alloc:%v,overhd,%v}\n"
+		log.Infof(fmsg, llrb.logprefix, kmem, capac, heap, alloc, overh)
 		panic(fmt.Errorf(
-			fmsg, entries, ratio*100, llrb.memutilization*100,
-			memory, allocated))
+			"keys(%v): ratio: %0.2f%% %v {%v/%v}",
+			entries, ratio*100, llrb.memutilization*100, memory, heap))
 	}
 	memory = float64(llrb.valmemory)
-	allocated = float64(stats["value.allocated"].(int64))
-	ratio = memory / allocated
+	heap = float64(stats["value.heap"].(int64))
+	ratio = memory / heap
 	if ratio < llrb.memutilization {
+		capac := dohumanize(stats["value.capacity"])
 		overh := dohumanize(stats["value.overhead"])
-		use := dohumanize(stats["value.useful"])
-		alloc := dohumanize(stats["value.allocated"])
-		avail := dohumanize(stats["value.available"])
+		heap := dohumanize(stats["value.heap"])
+		alloc := dohumanize(stats["value.alloc"])
 		vmem := dohumanize(stats["valmemory"])
-		fmsg := "%v valmem(%v): avail %v {allocated:%v,useful:%v,overhd:%v}\n"
-		log.Infof(fmsg, llrb.logprefix, vmem, avail, alloc, use, overh)
-		fmsg = "valueutilization(%v): ratio: %0.2f%% %v {%v/%v}"
+		fmsg := "%v valmem(%v): cap: %v {heap:%v,alloc:%v,overhd:%v}\n"
+		log.Infof(fmsg, llrb.logprefix, vmem, capac, heap, alloc, overh)
 		panic(fmt.Errorf(
-			fmsg, entries, ratio*100, llrb.memutilization*100,
-			memory, allocated))
+			"values(%v): ratio: %0.2f%% %v {%v/%v}",
+			entries, ratio*100, llrb.memutilization*100, memory, heap))
 	}
 }
 

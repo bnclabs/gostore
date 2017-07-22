@@ -81,7 +81,7 @@ func (arena *Arena) Alloc(n int64) (unsafe.Pointer, api.MemoryPool) {
 		if len(mpools) == 0 {
 			continue
 		}
-		allocated += mpools[0].Chunksize() * int64(len(mpools))
+		allocated += mpools[0].Slabsize() * int64(len(mpools))
 	}
 	if allocated > arena.capacity {
 		panic(ErrorOutofMemory)
@@ -113,32 +113,15 @@ func (arena *Arena) Slabs() []int64 {
 	return arena.slabs
 }
 
-// Allocated implement Mallocer{} interface.
-func (arena *Arena) Allocated() int64 {
-	allocated := int64(0)
-	for _, mpools := range arena.mpools {
-		for _, mpool := range mpools {
-			allocated += mpool.Allocated()
-		}
-	}
-	return allocated
-}
-
-// Available implement Mallocer{} interface.
-func (arena *Arena) Available() int64 {
-	return arena.capacity - arena.Allocated()
-}
-
-// Memory implement Mallocer{} interface.
-func (arena *Arena) Memory() (overhead, useful int64) {
+// Info implement Mallocer{} interface.
+func (arena *Arena) Info() (capacity, heap, alloc, overhead int64) {
 	self := int64(unsafe.Sizeof(*arena))
 	slicesz := int64(cap(arena.slabs) * int(unsafe.Sizeof(int64(1))))
-	overhead += self + slicesz
+	capacity, overhead = arena.capacity, self+slicesz
 	for _, mpools := range arena.mpools {
 		for _, mpool := range mpools {
-			x, y := mpool.Memory()
-			overhead += x
-			useful += y
+			_, h, a, o := mpool.Info()
+			heap, alloc, overhead = heap+h, alloc+a, overhead+o
 		}
 	}
 	return
@@ -154,16 +137,13 @@ func (arena *Arena) Utilization() ([]int, []float64) {
 
 	ss, zs := make([]int, 0), make([]float64, 0)
 	for _, size := range sizes {
-		capacity, allocated := float64(0), float64(0)
+		heap, alloc := float64(0), float64(0)
 		for _, mpool := range arena.mpools[int64(size)] {
-			_, useful := mpool.Memory()
-			capacity += float64(useful)
-			allocated += float64(mpool.Allocated())
+			_, h, a, _ := mpool.Info()
+			heap, alloc = heap+float64(h), alloc+float64(a)
 		}
-		if capacity > 0 {
-			ss = append(ss, size)
-			zs = append(zs, (allocated/capacity)*100)
-		}
+		ss = append(ss, size)
+		zs = append(zs, (alloc/heap)*100)
 	}
 	return ss, zs
 }

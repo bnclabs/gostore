@@ -32,12 +32,14 @@ func TestMpoolAlloc(t *testing.T) {
 	// allocate
 	for i := int64(0); i < n; i++ {
 		ptr, ok := mpool.Allocchunk()
+		capacity, _, alloc, _ := mpool.Info()
+		available := capacity - alloc
 		if ok == false {
 			t.Errorf("unable to allocate even first block")
-		} else if x, y := mpool.Allocated(), (i+1)*size; x != y {
-			t.Errorf("expected %v, got %v", y, x)
-		} else if x, y = mpool.Available(), (n-i-1)*size; x != y {
-			t.Errorf("expected %v, got %v", y, x)
+		} else if y := (i + 1) * size; alloc != y {
+			t.Errorf("expected %v, got %v", y, alloc)
+		} else if y = (n - i - 1) * size; available != y {
+			t.Errorf("expected %v, got %v", y, available)
 		}
 		ptrs = append(ptrs, ptr)
 	}
@@ -56,10 +58,9 @@ func TestMpoolAlloc(t *testing.T) {
 	for i, ptr := range ptrs[1:] {
 		j := int64(i) + 1
 		mpool.Free(ptr)
-		if x, y := mpool.Allocated(), (n-j-1)*size; x != y {
-			t.Errorf("expected %v, got %v", y, x)
-		} else if x, y = mpool.Available(), (j+1)*size; x != y {
-			t.Errorf("expected %v, got %v", y, x)
+		_, _, alloc, _ := mpool.Info()
+		if y := (n - j - 1) * size; alloc != y {
+			t.Errorf("expected %v, got %v", y, alloc)
 		}
 	}
 	if len(mpool.freelist) != int(n) || mpool.freeoff != int(n-1) {
@@ -85,10 +86,17 @@ func TestMpoolAlloc(t *testing.T) {
 	for i := 0; i < int(float64(n)*0.99); i++ {
 		mpool.Free(ptrs[rand.Intn(int(n))])
 	}
+	capacity, heap, alloc, overhead := mpool.Info()
 	if _, ok := mpool.Allocchunk(); !ok {
 		t.Errorf("unexpected false")
-	} else if x := mpool.Available() + mpool.Allocated(); x != mpool.capacity {
-		t.Errorf("expected %v, got %v", mpool.capacity, x)
+	} else if capacity != 6291456 {
+		t.Errorf("unexpected capacity %v", capacity)
+	} else if heap != 6291456 {
+		t.Errorf("unexpected heap %v", heap)
+	} else if alloc != 62976 {
+		t.Errorf("unexpected alloc %v", alloc)
+	} else if overhead != 88 {
+		t.Errorf("unexpected overhead %v", overhead)
 	}
 
 	// panic case
@@ -113,12 +121,18 @@ func TestMpoolAlloc(t *testing.T) {
 	mpool.Release()
 }
 
-func TestPoolMemory(t *testing.T) {
+func TestPoolInfo(t *testing.T) {
 	size, n := int64(96), int64(65536)
 	mpool := newpoolflist(size, n).(*poolflist)
-	_, useful := mpool.Memory()
-	if useful != 6291456 {
-		t.Errorf("expected %v, got %v", 25165824, useful)
+	capacity, heap, alloc, overhead := mpool.Info()
+	if capacity != 6291456 {
+		t.Errorf("unexpected capacity %v", capacity)
+	} else if heap != 6291456 {
+		t.Errorf("unexpected heap %v", heap)
+	} else if alloc != 0 {
+		t.Errorf("unexpected alloc %v", alloc)
+	} else if overhead != 88 {
+		t.Errorf("unexpected overhead %v", overhead)
 	}
 }
 
@@ -142,8 +156,9 @@ func TestCheckAllocated(t *testing.T) {
 	for i := int64(0); i < n; i++ {
 		mpool.Allocchunk()
 	}
-	if x, y := mpool.Allocated(), mpool.checkallocated(); x != y {
-		t.Errorf("expected %v, got %v", x, y)
+	_, _, alloc, _ := mpool.Info()
+	if y := mpool.checkallocated(); alloc != y {
+		t.Errorf("expected %v, got %v", alloc, y)
 	}
 }
 

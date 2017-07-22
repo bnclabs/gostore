@@ -249,6 +249,7 @@ func TestLookup(t *testing.T) {
 
 func TestPartialRange(t *testing.T) {
 	lsetts := llrb.Defaultsettings()
+	lsetts["keycapacity"], lsetts["valcapacity"] = 100*1024*1024, 100*1024*1024
 	lsetts["metadata.bornseqno"] = true
 	lsetts["metadata.deadseqno"] = true
 	lsetts["metadata.vbuuid"] = true
@@ -525,6 +526,7 @@ func TestRange(t *testing.T) {
 
 func TestPartialIterate(t *testing.T) {
 	lsetts := llrb.Defaultsettings()
+	lsetts["keycapacity"], lsetts["valcapacity"] = 100*1024*1024, 100*1024*1024
 	lsetts["metadata.bornseqno"] = true
 	lsetts["metadata.deadseqno"] = true
 	lsetts["metadata.vbuuid"] = true

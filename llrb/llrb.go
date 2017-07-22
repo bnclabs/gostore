@@ -1084,17 +1084,17 @@ func (llrb *LLRB) clonetree(nd *Llrbnode) *Llrbnode {
 
 func (llrb *LLRB) clonenode(nd *Llrbnode) (newnd *Llrbnode) {
 	// clone Llrbnode.
-	newndptr, mpool := llrb.nodearena.Alloc(nd.pool.Chunksize())
+	newndptr, mpool := llrb.nodearena.Alloc(nd.pool.Slabsize())
 	newnd = (*Llrbnode)(newndptr)
-	size := int(nd.pool.Chunksize())
+	size := int(nd.pool.Slabsize())
 	lib.Memcpy(unsafe.Pointer(newnd), unsafe.Pointer(nd), size)
 	newnd.pool = mpool
 	// clone value if value is present.
 	if nd.metadata().ismvalue() {
 		if mvalue := nd.metadata().mvalue(); mvalue != 0 {
 			nv := (*nodevalue)(unsafe.Pointer((uintptr)(mvalue)))
-			newnvptr, mpool := llrb.valarena.Alloc(nv.pool.Chunksize())
-			lib.Memcpy(newnvptr, unsafe.Pointer(nv), int(nv.pool.Chunksize()))
+			newnvptr, mpool := llrb.valarena.Alloc(nv.pool.Slabsize())
+			lib.Memcpy(newnvptr, unsafe.Pointer(nv), int(nv.pool.Slabsize()))
 			newnv := (*nodevalue)(newnvptr)
 			newnv.pool = mpool
 			newnd.setnodevalue(newnv)

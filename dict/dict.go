@@ -15,6 +15,7 @@ import "github.com/prataprc/gostore/lib"
 var _ = fmt.Sprintf("dummy")
 
 var crcisotab = crc64.MakeTable(crc64.ISO)
+var _ api.Index = &Dict{}
 
 // Dict is a reference data structure, for validation purpose.
 type Dict struct {

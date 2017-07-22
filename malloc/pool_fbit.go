@@ -40,7 +40,7 @@ func newpoolfbit(size, n int64) api.MemoryPool {
 }
 
 // Chunksize implement api.MemoryPool{} interface.
-func (pool *poolfbit) Chunksize() int64 {
+func (pool *poolfbit) Slabsize() int64 {
 	return pool.size
 }
 
@@ -85,21 +85,11 @@ func (pool *poolfbit) Free(ptr unsafe.Pointer) {
 	pool.mallocated -= pool.size
 }
 
-// Memory implement api.MemoryPool{} interface.
-func (pool *poolfbit) Memory() (overhead, useful int64) {
+// Info implement api.MemoryPool{} interface.
+func (pool *poolfbit) Info() (capacity, heap, alloc, overhead int64) {
 	self := int64(unsafe.Sizeof(*pool))
 	slicesz := int64(pool.fbits.sizeof())
-	return slicesz + self, pool.capacity
-}
-
-// Allocated implement api.MemoryPool{} interface.
-func (pool *poolfbit) Allocated() int64 {
-	return pool.mallocated
-}
-
-// Available implement api.MemoryPool{} interface.
-func (pool *poolfbit) Available() int64 {
-	return pool.capacity - pool.Allocated()
+	return pool.capacity, pool.capacity, pool.mallocated, slicesz + self
 }
 
 // Release implement api.MemoryPool{} interface.

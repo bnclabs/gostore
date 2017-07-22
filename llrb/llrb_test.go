@@ -29,26 +29,26 @@ func TestNewLLRB(t *testing.T) {
 
 	ovrhd, used, allc := int64(600), int64(0), int64(0)
 	keycapacity := setts.Int64("keycapacity")
-	if x := stats["node.overhead"].(int64); x != ovrhd {
+	if x := stats["node.capacity"].(int64); x != keycapacity {
+		t.Errorf("expected %v, got %v", keycapacity, x)
+	} else if x := stats["node.overhead"].(int64); x != ovrhd {
 		t.Errorf("expected %v, got %v", ovrhd, x)
-	} else if x := stats["node.useful"].(int64); x != used {
+	} else if x := stats["node.heap"].(int64); x != used {
 		t.Errorf("expected %v, got %v", used, x)
-	} else if x := stats["node.allocated"].(int64); x != allc {
+	} else if x := stats["node.alloc"].(int64); x != allc {
 		t.Errorf("expected %v, got %v", allc, x)
-	} else if x, y := keycapacity, stats["node.available"].(int64); x != y {
-		t.Errorf("expected %v, got %v", x, y)
 	}
 
 	ovrhd, used, allc = int64(2136), int64(0), int64(0)
 	valcapacity := setts.Int64("valcapacity")
-	if x := stats["value.overhead"].(int64); x != ovrhd {
+	if x := stats["value.capacity"].(int64); x != valcapacity {
+		t.Errorf("expected %v, got %v", valcapacity, x)
+	} else if x := stats["value.overhead"].(int64); x != ovrhd {
 		t.Errorf("expected %v, got %v", ovrhd, x)
-	} else if x := stats["value.useful"].(int64); x != used {
+	} else if x := stats["value.heap"].(int64); x != used {
 		t.Errorf("expected %v, got %v", used, x)
-	} else if x := stats["value.allocated"].(int64); x != allc {
+	} else if x := stats["value.alloc"].(int64); x != allc {
 		t.Errorf("expected %v, got %v", allc, x)
-	} else if x, y := valcapacity, stats["value.available"].(int64); x != y {
-		t.Errorf("expected %v, got %v", x, y)
 	}
 
 	if x, y := int64(0), stats["keymemory"].(int64); x != y {
@@ -234,6 +234,7 @@ func TestBasicUpdates(t *testing.T) {
 	}
 
 	setts := testsetts(Defaultsettings())
+	setts["keycapacity"], setts["valcapacity"] = 1024, 1024
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
@@ -282,7 +283,7 @@ func TestBasicUpdates(t *testing.T) {
 		t.Errorf("expected %v, got %v", newvalue, nd.Value())
 	}
 
-	llrb.ExpectedUtilization(0.03)
+	llrb.ExpectedUtilization(0.023)
 	llrb.Validate()
 
 	// delete
@@ -310,6 +311,7 @@ func TestBasicUpdates(t *testing.T) {
 		t.Errorf("expected missing key")
 	}
 
+	llrb.ExpectedUtilization(0.019)
 	llrb.Validate()
 
 	// delete-max
@@ -337,6 +339,7 @@ func TestBasicUpdates(t *testing.T) {
 		t.Errorf("expeced missing key")
 	}
 
+	llrb.ExpectedUtilization(0.014)
 	llrb.Validate()
 
 	// delete-min
@@ -363,7 +366,7 @@ func TestBasicUpdates(t *testing.T) {
 		t.Errorf("expected missing key")
 	}
 
-	llrb.ExpectedUtilization(0.03)
+	llrb.ExpectedUtilization(0.009)
 	llrb.Validate()
 
 	if err := llrb.Destroy(); err != nil {
@@ -373,6 +376,7 @@ func TestBasicUpdates(t *testing.T) {
 
 func TestBasicRange(t *testing.T) {
 	setts := testsetts(Defaultsettings())
+	setts["keycapacity"], setts["valcapacity"] = 1024, 1024
 	setts["metadata.mvalue"] = true
 	setts["metadata.fpos"] = true
 	setts["metadata.bornseqno"] = true
@@ -516,7 +520,7 @@ func TestBasicRange(t *testing.T) {
 		}
 	}
 
-	llrb.ExpectedUtilization(0.03)
+	llrb.ExpectedUtilization(0.02)
 	llrb.Validate()
 
 	if err := llrb.Destroy(); err != nil {
@@ -635,7 +639,7 @@ func TestPartialRange(t *testing.T) {
 		}
 	}
 
-	llrb.ExpectedUtilization(0.04)
+	llrb.ExpectedUtilization(0.008)
 	llrb.Validate()
 
 	if err := llrb.Destroy(); err != nil {
@@ -791,6 +795,7 @@ func TestIteratePool(t *testing.T) {
 
 func TestBasicIterate(t *testing.T) {
 	setts := testsetts(Defaultsettings())
+	setts["keycapacity"], setts["valcapacity"] = 1024, 1024
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
@@ -897,7 +902,7 @@ func TestBasicIterate(t *testing.T) {
 		}
 	}
 
-	llrb.ExpectedUtilization(0.03)
+	llrb.ExpectedUtilization(0.02)
 	llrb.Validate()
 
 	if err := llrb.Destroy(); err != nil {
@@ -1164,26 +1169,20 @@ func TestInsert(t *testing.T) {
 	}
 
 	useful := int64(1806336)
-	allocated, avail := int64(1680000), int64(103177600)
-	if x := stats["node.useful"].(int64); x != useful {
+	allocated := int64(1680000)
+	if x := stats["node.heap"].(int64); x != useful {
 		t.Errorf("expected %v, got %v", useful, x)
 	}
-	if x := stats["node.allocated"].(int64); x != allocated {
+	if x := stats["node.alloc"].(int64); x != allocated {
 		t.Errorf("expected %v, got %v", allocated, x)
-	}
-	if x := stats["node.available"].(int64); x != avail {
-		t.Errorf("expected %v, got %v", avail, x)
 	}
 	useful = int64(1280000)
-	allocated, avail = int64(1280000), int64(103577600)
-	if x := stats["value.useful"].(int64); x != useful {
+	allocated = int64(1280000)
+	if x := stats["value.heap"].(int64); x != useful {
 		t.Errorf("expected %v, got %v", useful, x)
 	}
-	if x := stats["value.allocated"].(int64); x != allocated {
+	if x := stats["value.alloc"].(int64); x != allocated {
 		t.Errorf("expected %v, got %v", allocated, x)
-	}
-	if x := stats["value.available"].(int64); x != avail {
-		t.Errorf("expected %v, got %v", avail, x)
 	}
 	if x, y := int64(1000000), stats["keymemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
@@ -1299,28 +1298,21 @@ func TestUpsert(t *testing.T) {
 		t.Error(err)
 	}
 
-	if useful := stats["node.useful"].(int64); useful != 1806336 {
+	if useful := stats["node.heap"].(int64); useful != 1806336 {
 		t.Errorf("expected %v, got %v", 1806336, useful)
 	}
-	if useful := stats["value.useful"].(int64); useful != 3601024 {
+	if useful := stats["value.heap"].(int64); useful != 3601024 {
 		t.Errorf("expected %v, got %v", 3601024, useful)
 	}
-	x, y := int64(1680000), stats["node.allocated"].(int64)
+	x, y := int64(1680000), stats["node.alloc"].(int64)
 	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
-	x, y = int64(2320000), stats["value.allocated"].(int64)
+	x, y = int64(2320000), stats["value.alloc"].(int64)
 	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
-	x, y = int64(103177600), stats["node.available"].(int64)
-	if x != y {
-		t.Errorf("expected %v, got %v", x, y)
-	}
-	x, y = int64(102537600), stats["value.available"].(int64)
-	if x != y {
-		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(1000000), stats["keymemory"].(int64); x != y {
+	if x, y = int64(1000000), stats["keymemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	} else if x, y = int64(2000000), stats["valmemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
@@ -1361,6 +1353,7 @@ func TestDelete(t *testing.T) {
 		seqno++
 	}
 
+	llrb.ExpectedUtilization(0.27)
 	llrb.Validate()
 
 	// Delete items
@@ -1389,6 +1382,7 @@ func TestDelete(t *testing.T) {
 		seqno++
 	}
 
+	llrb.ExpectedUtilization(0.13)
 	llrb.Validate()
 
 	// delete minimums
@@ -1427,6 +1421,7 @@ func TestDelete(t *testing.T) {
 			})
 	}
 
+	llrb.ExpectedUtilization(0)
 	llrb.Validate()
 
 	// check memory accounting
@@ -1435,24 +1430,17 @@ func TestDelete(t *testing.T) {
 		t.Error(err)
 	}
 
-	if useful := stats["node.useful"].(int64); useful != 1806336 {
+	if useful := stats["node.heap"].(int64); useful != 1806336 {
 		t.Errorf("expected %v, got %v", 1806336, useful)
 	}
-	if useful := stats["value.useful"].(int64); useful != 1281024 {
+	if useful := stats["value.heap"].(int64); useful != 1281024 {
 		t.Errorf("expected %v, got %v", 1281024, useful)
-	} else if x, y := int64(0), stats["node.allocated"].(int64); x != y {
+	} else if x, y := int64(0), stats["node.alloc"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(0), stats["value.allocated"].(int64); x != y {
-		t.Errorf("expected %v, got %v", x, y)
-	}
-	x, y := int64(104857600), stats["node.available"].(int64)
-	if x != y {
+	} else if x, y = int64(0), stats["value.alloc"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
-	x, y = int64(104857600), stats["value.available"].(int64)
-	if x != y {
-		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(0), stats["keymemory"].(int64); x != y {
+	if x, y := int64(0), stats["keymemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	} else if x, y = int64(0), stats["valmemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)

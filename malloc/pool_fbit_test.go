@@ -120,9 +120,15 @@ func TestMpoolAlloc(t *testing.T) {
 func TestPoolMemory(t *testing.T) {
 	size, n := int64(96), int64(512*512)
 	mpool := newpoolfbit(size, n)
-	_, useful := mpool.memory()
-	if useful != 25165824 {
-		t.Errorf("expected %v, got %v", 25165824, useful)
+	capacity, heap, alloc, overhead := mpool.Info()
+	if capacity != 0 {
+		t.Errorf("unexpected capacity %v", capacity)
+	} else if heap != 0 {
+		t.Errorf("unexpected heap %v", heap)
+	} else if alloc != 0 {
+		t.Errorf("unexpected alloc %v", alloc)
+	} else if overhead != 0 {
+		t.Errorf("unexpected overhead %v", overhead)
 	}
 }
 
@@ -146,8 +152,9 @@ func TestCheckAllocated(t *testing.T) {
 	for i := int64(0); i < n; i++ {
 		mpool.alloc()
 	}
-	if x, y := mpool.allocated(), mpool.checkallocated(); x != y {
-		t.Errorf("expected %v, got %v", x, y)
+	_, _, alloc, _ := mpool.Info()
+	if y := mpool.checkallocated(); alloc != y {
+		t.Errorf("expected %v, got %v", alloc, y)
 	}
 }
 

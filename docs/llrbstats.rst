@@ -114,17 +114,14 @@ scan the tree.
 Memory statistics:
 ------------------
 
-`node.useful` & `value.useful`
+`node.heap` & `value.heap`
     useful memory obtained from OS.
 
 `node.overhead` & `value.overhead`
     book-keeping overhead to manage `useful` memory.
 
-`node.allocated` & `value.allocated`
+`node.alloc` & `value.alloc`
     account of memory allocated from the `useful` pool.
-
-`node.available` & `value.available`
-    memory available for allocation.
 
 `node.blocks` & `value.blocks`
     list of allocatable block-sizes.

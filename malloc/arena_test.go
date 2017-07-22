@@ -11,7 +11,7 @@ import "github.com/prataprc/gostore/api"
 var _ = fmt.Sprintf("dummy")
 
 func TestNewmarena(t *testing.T) {
-	capacity := int64(1024 * 1024 * 1024 * 1024)
+	capacity := int64(10 * 1024 * 1024)
 	marena := NewArena(capacity, s.Settings{
 		"minblock":  int64(96),
 		"maxblock":  int64(1024 * 1024),
@@ -32,7 +32,7 @@ func TestNewmarena(t *testing.T) {
 				t.Errorf("expected panic")
 			}
 		}()
-		capacity := int64(1024 * 1024 * 1024)
+		capacity := int64(10 * 1024 * 1024)
 		NewArena(capacity, s.Settings{
 			"minblock":  int64(0),
 			"maxblock":  int64(0x1234567812344556),
@@ -45,7 +45,7 @@ func TestNewmarena(t *testing.T) {
 				t.Errorf("expected panic")
 			}
 		}()
-		capacity := int64(1024 * 1024 * 1024)
+		capacity := int64(10 * 1024 * 1024)
 		NewArena(capacity, s.Settings{
 			"minblock":  int64(0),
 			"maxblock":  int64(359399435061660672),
@@ -68,7 +68,7 @@ func TestNewmarena(t *testing.T) {
 }
 
 func TestArenaAlloc(t *testing.T) {
-	capacity := int64(1024 * 1024 * 1024)
+	capacity := int64(10 * 1024 * 1024)
 	marena := NewArena(capacity, s.Settings{
 		"minblock":  int64(96),
 		"maxblock":  int64(1024),
@@ -81,11 +81,17 @@ func TestArenaAlloc(t *testing.T) {
 			t.Errorf("unexpected allocation failure")
 		}
 	}
-	if x := marena.Available(); x != 1072693248 {
-		t.Errorf("expected %v, got %v", 1072693248, x)
-	} else if x, y := marena.Allocated(), int64(1024*1024); x != y {
-		t.Errorf("expected %v, got %v", x, y)
+	capacity, heap, alloc, overhead := marena.Info()
+	if capacity != 10485760 {
+		t.Errorf("unexpected capacity %v", capacity)
+	} else if heap != 1245184 {
+		t.Errorf("unexpected heap %v", heap)
+	} else if alloc != 1048576 {
+		t.Errorf("unexpected alloc %v", alloc)
+	} else if overhead != 776 {
+		t.Errorf("unexpected overhead %v", overhead)
 	}
+
 	// panic case
 	func() {
 		defer func() {
@@ -98,26 +104,27 @@ func TestArenaAlloc(t *testing.T) {
 	marena.Release()
 }
 
-func TestArenaMemory(t *testing.T) {
-	capacity := int64(1024 * 1024 * 1024 * 1024)
+func TestArenaInfo(t *testing.T) {
+	capacity := int64(10 * 1024 * 1024)
 	marena := NewArena(capacity, s.Settings{
 		"minblock":  int64(96),
-		"maxblock":  int64(1024 * 1024 * 1024),
+		"maxblock":  int64(1024 * 1024),
 		"allocator": "flist",
 	})
-	if x, y := marena.Memory(); x != 4184 {
-		t.Errorf("expected %v, got %v", 4184, x)
-	} else if y != 0 {
-		t.Errorf("expected %v, got %v", 0, y)
+	_, heap, _, overhead := marena.Info()
+	if overhead != 2136 {
+		t.Errorf("unexpected overhead %v", overhead)
+	} else if heap != 0 {
+		t.Errorf("unexpected overhead %v", heap)
 	}
 	marena.Release()
 }
 
 func BenchmarkNewarena(b *testing.B) {
-	capacity := int64(1024 * 1024 * 1024 * 1024)
+	capacity := int64(10 * 1024 * 1024)
 	setts := s.Settings{
 		"minblock":  int64(96),
-		"maxblock":  int64(1024 * 1024 * 1024),
+		"maxblock":  int64(1024 * 1024),
 		"allocator": "flist",
 	}
 	for i := 0; i < b.N; i++ {
@@ -126,10 +133,10 @@ func BenchmarkNewarena(b *testing.B) {
 }
 
 func BenchmarkArenaAlloc(b *testing.B) {
-	capacity := int64(1024 * 1024 * 1024 * 1024)
+	capacity := int64(100 * 1024 * 1024)
 	marena := NewArena(capacity, s.Settings{
 		"minblock":  int64(96),
-		"maxblock":  int64(1024 * 1024 * 1024),
+		"maxblock":  int64(1024),
 		"allocator": "flist",
 	})
 	b.ResetTimer()
@@ -140,38 +147,20 @@ func BenchmarkArenaAlloc(b *testing.B) {
 	}
 }
 
-func BenchmarkArenaMemory(b *testing.B) {
-	capacity := int64(3 * 1024 * 1024 * 1024)
+func BenchmarkArenaInfo(b *testing.B) {
+	capacity := int64(10 * 1024 * 1024)
 	marena := NewArena(capacity, s.Settings{
 		"minblock":  int64(96),
-		"maxblock":  int64(1024 * 1024 * 1024),
+		"maxblock":  int64(1024),
 		"allocator": "flist",
 	})
-	for i := 0; i < 1024*1024; i++ {
-		marena.Alloc(int64(rand.Intn(2048)))
+	for i := 0; i < 1024; i++ {
+		marena.Alloc(int64(rand.Intn(1024)))
 	}
 
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		marena.Memory()
-	}
-}
-
-func BenchmarkArenaAllocated(b *testing.B) {
-	capacity := int64(3 * 1024 * 1024 * 1024)
-	marena := NewArena(capacity, s.Settings{
-		"minblock":  int64(96),
-		"maxblock":  int64(1024 * 1024 * 1024),
-		"allocator": "flist",
-	})
-	for i := 0; i < 1024*1024; i++ {
-		marena.Alloc(int64(rand.Intn(2048)))
-	}
-
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		marena.Allocated()
+		marena.Info()
 	}
 }
