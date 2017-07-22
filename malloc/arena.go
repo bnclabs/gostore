@@ -108,8 +108,8 @@ func (arena *Arena) Release() {
 
 //---- statistics and maintenance
 
-// Chunksizes implement Mallocer{} interface.
-func (arena *Arena) Chunksizes() []int64 {
+// Slabs implement Mallocer{} interface.
+func (arena *Arena) Slabs() []int64 {
 	return arena.slabs
 }
 

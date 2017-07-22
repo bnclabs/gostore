@@ -12,8 +12,8 @@ type Mallocer interface {
 	// Release arena, all its pools and resources.
 	Release()
 
-	// Chunksizes allocatable chunk-sizes.
-	Chunksizes() (sizes []int64)
+	// Slabs allocatable slab of sizes.
+	Slabs() (sizes []int64)
 
 	// Allocated from `useful` memory.
 	Allocated() (allocated int64)

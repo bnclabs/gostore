@@ -77,7 +77,7 @@ func (llrb *LLRB) statskey(stats map[string]interface{}) map[string]interface{} 
 	stats["node.useful"] = useful
 	stats["node.allocated"] = llrb.nodearena.Allocated()
 	stats["node.available"] = llrb.nodearena.Available()
-	stats["node.blocks"] = llrb.nodearena.Chunksizes()
+	stats["node.blocks"] = llrb.nodearena.Slabs()
 	return stats
 }
 
@@ -89,7 +89,7 @@ func (llrb *LLRB) statsval(stats map[string]interface{}) map[string]interface{} 
 	stats["value.useful"] = useful
 	stats["value.allocated"] = llrb.valarena.Allocated()
 	stats["value.available"] = llrb.valarena.Available()
-	stats["value.blocks"] = llrb.valarena.Chunksizes()
+	stats["value.blocks"] = llrb.valarena.Slabs()
 	return stats
 }
 
