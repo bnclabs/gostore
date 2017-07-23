@@ -62,11 +62,9 @@ type LLRB struct { // tree container
 	maxlimit       int64
 	naminblock     int64
 	namaxblock     int64
-	nacapacity     int64
 	naallocator    string
 	vaminblock     int64
 	vamaxblock     int64
-	vacapacity     int64
 	vaallocator    string
 	writechansz    int64 // mvcc settings
 	snaptick       int64 // mvcc settings
@@ -1189,7 +1187,7 @@ func (llrb *LLRB) logarenasettings() {
 	kblocks := len(stats["node.blocks"].([]int64))
 	min := humanize.Bytes(uint64(llrb.naminblock))
 	max := humanize.Bytes(uint64(llrb.namaxblock))
-	cp := humanize.Bytes(uint64(llrb.nacapacity))
+	cp := humanize.Bytes(uint64(stats["node.capacity"].(int64)))
 	fmsg := "%v key arena %v blocks over {%v %v} cap %v\n"
 	log.Infof(fmsg, llrb.logprefix, kblocks, min, max, cp)
 
@@ -1197,7 +1195,7 @@ func (llrb *LLRB) logarenasettings() {
 	vblocks := len(stats["value.blocks"].([]int64))
 	min = humanize.Bytes(uint64(llrb.vaminblock))
 	max = humanize.Bytes(uint64(llrb.vamaxblock))
-	cp = humanize.Bytes(uint64(llrb.vacapacity))
+	cp = humanize.Bytes(uint64(stats["value.capacity"].(int64)))
 	fmsg = "%v val arena %v blocks over {%v %v} cap %v\n"
 	log.Infof(fmsg, llrb.logprefix, vblocks, min, max, cp)
 }
