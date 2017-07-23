@@ -1,9 +1,10 @@
 package malloc
 
-import "testing"
-import "math/rand"
-import "unsafe"
 import "fmt"
+import "testing"
+import "unsafe"
+import "reflect"
+import "math/rand"
 
 import s "github.com/prataprc/gosettings"
 import "github.com/prataprc/gostore/api"
@@ -88,7 +89,7 @@ func TestArenaAlloc(t *testing.T) {
 		t.Errorf("unexpected heap %v", heap)
 	} else if alloc != 1048576 {
 		t.Errorf("unexpected alloc %v", alloc)
-	} else if overhead != 776 {
+	} else if overhead != 824 {
 		t.Errorf("unexpected overhead %v", overhead)
 	}
 
@@ -112,12 +113,138 @@ func TestArenaInfo(t *testing.T) {
 		"allocator": "flist",
 	})
 	_, heap, _, overhead := marena.Info()
-	if overhead != 2136 {
+	if overhead != 2184 {
 		t.Errorf("unexpected overhead %v", overhead)
 	} else if heap != 0 {
 		t.Errorf("unexpected overhead %v", heap)
 	}
 	marena.Release()
+}
+
+func TestArenaMaxchunks(t *testing.T) {
+	// with capacity 1M
+	capacity := int64(1024 * 1024)
+	marena := NewArena(capacity, s.Settings{
+		"minblock":  int64(96),
+		"maxblock":  int64(10 * 1024),
+		"allocator": "flist",
+	})
+	ref := [6]int64{2, 1, 1, 1, 1, -1}
+	if !reflect.DeepEqual(ref, marena.maxchunks) {
+		t.Errorf("expected %v, got %v", ref, marena.maxchunks)
+	}
+	// with capacity 100M
+	capacity = int64(100 * 1024 * 1024)
+	marena = NewArena(capacity, s.Settings{
+		"minblock":  int64(96),
+		"maxblock":  int64(1024 * 1024),
+		"allocator": "flist",
+	})
+	ref = [6]int64{204, 102, 6, 1, 1, 1}
+	if !reflect.DeepEqual(ref, marena.maxchunks) {
+		t.Errorf("expected %v, got %v", ref, marena.maxchunks)
+	}
+	// with capacity 1G
+	capacity = int64(1024 * 1024 * 1024)
+	marena = NewArena(capacity, s.Settings{
+		"minblock":  int64(96),
+		"maxblock":  int64(10 * 1024 * 1024),
+		"allocator": "flist",
+	})
+	ref = [6]int64{1024, 1024, 65, 8, 1, 1}
+	if !reflect.DeepEqual(ref, marena.maxchunks) {
+		t.Errorf("expected %v, got %v", ref, marena.maxchunks)
+	}
+	// with capacity 1T
+	capacity = int64(1024 * 1024 * 1024 * 1024)
+	marena = NewArena(capacity, s.Settings{
+		"minblock":  int64(96),
+		"maxblock":  int64(10 * 1024 * 1024 * 1024),
+		"allocator": "flist",
+	})
+	ref = [6]int64{1024, 1024, 1024, 1024, 1024, 65}
+	if !reflect.DeepEqual(ref, marena.maxchunks) {
+		t.Errorf("expected %v, got %v", ref, marena.maxchunks)
+	}
+}
+
+func TestNumchunks(t *testing.T) {
+	capacity := int64(1024 * 1024 * 1024 * 1024)
+	marena := NewArena(capacity, s.Settings{
+		"minblock":  int64(96),
+		"maxblock":  int64(10 * 1024 * 1024 * 1024),
+		"allocator": "flist",
+	})
+	// 100 byte
+	out := []int64{}
+	for npools := 0; npools < 12; npools++ {
+		out = append(out, marena.adaptiveNumchunks(100, int64(npools)))
+	}
+	ref := []int64{1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 1024}
+	if !reflect.DeepEqual(out, ref) {
+		t.Errorf("expected %v, got %v", ref, out)
+	}
+
+	// 800 byte
+	out = []int64{}
+	for npools := 0; npools < 12; npools++ {
+		out = append(out, marena.adaptiveNumchunks(800, int64(npools)))
+	}
+	ref = []int64{1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 1024}
+	if !reflect.DeepEqual(out, ref) {
+		t.Errorf("expected %v, got %v", ref, out)
+	}
+
+	// 8000 byte
+	out = []int64{}
+	for npools := 0; npools < 12; npools++ {
+		out = append(out, marena.adaptiveNumchunks(8000, int64(npools)))
+	}
+	ref = []int64{1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 1024}
+	if !reflect.DeepEqual(out, ref) {
+		t.Errorf("expected %v, got %v", ref, out)
+	}
+
+	// 80000 byte
+	out = []int64{}
+	for npools := 0; npools < 12; npools++ {
+		out = append(out, marena.adaptiveNumchunks(80*1000, int64(npools)))
+	}
+	ref = []int64{1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 1024}
+	if !reflect.DeepEqual(out, ref) {
+		t.Errorf("expected %v, got %v", ref, out)
+	}
+
+	// 800*1000 byte
+	out = []int64{}
+	for npools := 0; npools < 12; npools++ {
+		out = append(out, marena.adaptiveNumchunks(800*1000, int64(npools)))
+	}
+	ref = []int64{1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 1024}
+	if !reflect.DeepEqual(out, ref) {
+		t.Errorf("expected %v, got %v", ref, out)
+	}
+
+	// 8*1000000 byte
+	out = []int64{}
+	for npools := 0; npools < 12; npools++ {
+		out = append(out, marena.adaptiveNumchunks(8*1000000, int64(npools)))
+	}
+	ref = []int64{1, 2, 4, 8, 16, 32, 64, 65, 65, 65, 65, 65}
+	if !reflect.DeepEqual(out, ref) {
+		t.Errorf("expected %v, got %v", ref, out)
+	}
+
+	// 80*1000000 byte
+	out = []int64{}
+	for npools := 0; npools < 12; npools++ {
+		out = append(out, marena.adaptiveNumchunks(80*1000000, int64(npools)))
+	}
+	ref = []int64{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
+	if !reflect.DeepEqual(out, ref) {
+		t.Errorf("expected %v, got %v", ref, out)
+	}
+
 }
 
 func BenchmarkNewarena(b *testing.B) {

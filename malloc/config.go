@@ -19,7 +19,7 @@ const Maxarenasize = int64(1024 * 1024 * 1024 * 1024)
 const Maxpools = int64(512)
 
 // Maxchunks maximum number of chunks allowed in a pool.
-const Maxchunks = int64(65536)
+const Maxchunks = int64(1024)
 
 // Malloc configurable parameters and default settings.
 //
