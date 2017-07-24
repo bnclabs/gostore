@@ -85,11 +85,11 @@ func TestArenaAlloc(t *testing.T) {
 	capacity, heap, alloc, overhead := marena.Info()
 	if capacity != 10485760 {
 		t.Errorf("unexpected capacity %v", capacity)
-	} else if heap != 1245184 {
+	} else if heap != 1048576 {
 		t.Errorf("unexpected heap %v", heap)
 	} else if alloc != 1048576 {
 		t.Errorf("unexpected alloc %v", alloc)
-	} else if overhead != 824 {
+	} else if overhead != 115320 {
 		t.Errorf("unexpected overhead %v", overhead)
 	}
 
@@ -113,7 +113,7 @@ func TestArenaInfo(t *testing.T) {
 		"allocator": "flist",
 	})
 	_, heap, _, overhead := marena.Info()
-	if overhead != 2184 {
+	if overhead != 2168 {
 		t.Errorf("unexpected overhead %v", overhead)
 	} else if heap != 0 {
 		t.Errorf("unexpected overhead %v", heap)
@@ -268,9 +268,27 @@ func BenchmarkArenaAlloc(b *testing.B) {
 	})
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if ptr, mpool := marena.Alloc(96); ptr == nil || mpool == nil {
-			b.Errorf("unexpected failure in allocation")
-		}
+		marena.Alloc(96)
+	}
+}
+
+func BenchmarkArenaFree(b *testing.B) {
+	capacity := int64(100 * 1024 * 1024)
+	marena := NewArena(capacity, s.Settings{
+		"minblock":  int64(96),
+		"maxblock":  int64(1024),
+		"allocator": "flist",
+	})
+	ptrs := []unsafe.Pointer{}
+	pools := []api.MemoryPool{}
+	for i := 0; i < b.N; i++ {
+		ptr, pool := marena.Alloc(96)
+		ptrs = append(ptrs, ptr)
+		pools = append(pools, pool)
+	}
+	b.ResetTimer()
+	for i, ptr := range ptrs {
+		pools[i].Free(ptr)
 	}
 }
 
@@ -289,5 +307,11 @@ func BenchmarkArenaInfo(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		marena.Info()
+	}
+}
+
+func BenchmarkOSMalloc(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		osmalloc(96)
 	}
 }

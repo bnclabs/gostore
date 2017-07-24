@@ -27,7 +27,7 @@ func TestNewLLRB(t *testing.T) {
 		t.Error(err)
 	}
 
-	ovrhd, used, allc := int64(600), int64(0), int64(0)
+	ovrhd, used, allc := int64(632), int64(0), int64(0)
 	keycapacity := setts.Int64("keycapacity")
 	if x := stats["node.capacity"].(int64); x != keycapacity {
 		t.Errorf("expected %v, got %v", keycapacity, x)
@@ -39,7 +39,7 @@ func TestNewLLRB(t *testing.T) {
 		t.Errorf("expected %v, got %v", allc, x)
 	}
 
-	ovrhd, used, allc = int64(2136), int64(0), int64(0)
+	ovrhd, used, allc = int64(2168), int64(0), int64(0)
 	valcapacity := setts.Int64("valcapacity")
 	if x := stats["value.capacity"].(int64); x != valcapacity {
 		t.Errorf("expected %v, got %v", valcapacity, x)
@@ -1168,7 +1168,7 @@ func TestInsert(t *testing.T) {
 		t.Error(err)
 	}
 
-	useful := int64(1806336)
+	useful := int64(1687896)
 	allocated := int64(1680000)
 	if x := stats["node.heap"].(int64); x != useful {
 		t.Errorf("expected %v, got %v", useful, x)
@@ -1176,7 +1176,7 @@ func TestInsert(t *testing.T) {
 	if x := stats["node.alloc"].(int64); x != allocated {
 		t.Errorf("expected %v, got %v", allocated, x)
 	}
-	useful = int64(1280000)
+	useful = int64(1286016)
 	allocated = int64(1280000)
 	if x := stats["value.heap"].(int64); x != useful {
 		t.Errorf("expected %v, got %v", useful, x)
@@ -1298,11 +1298,11 @@ func TestUpsert(t *testing.T) {
 		t.Error(err)
 	}
 
-	if useful := stats["node.heap"].(int64); useful != 1806336 {
-		t.Errorf("expected %v, got %v", 1806336, useful)
+	if useful := stats["node.heap"].(int64); useful != 1687896 {
+		t.Errorf("expected %v, got %v", 1687896, useful)
 	}
-	if useful := stats["value.heap"].(int64); useful != 3601024 {
-		t.Errorf("expected %v, got %v", 3601024, useful)
+	if useful := stats["value.heap"].(int64); useful != 3616920 {
+		t.Errorf("expected %v, got %v", 3616920, useful)
 	}
 	x, y := int64(1680000), stats["node.alloc"].(int64)
 	if x != y {
@@ -1430,11 +1430,11 @@ func TestDelete(t *testing.T) {
 		t.Error(err)
 	}
 
-	if useful := stats["node.heap"].(int64); useful != 1806336 {
-		t.Errorf("expected %v, got %v", 1806336, useful)
+	if useful := stats["node.heap"].(int64); useful != 1687728 {
+		t.Errorf("expected %v, got %v", 1687728, useful)
 	}
-	if useful := stats["value.heap"].(int64); useful != 1281024 {
-		t.Errorf("expected %v, got %v", 1281024, useful)
+	if useful := stats["value.heap"].(int64); useful != 1285888 {
+		t.Errorf("expected %v, got %v", 1285888, useful)
 	} else if x, y := int64(0), stats["node.alloc"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	} else if x, y = int64(0), stats["value.alloc"].(int64); x != y {

@@ -5,16 +5,13 @@ package malloc
 import "testing"
 import "unsafe"
 import "math/rand"
-import "sort"
 import "fmt"
-
-import "github.com/prataprc/gostore/api"
 
 var _ = fmt.Sprintf("dummy")
 
 func TestNewpoolflist(t *testing.T) {
 	size, n := int64(96), int64(65536)
-	mpool := flistfactory()(size, n).(*poolflist)
+	mpool := newpoolflist(size, n, nil, nil, nil)
 	if mpool.capacity != size*n {
 		t.Errorf("expected %v, got %v", size*n, mpool.capacity)
 	} else if mpool.size != size {
@@ -24,8 +21,9 @@ func TestNewpoolflist(t *testing.T) {
 
 func TestMpoolAlloc(t *testing.T) {
 	size, n := int64(96), int64(56)
+	pools := newFlistPool()
 	ptrs := make([]unsafe.Pointer, 0, n)
-	mpool := newpoolflist(size, n).(*poolflist)
+	mpool := newpoolflist(size, n, pools, nil, nil)
 	if len(mpool.freelist) != int(n) {
 		t.Errorf("expected %v, got %v", n, len(mpool.freelist))
 	}
@@ -72,7 +70,7 @@ func TestMpoolAlloc(t *testing.T) {
 
 	size, n = 96, 65536
 	ptrs = make([]unsafe.Pointer, 0, n)
-	mpool = newpoolflist(size, n).(*poolflist)
+	mpool = newpoolflist(size, n, pools, nil, nil)
 	// allocate all of them
 	ptrs = make([]unsafe.Pointer, 0, n)
 	for i := int64(0); i < n; i++ {
@@ -95,7 +93,7 @@ func TestMpoolAlloc(t *testing.T) {
 		t.Errorf("unexpected heap %v", heap)
 	} else if alloc != 62976 {
 		t.Errorf("unexpected alloc %v", alloc)
-	} else if overhead != 88 {
+	} else if overhead != 112 {
 		t.Errorf("unexpected overhead %v", overhead)
 	}
 
@@ -122,36 +120,23 @@ func TestMpoolAlloc(t *testing.T) {
 }
 
 func TestPoolInfo(t *testing.T) {
-	size, n := int64(96), int64(65536)
-	mpool := newpoolflist(size, n).(*poolflist)
+	size, n := int64(96), int64(1024)
+	mpool := newpoolflist(size, n, nil, nil, nil)
 	capacity, heap, alloc, overhead := mpool.Info()
-	if capacity != 6291456 {
+	if capacity != 98304 {
 		t.Errorf("unexpected capacity %v", capacity)
-	} else if heap != 6291456 {
+	} else if heap != 98304 {
 		t.Errorf("unexpected heap %v", heap)
 	} else if alloc != 0 {
 		t.Errorf("unexpected alloc %v", alloc)
-	} else if overhead != 88 {
+	} else if overhead != 112 {
 		t.Errorf("unexpected overhead %v", overhead)
-	}
-}
-
-func TestMpools(t *testing.T) {
-	size, n := int64(96), int64(8)
-	mpools := make(api.MemoryPools, 0)
-	for i := 0; i < 1024*1024; i++ {
-		mpool := newpoolflist(size, n).(*poolflist)
-		mpools = append(mpools, mpool)
-	}
-	sort.Sort(mpools)
-	if len(mpools) != 1024*1024 {
-		t.Errorf("unexpected")
 	}
 }
 
 func TestCheckAllocated(t *testing.T) {
 	size, n := int64(96), int64(56)
-	mpool := newpoolflist(size, n).(*poolflist)
+	mpool := newpoolflist(size, n, nil, nil, nil)
 	// allocate
 	for i := int64(0); i < n; i++ {
 		mpool.Allocchunk()
@@ -165,13 +150,14 @@ func TestCheckAllocated(t *testing.T) {
 func BenchmarkNewpoolflist(b *testing.B) {
 	size, n := int64(96), int64(65536)
 	for i := 0; i < b.N; i++ {
-		newpoolflist(size, n)
+		newpoolflist(size, n, nil, nil, nil)
 	}
 }
 
 func BenchmarkMpoolAllocX(b *testing.B) {
 	size, n := int64(96), int64(65536)
-	mpool := newpoolflist(size, n).(*poolflist)
+	pools := newFlistPool()
+	mpool := newpoolflist(size, n, pools, nil, nil)
 	for i := 0; i < int(n-1); i++ {
 		mpool.Allocchunk()
 	}

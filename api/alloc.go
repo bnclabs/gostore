@@ -15,7 +15,7 @@ type Mallocer interface {
 	// Release arena, all its pools and resources.
 	Release()
 
-	// Info of counts.
+	// Info of memory accounting for this arena.
 	Info() (capacity, heap, alloc, overhead int64)
 
 	// Utilization map of slab-size and its utilization
@@ -35,27 +35,21 @@ type MemoryPool interface {
 	// Slabsize return size of memory chunks managed by this pool.
 	Slabsize() int64
 
-	// Info of counts.
+	// Info return memory accounting for this pool.
 	Info() (capacity, heap, alloc, overhead int64)
 
 	// Less ordering between pools
 	Less(pool interface{}) bool
 }
 
-// MemoryPools sortable based on base-pointer.
-type MemoryPools []MemoryPool
+type MemoryPools interface {
+	// Allocate a new chunk from pool, no more memory available get a
+	// new pool from OS for numchunks for slab size.
+	Allocchunk(arena Mallocer, numchunks int64) (unsafe.Pointer, MemoryPool)
 
-// Len implement sort.Sort interface.
-func (pools MemoryPools) Len() int {
-	return len(pools)
-}
+	// Release all memory pools for this slab.
+	Release()
 
-// Less implement sort.Sort interface.
-func (pools MemoryPools) Less(i, j int) bool {
-	return pools[i].Less(pools[j])
-}
-
-// Swap implement sort.Sort interface.
-func (pools MemoryPools) Swap(i, j int) {
-	pools[i], pools[j] = pools[j], pools[i]
+	// Info return memory accouting for this slab.
+	Info() (capacity, heap, alloc, overhead int64)
 }

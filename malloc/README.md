@@ -13,7 +13,7 @@ with a limited scope:
   is Released.
 * There is no pointer re-write, if copying garbage collector is
   necessary it can be implemented on top of this implementation.
-
+* Larger overhead when arena-capacity is less but chunks are large.
 
 Applications are allowed to allocate memory chunks whose size fall
 between a pre-configured minimum chunk size and maximum chunk size,

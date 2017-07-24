@@ -31,14 +31,14 @@ func TestNewLLRBMvcc(t *testing.T) {
 
 	if kcap := stats["node.capacity"].(int64); kcap != keycapacity {
 		t.Errorf("expected %v, got %v", 600, kcap)
-	} else if overhead := stats["node.overhead"].(int64); overhead != 600 {
-		t.Errorf("expected %v, got %v", 600, overhead)
+	} else if overhead := stats["node.overhead"].(int64); overhead != 632 {
+		t.Errorf("expected %v, got %v", 632, overhead)
 	} else if heap := stats["node.heap"].(int64); heap != 0 {
 		t.Errorf("expected %v, got %v", 0, heap)
 	} else if vcap := stats["value.capacity"].(int64); vcap != valcapacity {
 		t.Errorf("expected %v, got %v", 600, vcap)
-	} else if overhead = stats["value.overhead"].(int64); overhead != 2136 {
-		t.Errorf("expected %v, got %v", 2136, overhead)
+	} else if overhead = stats["value.overhead"].(int64); overhead != 2168 {
+		t.Errorf("expected %v, got %v", 2168, overhead)
 	} else if heap = stats["value.heap"].(int64); heap != 0 {
 		t.Errorf("expected %v, got %v", 0, heap)
 	} else if x, y := int64(0), stats["node.alloc"].(int64); x != y {

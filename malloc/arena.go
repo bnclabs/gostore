@@ -8,6 +8,9 @@ import "errors"
 import "github.com/prataprc/gostore/api"
 import s "github.com/prataprc/gosettings"
 
+//#include <stdlib.h>
+import "C"
+
 var _ api.Mallocer = &Arena{}
 
 // ErrorOutofMemory when arena's capacity is exhausted and it cannot
@@ -19,14 +22,12 @@ type Arena struct {
 	slabs     []int64                   // sorted list of slabs in this arena
 	maxchunks [6]int64                  // 0-512,1-1K,16K,128K,1M,16M
 	mpools    map[int64]api.MemoryPools // size -> list of api.MemoryPool
-	poolmaker func(size, numchunks int64) api.MemoryPool
 
 	// settings
-	capacity   int64  // memory capacity to be managed by this arena
-	minblock   int64  // minimum block size allocatable by arena
-	maxblock   int64  // maximum block size allocatable by arena
-	allocator  string // allocator algorithm
-	fairchunks int64  // fair number of chunks per pool.
+	capacity  int64  // memory capacity to be managed by this arena
+	minblock  int64  // minimum block size allocatable by arena
+	maxblock  int64  // maximum block size allocatable by arena
+	allocator string // allocator algorithm
 }
 
 // NewArena create a new memory arena.
@@ -34,7 +35,6 @@ func NewArena(capacity int64, setts s.Settings) *Arena {
 	arena := (&Arena{capacity: capacity}).readsettings(setts)
 	arena.slabs = Computeslabs(arena.minblock, arena.maxblock)
 	arena.mpools = make(map[int64]api.MemoryPools)
-	arena.fairchunks = ChunksPerPool(arena.slabs, capacity)
 	// validate inputs
 	if int64(len(arena.slabs)) > Maxpools {
 		panic(fmt.Errorf("number of pools in arena exeeds %v", Maxpools))
@@ -42,15 +42,14 @@ func NewArena(capacity int64, setts s.Settings) *Arena {
 		fmsg := "capacity cannot exceed %v bytes (%v)"
 		panic(fmt.Errorf(fmsg, cp, Maxarenasize))
 	}
-	// pool-maker
-	switch arena.allocator {
-	case "flist":
-		arena.poolmaker = flistfactory()
-	case "fbit":
-		arena.poolmaker = fbitfactory()
-	}
-	for _, size := range arena.slabs {
-		arena.mpools[size] = make(api.MemoryPools, 0, Maxpools/2)
+	// memory-pools
+	for _, slab := range arena.slabs {
+		switch arena.allocator {
+		case "flist":
+			arena.mpools[slab] = newFlistPool()
+		case "fbit":
+			arena.mpools[slab] = newFbitPool()
+		}
 	}
 	// lookup table for adaptive numchunks
 	arena.maxchunks = [6]int64{
@@ -81,38 +80,13 @@ func (arena *Arena) Alloc(n int64) (unsafe.Pointer, api.MemoryPool) {
 	}
 	// try to get from existing pool
 	size := SuitableSlab(arena.slabs, n)
-	for _, mpool := range arena.mpools[size] {
-		if ptr, ok := mpool.Allocchunk(); ok {
-			return ptr, mpool
-		}
-	}
-	// check whether we are exceeding memory.
-	allocated := int64(arena.fairchunks * size)
-	for _, mpools := range arena.mpools {
-		if len(mpools) == 0 {
-			continue
-		}
-		allocated += mpools[0].Slabsize() * int64(len(mpools))
-	}
-	if allocated > arena.capacity {
-		panic(ErrorOutofMemory)
-	}
-	// go ahead, create a new pool.
-	mpool := arena.poolmaker(size, arena.fairchunks)
-	ln := len(arena.mpools[size])
-	arena.mpools[size] = append(arena.mpools[size], nil)
-	copy(arena.mpools[size][1:], arena.mpools[size][:ln])
-	arena.mpools[size][0] = mpool
-	ptr, _ := mpool.Allocchunk()
-	return ptr, mpool
+	return arena.mpools[size].Allocchunk(arena, size)
 }
 
 // Release implement Mallocer{} interface.
 func (arena *Arena) Release() {
 	for _, mpools := range arena.mpools {
-		for _, mpool := range mpools {
-			mpool.Release()
-		}
+		mpools.Release()
 	}
 	arena.slabs, arena.mpools = nil, nil
 }
@@ -130,10 +104,8 @@ func (arena *Arena) Info() (capacity, heap, alloc, overhead int64) {
 	slicesz := int64(cap(arena.slabs) * int(unsafe.Sizeof(int64(1))))
 	capacity, overhead = arena.capacity, self+slicesz
 	for _, mpools := range arena.mpools {
-		for _, mpool := range mpools {
-			_, h, a, o := mpool.Info()
-			heap, alloc, overhead = heap+h, alloc+a, overhead+o
-		}
+		_, h, a, o := mpools.Info()
+		heap, alloc, overhead = heap+h, alloc+a, overhead+o
 	}
 	return
 }
@@ -148,13 +120,9 @@ func (arena *Arena) Utilization() ([]int, []float64) {
 
 	ss, zs := make([]int, 0), make([]float64, 0)
 	for _, size := range sizes {
-		heap, alloc := float64(0), float64(0)
-		for _, mpool := range arena.mpools[int64(size)] {
-			_, h, a, _ := mpool.Info()
-			heap, alloc = heap+float64(h), alloc+float64(a)
-		}
+		_, heap, alloc, _ := arena.mpools[int64(size)].Info()
 		ss = append(ss, size)
-		zs = append(zs, (alloc/heap)*100)
+		zs = append(zs, (float64(alloc)/float64(heap))*100)
 	}
 	return ss, zs
 }
@@ -176,7 +144,7 @@ func (arena *Arena) adaptiveNumchunks(size, npools int64) int64 {
 	} else {
 		return 1
 	}
-	if numchunks > maxchunk {
+	if npools > 16 || numchunks > maxchunk {
 		return maxchunk
 	}
 	return numchunks
@@ -194,4 +162,8 @@ func (arena *Arena) maxchunksSize(capacity, marker int64) int64 {
 		maxchunks = Maxchunks
 	}
 	return maxchunks
+}
+
+func osmalloc(size int) uintptr {
+	return (uintptr)(C.malloc(C.size_t(size)))
 }
