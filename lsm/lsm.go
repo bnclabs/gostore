@@ -21,9 +21,6 @@ import "fmt"
 
 import "github.com/prataprc/gostore/api"
 
-// TODO: Implement LSMPool as make(chan *lsmiterator, N) to recycle
-// lsmiterator object.
-
 type lsmiterator struct {
 	merge     bool
 	iterators []api.IndexIterator
