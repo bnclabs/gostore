@@ -8,11 +8,6 @@ import "bytes"
 import "strings"
 import "encoding/json"
 
-// TODO: FailsafeRequest and FailsafePost can be localized as gen-server
-// methods. That way we can be specific about the channel type instead of
-// typing it as `chan []interface{}`.
-// TODO: ResponseError can also be localized to gen-server routine.
-
 // Parsecsv convert a string of command seperated value into list of string of
 // values.
 func Parsecsv(input string) []string {
