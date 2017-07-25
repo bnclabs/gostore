@@ -57,9 +57,9 @@ func (llrb *LLRB) fullstats() (map[string]interface{}, error) {
 	}
 
 	h_heightav := lib.NewhistorgramInt64(1, 256, 1)
-	llrb.heightStats(llrb.getroot(), 1 /*depth*/, h_heightav)
+	n_blacks := llrb.treecheck(llrb.getroot(), 1 /*depth*/, h_heightav, 0)
 	stats["h_height"] = h_heightav.Fullstats()
-	stats["n_blacks"] = llrb.countblacks(llrb.getroot(), 0)
+	stats["n_blacks"] = n_blacks
 
 	h_height := stats["h_height"].(map[string]interface{})
 	if x := h_height["samples"].(int64); x != llrb.Count() {

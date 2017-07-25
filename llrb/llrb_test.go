@@ -9,6 +9,7 @@ import "math/rand"
 import "bytes"
 
 import "github.com/prataprc/gostore/api"
+import "github.com/prataprc/gostore/lib"
 import "github.com/prataprc/gostore/dict"
 import s "github.com/prataprc/gosettings"
 
@@ -1318,6 +1319,42 @@ func TestUpsert(t *testing.T) {
 		t.Errorf("expected %v, got %v", x, y)
 	}
 
+	if err := llrb.Destroy(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTreecheck(t *testing.T) {
+	setts := testsetts(Defaultsettings())
+	setts["metadata.mvalue"] = true
+	setts["metadata.bornseqno"] = true
+	setts["metadata.deadseqno"] = false
+	setts["metadata.vbuuid"] = true
+	llrb := NewLLRB("test", setts)
+	vbno, vbuuid, seqno := uint16(10), uint64(0xABCD), uint64(12345678)
+	keys, values := make([][]byte, 0), make([][]byte, 0)
+	// insert 10K items
+	count := 20 * 1000
+	for i := 0; i < count; i++ {
+		key, value := make([]byte, 100), make([]byte, 100)
+		key, value = makekeyvalue(key, value)
+		llrb.Upsert(
+			key, value,
+			func(index api.Index, _ int64, nnd, ond api.Node, err error) bool {
+				nnd.Setvbno(vbno).SetVbuuid(vbuuid).SetBornseqno(seqno)
+				keys, values = append(keys, key), append(values, value)
+				return false
+			})
+		seqno++
+	}
+
+	h_heightav := lib.NewhistorgramInt64(1, 256, 1)
+	now := time.Now()
+	n_blacks := llrb.treecheck(llrb.getroot(), 1 /*depth*/, h_heightav, 0)
+	fmt.Printf("HeightStats took %v for %v items\n", time.Since(now), count)
+	fmt.Printf("Blacks in depth %v\n", n_blacks)
+
+	llrb.Validate()
 	if err := llrb.Destroy(); err != nil {
 		t.Fatal(err)
 	}

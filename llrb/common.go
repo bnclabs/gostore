@@ -9,7 +9,8 @@ import "github.com/prataprc/gostore/api"
 import "github.com/prataprc/gostore/lib"
 
 // low <= (keys) <= high
-func (llrb *LLRB) rangehele(nd *Llrbnode, lk, hk []byte, callb api.NodeCallb) bool {
+func (llrb *LLRB) rangehele(
+	nd *Llrbnode, lk, hk []byte, callb api.NodeCallb) bool {
 
 	if nd == nil {
 		return true
@@ -30,7 +31,8 @@ func (llrb *LLRB) rangehele(nd *Llrbnode, lk, hk []byte, callb api.NodeCallb) bo
 }
 
 // low <= (keys) < hk
-func (llrb *LLRB) rangehelt(nd *Llrbnode, lk, hk []byte, callb api.NodeCallb) bool {
+func (llrb *LLRB) rangehelt(
+	nd *Llrbnode, lk, hk []byte, callb api.NodeCallb) bool {
 
 	if nd == nil {
 		return true
@@ -51,7 +53,9 @@ func (llrb *LLRB) rangehelt(nd *Llrbnode, lk, hk []byte, callb api.NodeCallb) bo
 }
 
 // low < (keys) <= hk
-func (llrb *LLRB) rangehtle(nd *Llrbnode, lk, hk []byte, callb api.NodeCallb) bool {
+func (llrb *LLRB) rangehtle(
+	nd *Llrbnode, lk, hk []byte, callb api.NodeCallb) bool {
+
 	if nd == nil {
 		return true
 	}
@@ -71,7 +75,9 @@ func (llrb *LLRB) rangehtle(nd *Llrbnode, lk, hk []byte, callb api.NodeCallb) bo
 }
 
 // low < (keys) < hk
-func (llrb *LLRB) rangehtlt(nd *Llrbnode, lk, hk []byte, callb api.NodeCallb) bool {
+func (llrb *LLRB) rangehtlt(
+	nd *Llrbnode, lk, hk []byte, callb api.NodeCallb) bool {
+
 	if nd == nil {
 		return true
 	}
@@ -91,7 +97,9 @@ func (llrb *LLRB) rangehtlt(nd *Llrbnode, lk, hk []byte, callb api.NodeCallb) bo
 }
 
 // high >= (keys) >= low
-func (llrb *LLRB) rvrslehe(nd *Llrbnode, lk, hk []byte, callb api.NodeCallb) bool {
+func (llrb *LLRB) rvrslehe(
+	nd *Llrbnode, lk, hk []byte, callb api.NodeCallb) bool {
+
 	if nd == nil {
 		return true
 	}
@@ -111,7 +119,9 @@ func (llrb *LLRB) rvrslehe(nd *Llrbnode, lk, hk []byte, callb api.NodeCallb) boo
 }
 
 // high >= (keys) > low
-func (llrb *LLRB) rvrsleht(nd *Llrbnode, lk, hk []byte, callb api.NodeCallb) bool {
+func (llrb *LLRB) rvrsleht(
+	nd *Llrbnode, lk, hk []byte, callb api.NodeCallb) bool {
+
 	if nd == nil {
 		return true
 	}
@@ -131,7 +141,9 @@ func (llrb *LLRB) rvrsleht(nd *Llrbnode, lk, hk []byte, callb api.NodeCallb) boo
 }
 
 // high > (keys) >= low
-func (llrb *LLRB) rvrslthe(nd *Llrbnode, lk, hk []byte, callb api.NodeCallb) bool {
+func (llrb *LLRB) rvrslthe(
+	nd *Llrbnode, lk, hk []byte, callb api.NodeCallb) bool {
+
 	if nd == nil {
 		return true
 	}
@@ -151,7 +163,9 @@ func (llrb *LLRB) rvrslthe(nd *Llrbnode, lk, hk []byte, callb api.NodeCallb) boo
 }
 
 // high > (keys) > low
-func (llrb *LLRB) rvrsltht(nd *Llrbnode, lk, hk []byte, callb api.NodeCallb) bool {
+func (llrb *LLRB) rvrsltht(
+	nd *Llrbnode, lk, hk []byte, callb api.NodeCallb) bool {
+
 	if nd == nil {
 		return true
 	}
@@ -170,24 +184,20 @@ func (llrb *LLRB) rvrsltht(nd *Llrbnode, lk, hk []byte, callb api.NodeCallb) boo
 	return llrb.rvrsltht(nd.left, lk, hk, callb)
 }
 
-func (llrb *LLRB) heightStats(nd *Llrbnode, depth int64, h *lib.HistogramInt64) {
-	if nd == nil {
-		return
-	}
-	h.Add(depth)
-	llrb.heightStats(nd.left, depth+1, h)
-	llrb.heightStats(nd.right, depth+1, h)
-}
+// costly operation, don't call this one active trees.
+func (llrb *LLRB) treecheck(
+	nd *Llrbnode, depth int64, h *lib.HistogramInt64, count int64) int64 {
 
-func (llrb *LLRB) countblacks(nd *Llrbnode, count int) int {
 	if nd != nil {
+		h.Add(depth)
 		if !isred(nd) {
 			count++
 		}
-		x := llrb.countblacks(nd.left, count)
-		y := llrb.countblacks(nd.right, count)
+
+		x := llrb.treecheck(nd.left, depth+1, h, count)
+		y := llrb.treecheck(nd.right, depth+1, h, count)
 		if x != y {
-			fmsg := "countblacks(): no. of blacks {left,right} : {%v,%v}"
+			fmsg := "invariant failed, no. of blacks : {%v,%v}"
 			panic(fmt.Errorf(fmsg, x, y))
 		}
 		return x
