@@ -121,6 +121,9 @@ func (arena *Arena) Utilization() ([]int, []float64) {
 	ss, zs := make([]int, 0), make([]float64, 0)
 	for _, size := range sizes {
 		_, heap, alloc, _ := arena.mpools[int64(size)].Info()
+		if heap == 0 {
+			continue
+		}
 		ss = append(ss, size)
 		zs = append(zs, (float64(alloc)/float64(heap))*100)
 	}
