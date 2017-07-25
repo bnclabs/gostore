@@ -184,7 +184,7 @@ func (llrb *LLRB) rvrsltht(
 	return llrb.rvrsltht(nd.left, lk, hk, callb)
 }
 
-// costly operation, don't call this one active trees.
+// costly operation, don't call this on active trees.
 func (llrb *LLRB) treecheck(
 	nd *Llrbnode, depth int64, h *lib.HistogramInt64, count int64) int64 {
 

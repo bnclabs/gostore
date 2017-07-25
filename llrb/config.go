@@ -7,16 +7,12 @@ import "github.com/cloudfoundry/gosigar"
 
 // Defaultsettings for llrb instance along with node arena and value arena.
 //
-// Configuration parameters:
+// "iterpool.size": int64(100)
+//      Maximum number of active iterators. Each Iterate call will acquire
+//      an instance of iterator.
 //
-// "iterpool.size":        int64(100),
-//		maximum number of active iterators.
-//
-// "lsm":                  false,
-//		Enable Log-Structured-Merge feature.
-//
-// "memutilization":       float64(0.4),
-//		allowable memory utilization.
+// "lsm": false
+//      Enable Log-Structured-Merge feature.
 //
 // "minkeysize" (int64, default: <api.MinKeysize>),
 //		minimum size allowed for key.
@@ -81,7 +77,6 @@ func Defaultsettings() s.Settings {
 	setts := s.Settings{
 		"iterpool.size":        int64(100),
 		"lsm":                  false,
-		"memutilization":       float64(0.4),
 		"minkeysize":           api.MinKeysize,
 		"maxkeysize":           api.MaxKeysize,
 		"minvalsize":           api.MinValsize,

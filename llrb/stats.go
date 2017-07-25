@@ -50,6 +50,11 @@ func (llrb *LLRB) stats() (map[string]interface{}, error) {
 	return stats, nil
 }
 
+// along with basic tree statistics, walks the tree to gather:
+// * histogram of tree-height
+// * number blacks, also make sures that number of blacks
+//   on the left path patches with number of blacks on the right
+//   path. this is a basic llrb invariant.
 func (llrb *LLRB) fullstats() (map[string]interface{}, error) {
 	stats, err := llrb.stats()
 	if err != nil {

@@ -35,7 +35,6 @@ func (llrb *LLRB) readsettings(setts s.Settings) {
 	llrb.mvcc.enabled = setts.Bool("mvcc.enable")
 	llrb.writechansz = setts.Int64("mvcc.writer.chansize")
 	llrb.snaptick = setts.Int64("mvcc.snapshot.tick")
-	llrb.memutilization = setts.Float64("memutilization")
 }
 
 func (llrb *LLRB) newnodearena(capacity int64, setts s.Settings) *malloc.Arena {
