@@ -1,5 +1,3 @@
-// +build !fbit
-
 package malloc
 
 import "testing"

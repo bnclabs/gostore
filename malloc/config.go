@@ -30,7 +30,7 @@ const Maxchunks = int64(1024)
 //		Maximum size of a chunk. Must be confirm to 8-byte alignment.
 //
 // "allocator" (string, default: "flist")
-//		Allocater algorithm, can be "flist" or "fbit".
+//		Allocater algorithm, should be "flist"
 func Defaultsettings(minblock, maxblock int64) s.Settings {
 	if minblock > maxblock {
 		panic(fmt.Errorf("minblock(%v) > maxblock(%v)", minblock, maxblock))

@@ -47,8 +47,8 @@ func NewArena(capacity int64, setts s.Settings) *Arena {
 		switch arena.allocator {
 		case "flist":
 			arena.mpools[slab] = newFlistPool()
-		case "fbit":
-			arena.mpools[slab] = newFbitPool()
+		default:
+			panic(fmt.Errorf("invalid allocator %v", arena.allocator))
 		}
 	}
 	// lookup table for adaptive numchunks

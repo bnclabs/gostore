@@ -1,3 +1,4 @@
+// +build fbit
 // Functions and methods are not thread safe.
 
 package malloc
