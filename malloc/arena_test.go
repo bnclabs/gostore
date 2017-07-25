@@ -13,11 +13,7 @@ var _ = fmt.Sprintf("dummy")
 
 func TestNewmarena(t *testing.T) {
 	capacity := int64(10 * 1024 * 1024)
-	marena := NewArena(capacity, s.Settings{
-		"minblock":  int64(96),
-		"maxblock":  int64(1024 * 1024),
-		"allocator": "flist",
-	})
+	marena := NewArena(capacity, Defaultsettings(96, 1024*1024))
 	if x := len(marena.slabs); x != 182 {
 		t.Errorf("expected %v, got %v", 182, x)
 	}
@@ -91,6 +87,16 @@ func TestArenaAlloc(t *testing.T) {
 		t.Errorf("unexpected alloc %v", alloc)
 	} else if overhead != 115320 {
 		t.Errorf("unexpected overhead %v", overhead)
+	}
+
+	if slabs, uzs := marena.Utilization(); len(slabs) != 1 {
+		t.Errorf("unexpected %v", len(slabs))
+	} else if slabs[0] != 1024 {
+		t.Errorf("unexpected %v", slabs[0])
+	} else if len(uzs) != 1 {
+		t.Errorf("unexpected %v", len(uzs))
+	} else if uzs[0] != 100 {
+		t.Errorf("unexpected %v", uzs[0])
 	}
 
 	// panic case

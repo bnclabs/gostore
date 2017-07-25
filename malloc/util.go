@@ -64,25 +64,6 @@ func Computeslabs(minblock, maxblock int64) []int64 {
 	return sizes
 }
 
-// ChunksPerPool calculates the fair number of entries to each slab.
-func ChunksPerPool(slabs []int64, capacity int64) int64 {
-	sum := int64(0)
-	for _, x := range slabs {
-		sum += x
-	}
-	fairchunks := capacity / sum
-	if fairchunks > Maxchunks {
-		fairchunks = Maxchunks
-	}
-	if fairchunks < Alignment {
-		fairchunks = Alignment
-	}
-	if mod := fairchunks % Alignment; mod != 0 {
-		fairchunks += Alignment - mod
-	}
-	return fairchunks
-}
-
 var poolblkinit = make([]byte, 1024)
 var zeroblkinit = make([]byte, 1024)
 
