@@ -2,9 +2,6 @@ package malloc
 
 import "fmt"
 
-// TODO: create a slab structure that maintains the all slabs
-// and provides suitable-size method.
-
 // SuitableSlab return an optimal block-size for required size.
 // Argument slabs should be sorted array of int64.
 func SuitableSlab(slabs []int64, size int64) int64 {

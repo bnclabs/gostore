@@ -23,6 +23,3 @@
 // between a pre-configured minimum chunk size and maximum chunk size,
 // supplied while instantiating a new arena.
 package malloc
-
-// TODO: Right now memory is given back to OS only when the arena is released.
-// Implement arena API to detect and free memory at pool level granularity.
