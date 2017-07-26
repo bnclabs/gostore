@@ -1,10 +1,21 @@
-Custom memory allocator
-=======================
+Allocator backend
+=================
+
+Malloc supplies different allocator backend based on application
+behaviour:
+
+* `flist` uses custom allocator built for gostore. Default allocator.
+* `malloc` uses OS standard library, Ref #33.
+* `jemalloc` from FreeBSD [jemalloc.net](http://jemalloc.net).
+   Ref #34.
+
+FLIST allocator
+===============
 
 Malloc supplies custom memory management for storage algorithms,
 with a limited scope:
 
-* Types and Functions exported by this package are not thread safe.
+* Types and Functions exported by this allocator are not thread safe.
 * Work best when memory behaviour is known apriori.
 * Memory is allocated in pools, of several Megabytes, where each
   pool manages several memory-chunks of same size.
