@@ -90,8 +90,13 @@ func (pool *poolflist) Free(ptr unsafe.Pointer) {
 	pool.freelist = append(pool.freelist, nthblock)
 	pool.freeoff++
 	pool.mallocated -= pool.size
-	// unlink and re-link.
-	pool.pools.unlink(pool).toheadfree(pool)
+	if pool.mallocated == 0 { // release to OS.
+		pool.pools.unlink(pool)
+		C.free(pool.base)
+		pool.pools.npools--
+	} else { // or unlink and re-link to free pool
+		pool.pools.unlink(pool).toheadfree(pool)
+	}
 }
 
 // Info implement api.MemoryPool{} interface.
@@ -119,7 +124,6 @@ type flistPools struct {
 	full   *poolflist
 	free   *poolflist
 	npools int64 // number of active pools
-	cpools int64 // number of created pools, including the ones released to OS.
 }
 
 func newFlistPool() *flistPools {
@@ -180,17 +184,9 @@ func (pools *flistPools) Allocchunk(
 
 	arena := mallocer.(*Arena)
 	if pools.free == nil {
-		numchunks := arena.adaptiveNumchunks(size, pools.cpools)
+		numchunks := arena.adaptiveNumchunks(size, pools.npools)
 		pools.free = newpoolflist(size, numchunks, pools, &pools.free, nil)
 		pools.npools++
-		pools.cpools++
-
-	} else if pools.npools > 5 && pools.free.mallocated == 0 {
-		if (pools.free.capacity / size) < 64 { // release pool to OS
-			C.free(pools.free.base)
-			pools.npools--
-			return pools.shiftupFree().Allocchunk(arena, size)
-		}
 	}
 	ptr, ok := pools.free.Allocchunk()
 	if !ok { // full

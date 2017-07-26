@@ -63,9 +63,6 @@ func TestMpoolAlloc(t *testing.T) {
 		t.Errorf("unexpected %v, %v", len(mpool.freelist), mpool.freeoff)
 	}
 
-	// done
-	mpool.Release()
-
 	size, n = 96, 65536
 	ptrs = make([]unsafe.Pointer, 0, n)
 	mpool = newpoolflist(size, n, pools, nil, nil)
