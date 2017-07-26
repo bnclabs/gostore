@@ -72,16 +72,16 @@ type LLRB struct { // tree container
 
 // NewLLRB a new instance of in-memory sorted index.
 func NewLLRB(name string, setts s.Settings) *LLRB {
-	setts = make(s.Settings).Mixin(Defaultsettings(), setts)
 	llrb := &LLRB{name: name, borntime: time.Now()}
+	llrb.logprefix = fmt.Sprintf("LLRB [%s]", name)
+
+	setts = make(s.Settings).Mixin(Defaultsettings(), setts)
 	llrb.readsettings(setts)
 	llrb.iterpool = make(chan *iterator, llrb.iterpoolsize)
 
 	// setup arena for nodes and node-values.
 	llrb.nodearena = llrb.newnodearena(setts)
 	llrb.valarena = llrb.newvaluearena(setts)
-
-	llrb.logprefix = fmt.Sprintf("LLRB [%s]", name)
 
 	// set up metadata options
 	llrb.fmask = llrb.setupfmask(setts)
