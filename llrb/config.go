@@ -98,9 +98,15 @@ func Defaultsettings() s.Settings {
 		"mvcc.writer.chansize": int64(1000),
 		"nodearena.allocator":  "flist", // just a place holder
 	}
-	nodesetts := malloc.Defaultsettings(api.MinKeysize, api.MaxKeysize)
+
+	minkeysize := adjustkeysize(api.MinKeysize, setts)
+	maxkeysize := adjustkeysize(api.MaxKeysize, setts)
+	minvalsize := adjustvalsize(api.MinValsize)
+	maxvalsize := adjustvalsize(api.MaxValsize)
+
+	nodesetts := malloc.Defaultsettings(minkeysize, maxkeysize)
 	nodesetts = nodesetts.AddPrefix("nodearena.")
-	valsetts := malloc.Defaultsettings(api.MinValsize, api.MaxValsize)
+	valsetts := malloc.Defaultsettings(minvalsize, maxvalsize)
 	valsetts = valsetts.AddPrefix("valarena.")
 	setts = setts.Mixin(nodesetts, valsetts)
 	return setts
