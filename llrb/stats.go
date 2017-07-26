@@ -153,9 +153,9 @@ func (llrb *LLRB) log(involved string, humanize bool) {
 		}
 		return val.(int64)
 	}
-	fullutilization := func(alloc, heap interface{}) float64 {
+	fullutilization := func(alloc, heap interface{}) int64 {
 		uz := float64(alloc.(int64)) / float64(heap.(int64))
-		return uz
+		return int64(uz * 100)
 	}
 
 	if humanize {
@@ -176,7 +176,7 @@ func (llrb *LLRB) log(involved string, humanize bool) {
 		}
 		out := strings.Join(outs, "\n")
 		uz := fullutilization(stats["node.alloc"], stats["node.heap"])
-		log.Infof("%v key utilization: %.2f\n%v\n", llrb.logprefix, uz, out)
+		log.Infof("%v key utilization: %v%%\n%v\n", llrb.logprefix, uz, out)
 
 		// value memory
 		capac = dohumanize(stats["value.capacity"])
@@ -196,7 +196,7 @@ func (llrb *LLRB) log(involved string, humanize bool) {
 		}
 		out = strings.Join(outs, "\n")
 		uz = fullutilization(stats["value.alloc"], stats["value.heap"])
-		log.Infof("%v value utilization: %.2f\n%v\n", llrb.logprefix, uz, out)
+		log.Infof("%v value utilization: %v%%\n%v\n", llrb.logprefix, uz, out)
 	}
 
 	// log statistics
