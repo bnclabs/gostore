@@ -1202,12 +1202,12 @@ func TestLLRBMvccInsert(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	alloc := int64(1040000)
+	alloc := int64(1680000)
 	if x := stats["node.alloc"].(int64); x != alloc {
 		t.Errorf("expected %v, got %v", alloc, x)
 	}
 	//useful := int64(25165824)
-	alloc = int64(1280000)
+	alloc = int64(1360000)
 	if x := stats["value.alloc"].(int64); x != alloc {
 		t.Errorf("expected %v, got %v", alloc, x)
 	}

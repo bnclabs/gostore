@@ -1,5 +1,3 @@
-// LLRB MVCC snapshot readers.
-
 package llrb
 
 import "sync/atomic"
@@ -16,8 +14,7 @@ import "github.com/prataprc/gostore/lib"
 import "github.com/prataprc/golog"
 import "github.com/prataprc/gostore/api"
 
-//---- snapshot ticker
-
+// go-routine to generate snapshots.
 func (writer *LLRBWriter) snapshotticker(interval int64, finch chan bool) {
 	llrb := writer.llrb
 	tick := time.NewTicker(time.Duration(interval) * time.Millisecond)
@@ -62,7 +59,8 @@ type LLRBSnapshot struct {
 	n_cclookups int64
 	n_ccranges  int64
 
-	// 64-bit aligned writer statistics
+	// 64-bit aligned writer statistics, useful for
+	// validating the correctness of snapshot.
 	n_count    int64
 	n_inserts  int64
 	n_updates  int64
@@ -78,7 +76,7 @@ type LLRBSnapshot struct {
 	// can be unaligned fields
 
 	llrb  *LLRB
-	id    string
+	id    string // snapshot id
 	root  *Llrbnode
 	clock api.Clock
 	dead  bool

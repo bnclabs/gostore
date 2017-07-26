@@ -1,23 +1,23 @@
 // Package llrb implement a self-balancing verions of binary-tree, called,
 // LLRB (Left Leaning Red Black).
 //
-//   * index key, value (value is optional).
-//   * each key shall be unique within the index sample-set.
-//   * custom memory management.
-//   * settings metadata - vbno, access-time, bornseqno, deadseqno, vbuuid.
-//   * in single-threaded settings, reads and writes are serialized.
-//   * supports multi-version-concurrency-control, where writes are
+//   * Index key, value (value is optional).
+//   * Each key shall be unique within the index sample-set.
+//   * Configurable memory backend.
+//   * Metadata - vbno, access-time, bornseqno, deadseqno, vbuuid.
+//   * In single-threaded settings, reads and writes are serialized.
+//   * Supports multi-version-concurrency-control, where writes are
 //     serialized even if there are concurrent writers, and there can be
 //     zero or more concurrent readers.
 //
-// metadata fields are part of index entry, and describes them with:
+// Metadata fields are part of index entry, and describes them with:
 //
 //   a. 16 bit vbucket-number virtual bucket for the key.
 //   b. 20 bit access time bits time.Now()[50:30].
 //
-//   and upto 12 optional fields that are settings.
+//   and upto 12 optional fields that can be configured via settings.
 //
-//   1. 64 bit unique vbucket id for the vbucket number.
+//   1. 64 bit unique vbucket id.
 //   2. 64 bit born-seqno vbucket seqno in which this entry was upserted.
 //   3. 64 bit dead-seqno vbucket seqno in which this entry was deleted.
 //   4. 64 bit mvalue, pointer to memory refering to value.
@@ -25,15 +25,15 @@
 //
 //   few more to be added...
 //
-// fpos:
+// Note on `fpos`:
 //
-//   * value can be kept in memory or backed by disk.
-//   * if value is kept in memory, mvalue refers to the memory offset for
+//   * Value can be kept in memory or backed by disk.
+//   * If value is kept in memory, mvalue refers to the memory offset for
 //     fetching the entry value.
-//   * if value is backed by disk then,
+//   * If value is backed by disk then,
 //     fpos[64:59], specifies file-id, ranging from 0-31.
 //     fpos[59:], specifies the offset into the identified file.
-//   * file-id identifies the level, with 0 being the most recent level.
+//   * File-id identifies the level, with 0 being the most recent level.
 //
 // Hard Limits:
 //

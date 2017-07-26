@@ -91,7 +91,7 @@ func (llrb *LLRB) validatemem() {
 			"node.overhead",
 		)
 		log.Infof("%v %v\n", llrb.logprefix, info)
-		panic(fmt.Errorf("%v/%v=%v < %v", memory, heap, ratio*100, memuz*100))
+		panic(fmt.Errorf("%v/%v=%.2f < %v", memory, heap, ratio*100, memuz*100))
 	}
 
 	memory = float64(llrb.valmemory)
@@ -103,7 +103,7 @@ func (llrb *LLRB) validatemem() {
 			"value.overhead",
 		)
 		log.Infof("%v %v\n", llrb.logprefix, info)
-		panic(fmt.Errorf("%v/%v=%v < %v", memory, heap, ratio*100, memuz*100))
+		panic(fmt.Errorf("%v/%v=%.2f < %v", memory, heap, ratio*100, memuz*100))
 	}
 }
 

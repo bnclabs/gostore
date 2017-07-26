@@ -284,7 +284,7 @@ func TestBasicUpdates(t *testing.T) {
 		t.Errorf("expected %v, got %v", newvalue, nd.Value())
 	}
 
-	llrb.ExpectedUtilization(0.023)
+	llrb.ExpectedUtilization(0.019)
 	llrb.Validate()
 
 	// delete
@@ -312,7 +312,7 @@ func TestBasicUpdates(t *testing.T) {
 		t.Errorf("expected missing key")
 	}
 
-	llrb.ExpectedUtilization(0.019)
+	llrb.ExpectedUtilization(0.015)
 	llrb.Validate()
 
 	// delete-max
@@ -340,7 +340,7 @@ func TestBasicUpdates(t *testing.T) {
 		t.Errorf("expeced missing key")
 	}
 
-	llrb.ExpectedUtilization(0.014)
+	llrb.ExpectedUtilization(0.011)
 	llrb.Validate()
 
 	// delete-min
@@ -1177,8 +1177,8 @@ func TestInsert(t *testing.T) {
 	if x := stats["node.alloc"].(int64); x != allocated {
 		t.Errorf("expected %v, got %v", allocated, x)
 	}
-	useful = int64(1286016)
-	allocated = int64(1280000)
+	useful = int64(1366392)
+	allocated = int64(1360000)
 	if x := stats["value.heap"].(int64); x != useful {
 		t.Errorf("expected %v, got %v", useful, x)
 	}
@@ -1302,8 +1302,8 @@ func TestUpsert(t *testing.T) {
 	if useful := stats["node.heap"].(int64); useful != 1687896 {
 		t.Errorf("expected %v, got %v", 1687896, useful)
 	}
-	if useful := stats["value.heap"].(int64); useful != 3616920 {
-		t.Errorf("expected %v, got %v", 3616920, useful)
+	if useful := stats["value.heap"].(int64); useful != 3697296 {
+		t.Errorf("expected %v, got %v", 3697296, useful)
 	}
 	x, y := int64(1680000), stats["node.alloc"].(int64)
 	if x != y {
@@ -1470,8 +1470,8 @@ func TestDelete(t *testing.T) {
 	if useful := stats["node.heap"].(int64); useful != 1687728 {
 		t.Errorf("expected %v, got %v", 1687728, useful)
 	}
-	if useful := stats["value.heap"].(int64); useful != 1285888 {
-		t.Errorf("expected %v, got %v", 1285888, useful)
+	if useful := stats["value.heap"].(int64); useful != 1366256 {
+		t.Errorf("expected %v, got %v", 1366256, useful)
 	} else if x, y := int64(0), stats["node.alloc"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	} else if x, y = int64(0), stats["value.alloc"].(int64); x != y {
