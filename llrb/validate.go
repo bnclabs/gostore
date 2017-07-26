@@ -169,10 +169,10 @@ func (llrb *LLRB) validatestats() error {
 			"abs(n_clones:%v - n_frees:%v)"
 		panic(fmt.Errorf(fmsg, n_deletes, total_reclaim, n_clones, n_frees))
 	}
-	// mvcc.n_snapshots should match (mvcc.n_activess + mvcc.n_purgedss)
-	n_snapshots := atomic.LoadInt64(&llrb.mvcc.n_snapshots)
-	n_purgedss := atomic.LoadInt64(&llrb.mvcc.n_purgedss)
-	n_activess := atomic.LoadInt64(&llrb.mvcc.n_activess)
+	// n_snapshots should match (n_activess + n_purgedss)
+	n_snapshots := atomic.LoadInt64(&llrb.n_snapshots)
+	n_purgedss := atomic.LoadInt64(&llrb.n_purgedss)
+	n_activess := atomic.LoadInt64(&llrb.n_activess)
 	if n_snapshots != (n_purgedss + n_activess) {
 		fmsg := "validatestats(): " +
 			"n_snapshots:%v != (n_activess:%v + n_purgedss:%v)"

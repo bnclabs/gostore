@@ -213,8 +213,8 @@ func (writer *LLRBWriter) run() {
 	reclaimNodes := func(opname string, reclaim []*Llrbnode) {
 		if len(reclaim) > 0 {
 			llrb.mvcc.h_reclaims[opname].Add(int64(len(reclaim)))
-			llrb.mvcc.n_reclaims += int64(len(reclaim))
-			if atomic.LoadInt64(&llrb.mvcc.n_activess) == 0 {
+			llrb.n_reclaims += int64(len(reclaim))
+			if atomic.LoadInt64(&llrb.n_activess) == 0 {
 				// no snapshots are refering to these nodes, free them.
 				for _, nd := range reclaim {
 					llrb.freenode(nd)
@@ -388,7 +388,7 @@ func (writer *LLRBWriter) mvccupsert(
 	var root, newnd, oldnd *Llrbnode
 
 	llrb := writer.llrb
-	llrb.mvcc.h_versions.Add(atomic.LoadInt64(&llrb.mvcc.n_activess))
+	llrb.mvcc.h_versions.Add(atomic.LoadInt64(&llrb.n_activess))
 
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
 
@@ -433,7 +433,7 @@ func (writer *LLRBWriter) mvccupsertcas(
 
 	// if cas matches go ahead with upsert.
 	var root, newnd, oldnd *Llrbnode
-	llrb.mvcc.h_versions.Add(atomic.LoadInt64(&llrb.mvcc.n_activess))
+	llrb.mvcc.h_versions.Add(atomic.LoadInt64(&llrb.n_activess))
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
 	root, newnd, oldnd, reclaim = writer.upsert(
 		llrb.getroot(), 1, key, value, reclaim)
@@ -510,7 +510,7 @@ func (writer *LLRBWriter) mvccdelmin(
 	var root, deleted *Llrbnode
 
 	llrb := writer.llrb
-	llrb.mvcc.h_versions.Add(atomic.LoadInt64(&llrb.mvcc.n_activess))
+	llrb.mvcc.h_versions.Add(atomic.LoadInt64(&llrb.n_activess))
 
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
 
@@ -575,7 +575,7 @@ func (writer *LLRBWriter) mvccdelmax(
 	var root, deleted *Llrbnode
 
 	llrb := writer.llrb
-	llrb.mvcc.h_versions.Add(atomic.LoadInt64(&llrb.mvcc.n_activess))
+	llrb.mvcc.h_versions.Add(atomic.LoadInt64(&llrb.n_activess))
 
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
 
@@ -642,7 +642,7 @@ func (writer *LLRBWriter) mvccdelete(
 	var root, deleted *Llrbnode
 
 	llrb := writer.llrb
-	llrb.mvcc.h_versions.Add(atomic.LoadInt64(&llrb.mvcc.n_activess))
+	llrb.mvcc.h_versions.Add(atomic.LoadInt64(&llrb.n_activess))
 
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
 
@@ -975,13 +975,15 @@ func (writer *LLRBWriter) purgesnapshot(snapshot *LLRBSnapshot) bool {
 	for _, nd := range snapshot.reclaim {
 		snapshot.llrb.freenode(nd)
 	}
-	atomic.AddInt64(&llrb.mvcc.n_activess, -1)
-	atomic.AddInt64(&llrb.mvcc.n_purgedss, 1)
-	log.Debugf("%v snapshot PURGED\n", snapshot.logprefix)
+
+	atomic.AddInt64(&llrb.n_activess, -1)
+	atomic.AddInt64(&llrb.n_purgedss, 1)
 	atomic.AddInt64(&llrb.n_lookups, snapshot.n_lookups)
 	atomic.AddInt64(&llrb.n_ranges, snapshot.n_ranges)
-	atomic.AddInt64(&llrb.mvcc.n_cclookups, snapshot.n_cclookups)
-	atomic.AddInt64(&llrb.mvcc.n_ccranges, snapshot.n_ccranges)
+	atomic.AddInt64(&llrb.n_cclookups, snapshot.n_cclookups)
+	atomic.AddInt64(&llrb.n_ccranges, snapshot.n_ccranges)
+
+	log.Debugf("%v snapshot PURGED\n", snapshot.logprefix)
 	return true
 }
 

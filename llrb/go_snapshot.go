@@ -53,25 +53,8 @@ loop:
 
 // LLRBSnapshot holds on to a read-only version of the LLRB tree.
 type LLRBSnapshot struct {
-	// 64-bit aligned reader statistics
-	n_lookups   int64
-	n_ranges    int64
-	n_cclookups int64
-	n_ccranges  int64
-
-	// 64-bit aligned writer statistics, useful for
-	// validating the correctness of snapshot.
-	n_count    int64
-	n_inserts  int64
-	n_updates  int64
-	n_deletes  int64
-	n_nodes    int64
-	n_frees    int64
-	n_clones   int64
-	n_reclaims int64
-	keymemory  int64
-	valmemory  int64
-	refcount   int64
+	refcount int64
+	llrbstats
 
 	// can be unaligned fields
 
@@ -100,16 +83,7 @@ func (llrb *LLRB) newsnapshot(id string) *LLRBSnapshot {
 		dead:  llrb.dead,
 		fmask: llrb.fmask,
 		// writer statistics
-		n_count:    llrb.n_count,
-		n_inserts:  llrb.n_inserts,
-		n_updates:  llrb.n_updates,
-		n_deletes:  llrb.n_deletes,
-		n_nodes:    llrb.n_nodes,
-		n_frees:    llrb.n_frees,
-		n_clones:   llrb.n_clones,
-		n_reclaims: llrb.mvcc.n_reclaims,
-		keymemory:  llrb.keymemory,
-		valmemory:  llrb.valmemory,
+		llrbstats: llrb.llrbstats,
 	}
 	snapshot.logprefix = fmt.Sprintf("[LLRBSnapshot-%s/%s]", llrb.name, id)
 
@@ -130,8 +104,8 @@ func (llrb *LLRB) newsnapshot(id string) *LLRBSnapshot {
 
 	fmsg := "%v snapshot BORN %v nodes to reclaim...\n"
 	log.Debugf(fmsg, snapshot.logprefix, len(snapshot.reclaim))
-	atomic.AddInt64(&llrb.mvcc.n_snapshots, 1)
-	atomic.AddInt64(&llrb.mvcc.n_activess, 1)
+	atomic.AddInt64(&llrb.n_snapshots, 1)
+	atomic.AddInt64(&llrb.n_activess, 1)
 	return snapshot
 }
 

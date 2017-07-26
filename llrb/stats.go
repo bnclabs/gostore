@@ -10,10 +10,14 @@ import "github.com/prataprc/gostore/lib"
 import "github.com/prataprc/golog"
 
 type llrbstats struct {
-	// 64-bit aligned reader statistics
+	// 64-bit aligned reader statistics.
 	n_lookups int64
 	n_casgets int64
 	n_ranges  int64
+
+	// 64-bit aligned snapshot statistics.
+	n_cclookups int64
+	n_ccranges  int64
 
 	// 64-bit aligned writer statistics
 	n_count   int64 // number of nodes in the tree
@@ -25,14 +29,11 @@ type llrbstats struct {
 	n_clones  int64
 	keymemory int64 // memory used by all keys
 	valmemory int64 // memory used by all values
-}
 
-type mvccstats struct {
+	// 64-bit aligned mvcc stats.
 	n_snapshots int64
 	n_purgedss  int64
 	n_activess  int64
-	n_cclookups int64
-	n_ccranges  int64
 	n_reclaims  int64
 }
 
@@ -118,12 +119,12 @@ func (llrb *LLRB) statswt(stats map[string]interface{}) map[string]interface{} {
 }
 
 func (llrb *LLRB) statsmvcc(stats map[string]interface{}) map[string]interface{} {
-	stats["mvcc.n_snapshots"] = atomic.LoadInt64(&llrb.mvcc.n_snapshots)
-	stats["mvcc.n_purgedss"] = atomic.LoadInt64(&llrb.mvcc.n_purgedss)
-	stats["mvcc.n_activess"] = atomic.LoadInt64(&llrb.mvcc.n_activess)
-	stats["mvcc.n_cclookups"] = llrb.mvcc.n_cclookups
-	stats["mvcc.n_ccranges"] = llrb.mvcc.n_ccranges
-	stats["mvcc.n_reclaims"] = llrb.mvcc.n_reclaims
+	stats["mvcc.n_cclookups"] = llrb.n_cclookups
+	stats["mvcc.n_ccranges"] = llrb.n_ccranges
+	stats["mvcc.n_snapshots"] = atomic.LoadInt64(&llrb.n_snapshots)
+	stats["mvcc.n_purgedss"] = atomic.LoadInt64(&llrb.n_purgedss)
+	stats["mvcc.n_activess"] = atomic.LoadInt64(&llrb.n_activess)
+	stats["mvcc.n_reclaims"] = llrb.n_reclaims
 	return stats
 }
 

@@ -1302,8 +1302,8 @@ func TestUpsert(t *testing.T) {
 	if useful := stats["node.heap"].(int64); useful != 1687896 {
 		t.Errorf("expected %v, got %v", 1687896, useful)
 	}
-	if useful := stats["value.heap"].(int64); useful != 3697296 {
-		t.Errorf("expected %v, got %v", 3697296, useful)
+	if useful := stats["value.heap"].(int64); useful != 2330904 {
+		t.Errorf("expected %v, got %v", 2330904, useful)
 	}
 	x, y := int64(1680000), stats["node.alloc"].(int64)
 	if x != y {
@@ -1467,11 +1467,11 @@ func TestDelete(t *testing.T) {
 		t.Error(err)
 	}
 
-	if useful := stats["node.heap"].(int64); useful != 1687728 {
-		t.Errorf("expected %v, got %v", 1687728, useful)
+	if useful := stats["node.heap"].(int64); useful != 0 {
+		t.Errorf("expected %v, got %v", 0, useful)
 	}
-	if useful := stats["value.heap"].(int64); useful != 1366256 {
-		t.Errorf("expected %v, got %v", 1366256, useful)
+	if useful := stats["value.heap"].(int64); useful != 0 {
+		t.Errorf("expected %v, got %v", 0, useful)
 	} else if x, y := int64(0), stats["node.alloc"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	} else if x, y = int64(0), stats["value.alloc"].(int64); x != y {

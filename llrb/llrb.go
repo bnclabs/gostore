@@ -24,7 +24,6 @@ type LLRB struct { // tree container
 	// mvcc
 	mvcc struct {
 		ismut int64 // need to be 64-bit aligned
-		mvccstats
 		// can be unaligned fields
 		enabled    bool // comes from mvcc.enable settings
 		reclaim    []*Llrbnode
@@ -84,7 +83,7 @@ func NewLLRB(name string, setts s.Settings) *LLRB {
 	llrb.valarena = llrb.newvaluearena(setts)
 
 	// set up metadata options
-	llrb.fmask = llrb.setupfmask(setts)
+	llrb.fmask = setupfmask(setts)
 	llrb.mdsize = (&metadata{}).initMetadata(0, llrb.fmask).sizeof()
 	llrb.setts = setts
 
