@@ -98,7 +98,7 @@ func BenchmarkComputeslabs(b *testing.B) {
 }
 
 func BenchmarkSuitableSlab(b *testing.B) {
-	minblock, maxblock := int64(96), int64(1024*1024*1024*10)
+	minblock, maxblock := int64(96), int64(1024*1024*1024*1024)
 	sizes := Computeslabs(minblock, maxblock)
 	rsizes := make([]int64, b.N)
 
