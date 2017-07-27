@@ -421,7 +421,7 @@ func (writer *LLRBWriter) mvccupsertcas(
 	// Get to check for CAS
 	var currcas uint64
 	defer atomic.AddInt64(&llrb.n_casgets, 1)
-	if nd := llrb.get(key); nd != nil {
+	if nd, _ := doget(llrb, llrb.getroot(), key, nil); nd != nil {
 		currcas = nd.Bornseqno()
 	}
 	if currcas != cas {
@@ -647,7 +647,7 @@ func (writer *LLRBWriter) mvccdelete(
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
 
 	if llrb.lsm {
-		nd := llrb.get(key)
+		nd, _ := doget(llrb, llrb.getroot(), key, nil)
 		if nd != nil {
 			llrbnd := nd.(*Llrbnode)
 			llrbnd.metadata().setdeleted()

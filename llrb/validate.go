@@ -107,6 +107,13 @@ func (llrb *LLRB) validatemem() {
 	}
 }
 
+// Validate the following expectation on the tree.
+//  * If current node is red, parent node should be black.
+//  * At each level, number of blacks on the left subtree should
+//    be equal to number of blacks on the right subtree.
+//  * Make sure that the tree is in sort order.
+//  * Return number of blacks, cummulative memory consumed by keys,
+//    cummulative memory consumed by values.
 func (llrb *LLRB) validatetree(
 	nd *Llrbnode, fromred bool, blacks, depth int64,
 	h *lib.HistogramInt64) (nblacks, keymem, valmem int64) {

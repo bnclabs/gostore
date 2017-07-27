@@ -194,36 +194,9 @@ func (snapshot *LLRBSnapshot) Has(key []byte) bool {
 
 // Get implement IndexReader{} interface.
 func (snapshot *LLRBSnapshot) Get(key []byte, callb api.NodeCallb) bool {
-	defer func() {
-		atomic.AddInt64(&snapshot.n_lookups, 1)
-		if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
-			atomic.AddInt64(&snapshot.n_cclookups, 1)
-		}
-	}()
-
-	if nd := snapshot.get(key); nd == nil {
-		if callb != nil {
-			callb(snapshot.llrb, 0, nil, nil, api.ErrorKeyMissing)
-		}
-		return false
-	} else if callb != nil {
-		callb(snapshot.llrb, 0, nd, nd, nil)
-	}
-	return true
-}
-
-func (snapshot *LLRBSnapshot) get(key []byte) api.Node {
-	mdsize, nd := snapshot.llrb.mdsize, snapshot.root
-	for nd != nil {
-		if nd.gtkey(mdsize, key, false) {
-			nd = nd.left
-		} else if nd.ltkey(mdsize, key, false) {
-			nd = nd.right
-		} else {
-			return nd
-		}
-	}
-	return nil // key is not present in the tree
+	defer snapshot.countlookup(atomic.LoadInt64(&snapshot.llrb.mvcc.ismut))
+	_, ok := doget(snapshot.llrb, snapshot.root, key, callb)
+	return ok
 }
 
 // Min implement IndexReader{} interface.
@@ -389,13 +362,17 @@ func (snapshot *LLRBSnapshot) Iterate(
 	return iter
 }
 
-// don't use llrb.validate(), it will access stats that needs
-// to be serialized.
+// Validate the following expectation on the snapshot.
+//  * Walk the tree and calculate cummulative memory consumed by
+//    all keys, confirm the same with keymemory accounting.
+//  * Walk the tree and calculate cummulative memory consumed by
+//    all values, confirm the same with valmemory accounting.
+//  * Maximum height of the tree should not exceed 3*math.Log2(n),
+//    where `n` is the number of entries on the snapshot.
+//  * Validatestats.
 func (snapshot *LLRBSnapshot) validate(root *Llrbnode) {
-	llrb := snapshot.llrb
-
-	h := lib.NewhistorgramInt64(1, 256, 1)
-	_, km, vm := llrb.validatetree(root, isred(root), 0 /*blck*/, 1 /*dep*/, h)
+	llrb, h := snapshot.llrb, lib.NewhistorgramInt64(1, 256, 1)
+	_, km, vm := llrb.validatetree(root, isred(root), 0 /*blcks*/, 1 /*dep*/, h)
 	if km != snapshot.keymemory {
 		fmsg := "validate(): keymemory:%v != actual:%v"
 		panic(fmt.Errorf(fmsg, snapshot.keymemory, km))
@@ -403,7 +380,6 @@ func (snapshot *LLRBSnapshot) validate(root *Llrbnode) {
 		fmsg := "validate(): valmemory:%v != actual:%v"
 		panic(fmt.Errorf(fmsg, snapshot.valmemory, vm))
 	}
-
 	// `h_height`.max should not exceed certain limit
 	llrb.validatetree(root, isred(root), 0 /*blacks*/, 1 /*depth*/, h)
 	if h.Samples() > 8 {
@@ -413,10 +389,11 @@ func (snapshot *LLRBSnapshot) validate(root *Llrbnode) {
 			panic(fmt.Errorf(fmsg, float64(h.Max()), nf))
 		}
 	}
-
 	snapshot.validatestats()
 }
 
+// validatestats can be used for quick validation based on
+// statistic accounting.
 func (snapshot *LLRBSnapshot) validatestats() {
 	// n_count should match (n_inserts - n_deletes)
 	n_count := snapshot.n_count
@@ -437,7 +414,6 @@ func (snapshot *LLRBSnapshot) validatestats() {
 		fmsg := "sstats(): n_count:%v != (n_nodes:%v + n_clones:%v - reclaims:%v)"
 		panic(fmt.Errorf(fmsg, n_count, n_nodes, n_clones, n_reclaims))
 	}
-
 	// n_deletes should match (n_reclaims - n_clones)
 	if n_deletes != (n_reclaims - n_clones) {
 		fmsg := "sstats(): n_deletes:%v != (n_reclaims:%v - n_clones:%v)"

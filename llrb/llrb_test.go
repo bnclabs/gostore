@@ -1350,7 +1350,7 @@ func TestTreecheck(t *testing.T) {
 
 	h_heightav := lib.NewhistorgramInt64(1, 256, 1)
 	now := time.Now()
-	n_blacks := llrb.treecheck(llrb.getroot(), 1 /*depth*/, h_heightav, 0)
+	n_blacks := treestats(llrb.getroot(), 1 /*depth*/, h_heightav, 0)
 	fmt.Printf("HeightStats took %v for %v items\n", time.Since(now), count)
 	fmt.Printf("Blacks in depth %v\n", n_blacks)
 

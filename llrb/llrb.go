@@ -311,46 +311,18 @@ func (llrb *LLRB) Log(involved string, humanize bool) {
 
 // Has implement IndexReader{} interface.
 func (llrb *LLRB) Has(key []byte) bool {
-	if llrb.mvcc.enabled {
-		panic("Has(): mvcc enabled, use snapshots for reading")
-	}
+	llrb.assertnomvcc()
 	return llrb.Get(key, nil)
 }
 
-// Get implement IndexReader{} interface.
+// Get implement IndexReader{} interface, acquires a read lock.
 func (llrb *LLRB) Get(key []byte, callb api.NodeCallb) bool {
-	if llrb.mvcc.enabled {
-		panic("Get(): mvcc enabled, use snapshots for reading")
-	}
-
+	llrb.assertnomvcc()
 	llrb.rw.RLock()
 	defer llrb.rw.RUnlock()
-
 	defer atomic.AddInt64(&llrb.n_lookups, 1)
-
-	if nd := llrb.get(key); nd == nil {
-		if callb != nil {
-			callb(llrb, 0, nil, nil, api.ErrorKeyMissing)
-		}
-		return false
-	} else if callb != nil {
-		callb(llrb, 0, nd, nd, nil)
-	}
-	return true
-}
-
-func (llrb *LLRB) get(key []byte) api.Node {
-	nd := llrb.getroot()
-	for nd != nil {
-		if nd.gtkey(llrb.mdsize, key, false) {
-			nd = nd.left
-		} else if nd.ltkey(llrb.mdsize, key, false) {
-			nd = nd.right
-		} else {
-			return nd
-		}
-	}
-	return nil // key is not present in the tree
+	_, ok := doget(llrb, llrb.getroot(), key, callb)
+	return ok
 }
 
 // Min implement IndexReader{} interface.
@@ -581,7 +553,7 @@ func (llrb *LLRB) UpsertCas(key, value []byte, cas uint64, callb api.NodeCallb) 
 	if cas > 0 {
 		var currcas uint64
 		defer atomic.AddInt64(&llrb.n_casgets, 1)
-		if nd := llrb.get(key); nd != nil {
+		if nd, _ := doget(llrb, llrb.getroot(), key, nil); nd != nil {
 			currcas = nd.Bornseqno()
 		}
 		if currcas != cas {
@@ -774,7 +746,7 @@ func (llrb *LLRB) Delete(key []byte, callb api.NodeCallb) (e error) {
 	llrb.rw.Lock()
 
 	if llrb.lsm {
-		nd := llrb.get(key)
+		nd, _ := doget(llrb, llrb.getroot(), key, nil)
 		if nd != nil {
 			llrbnd := nd.(*Llrbnode)
 			llrbnd.metadata().setdeleted()
@@ -1226,4 +1198,10 @@ func (llrb *LLRB) walkuprot234(nd *Llrbnode) *Llrbnode {
 		nd = llrb.rotateright(nd)
 	}
 	return nd
+}
+
+func (llrb *LLRB) assertnomvcc() {
+	if llrb.mvcc.enabled {
+		panic("mvcc enabled, use snapshots for reading")
+	}
 }

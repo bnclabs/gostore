@@ -3,10 +3,31 @@
 
 package llrb
 
-import "fmt"
-
 import "github.com/prataprc/gostore/api"
-import "github.com/prataprc/gostore/lib"
+
+// lift Get() call, either from LLRB or from LLRBSnapshot.
+func doget(
+	llrb *LLRB, root *Llrbnode,
+	key []byte, callb api.NodeCallb) (api.Node, bool) {
+
+	nd := root
+	for nd != nil {
+		if nd.gtkey(llrb.mdsize, key, false) {
+			nd = nd.left
+		} else if nd.ltkey(llrb.mdsize, key, false) {
+			nd = nd.right
+		} else {
+			if callb != nil {
+				callb(llrb, 0, nd, nd, nil)
+			}
+			return nd, true
+		}
+	}
+	if callb != nil { // and nd == nil
+		callb(llrb, 0, nil, nil, api.ErrorKeyMissing)
+	}
+	return nd, false
+}
 
 // low <= (keys) <= high
 func (llrb *LLRB) rangehele(
@@ -182,25 +203,4 @@ func (llrb *LLRB) rvrsltht(
 		return false
 	}
 	return llrb.rvrsltht(nd.left, lk, hk, callb)
-}
-
-// costly operation, don't call this on active trees.
-func (llrb *LLRB) treecheck(
-	nd *Llrbnode, depth int64, h *lib.HistogramInt64, count int64) int64 {
-
-	if nd != nil {
-		h.Add(depth)
-		if !isred(nd) {
-			count++
-		}
-
-		x := llrb.treecheck(nd.left, depth+1, h, count)
-		y := llrb.treecheck(nd.right, depth+1, h, count)
-		if x != y {
-			fmsg := "invariant failed, no. of blacks : {%v,%v}"
-			panic(fmt.Errorf(fmsg, x, y))
-		}
-		return x
-	}
-	return count
 }

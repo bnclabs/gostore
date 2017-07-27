@@ -37,7 +37,7 @@ import "github.com/cloudfoundry/gosigar"
 //		(avgvalsize / (avgkeysize+avgvalsize)) * freeRAM
 //
 // "maxlimit" (int64, default: 100),
-//		Applicable for Iterate() API. Iterate uses Range to fetch
+//		Applicable for Iterate API. Iterate uses Range to fetch
 //      a batch of entries to iterate upon. Limit the batch size
 //		if number iterations are known apriori.
 //

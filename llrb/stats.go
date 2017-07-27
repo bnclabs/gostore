@@ -63,7 +63,7 @@ func (llrb *LLRB) fullstats() (map[string]interface{}, error) {
 	}
 
 	h_heightav := lib.NewhistorgramInt64(1, 256, 1)
-	n_blacks := llrb.treecheck(llrb.getroot(), 1 /*depth*/, h_heightav, 0)
+	n_blacks := treestats(llrb.getroot(), 1 /*depth*/, h_heightav, 0)
 	stats["h_height"] = h_heightav.Fullstats()
 	stats["n_blacks"] = n_blacks
 
@@ -242,4 +242,31 @@ func (llrb *LLRB) log(involved string, humanize bool) {
 		fmsg := "%v snapshot chain %v\n"
 		log.Infof(fmsg, llrb.logprefix, strings.Join(chain, "->"))
 	}
+}
+
+// count lookup operation in mvcc mode, if there is on-going lookup, count
+// as concurrent-lookup n_cclookups, else as n_lookups.
+func (stats *llrbstats) countlookup(ismut int64) {
+	atomic.AddInt64(&stats.n_lookups, 1)
+	if ismut == 1 {
+		atomic.AddInt64(&stats.n_cclookups, 1)
+	}
+}
+
+// costly operation, don't call this on active trees.
+func treestats(nd *Llrbnode, d int64, h *lib.HistogramInt64, c int64) int64 {
+	if nd != nil {
+		h.Add(d)
+		if !isred(nd) {
+			c++
+		}
+		x := treestats(nd.left, d+1, h, c)
+		y := treestats(nd.right, d+1, h, c)
+		if x != y {
+			fmsg := "invariant failed, no. of blacks : {%v,%v}"
+			panic(fmt.Errorf(fmsg, x, y))
+		}
+		return x
+	}
+	return c
 }
