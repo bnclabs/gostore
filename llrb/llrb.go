@@ -327,9 +327,7 @@ func (llrb *LLRB) Get(key []byte, callb api.NodeCallb) bool {
 
 // Min implement IndexReader{} interface.
 func (llrb *LLRB) Min(callb api.NodeCallb) bool {
-	if llrb.mvcc.enabled {
-		panic("Min(): mvcc enabled, use snapshots for reading")
-	}
+	llrb.assertnomvcc()
 
 	llrb.rw.RLock()
 	defer llrb.rw.RUnlock()
@@ -360,9 +358,7 @@ func (llrb *LLRB) min(nd *Llrbnode) (api.Node, bool) {
 
 // Max implement IndexReader{} interface.
 func (llrb *LLRB) Max(callb api.NodeCallb) bool {
-	if llrb.mvcc.enabled {
-		panic("Max(): mvcc enabled, use snapshots for reading")
-	}
+	llrb.assertnomvcc()
 
 	llrb.rw.RLock()
 	defer llrb.rw.RUnlock()
@@ -395,9 +391,7 @@ func (llrb *LLRB) max(nd *Llrbnode) (api.Node, bool) {
 func (llrb *LLRB) Range(
 	lkey, hkey []byte, incl string, reverse bool, callb api.NodeCallb) {
 
-	if llrb.mvcc.enabled {
-		panic("Range(): mvcc enabled, use snapshots for reading")
-	}
+	llrb.assertnomvcc()
 
 	lkey, hkey = llrb.fixrangeargs(lkey, hkey)
 	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
@@ -443,9 +437,7 @@ func (llrb *LLRB) Range(
 func (llrb *LLRB) Iterate(
 	lkey, hkey []byte, incl string, r bool) api.IndexIterator {
 
-	if llrb.mvcc.enabled {
-		panic("Iterate(): mvcc enabled, use snapshots for reading")
-	}
+	llrb.assertnomvcc()
 
 	lkey, hkey = llrb.fixrangeargs(lkey, hkey)
 	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
