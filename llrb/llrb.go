@@ -318,10 +318,11 @@ func (llrb *LLRB) Has(key []byte) bool {
 // Get implement IndexReader{} interface, acquires a read lock.
 func (llrb *LLRB) Get(key []byte, callb api.NodeCallb) bool {
 	llrb.assertnomvcc()
+
 	llrb.rw.RLock()
 	defer llrb.rw.RUnlock()
 	defer atomic.AddInt64(&llrb.n_lookups, 1)
-	_, ok := doget(llrb, llrb.getroot(), key, callb)
+	_, ok := getkey(llrb, llrb.getroot(), key, callb)
 	return ok
 }
 
@@ -332,28 +333,8 @@ func (llrb *LLRB) Min(callb api.NodeCallb) bool {
 	llrb.rw.RLock()
 	defer llrb.rw.RUnlock()
 	defer atomic.AddInt64(&llrb.n_lookups, 1)
-
-	if nd, _ := llrb.min(llrb.getroot()); nd == nil {
-		if callb != nil {
-			callb(llrb, 0, nil, nil, api.ErrorKeyMissing)
-		}
-		return false
-
-	} else if callb != nil {
-		callb(llrb, 0, nd, nd, nil)
-	}
-	return true
-}
-
-func (llrb *LLRB) min(nd *Llrbnode) (api.Node, bool) {
-	if nd == nil {
-		return nil, false
-	} else if minnd, ok := llrb.min(nd.left); ok {
-		return minnd, ok
-	} else if nd.IsDeleted() {
-		return llrb.min(nd.right)
-	}
-	return nd, true
+	_, ok := getmin(llrb, llrb.getroot(), callb)
+	return ok
 }
 
 // Max implement IndexReader{} interface.
@@ -363,28 +344,8 @@ func (llrb *LLRB) Max(callb api.NodeCallb) bool {
 	llrb.rw.RLock()
 	defer llrb.rw.RUnlock()
 	defer atomic.AddInt64(&llrb.n_lookups, 1)
-
-	if nd, _ := llrb.max(llrb.getroot()); nd == nil {
-		if callb != nil {
-			callb(llrb, 0, nil, nil, api.ErrorKeyMissing)
-		}
-		return false
-
-	} else if callb != nil {
-		callb(llrb, 0, nd, nd, nil)
-	}
-	return true
-}
-
-func (llrb *LLRB) max(nd *Llrbnode) (api.Node, bool) {
-	if nd == nil {
-		return nil, false
-	} else if maxnd, ok := llrb.max(nd.right); ok {
-		return maxnd, ok
-	} else if nd.IsDeleted() {
-		return llrb.max(nd.left)
-	}
-	return nd, true
+	_, ok := getmax(llrb, llrb.getroot(), callb)
+	return ok
 }
 
 // Range from lkey to hkey, incl can be "both", "low", "high", "none"
@@ -545,7 +506,7 @@ func (llrb *LLRB) UpsertCas(key, value []byte, cas uint64, callb api.NodeCallb) 
 	if cas > 0 {
 		var currcas uint64
 		defer atomic.AddInt64(&llrb.n_casgets, 1)
-		if nd, _ := doget(llrb, llrb.getroot(), key, nil); nd != nil {
+		if nd, _ := getkey(llrb, llrb.getroot(), key, nil); nd != nil {
 			currcas = nd.Bornseqno()
 		}
 		if currcas != cas {
@@ -631,7 +592,7 @@ func (llrb *LLRB) DeleteMin(callb api.NodeCallb) (e error) {
 	llrb.rw.Lock()
 
 	if llrb.lsm {
-		nd, _ := llrb.min(llrb.getroot())
+		nd, _ := getmin(llrb, llrb.getroot(), nil)
 		if nd != nil {
 			llrbnd := nd.(*Llrbnode)
 			llrbnd.metadata().setdeleted()
@@ -683,7 +644,7 @@ func (llrb *LLRB) DeleteMax(callb api.NodeCallb) (e error) {
 	llrb.rw.Lock()
 
 	if llrb.lsm {
-		nd, _ := llrb.max(llrb.getroot())
+		nd, _ := getmax(llrb, llrb.getroot(), nil)
 		if nd != nil {
 			llrbnd := nd.(*Llrbnode)
 			llrbnd.metadata().setdeleted()
@@ -738,7 +699,7 @@ func (llrb *LLRB) Delete(key []byte, callb api.NodeCallb) (e error) {
 	llrb.rw.Lock()
 
 	if llrb.lsm {
-		nd, _ := doget(llrb, llrb.getroot(), key, nil)
+		nd, _ := getkey(llrb, llrb.getroot(), key, nil)
 		if nd != nil {
 			llrbnd := nd.(*Llrbnode)
 			llrbnd.metadata().setdeleted()

@@ -421,7 +421,7 @@ func (writer *LLRBWriter) mvccupsertcas(
 	// Get to check for CAS
 	var currcas uint64
 	defer atomic.AddInt64(&llrb.n_casgets, 1)
-	if nd, _ := doget(llrb, llrb.getroot(), key, nil); nd != nil {
+	if nd, _ := getkey(llrb, llrb.getroot(), key, nil); nd != nil {
 		currcas = nd.Bornseqno()
 	}
 	if currcas != cas {
@@ -515,7 +515,7 @@ func (writer *LLRBWriter) mvccdelmin(
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
 
 	if llrb.lsm {
-		nd, _ := llrb.min(llrb.getroot())
+		nd, _ := getmin(llrb, llrb.getroot(), nil)
 		if nd != nil {
 			llrbnd := nd.(*Llrbnode)
 			llrbnd.metadata().setdeleted()
@@ -580,7 +580,7 @@ func (writer *LLRBWriter) mvccdelmax(
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
 
 	if llrb.lsm {
-		nd, _ := llrb.max(llrb.getroot())
+		nd, _ := getmax(llrb, llrb.getroot(), nil)
 		if nd != nil {
 			llrbnd := nd.(*Llrbnode)
 			llrbnd.metadata().setdeleted()
@@ -647,7 +647,7 @@ func (writer *LLRBWriter) mvccdelete(
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
 
 	if llrb.lsm {
-		nd, _ := doget(llrb, llrb.getroot(), key, nil)
+		nd, _ := getkey(llrb, llrb.getroot(), key, nil)
 		if nd != nil {
 			llrbnd := nd.(*Llrbnode)
 			llrbnd.metadata().setdeleted()

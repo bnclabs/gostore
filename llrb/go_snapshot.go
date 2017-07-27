@@ -190,70 +190,22 @@ func (snapshot *LLRBSnapshot) Has(key []byte) bool {
 // Get implement IndexReader{} interface.
 func (snapshot *LLRBSnapshot) Get(key []byte, callb api.NodeCallb) bool {
 	defer snapshot.countlookup(atomic.LoadInt64(&snapshot.llrb.mvcc.ismut))
-	_, ok := doget(snapshot.llrb, snapshot.root, key, callb)
+	_, ok := getkey(snapshot.llrb, snapshot.root, key, callb)
 	return ok
 }
 
 // Min implement IndexReader{} interface.
 func (snapshot *LLRBSnapshot) Min(callb api.NodeCallb) bool {
-	defer func() {
-		atomic.AddInt64(&snapshot.n_lookups, 1)
-		if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
-			atomic.AddInt64(&snapshot.n_cclookups, 1)
-		}
-	}()
-
-	if nd, _ := snapshot.min(snapshot.root); nd == nil {
-		if callb != nil {
-			callb(snapshot.llrb, 0, nil, nil, api.ErrorKeyMissing)
-		}
-		return false
-	} else if callb != nil {
-		callb(snapshot.llrb, 0, nd, nd, nil)
-	}
-	return true
-}
-
-func (snapshot *LLRBSnapshot) min(nd *Llrbnode) (api.Node, bool) {
-	if nd == nil {
-		return nil, false
-	} else if minnd, ok := snapshot.min(nd.left); ok {
-		return minnd, ok
-	} else if nd.IsDeleted() {
-		return snapshot.min(nd.right)
-	}
-	return nd, true
+	defer snapshot.countlookup(atomic.LoadInt64(&snapshot.llrb.mvcc.ismut))
+	_, ok := getmin(snapshot.llrb, snapshot.root, callb)
+	return ok
 }
 
 // Max implement IndexReader{} interface.
 func (snapshot *LLRBSnapshot) Max(callb api.NodeCallb) bool {
-	defer func() {
-		atomic.AddInt64(&snapshot.n_lookups, 1)
-		if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
-			atomic.AddInt64(&snapshot.n_cclookups, 1)
-		}
-	}()
-
-	if nd, _ := snapshot.max(snapshot.root); nd == nil {
-		if callb != nil {
-			callb(snapshot.llrb, 0, nil, nil, api.ErrorKeyMissing)
-		}
-		return false
-	} else if callb != nil {
-		callb(snapshot.llrb, 0, nd, nd, nil)
-	}
-	return true
-}
-
-func (snapshot *LLRBSnapshot) max(nd *Llrbnode) (api.Node, bool) {
-	if nd == nil {
-		return nil, false
-	} else if maxnd, ok := snapshot.max(nd.right); ok {
-		return maxnd, ok
-	} else if nd.IsDeleted() {
-		return snapshot.max(nd.left)
-	}
-	return nd, true
+	defer snapshot.countlookup(atomic.LoadInt64(&snapshot.llrb.mvcc.ismut))
+	_, ok := getmax(snapshot.llrb, snapshot.root, callb)
+	return ok
 }
 
 // Range implement IndexReader{} interface.
