@@ -69,19 +69,17 @@ type LLRBSnapshot struct {
 	next    *LLRBSnapshot
 
 	// settings
-	fmask     metadataMask
 	logprefix string
 }
 
 // newsnapshot mvcc version for LLRB tree.
-func (llrb *LLRB) newsnapshot(id string) *LLRBSnapshot {
+func newsnapshot(llrb *LLRB, id string) *LLRBSnapshot {
 	snapshot := &LLRBSnapshot{
 		llrb:  llrb,
 		id:    id,
 		root:  llrb.getroot(),
 		clock: llrb.Getclock(),
 		dead:  llrb.dead,
-		fmask: llrb.fmask,
 		// writer statistics
 		llrbstats: llrb.llrbstats,
 	}
@@ -109,13 +107,10 @@ func (llrb *LLRB) newsnapshot(id string) *LLRBSnapshot {
 	return snapshot
 }
 
-func (snapshot *LLRBSnapshot) countreclaimnodes() int64 {
-	if snapshot == nil {
-		return 0
-	}
-	total := int64(len(snapshot.reclaim))
-	for snap := snapshot.next; snap != nil; snap = snap.next {
-		total += int64(len(snap.reclaim))
+// return the sum of all nodes that needs to be reclaimed from snapshots.
+func countreclaimnodes(head *LLRBSnapshot) (total int64) {
+	for snapshot := head; snapshot != nil; snapshot = snapshot.next {
+		total += int64(len(snapshot.reclaim))
 	}
 	return total
 }

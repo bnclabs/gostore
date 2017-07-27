@@ -352,7 +352,7 @@ func (writer *LLRBWriter) handlesnapshots(msg []interface{}) bool {
 		// a. there are readers waiting for a new snapshot.
 		// b. if there are 0 or 1 active snapshots.
 		if len(writer.waiters) > 0 || snapshot == nil || snapshot.next == nil {
-			snapshot := llrb.newsnapshot(id)
+			snapshot := newsnapshot(llrb, id)
 			for _, snapch := range writer.waiters {
 				snapshot.Refer()
 				snapch <- snapshot

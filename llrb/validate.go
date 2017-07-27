@@ -169,7 +169,7 @@ func (llrb *LLRB) validatestats() error {
 	}
 	// n_deletes + reclaim should match (n_frees - n_clones)
 	total_reclaim := int64(len(llrb.mvcc.reclaim))
-	total_reclaim += llrb.mvcc.snapshot.countreclaimnodes()
+	total_reclaim += countreclaimnodes(llrb.mvcc.snapshot)
 	n_frees, n_clones := llrb.n_frees, llrb.n_clones
 	if lib.AbsInt64(n_deletes-total_reclaim) != lib.AbsInt64(n_clones-n_frees) {
 		fmsg := "validatestats(): abs(n_deletes:%v - reclaim:%v) != " +
