@@ -1,13 +1,12 @@
 package llrb
 
+import "fmt"
+
 import "github.com/prataprc/golog"
 import "github.com/prataprc/gostore/malloc"
 import s "github.com/prataprc/gosettings"
 
-// TODO: replace panicerr with panic.
-
 func (llrb *LLRB) readsettings(setts s.Settings) {
-
 	llrb.iterpoolsize = setts.Int64("iterpool.size")
 	llrb.lsm = setts.Bool("lsm")
 	llrb.minkeysize = setts.Int64("minkeysize")
@@ -23,7 +22,7 @@ func (llrb *LLRB) readsettings(setts s.Settings) {
 
 	// adjust minkeysize to include overhead
 	if llrb.minkeysize < 0 {
-		panicerr("invalid minkeysize settings %v", llrb.minkeysize)
+		panic(fmt.Errorf("invalid minkeysize settings %v", llrb.minkeysize))
 	}
 	minkeysize := adjustkeysize(llrb.minkeysize, setts)
 	minkeysize = minkeysize / 32 * 32 // floor minsize
@@ -41,7 +40,8 @@ func (llrb *LLRB) readsettings(setts s.Settings) {
 
 	// adjust minvalsize to include overhead
 	if llrb.minvalsize < 0 {
-		panicerr("invalid minvalsize.maxblock settings %v", llrb.minvalsize)
+		fmsg := "invalid minvalsize.maxblock settings %v"
+		panic(fmt.Errorf(fmsg, llrb.minvalsize))
 	}
 	minvalsize := adjustvalsize(llrb.minvalsize)
 	minvalsize = minvalsize / 32 * 32 // floor minsize
@@ -92,12 +92,14 @@ func setupfmask(setts s.Settings) metadataMask {
 	return fmask
 }
 
+// adjust key size to include metadata and overhead.
 func adjustkeysize(keysize int64, setts s.Settings) int64 {
 	fmask := setupfmask(setts)
 	mdsize := int64((&metadata{}).initMetadata(0, fmask).sizeof())
 	return keysize + int64((&Llrbnode{}).sizeof()) + mdsize
 }
 
+// adjust value size to include metadata and overhead.
 func adjustvalsize(valsize int64) int64 {
 	return valsize + int64((&nodevalue{}).sizeof())
 }
