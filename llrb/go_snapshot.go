@@ -2,7 +2,6 @@ package llrb
 
 import "sync/atomic"
 import "time"
-import "bytes"
 import "strings"
 import "math"
 import "io"
@@ -189,21 +188,21 @@ func (snapshot *LLRBSnapshot) Has(key []byte) bool {
 
 // Get implement IndexReader{} interface.
 func (snapshot *LLRBSnapshot) Get(key []byte, callb api.NodeCallb) bool {
-	defer snapshot.countlookup(atomic.LoadInt64(&snapshot.llrb.mvcc.ismut))
+	snapshot.countlookup(atomic.LoadInt64(&snapshot.llrb.mvcc.ismut))
 	_, ok := getkey(snapshot.llrb, snapshot.root, key, callb)
 	return ok
 }
 
 // Min implement IndexReader{} interface.
 func (snapshot *LLRBSnapshot) Min(callb api.NodeCallb) bool {
-	defer snapshot.countlookup(atomic.LoadInt64(&snapshot.llrb.mvcc.ismut))
+	snapshot.countlookup(atomic.LoadInt64(&snapshot.llrb.mvcc.ismut))
 	_, ok := getmin(snapshot.llrb, snapshot.root, callb)
 	return ok
 }
 
 // Max implement IndexReader{} interface.
 func (snapshot *LLRBSnapshot) Max(callb api.NodeCallb) bool {
-	defer snapshot.countlookup(atomic.LoadInt64(&snapshot.llrb.mvcc.ismut))
+	snapshot.countlookup(atomic.LoadInt64(&snapshot.llrb.mvcc.ismut))
 	_, ok := getmax(snapshot.llrb, snapshot.root, callb)
 	return ok
 }
@@ -212,99 +211,29 @@ func (snapshot *LLRBSnapshot) Max(callb api.NodeCallb) bool {
 func (snapshot *LLRBSnapshot) Range(
 	lkey, hkey []byte, incl string, reverse bool, callb api.NodeCallb) {
 
-	lkey, hkey = snapshot.llrb.fixrangeargs(lkey, hkey)
-	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
-		if incl == "none" {
-			return
-		} else if incl == "low" || incl == "high" {
-			incl = "both"
-		}
+	var skip bool
+	lkey, hkey, incl, skip = fixrangeargs(lkey, hkey, incl)
+	if skip {
+		return
 	}
-
-	if reverse {
-		switch incl {
-		case "both":
-			snapshot.llrb.rvrslehe(snapshot.root, lkey, hkey, callb)
-		case "high":
-			snapshot.llrb.rvrsleht(snapshot.root, lkey, hkey, callb)
-		case "low":
-			snapshot.llrb.rvrslthe(snapshot.root, lkey, hkey, callb)
-		default:
-			snapshot.llrb.rvrsltht(snapshot.root, lkey, hkey, callb)
-		}
-
-	} else {
-		switch incl {
-		case "both":
-			snapshot.llrb.rangehele(snapshot.root, lkey, hkey, callb)
-		case "high":
-			snapshot.llrb.rangehtle(snapshot.root, lkey, hkey, callb)
-		case "low":
-			snapshot.llrb.rangehelt(snapshot.root, lkey, hkey, callb)
-		default:
-			snapshot.llrb.rangehtlt(snapshot.root, lkey, hkey, callb)
-		}
-	}
-
-	if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
-		atomic.AddInt64(&snapshot.n_ccranges, 1)
-	}
-	atomic.AddInt64(&snapshot.n_ranges, 1)
+	dorange(snapshot.llrb, snapshot.root, lkey, hkey, incl, reverse, callb)
+	snapshot.countrange(atomic.LoadInt64(&snapshot.llrb.mvcc.ismut))
 }
 
 // Iterate implement IndexReader{} interface.
 func (snapshot *LLRBSnapshot) Iterate(
 	lkey, hkey []byte, incl string, r bool) api.IndexIterator {
 
-	lkey, hkey = snapshot.llrb.fixrangeargs(lkey, hkey)
-	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
-		if incl == "none" {
-			return nil
-		} else if incl == "low" || incl == "high" {
-			incl = "both"
-		}
+	var skip bool
+	lkey, hkey, incl, skip = fixrangeargs(lkey, hkey, incl)
+	if skip {
+		return nil
 	}
 
 	llrb := snapshot.llrb
+	iter := inititerator(llrb, snapshot, lkey, hkey, incl, r)
 
-	// NOTE: always re-initialize, because we are getting it back from pool.
-	iter := llrb.getiterator()
-	iter.tree, iter.llrb = snapshot, llrb
-	iter.continuate = false
-	iter.nodes, iter.index, iter.limit = iter.nodes[:0], 0, int(llrb.maxlimit)
-	// startkey
-	iter.startkey = lib.Fixbuffer(iter.startkey, llrb.maxkeysize)
-	n := copy(iter.startkey, lkey)
-	iter.startkey = iter.startkey[:n]
-	// endkey
-	iter.endkey = lib.Fixbuffer(iter.endkey, llrb.maxkeysize)
-	n = copy(iter.endkey, hkey)
-	iter.endkey = iter.endkey[:n]
-	// other params
-	iter.incl, iter.reverse = incl, r
-	iter.closed, iter.n_activeiter = false, &llrb.n_activeiter
-
-	iter.rangefill()
-	if r {
-		switch iter.incl {
-		case "none":
-			iter.incl = "high"
-		case "low":
-			iter.incl = "both"
-		}
-	} else {
-		switch iter.incl {
-		case "none":
-			iter.incl = "low"
-		case "high":
-			iter.incl = "both"
-		}
-	}
-
-	if atomic.LoadInt64(&snapshot.llrb.mvcc.ismut) == 1 {
-		atomic.AddInt64(&snapshot.n_ccranges, 1)
-	}
-	atomic.AddInt64(&snapshot.n_ranges, 1)
+	snapshot.countrange(atomic.LoadInt64(&snapshot.llrb.mvcc.ismut))
 	atomic.AddInt64(&llrb.n_activeiter, 1)
 	return iter
 }

@@ -3,7 +3,10 @@
 
 package llrb
 
+import "bytes"
+
 import "github.com/prataprc/gostore/api"
+import "github.com/prataprc/gostore/lib"
 
 // lift Get() call, either from LLRB or from LLRBSnapshot.
 func getkey(
@@ -79,6 +82,94 @@ func getmax1(nd *Llrbnode) (api.Node, bool) {
 		return getmax1(nd.left)
 	}
 	return nd, true
+}
+
+func fixrangeargs(lk, hk []byte, incl string) ([]byte, []byte, string, bool) {
+	if len(lk) == 0 {
+		lk = nil
+	}
+	if len(hk) == 0 {
+		hk = nil
+	}
+	if lk != nil && hk != nil && bytes.Compare(lk, hk) == 0 {
+		if incl == "none" {
+			return lk, hk, incl, true
+		} else if incl == "low" || incl == "high" {
+			return lk, hk, "both", false
+		}
+	}
+	return lk, hk, incl, false
+}
+
+func dorange(
+	llrb *LLRB, root *Llrbnode,
+	lkey, hkey []byte, incl string, r bool, callb api.NodeCallb) {
+
+	if r {
+		switch incl {
+		case "both":
+			llrb.rvrslehe(root, lkey, hkey, callb)
+		case "high":
+			llrb.rvrsleht(root, lkey, hkey, callb)
+		case "low":
+			llrb.rvrslthe(root, lkey, hkey, callb)
+		default:
+			llrb.rvrsltht(root, lkey, hkey, callb)
+		}
+
+	} else {
+		switch incl {
+		case "both":
+			llrb.rangehele(root, lkey, hkey, callb)
+		case "high":
+			llrb.rangehtle(root, lkey, hkey, callb)
+		case "low":
+			llrb.rangehelt(root, lkey, hkey, callb)
+		default:
+			llrb.rangehtlt(root, lkey, hkey, callb)
+		}
+	}
+}
+
+func inititerator(
+	llrb *LLRB, reader api.IndexReader,
+	lk, hk []byte, incl string, r bool) api.IndexIterator {
+
+	// NOTE: always re-initialize, because we are getting it back from pool.
+	iter := llrb.getiterator()
+	iter.tree, iter.llrb = reader, llrb
+	iter.continuate = false
+	iter.nodes, iter.index, iter.limit = iter.nodes[:0], 0, startlimit
+	// startkey
+	iter.startkey = lib.Fixbuffer(iter.startkey, llrb.maxkeysize)
+	n := copy(iter.startkey, lk)
+	iter.startkey = iter.startkey[:n]
+	// endkey
+	iter.endkey = lib.Fixbuffer(iter.endkey, llrb.maxkeysize)
+	n = copy(iter.endkey, hk)
+	iter.endkey = iter.endkey[:n]
+	// other params
+	iter.incl, iter.reverse = incl, r
+	iter.closed, iter.n_activeiter = false, &llrb.n_activeiter
+
+	iter.rangefill()
+
+	if r {
+		switch iter.incl {
+		case "none":
+			iter.incl = "high"
+		case "low":
+			iter.incl = "both"
+		}
+	} else {
+		switch iter.incl {
+		case "none":
+			iter.incl = "low"
+		case "high":
+			iter.incl = "both"
+		}
+	}
+	return iter
 }
 
 // low <= (keys) <= high

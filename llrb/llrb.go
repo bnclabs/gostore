@@ -321,7 +321,7 @@ func (llrb *LLRB) Get(key []byte, callb api.NodeCallb) bool {
 
 	llrb.rw.RLock()
 	defer llrb.rw.RUnlock()
-	defer atomic.AddInt64(&llrb.n_lookups, 1)
+	atomic.AddInt64(&llrb.n_lookups, 1)
 	_, ok := getkey(llrb, llrb.getroot(), key, callb)
 	return ok
 }
@@ -332,7 +332,7 @@ func (llrb *LLRB) Min(callb api.NodeCallb) bool {
 
 	llrb.rw.RLock()
 	defer llrb.rw.RUnlock()
-	defer atomic.AddInt64(&llrb.n_lookups, 1)
+	atomic.AddInt64(&llrb.n_lookups, 1)
 	_, ok := getmin(llrb, llrb.getroot(), callb)
 	return ok
 }
@@ -343,7 +343,7 @@ func (llrb *LLRB) Max(callb api.NodeCallb) bool {
 
 	llrb.rw.RLock()
 	defer llrb.rw.RUnlock()
-	defer atomic.AddInt64(&llrb.n_lookups, 1)
+	atomic.AddInt64(&llrb.n_lookups, 1)
 	_, ok := getmax(llrb, llrb.getroot(), callb)
 	return ok
 }
@@ -354,96 +354,31 @@ func (llrb *LLRB) Range(
 
 	llrb.assertnomvcc()
 
-	lkey, hkey = llrb.fixrangeargs(lkey, hkey)
-	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
-		if incl == "none" {
-			return
-		} else if incl == "low" || incl == "high" {
-			incl = "both"
-		}
+	var skip bool
+	lkey, hkey, incl, skip = fixrangeargs(lkey, hkey, incl)
+	if skip {
+		return
 	}
 
 	llrb.rw.RLock()
-
-	if reverse {
-		switch incl {
-		case "both":
-			llrb.rvrslehe(llrb.getroot(), lkey, hkey, callb)
-		case "high":
-			llrb.rvrsleht(llrb.getroot(), lkey, hkey, callb)
-		case "low":
-			llrb.rvrslthe(llrb.getroot(), lkey, hkey, callb)
-		default:
-			llrb.rvrsltht(llrb.getroot(), lkey, hkey, callb)
-		}
-
-	} else {
-		switch incl {
-		case "both":
-			llrb.rangehele(llrb.getroot(), lkey, hkey, callb)
-		case "high":
-			llrb.rangehtle(llrb.getroot(), lkey, hkey, callb)
-		case "low":
-			llrb.rangehelt(llrb.getroot(), lkey, hkey, callb)
-		default:
-			llrb.rangehtlt(llrb.getroot(), lkey, hkey, callb)
-		}
-	}
-
+	dorange(llrb, llrb.getroot(), lkey, hkey, incl, reverse, callb)
 	llrb.rw.RUnlock()
+
 	atomic.AddInt64(&llrb.n_ranges, 1)
 }
 
 // Iterate implement IndexReader{} interface.
-func (llrb *LLRB) Iterate(
-	lkey, hkey []byte, incl string, r bool) api.IndexIterator {
-
+func (llrb *LLRB) Iterate(lk, hk []byte, incl string, r bool) api.IndexIterator {
 	llrb.assertnomvcc()
 
-	lkey, hkey = llrb.fixrangeargs(lkey, hkey)
-	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
-		if incl == "none" {
-			return nil
-		} else if incl == "low" || incl == "high" {
-			incl = "both"
-		}
+	var skip bool
+	lk, hk, incl, skip = fixrangeargs(lk, hk, incl)
+	if skip {
+		return nil
 	}
 
 	llrb.rw.RLock()
-
-	// NOTE: always re-initialize, because we are getting it back from pool.
-	iter := llrb.getiterator()
-	iter.tree, iter.llrb = llrb, llrb
-	iter.continuate = false
-	iter.nodes, iter.index, iter.limit = iter.nodes[:0], 0, startlimit
-	// startkey
-	iter.startkey = lib.Fixbuffer(iter.startkey, llrb.maxkeysize)
-	n := copy(iter.startkey, lkey)
-	iter.startkey = iter.startkey[:n]
-	// endkey
-	iter.endkey = lib.Fixbuffer(iter.endkey, llrb.maxkeysize)
-	n = copy(iter.endkey, hkey)
-	iter.endkey = iter.endkey[:n]
-	// other params
-	iter.incl, iter.reverse = incl, r
-	iter.closed, iter.n_activeiter = false, &llrb.n_activeiter
-
-	iter.rangefill()
-	if r {
-		switch iter.incl {
-		case "none":
-			iter.incl = "high"
-		case "low":
-			iter.incl = "both"
-		}
-	} else {
-		switch iter.incl {
-		case "none":
-			iter.incl = "low"
-		case "high":
-			iter.incl = "both"
-		}
-	}
+	iter := inititerator(llrb, llrb, lk, hk, incl, r)
 
 	atomic.AddInt64(&llrb.n_ranges, 1)
 	atomic.AddInt64(&llrb.n_activeiter, 1)
@@ -1048,17 +983,6 @@ func (llrb *LLRB) delcount(nd *Llrbnode) {
 		llrb.n_count--
 		llrb.n_deletes++
 	}
-}
-
-func (llrb *LLRB) fixrangeargs(lk, hk []byte) ([]byte, []byte) {
-	l, h := lk, hk
-	if len(lk) == 0 {
-		l = nil
-	}
-	if len(hk) == 0 {
-		h = nil
-	}
-	return l, h
 }
 
 func (llrb *LLRB) equivalent(n1, n2 *Llrbnode) bool {

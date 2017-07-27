@@ -244,12 +244,21 @@ func (llrb *LLRB) log(involved string, humanize bool) {
 	}
 }
 
-// count lookup operation in mvcc mode, if there is on-going lookup, count
+// count lookup operation in mvcc mode, if there is on-going mutation, count
 // as concurrent-lookup n_cclookups, else as n_lookups.
 func (stats *llrbstats) countlookup(ismut int64) {
 	atomic.AddInt64(&stats.n_lookups, 1)
 	if ismut == 1 {
 		atomic.AddInt64(&stats.n_cclookups, 1)
+	}
+}
+
+// count range operation in mvcc mode, if there is on-going mutation, count
+// as concurrent-range n_ccranges, else as n_ranges.
+func (stats *llrbstats) countrange(ismut int64) {
+	atomic.AddInt64(&stats.n_ranges, 1)
+	if ismut == 1 {
+		atomic.AddInt64(&stats.n_ccranges, 1)
 	}
 }
 
