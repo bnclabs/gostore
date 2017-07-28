@@ -1,3 +1,18 @@
+LLRB can manage an in-memory instance of sorted index using
+left-leaning-red-black tree. LLRB is self balancing tree that supports
+all basic write operations, like create, update, delete. Additionally
+this implementation supports multi-version-concurrency control on
+the LLRB tree, for applications that are read intensive.
+
+Time-clock is supported via methods on IndexMeta interafce. Note that
+it is upto applications to increment the clock and set/get them on the
+LLRB instance. It is also possible for applications to maintain instance
+level `seqno`, not necessarily linked to Time-clock, and use NodeSetter
+and NodeGetter APIs to include a time order for LLRB entries. Check
+out `Bornseqno` and `Deadseqno` APIs. They are specially important when
+LLRB is used in `lsm` mode.
+
+
 Background routines
 -------------------
 

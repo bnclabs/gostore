@@ -27,7 +27,7 @@ type iterator struct {
 	closed     bool
 }
 
-// Next implement IndexIterator{} interface.
+// Next implement IndexIterator interface.
 func (iter *iterator) Next() api.Node {
 	if iter.closed {
 		panic("cannot iterate over a closed iterator")
@@ -48,14 +48,20 @@ func (iter *iterator) Next() api.Node {
 	return nil
 }
 
-// Close implement IndexIterator{} interface.
+// Close implement IndexIterator interface.
 func (iter *iterator) Close() {
 	iter.closed, iter.nodes = true, iter.nodes[:cap(iter.nodes)]
+	// TODO: remove this loop.
 	for i := range iter.nodes {
 		iter.nodes[i] = nil
 	}
 	iter.nodes = iter.nodes[:0]
 	atomic.AddInt64(iter.n_activeiter, -1)
+
+	// release itself from snapshot, if it is.
+	if snapshot, ok := iter.tree.(*LLRBSnapshot); ok {
+		snapshot.Release()
+	}
 
 	// give it back to the pool if not overflowing.
 	if iter.llrb.mvcc.enabled == false { // NOTE: remember to reader unlock

@@ -24,7 +24,7 @@ func (nd *Llrbnode) sizeof() int {
 
 //---- Exported methods for metadata.
 
-// Setvbno implement NodeSetter{}
+// Setvbno implement NodeSetter method.
 func (nd *Llrbnode) Setvbno(vbno uint16) api.Node {
 	if nd != nil {
 		nd.metadata().setvbno(vbno)
@@ -32,7 +32,7 @@ func (nd *Llrbnode) Setvbno(vbno uint16) api.Node {
 	return nd
 }
 
-// Setaccess implement NodeSetter{}
+// Setaccess implement NodeSetter method.
 func (nd *Llrbnode) Setaccess(access uint64) api.Node {
 	if nd != nil {
 		nd.metadata().setaccess(access)
@@ -40,7 +40,7 @@ func (nd *Llrbnode) Setaccess(access uint64) api.Node {
 	return nd
 }
 
-// SetBornseqno implemens NodeSetter{}
+// SetBornseqno implemens NodeSetter method.
 func (nd *Llrbnode) SetBornseqno(seqno uint64) api.Node {
 	if nd != nil {
 		nd.metadata().setbnseq(seqno)
@@ -48,7 +48,7 @@ func (nd *Llrbnode) SetBornseqno(seqno uint64) api.Node {
 	return nd
 }
 
-// SetDeadseqno implement NodeSetter{}
+// SetDeadseqno implement NodeSetter method.
 func (nd *Llrbnode) SetDeadseqno(seqno uint64) api.Node {
 	if nd != nil {
 		nd.metadata().setddseq(seqno)
@@ -56,7 +56,7 @@ func (nd *Llrbnode) SetDeadseqno(seqno uint64) api.Node {
 	return nd
 }
 
-// SetVbuuid implement NodeSetter{}
+// SetVbuuid implement NodeSetter method.
 func (nd *Llrbnode) SetVbuuid(vbuuid uint64) api.Node {
 	if nd != nil {
 		nd.metadata().setvbuuid(vbuuid)
@@ -64,7 +64,7 @@ func (nd *Llrbnode) SetVbuuid(vbuuid uint64) api.Node {
 	return nd
 }
 
-// SetFpos implement NodeSetter{}
+// SetFpos implement NodeSetter method.
 func (nd *Llrbnode) SetFpos(level byte, offset uint64) api.Node {
 	if nd != nil {
 		nd.metadata().setfpos(level, offset)
@@ -72,7 +72,7 @@ func (nd *Llrbnode) SetFpos(level byte, offset uint64) api.Node {
 	return nd
 }
 
-// Vbno implement NodeGetter{}
+// Vbno implement NodeGetter method.
 func (nd *Llrbnode) Vbno() uint16 {
 	if nd != nil {
 		return nd.metadata().vbno()
@@ -80,7 +80,7 @@ func (nd *Llrbnode) Vbno() uint16 {
 	return 0
 }
 
-// Access implement NodeGetter{}
+// Access implement NodeGetter method.
 func (nd *Llrbnode) Access() uint64 {
 	if nd != nil {
 		return nd.metadata().access()
@@ -88,7 +88,7 @@ func (nd *Llrbnode) Access() uint64 {
 	return 0
 }
 
-// Key implement NodeGetter{}
+// Key implement NodeGetter method.
 func (nd *Llrbnode) Key() []byte {
 	if nd != nil {
 		return nd.key(nd.metadata().sizeof())
@@ -96,7 +96,7 @@ func (nd *Llrbnode) Key() []byte {
 	return nil
 }
 
-// Bornseqno implement NodeGetter{}
+// Bornseqno implement NodeGetter method.
 func (nd *Llrbnode) Bornseqno() uint64 {
 	if nd != nil {
 		return nd.metadata().bnseq()
@@ -104,7 +104,7 @@ func (nd *Llrbnode) Bornseqno() uint64 {
 	return 0
 }
 
-// Deadseqno implement NodeGetter{}
+// Deadseqno implement NodeGetter method.
 func (nd *Llrbnode) Deadseqno() uint64 {
 	if nd != nil {
 		return nd.metadata().ddseq()
@@ -112,7 +112,7 @@ func (nd *Llrbnode) Deadseqno() uint64 {
 	return 0
 }
 
-// IsDeleted implement NodeGetter{}
+// IsDeleted implement NodeGetter method.
 func (nd *Llrbnode) IsDeleted() bool {
 	if nd != nil {
 		return nd.metadata().isdeleted()
@@ -120,7 +120,7 @@ func (nd *Llrbnode) IsDeleted() bool {
 	return true
 }
 
-// Vbuuid implement NodeGetter{}
+// Vbuuid implement NodeGetter method.
 func (nd *Llrbnode) Vbuuid() uint64 {
 	if nd != nil {
 		return nd.metadata().vbuuid()
@@ -128,7 +128,7 @@ func (nd *Llrbnode) Vbuuid() uint64 {
 	return 0
 }
 
-// Fpos implement NodeGetter{}
+// Fpos implement NodeGetter method.
 func (nd *Llrbnode) Fpos() (level byte, offset uint64) {
 	if nd != nil {
 		return nd.metadata().fpos()
@@ -136,7 +136,7 @@ func (nd *Llrbnode) Fpos() (level byte, offset uint64) {
 	return 0, 0
 }
 
-// Value implement NodeGetter{}
+// Value implement NodeGetter method.
 func (nd *Llrbnode) Value() []byte {
 	if nd != nil && nd.metadata().ismvalue() {
 		if nv := nd.nodevalue(); nv != nil {

@@ -15,7 +15,8 @@ import "github.com/prataprc/golog"
 import s "github.com/prataprc/gosettings"
 import humanize "github.com/dustin/go-humanize"
 
-// LLRB in-memory sorted index using left-leaning-red-black trees.
+// LLRB manage a single instance of in-memory sorted index using
+// left-leaning-red-black tree.
 type LLRB struct { // tree container
 	// all are 64-bit aligned
 	llrbstats
@@ -130,24 +131,37 @@ func (llrb *LLRB) EnableMVCC() {
 	llrb.enableMVCC()
 }
 
+// Dotdump to convert whole tree into dot script that can be visualized using
+// graphviz.
+func (llrb *LLRB) Dotdump(buffer io.Writer) {
+	lines := []string{
+		"digraph llrb {",
+		"  node[shape=record];\n",
+		"}",
+	}
+	buffer.Write([]byte(strings.Join(lines[:len(lines)-1], "\n")))
+	llrb.getroot().dotdump(buffer)
+	buffer.Write([]byte(lines[len(lines)-1]))
+}
+
 // ---- api.IndexMeta{} interface
 
-// ID implement api.IndexMeta{} interface.
+// ID implement api.IndexMeta interface.
 func (llrb *LLRB) ID() string {
 	return llrb.name
 }
 
-// Count implement api.IndexMeta{} interface.
+// Count implement api.IndexMeta interface.
 func (llrb *LLRB) Count() int64 {
 	return atomic.LoadInt64(&llrb.n_count)
 }
 
-// Isactive implement api.IndexMeta{} interface.
+// Isactive implement api.IndexMeta interface.
 func (llrb *LLRB) Isactive() bool {
 	return llrb.dead == false
 }
 
-// Getclock implement api.IndexMeta{} interface.
+// Getclock implement api.IndexMeta interface.
 func (llrb *LLRB) Getclock() api.Clock {
 	clock := (*api.Clock)(atomic.LoadPointer(&llrb.clock))
 	if clock == nil {
@@ -156,12 +170,14 @@ func (llrb *LLRB) Getclock() api.Clock {
 	return *clock
 }
 
-// Metadata implement api.IndexMeta{} interface.
+// Metadata implement api.IndexMeta interface. LLRB instances
+// are transient and don't support backup and restore of context.
+// Return nil.
 func (llrb *LLRB) Metadata() []byte {
 	return nil
 }
 
-// Stats implement api.IndexMeta{} interface.
+// Stats implement api.IndexMeta interface.
 func (llrb *LLRB) Stats() (map[string]interface{}, error) {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.stats()
@@ -171,7 +187,7 @@ func (llrb *LLRB) Stats() (map[string]interface{}, error) {
 	return llrb.stats(llrb)
 }
 
-// Fullstats implement api.IndexMeta{} interface.
+// Fullstats implement api.IndexMeta interface.
 func (llrb *LLRB) Fullstats() (map[string]interface{}, error) {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.fullstats()
@@ -182,7 +198,9 @@ func (llrb *LLRB) Fullstats() (map[string]interface{}, error) {
 	return llrb.fullstats(llrb)
 }
 
-// Validate implement api.IndexMeta{} interface.
+// Validate implement api.IndexMeta interface. Will walk
+// the full tree to confirm the sort order and check for
+// memory leaks.
 func (llrb *LLRB) Validate() {
 	if llrb.mvcc.enabled {
 		if err := llrb.mvcc.writer.validate(); err != nil {
@@ -195,20 +213,21 @@ func (llrb *LLRB) Validate() {
 	llrb.rw.RUnlock()
 }
 
-// Log implement api.IndexMeta{} interface.
-func (llrb *LLRB) Log(involved string, humanize bool) {
+// Log implement api.IndexMeta interface.
+func (llrb *LLRB) Log(what string, humanize bool) {
 	if llrb.mvcc.enabled {
-		llrb.mvcc.writer.log(involved, humanize)
+		llrb.mvcc.writer.log(what, humanize)
 		return
 	}
 	llrb.rw.RLock()
 	defer llrb.rw.RUnlock()
-	llrb.log(involved, humanize)
+	llrb.log(what, humanize)
 }
 
-// ---- api.IndexSnapshot{} interface
+// ---- api.Index interface
 
-// RSnapshot implement api.IndexSnapshot{} interface.
+// RSnapshot implement api.Index interface. Snapshotting is allowed
+// only if mvcc is enabled.
 func (llrb *LLRB) RSnapshot(snapch chan api.IndexSnapshot, next bool) error {
 	if llrb.mvcc.enabled {
 		err := llrb.mvcc.writer.getSnapshot(snapch, next)
@@ -220,12 +239,13 @@ func (llrb *LLRB) RSnapshot(snapch chan api.IndexSnapshot, next bool) error {
 	panic("RSnapshot(): mvcc is not enabled")
 }
 
-// Setclock implement api.IndexSnapshot{} interface.
+// Setclock implement api.Index interface.
 func (llrb *LLRB) Setclock(clock api.Clock) {
 	atomic.StorePointer(&llrb.clock, unsafe.Pointer(&clock))
 }
 
-// Clone implement api.IndexSnapshot{} interface.
+// Clone implement api.Index interface. Avoid clone while there are
+// incoming mutations.
 func (llrb *LLRB) Clone(name string) (api.Index, error) {
 	if llrb.mvcc.enabled {
 		newllrb, err := llrb.mvcc.writer.clone(name)
@@ -235,13 +255,14 @@ func (llrb *LLRB) Clone(name string) (api.Index, error) {
 		return newllrb, err
 	}
 
+	// TODO: convert this into read lock ?
 	llrb.rw.Lock()
 	defer llrb.rw.Unlock()
 
 	return llrb.doclone(name)
 }
 
-// Destroy implement api.Index{} interface.
+// Destroy implement api.Index interface.
 func (llrb *LLRB) Destroy() error {
 	if n_activeiter := atomic.LoadInt64(&llrb.n_activeiter); n_activeiter > 0 {
 		log.Infof("%v n_activeiter: %v\n", llrb.logprefix, n_activeiter)
@@ -263,18 +284,96 @@ func (llrb *LLRB) Destroy() error {
 	panic("Destroy(): already dead tree")
 }
 
-// ---- api.IndexSnapshot{} interface
+// ---- api.IndexSnapshot interface
 
-// Refer implement api.IndexSnapshot{} interface. Call this method on
+// Refer implement api.IndexSnapshot interface. Call this method on
 // llrb-snapshot, calling on this type will cause panic.
 func (llrb *LLRB) Refer() {
 	panic("Refer(): only allowed on snapshot")
 }
 
-// Release implement api.IndexSnapshot{} interface. Call this method on
+// Release implement api.IndexSnapshot interface. Call this method on
 // llrb-snapshot, calling on this type will cause panic.
 func (llrb *LLRB) Release() {
 	panic("Release(): only allowed on snapshot")
+}
+
+//---- api.IndexReader interface.
+
+// Has implement api.IndexReader interface.
+func (llrb *LLRB) Has(key []byte) bool {
+	llrb.assertnomvcc()
+	return llrb.Get(key, nil)
+}
+
+// Get implement api.IndexReader interface, acquires a read lock.
+func (llrb *LLRB) Get(key []byte, callb api.NodeCallb) bool {
+	llrb.assertnomvcc()
+
+	llrb.rw.RLock()
+	defer llrb.rw.RUnlock()
+	atomic.AddInt64(&llrb.n_lookups, 1)
+	_, ok := getkey(llrb, llrb.getroot(), key, callb)
+	return ok
+}
+
+// Min implement api.IndexReader interface.
+func (llrb *LLRB) Min(callb api.NodeCallb) bool {
+	llrb.assertnomvcc()
+
+	llrb.rw.RLock()
+	defer llrb.rw.RUnlock()
+	atomic.AddInt64(&llrb.n_lookups, 1)
+	_, ok := getmin(llrb, llrb.getroot(), callb)
+	return ok
+}
+
+// Max implement api.IndexReader interface.
+func (llrb *LLRB) Max(callb api.NodeCallb) bool {
+	llrb.assertnomvcc()
+
+	llrb.rw.RLock()
+	defer llrb.rw.RUnlock()
+	atomic.AddInt64(&llrb.n_lookups, 1)
+	_, ok := getmax(llrb, llrb.getroot(), callb)
+	return ok
+}
+
+// Range from lkey to hkey, incl can be "both", "low", "high", "none"
+func (llrb *LLRB) Range(
+	lkey, hkey []byte, incl string, reverse bool, callb api.NodeCallb) {
+
+	llrb.assertnomvcc()
+
+	var skip bool
+	lkey, hkey, incl, skip = fixrangeargs(lkey, hkey, incl)
+	if skip {
+		return
+	}
+
+	llrb.rw.RLock()
+	dorange(llrb, llrb.getroot(), lkey, hkey, incl, reverse, callb)
+	llrb.rw.RUnlock()
+
+	atomic.AddInt64(&llrb.n_ranges, 1)
+}
+
+// Iterate implement api.IndexReader interface.
+func (llrb *LLRB) Iterate(lk, hk []byte, incl string, r bool) api.IndexIterator {
+	llrb.assertnomvcc()
+
+	var skip bool
+	lk, hk, incl, skip = fixrangeargs(lk, hk, incl)
+	if skip {
+		return nil
+	}
+
+	llrb.rw.RLock()
+	iter := inititerator(llrb, llrb, lk, hk, incl, r)
+
+	atomic.AddInt64(&llrb.n_ranges, 1)
+	atomic.AddInt64(&llrb.n_activeiter, 1)
+	return iter
 }
 
 //---- local functions
@@ -319,87 +418,9 @@ func (llrb *LLRB) assertnomvcc() {
 	}
 }
 
-//---- api.IndexReader{} interface.
+//---- api.IndexWriter interface
 
-// Has implement api.IndexReader{} interface.
-func (llrb *LLRB) Has(key []byte) bool {
-	llrb.assertnomvcc()
-	return llrb.Get(key, nil)
-}
-
-// Get implement api.IndexReader{} interface, acquires a read lock.
-func (llrb *LLRB) Get(key []byte, callb api.NodeCallb) bool {
-	llrb.assertnomvcc()
-
-	llrb.rw.RLock()
-	defer llrb.rw.RUnlock()
-	atomic.AddInt64(&llrb.n_lookups, 1)
-	_, ok := getkey(llrb, llrb.getroot(), key, callb)
-	return ok
-}
-
-// Min implement api.IndexReader{} interface.
-func (llrb *LLRB) Min(callb api.NodeCallb) bool {
-	llrb.assertnomvcc()
-
-	llrb.rw.RLock()
-	defer llrb.rw.RUnlock()
-	atomic.AddInt64(&llrb.n_lookups, 1)
-	_, ok := getmin(llrb, llrb.getroot(), callb)
-	return ok
-}
-
-// Max implement api.IndexReader{} interface.
-func (llrb *LLRB) Max(callb api.NodeCallb) bool {
-	llrb.assertnomvcc()
-
-	llrb.rw.RLock()
-	defer llrb.rw.RUnlock()
-	atomic.AddInt64(&llrb.n_lookups, 1)
-	_, ok := getmax(llrb, llrb.getroot(), callb)
-	return ok
-}
-
-// Range from lkey to hkey, incl can be "both", "low", "high", "none"
-func (llrb *LLRB) Range(
-	lkey, hkey []byte, incl string, reverse bool, callb api.NodeCallb) {
-
-	llrb.assertnomvcc()
-
-	var skip bool
-	lkey, hkey, incl, skip = fixrangeargs(lkey, hkey, incl)
-	if skip {
-		return
-	}
-
-	llrb.rw.RLock()
-	dorange(llrb, llrb.getroot(), lkey, hkey, incl, reverse, callb)
-	llrb.rw.RUnlock()
-
-	atomic.AddInt64(&llrb.n_ranges, 1)
-}
-
-// Iterate implement api.IndexReader{} interface.
-func (llrb *LLRB) Iterate(lk, hk []byte, incl string, r bool) api.IndexIterator {
-	llrb.assertnomvcc()
-
-	var skip bool
-	lk, hk, incl, skip = fixrangeargs(lk, hk, incl)
-	if skip {
-		return nil
-	}
-
-	llrb.rw.RLock()
-	iter := inititerator(llrb, llrb, lk, hk, incl, r)
-
-	atomic.AddInt64(&llrb.n_ranges, 1)
-	atomic.AddInt64(&llrb.n_activeiter, 1)
-	return iter
-}
-
-//---- api.IndexWriter{} interface
-
-// Upsert implement api.IndexWriter{} interface.
+// Upsert implement api.IndexWriter interface.
 func (llrb *LLRB) Upsert(key, value []byte, callb api.NodeCallb) error {
 	if key == nil {
 		panic("Upsert(): upserting nil key")
@@ -431,6 +452,7 @@ func (llrb *LLRB) Upsert(key, value []byte, callb api.NodeCallb) error {
 	return nil
 }
 
+// UpsertCas implement api.IndexWriter interface.
 func (llrb *LLRB) UpsertCas(key, value []byte, cas uint64, callb api.NodeCallb) error {
 	if key == nil {
 		panic("Upsert(): upserting nil key")
@@ -530,7 +552,7 @@ func (llrb *LLRB) upsert(
 	return nd, newnd, oldnd
 }
 
-// DeleteMin implement api.IndexWriter{} interface.
+// DeleteMin implement api.IndexWriter interface.
 func (llrb *LLRB) DeleteMin(callb api.NodeCallb) (e error) {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.wdeleteMin(callb)
@@ -581,7 +603,7 @@ func (llrb *LLRB) deletemin(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 	return llrb.fixup(nd), deleted
 }
 
-// DeleteMax implements api.IndexWriter{} interface.
+// DeleteMax implements api.IndexWriter interface.
 func (llrb *LLRB) DeleteMax(callb api.NodeCallb) (e error) {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.wdeleteMax(callb)
@@ -635,7 +657,7 @@ func (llrb *LLRB) deletemax(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 	return llrb.fixup(nd), deleted
 }
 
-// Delete implement api.IndexWriter{} interface.
+// Delete implement api.IndexWriter interface.
 func (llrb *LLRB) Delete(key []byte, callb api.NodeCallb) (e error) {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.wdelete(key, callb)
@@ -748,7 +770,7 @@ func (llrb *LLRB) delete(nd *Llrbnode, key []byte) (newnd, deleted *Llrbnode) {
 	return llrb.fixup(nd), deleted
 }
 
-// Mutations implement api.IndexWriter{} interface.
+// Mutations implement api.IndexWriter interface.
 func (llrb *LLRB) Mutations(cmds []*api.MutationCmd, callb api.NodeCallb) error {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.wmutations(cmds, callb)
@@ -873,19 +895,6 @@ func (llrb *LLRB) fixup(nd *Llrbnode) *Llrbnode {
 		llrb.flip(nd)
 	}
 	return nd
-}
-
-// Dotdump to convert whole tree into dot script that can be visualized using
-// graphviz.
-func (llrb *LLRB) Dotdump(buffer io.Writer) {
-	lines := []string{
-		"digraph llrb {",
-		"  node[shape=record];\n",
-		"}",
-	}
-	buffer.Write([]byte(strings.Join(lines[:len(lines)-1], "\n")))
-	llrb.getroot().dotdump(buffer)
-	buffer.Write([]byte(lines[len(lines)-1]))
 }
 
 //---- local functions

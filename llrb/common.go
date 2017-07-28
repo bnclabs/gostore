@@ -178,6 +178,10 @@ func inititerator(
 			iter.incl = "both"
 		}
 	}
+	// If iteration is called on snapshot, hold a reference.
+	if snapshot, ok := iter.tree.(*LLRBSnapshot); ok {
+		snapshot.Refer()
+	}
 	return iter
 }
 

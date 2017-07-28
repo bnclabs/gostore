@@ -36,40 +36,40 @@ import "github.com/cloudfoundry/gosigar"
 //		Memory capacity required for values. Default will be
 //		(avgvalsize / (avgkeysize+avgvalsize)) * freeRAM
 //
-// "maxlimit" (int64, default: 100),
-//		Applicable for Iterate API. Iterate uses Range to fetch
+// "maxlimit" (int64, default: 100)
+//      Applicable for Iterate API. Iterate uses Range to fetch
 //      a batch of entries to iterate upon. Limit the batch size
-//		if number iterations are known apriori.
+//      if number iterations are known apriori.
 //
-// "metadata.bornseqno" (bool, default: false),
+// "metadata.bornseqno" (bool, default: false)
 //		If true, use metadata field to book-keep node's born
 //		sequence number.
 //
-// "metadata.deadseqno": (bool,  default: false),
+// "metadata.deadseqno": (bool,  default: false)
 //		If true, use metadata field to book-keep node's dead
 //		sequence number.
 //
-// "metadata.mvalue": (bool, default: true),
+// "metadata.mvalue": (bool, default: true)
 //		Store value pointer, as metadata, for each entry. If
 //		entries don't have value, mark this as false.
 //
-// "metadata.vbuuid": (bool, default: false),
+// "metadata.vbuuid": (bool, default: false)
 //		If true, use metadata field to book-keep node's vbuuid.
 //
-// "metadata.fpos": (bool, default: false),
+// "metadata.fpos": (bool, default: false)
 //		If true, use file position in disk files where value is
 //		stored.
 //
-// "mvcc.enable" (bool, default: false),
-//		Manage LLRB as Multi-Version-Concurrency-Control tree.
-//		Write intensive applications can leave this as false,
+// "mvcc.enable" (bool, default: false)
+//      Manage LLRB as Multi-Version-Concurrency-Control tree.
+//      Write intensive applications can leave this as false,
 //      while read intensive applications can set this as true.
 //
-// "mvcc.snapshot.tick" (int64, default: 5),
+// "mvcc.snapshot.tick" (int64, default: 5)
 //		Time period, in millisecond, for generating read-snapshots.
 //
-// "mvcc.writer.chansize" (int64, default: 1000),
-//		Buffered channel's size, if "mvcc.enable" is true, to batch
+// "mvcc.writer.chansize" (int64, default: 1000)
+//      Buffered channel's size, if "mvcc.enable" is true, to batch
 //      write operations.
 //
 func Defaultsettings() s.Settings {

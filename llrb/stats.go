@@ -175,11 +175,11 @@ func (llrb *LLRB) statsval(stats map[string]interface{}) map[string]interface{} 
 	return stats
 }
 
-func (llrb *LLRB) log(involved string, humanize bool) {
+func (llrb *LLRB) log(what string, humanize bool) {
 	var stats map[string]interface{}
 	var err error
 
-	switch involved {
+	switch what {
 	case "full":
 		startts := time.Now()
 		stats, err = llrb.fullstats(llrb)

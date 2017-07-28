@@ -123,47 +123,50 @@ func (snapshot *LLRBSnapshot) copystats(llrb *LLRB) *LLRBSnapshot {
 
 //---- implement api.IndexMeta interface.
 
-// ID implement api.IndexMeta{} interface.
+// ID implement api.IndexMeta interface.
 func (snapshot *LLRBSnapshot) ID() string {
 	return snapshot.id
 }
 
-// Count implement api.IndexMeta{} interface.
+// Count implement api.IndexMeta interface.
 func (snapshot *LLRBSnapshot) Count() int64 {
 	return snapshot.n_count
 }
 
-// Isactive implement api.IndexMeta{} interface.
+// Isactive implement api.IndexMeta interface.
 func (snapshot *LLRBSnapshot) Isactive() bool {
 	return snapshot.dead == false
 }
 
-// Getclock implement api.IndexMeta{} inteface.
+// Getclock implement api.IndexMeta inteface.
 func (snapshot *LLRBSnapshot) Getclock() api.Clock {
 	return snapshot.clock
 }
 
-// Metadata implement api.IndexMeta{} interface.
+// Metadata implement api.IndexMeta interface.
 func (snapshot *LLRBSnapshot) Metadata() []byte {
 	return nil
 }
 
-// Validate implement api.IndexMeta{} interface.
-func (snapshot *LLRBSnapshot) Validate() {
-	snapshot.validate(snapshot.root)
-}
-
-// Stats implement api.IndexMeta{} interface.
+// Stats implement api.IndexMeta interface.
 func (snapshot *LLRBSnapshot) Stats() (map[string]interface{}, error) {
 	return snapshot.stats(snapshot)
 }
 
-// Fullstats implement api.IndexMeta{} interface.
+// Fullstats implement api.IndexMeta interface.
 func (snapshot *LLRBSnapshot) Fullstats() (map[string]interface{}, error) {
 	return snapshot.fullstats(snapshot)
 }
 
-// Log implement api.IndexMeta{} interface.
+// Validate implement api.IndexMeta interface. Will walk
+// the full tree to confirm the sort order and check for
+// memory leaks.
+func (snapshot *LLRBSnapshot) Validate() {
+	snapshot.validate(snapshot.root)
+}
+
+// Log implement api.IndexMeta interface. Call Log on the index
+// instance, calling it on snapshot will panic.
 func (snapshot *LLRBSnapshot) Log(string, bool) {
 	panic("call this method on the index, snapshot don't support it")
 }
@@ -176,22 +179,25 @@ func (snapshot *LLRBSnapshot) Refer() {
 	atomic.AddInt64(&snapshot.refcount, 1)
 }
 
-// Release implement api.IndexSnapshot interface.
+// Release implement api.IndexSnapshot interface. Snapshot will be purged
+// only when all references to this snapshot has Release-d it. That includes
+// the iterators.
 func (snapshot *LLRBSnapshot) Release() {
 	log.Debugf("%v snapshot DEREF\n", snapshot.logprefix)
-	// TODO: is there a way to make sure that this won't end up in
-	// forever loop.
-	for n := atomic.LoadInt64(&snapshot.n_activeiter); n > 0; {
-		time.Sleep(1 * time.Millisecond)
-		n = atomic.LoadInt64(&snapshot.n_activeiter)
-	}
 	refcount := atomic.AddInt64(&snapshot.refcount, -1)
-	if refcount == 0 {
-		if err := snapshot.llrb.mvcc.writer.purgeSnapshot(); err != nil {
-			log.Errorf("%v purgeSnapshot(): %v\n", snapshot.logprefix, err)
-		}
-	} else if refcount < 0 {
+	if refcount < 0 {
 		panic("Release(): snapshot refcount gone negative")
+	} else if refcount > 0 {
+		return
+	}
+	// refcount is ZERO
+	n_activeiter := atomic.LoadInt64(&snapshot.n_activeiter)
+	if n_activeiter > 0 {
+		fmsg := "%v Release(): refcount is ZERO but iters are %v\n"
+		panic(fmt.Errorf(fmsg, snapshot.logprefix, n_activeiter))
+	}
+	if err := snapshot.llrb.mvcc.writer.purgeSnapshot(); err != nil {
+		log.Errorf("%v purgeSnapshot(): %v\n", snapshot.logprefix, err)
 	}
 }
 
@@ -286,8 +292,7 @@ func (snapshot *LLRBSnapshot) validate(root *Llrbnode) {
 		fmsg := "validate(): valmemory:%v != actual:%v"
 		panic(fmt.Errorf(fmsg, snapshot.valmemory, vm))
 	}
-	// `h_height`.max should not exceed certain limit
-	llrb.validatetree(root, isred(root), 0 /*blacks*/, 1 /*depth*/, h)
+	// h.max should not exceed certain limit
 	if h.Samples() > 8 {
 		nf := float64(snapshot.Count())
 		if float64(h.Max()) > (3 * math.Log2(nf)) {

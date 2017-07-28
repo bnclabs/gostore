@@ -65,6 +65,8 @@ func (llrb *LLRB) validate(root *Llrbnode) {
 	llrb.validatestats()
 }
 
+// Gather memory information and validate memory-utilization
+// with expected utilization.
 func (llrb *LLRB) validatemem() {
 	stats := llrb.statsval(llrb.statskey(make(map[string]interface{})))
 	entries := llrb.Count()
@@ -107,10 +109,10 @@ func (llrb *LLRB) validatemem() {
 	}
 }
 
-// Validate the following expectation on the tree.
+// Validate following expectations on the tree.
 //  * If current node is red, parent node should be black.
-//  * At each level, number of blacks on the left subtree should
-//    be equal to number of blacks on the right subtree.
+//  * At each level, number of black-links on the left subtree
+//    should be equal to number of black-links on the right subtree.
 //  * Make sure that the tree is in sort order.
 //  * Return number of blacks, cummulative memory consumed by keys,
 //    cummulative memory consumed by values.
@@ -153,6 +155,8 @@ func (llrb *LLRB) validatetree(
 	return blacks, 0, 0
 }
 
+// validatestats can be used for quick validation based on
+// statistic accounting.
 func (llrb *LLRB) validatestats() error {
 	// n_count should match (n_inserts - n_deletes)
 	n_count := llrb.n_count

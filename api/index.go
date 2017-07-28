@@ -108,9 +108,11 @@ type NodeSetter interface {
 	SetFpos(level byte, offset uint64) Node
 }
 
+// Clock defines timestamp versioning for storage instances.
 type Clock interface {
 	// Update clock to latest write operation. Typically `msg`
-	// indicates a write operation.
+	// indicates a mutation that will take the storage instance to
+	// next point in time.
 	Update(msg interface{}) Clock
 
 	// Clone creates a copy of the clock.
@@ -136,6 +138,8 @@ type Clock interface {
 	Unmarshal(data []byte) Clock
 }
 
+// IndexMeta defines metadata operations on storage instance. Unless
+// specified they are cheap calls and can be used at any point in time.
 type IndexMeta interface {
 	// Id return index id. Typically, it is human readable and unique.
 	ID() string
@@ -161,11 +165,15 @@ type IndexMeta interface {
 	// this function may lead to a full table scan.
 	Fullstats() (map[string]interface{}, error)
 
-	// Validate check whether index is in sane state.
+	// Validate check whether index/snapshot is in sane state. Until
+	// validate completes on a snapshot, it can be freed. Refer to
+	// implementing storage algorithm to know the effects of calling
+	// Validate.
 	Validate()
 
-	// Log current statistics, if humanize is true log in human
-	// readable format.
+	// Log current statistics, if humanize is true log memory
+	// information in human readable format. If what is "full", detailed
+	// information about instance will be logged.
 	Log(what string, humanize bool)
 }
 
@@ -177,7 +185,8 @@ type Index interface {
 	// subsequent writes. Caller should make sure to call
 	// snapshot.Release() once it is done with the snapshot, which
 	// also implies that all iterators on the snapshot are closed.
-	// If `next` is true block till next snapshot is made.
+	// If `next` is true block till next snapshot is available on
+	// the index.
 	RSnapshot(snapch chan IndexSnapshot, next bool) error
 
 	// Setclock attaches a new clock to the index.
