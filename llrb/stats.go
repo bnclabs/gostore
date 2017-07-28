@@ -5,9 +5,10 @@ import "time"
 import "strings"
 import "sync/atomic"
 
-import gohumanize "github.com/dustin/go-humanize"
+import "github.com/prataprc/gostore/api"
 import "github.com/prataprc/gostore/lib"
 import "github.com/prataprc/golog"
+import gohumanize "github.com/dustin/go-humanize"
 
 type llrbstats struct {
 	// 64-bit aligned reader statistics.
@@ -16,8 +17,9 @@ type llrbstats struct {
 	n_ranges  int64
 
 	// 64-bit aligned snapshot statistics.
-	n_cclookups int64
-	n_ccranges  int64
+	n_activeiter int64
+	n_cclookups  int64
+	n_ccranges   int64
 
 	// 64-bit aligned writer statistics
 	n_count   int64 // number of nodes in the tree
@@ -37,18 +39,47 @@ type llrbstats struct {
 	n_reclaims  int64
 }
 
-func (llrb *LLRB) stats() (map[string]interface{}, error) {
-	stats := llrb.statsval(llrb.statskey(map[string]interface{}{}))
-	stats = llrb.statsrd(llrb.statsmvcc(llrb.statswt(stats)))
-	stats["h_upsertdepth"] = llrb.h_upsertdepth.Fullstats()
-	if llrb.mvcc.enabled {
-		stats["mvcc.h_bulkfree"] = llrb.mvcc.h_bulkfree.Fullstats()
-		stats["mvcc.h_versions"] = llrb.mvcc.h_versions.Fullstats()
-		for k, h := range llrb.mvcc.h_reclaims {
-			stats["mvcc.h_reclaims."+k] = h.Fullstats()
+//---- write methods
+
+// count lookup operation in mvcc mode, if there is on-going mutation, count
+// as concurrent-lookup n_cclookups, else as n_lookups.
+func (stats *llrbstats) countlookup(ismut int64) {
+	atomic.AddInt64(&stats.n_lookups, 1)
+	if ismut > 0 {
+		atomic.AddInt64(&stats.n_cclookups, 1)
+	}
+}
+
+// count range operation in mvcc mode, if there is on-going mutation, count
+// as concurrent-range n_ccranges, else as n_ranges.
+func (stats *llrbstats) countrange(ismut int64) {
+	atomic.AddInt64(&stats.n_ranges, 1)
+	if ismut > 0 {
+		atomic.AddInt64(&stats.n_ccranges, 1)
+	}
+}
+
+//---- read methods
+
+// gether stats either on LLRB or LLRBSnapshot tree, this function is
+// expected to return back quickly.
+func (stats *llrbstats) stats(
+	tree api.IndexMeta) (map[string]interface{}, error) {
+
+	m := make(map[string]interface{})
+	m = stats.statsrd(stats.statsmvcc(stats.statswt(m)))
+	if llrb, ok := tree.(*LLRB); ok {
+		m = llrb.statsval(llrb.statskey(m))
+		m["h_upsertdepth"] = llrb.h_upsertdepth.Fullstats()
+		if llrb.mvcc.enabled {
+			m["mvcc.h_bulkfree"] = llrb.mvcc.h_bulkfree.Fullstats()
+			m["mvcc.h_versions"] = llrb.mvcc.h_versions.Fullstats()
+			for k, h := range llrb.mvcc.h_reclaims {
+				m["mvcc.h_reclaims."+k] = h.Fullstats()
+			}
 		}
 	}
-	return stats, nil
+	return m, nil
 }
 
 // along with basic tree statistics, walks the tree to gather:
@@ -56,38 +87,83 @@ func (llrb *LLRB) stats() (map[string]interface{}, error) {
 // * number blacks, also make sures that number of blacks
 //   on the left path patches with number of blacks on the right
 //   path. this is a basic llrb invariant.
-func (llrb *LLRB) fullstats() (map[string]interface{}, error) {
-	stats, err := llrb.stats()
+func (stats *llrbstats) fullstats(
+	tree api.IndexMeta) (map[string]interface{}, error) {
+
+	m, err := stats.stats(tree)
 	if err != nil {
 		return nil, err
 	}
+	var root *Llrbnode
+	switch v := tree.(type) {
+	case *LLRB:
+		root = v.getroot()
+	case *LLRBSnapshot:
+		root = v.root
+	}
 
 	h_heightav := lib.NewhistorgramInt64(1, 256, 1)
-	n_blacks := treestats(llrb.getroot(), 1 /*depth*/, h_heightav, 0)
-	stats["h_height"] = h_heightav.Fullstats()
-	stats["n_blacks"] = n_blacks
+	n_blacks := treestats(root, 1 /*depth*/, h_heightav, 0)
+	m["h_height"] = h_heightav.Fullstats()
+	m["n_blacks"] = n_blacks
 
-	h_height := stats["h_height"].(map[string]interface{})
-	if x := h_height["samples"].(int64); x != llrb.Count() {
-		fmsg := "expected h_height.samples:%v to be same as llrb.Count():%v"
-		panic(fmt.Errorf(fmsg, x, llrb.Count()))
+	h_height := m["h_height"].(map[string]interface{})
+	if x := h_height["samples"].(int64); x != tree.Count() {
+		fmsg := "expected h_height.samples:%v to be same as tree.Count():%v"
+		panic(fmt.Errorf(fmsg, x, tree.Count()))
 	}
-	return stats, nil
+	return m, nil
 }
 
-// memory statistics for keys: node-arena, total-keysize
-func (llrb *LLRB) statskey(stats map[string]interface{}) map[string]interface{} {
+// read op statistics.
+func (stats *llrbstats) statsrd(m map[string]interface{}) map[string]interface{} {
+	m["n_lookups"] = atomic.LoadInt64(&stats.n_lookups)
+	m["n_casgets"] = atomic.LoadInt64(&stats.n_casgets)
+	m["n_ranges"] = atomic.LoadInt64(&stats.n_ranges)
+	m["n_activeiter"] = atomic.LoadInt64(&stats.n_activeiter)
+	return m
+}
+
+// write op statistics.
+func (stats *llrbstats) statswt(m map[string]interface{}) map[string]interface{} {
+	m["n_count"] = stats.n_count
+	m["n_inserts"] = stats.n_inserts
+	m["n_updates"] = stats.n_updates
+	m["n_deletes"] = stats.n_deletes
+	m["n_nodes"] = stats.n_nodes
+	m["n_frees"] = stats.n_frees
+	m["n_clones"] = stats.n_clones
+	return m
+}
+
+// mvcc statistics.
+func (stats *llrbstats) statsmvcc(
+	m map[string]interface{}) map[string]interface{} {
+
+	m["mvcc.n_cclookups"] = stats.n_cclookups
+	m["mvcc.n_ccranges"] = stats.n_ccranges
+	m["mvcc.n_snapshots"] = atomic.LoadInt64(&stats.n_snapshots)
+	m["mvcc.n_purgedss"] = atomic.LoadInt64(&stats.n_purgedss)
+	m["mvcc.n_activess"] = atomic.LoadInt64(&stats.n_activess)
+	m["mvcc.n_reclaims"] = stats.n_reclaims
+	return m
+}
+
+//---- statistics relevant only on LLRB tree, not for snapshots.
+
+// memory statistics for keys.
+func (llrb *LLRB) statskey(m map[string]interface{}) map[string]interface{} {
 	capacity, heap, alloc, overhead := llrb.nodearena.Info()
-	stats["keymemory"] = llrb.keymemory
-	stats["node.capacity"] = capacity
-	stats["node.heap"] = heap
-	stats["node.alloc"] = alloc
-	stats["node.overhead"] = overhead
-	stats["node.blocks"] = llrb.nodearena.Slabs()
-	return stats
+	m["keymemory"] = llrb.keymemory
+	m["node.capacity"] = capacity
+	m["node.heap"] = heap
+	m["node.alloc"] = alloc
+	m["node.overhead"] = overhead
+	m["node.blocks"] = llrb.nodearena.Slabs()
+	return m
 }
 
-// memory statistics for keys: value.arena, total-valuesize
+// memory statistics for values.
 func (llrb *LLRB) statsval(stats map[string]interface{}) map[string]interface{} {
 	capacity, heap, alloc, overhead := llrb.valarena.Info()
 	stats["valmemory"] = llrb.valmemory
@@ -99,35 +175,6 @@ func (llrb *LLRB) statsval(stats map[string]interface{}) map[string]interface{} 
 	return stats
 }
 
-func (llrb *LLRB) statsrd(stats map[string]interface{}) map[string]interface{} {
-	stats["n_lookups"] = atomic.LoadInt64(&llrb.n_lookups)
-	stats["n_casgets"] = atomic.LoadInt64(&llrb.n_casgets)
-	stats["n_ranges"] = atomic.LoadInt64(&llrb.n_ranges)
-	stats["n_activeiter"] = atomic.LoadInt64(&llrb.n_activeiter)
-	return stats
-}
-
-func (llrb *LLRB) statswt(stats map[string]interface{}) map[string]interface{} {
-	stats["n_count"] = llrb.n_count
-	stats["n_inserts"] = llrb.n_inserts
-	stats["n_updates"] = llrb.n_updates
-	stats["n_deletes"] = llrb.n_deletes
-	stats["n_nodes"] = llrb.n_nodes
-	stats["n_frees"] = llrb.n_frees
-	stats["n_clones"] = llrb.n_clones
-	return stats
-}
-
-func (llrb *LLRB) statsmvcc(stats map[string]interface{}) map[string]interface{} {
-	stats["mvcc.n_cclookups"] = llrb.n_cclookups
-	stats["mvcc.n_ccranges"] = llrb.n_ccranges
-	stats["mvcc.n_snapshots"] = atomic.LoadInt64(&llrb.n_snapshots)
-	stats["mvcc.n_purgedss"] = atomic.LoadInt64(&llrb.n_purgedss)
-	stats["mvcc.n_activess"] = atomic.LoadInt64(&llrb.n_activess)
-	stats["mvcc.n_reclaims"] = llrb.n_reclaims
-	return stats
-}
-
 func (llrb *LLRB) log(involved string, humanize bool) {
 	var stats map[string]interface{}
 	var err error
@@ -135,14 +182,14 @@ func (llrb *LLRB) log(involved string, humanize bool) {
 	switch involved {
 	case "full":
 		startts := time.Now()
-		stats, err = llrb.fullstats()
+		stats, err = llrb.fullstats(llrb)
 		if err != nil {
 			panic(fmt.Errorf("log(): %v", err))
 		}
 		log.Infof("%v fullstats() took %v\n", llrb.logprefix, time.Since(startts))
 
 	default:
-		stats, err = llrb.stats()
+		stats, err = llrb.stats(llrb)
 		if err != nil {
 			panic(fmt.Errorf("log(): %v", err))
 		}
@@ -160,6 +207,7 @@ func (llrb *LLRB) log(involved string, humanize bool) {
 	}
 
 	if humanize {
+		// log information about key memory arena
 		capac := dohumanize(stats["node.capacity"])
 		overh := dohumanize(stats["node.overhead"])
 		heap := dohumanize(stats["node.heap"])
@@ -168,7 +216,7 @@ func (llrb *LLRB) log(involved string, humanize bool) {
 		fmsg := "%v keymem(%v): cap: %v {heap:%v,alloc:%v,overhd,%v}\n"
 		log.Infof(fmsg, llrb.logprefix, kmem, capac, heap, alloc, overh)
 
-		// node utilization
+		// log information about key memory utilization
 		outs := []string{}
 		fmsg = "  %4v chunk-size, utilz: %2.2f%%"
 		sizes, zs := llrb.nodearena.Utilization()
@@ -179,7 +227,7 @@ func (llrb *LLRB) log(involved string, humanize bool) {
 		uz := fullutilization(stats["node.alloc"], stats["node.heap"])
 		log.Infof("%v key utilization: %v%%\n%v\n", llrb.logprefix, uz, out)
 
-		// value memory
+		// log information about value memory arena
 		capac = dohumanize(stats["value.capacity"])
 		overh = dohumanize(stats["value.overhead"])
 		heap = dohumanize(stats["value.heap"])
@@ -188,7 +236,7 @@ func (llrb *LLRB) log(involved string, humanize bool) {
 		fmsg = "%v valmem(%v): cap: %v {heap:%v,alloc:%v,overhd:%v}\n"
 		log.Infof(fmsg, llrb.logprefix, vmem, capac, heap, alloc, overh)
 
-		// value utilization
+		// log information about value utilization
 		outs = []string{}
 		fmsg = "  %4v chunk-size, utilz: %2.2f%%"
 		sizes, zs = llrb.valarena.Utilization()
@@ -241,24 +289,6 @@ func (llrb *LLRB) log(involved string, humanize bool) {
 		}
 		fmsg := "%v snapshot chain %v\n"
 		log.Infof(fmsg, llrb.logprefix, strings.Join(chain, "->"))
-	}
-}
-
-// count lookup operation in mvcc mode, if there is on-going mutation, count
-// as concurrent-lookup n_cclookups, else as n_lookups.
-func (stats *llrbstats) countlookup(ismut int64) {
-	atomic.AddInt64(&stats.n_lookups, 1)
-	if ismut == 1 {
-		atomic.AddInt64(&stats.n_cclookups, 1)
-	}
-}
-
-// count range operation in mvcc mode, if there is on-going mutation, count
-// as concurrent-range n_ccranges, else as n_ranges.
-func (stats *llrbstats) countrange(ismut int64) {
-	atomic.AddInt64(&stats.n_ranges, 1)
-	if ismut == 1 {
-		atomic.AddInt64(&stats.n_ccranges, 1)
 	}
 }
 

@@ -168,10 +168,6 @@ func OpenBubtstore(name, path string) (ss *Snapshot, err error) {
 	return ss, nil
 }
 
-func (ss *Snapshot) Metadata() []byte {
-	return ss.metadata
-}
-
 func (ss *Snapshot) Name() string {
 	return ss.path
 }
@@ -186,51 +182,52 @@ func (ss *Snapshot) Datafile() string {
 	return ss.datafile
 }
 
-//---- Index{} interface.
+//---- IndexMeta{} interface.
 
-// ID implement Index{} interface.
+// ID implement api.IndexMeta interface.
 func (ss *Snapshot) ID() string {
 	return ss.name
 }
 
-// Count implement Index{} interface.
+// Count implement api.IndexMeta interface.
 func (ss *Snapshot) Count() int64 {
 	return ss.n_count
 }
 
-// Isactive implement Index{} interface.
+// Isactive implement api.IndexMeta interface.
 func (ss *Snapshot) Isactive() bool {
 	return atomic.LoadInt64(&ss.n_snapshots) > 0
 }
 
-// RSnapshot implement Index{} interface.
-func (ss *Snapshot) RSnapshot(snapch chan api.IndexSnapshot, next bool) error {
-	ss.Refer()
-	snapch <- ss
-	return nil
+// Getclock implement api.IndexMeta interface.
+func (ss *Snapshot) Getclock() api.Clock {
+	return ss.clock
 }
 
-// Setclock implement Index{} interface.
-func (ss *Snapshot) Setclock(clock api.Clock) {
-	ss.clock = clock
+// Metadata implement api.IndexMeta interface.
+func (ss *Snapshot) Metadata() []byte {
+	return ss.metadata
 }
 
-// Clone Index{} interface is not supported
-func (ss *Snapshot) Clone(name string) (api.Index, error) {
-	panic("not supported")
-}
-
-// Stats implement Index{} interface.
+// Stats implement api.IndexMeta interface.
 func (ss *Snapshot) Stats() (map[string]interface{}, error) {
 	panic("TBD")
 }
 
-// Fullstats implement Index{} interface.
+// Fullstats implement api.IndexMeta interface.
 func (ss *Snapshot) Fullstats() (map[string]interface{}, error) {
 	panic("TBD")
 }
 
-// Log implement Index{} interface.
+// Validate implement api.IndexMeta interface.
+func (ss *Snapshot) Validate() {
+	if atomic.LoadInt64(&ss.n_snapshots) == 0 {
+		panic("TBD")
+	}
+	panic("all snapshots released")
+}
+
+// Log implement api.IndexMeta interface.
 func (ss *Snapshot) Log(involved string, humanize bool) {
 	if atomic.LoadInt64(&ss.n_snapshots) == 0 {
 		panic("TBD")
@@ -238,12 +235,23 @@ func (ss *Snapshot) Log(involved string, humanize bool) {
 	panic("all snapshots released")
 }
 
-// Validate implement Index{} interface.
-func (ss *Snapshot) Validate() {
-	if atomic.LoadInt64(&ss.n_snapshots) == 0 {
-		panic("TBD")
-	}
-	panic("all snapshots released")
+//---- api.Index interface
+
+// RSnapshot implement api.Index interface.
+func (ss *Snapshot) RSnapshot(snapch chan api.IndexSnapshot, next bool) error {
+	ss.Refer()
+	snapch <- ss
+	return nil
+}
+
+// Setclock implement api.Index interface.
+func (ss *Snapshot) Setclock(clock api.Clock) {
+	ss.clock = clock
+}
+
+// Clone api.Index interface is not supported
+func (ss *Snapshot) Clone(name string) (api.Index, error) {
+	panic("not supported")
 }
 
 // Destroy implement Index{} interface.
@@ -257,79 +265,26 @@ func (ss *Snapshot) Destroy() error {
 	return ss.destroy()
 }
 
-func (ss *Snapshot) destroy() error {
-	if atomic.LoadInt64(&ss.n_snapshots) > 0 {
-		return api.ErrorActiveSnapshots
-	} else if atomic.LoadInt64(&ss.activeiter) > 0 {
-		return api.ErrorActiveIterators
-	}
+//---- api.IndexSnapshot interface.
 
-	if err := ss.indexfd.Close(); err != nil {
-		fmsg := "%v closing indexfile %q: %v\n"
-		log.Errorf(fmsg, ss.logprefix, ss.indexfile, err)
-		return err
-	}
-	if ss.datafd != nil {
-		if err := ss.datafd.Close(); err != nil {
-			fmsg := "%v closing datafile %q: %v\n"
-			log.Errorf(fmsg, ss.logprefix, ss.datafile, err)
-			return err
-		}
-	}
-
-	if err := os.Remove(ss.indexfile); err != nil {
-		fmsg := "%v while removing indexfile %q: %v\n"
-		log.Errorf(fmsg, ss.logprefix, ss.indexfile, err)
-		return err
-	} else {
-		log.Infof("%v removing indexfile %q\n", ss.logprefix, ss.indexfile)
-	}
-	if ss.datafile != "" {
-		if err := os.Remove(ss.datafile); err != nil {
-			fmsg := "%v while removing datafile %q: %v\n"
-			log.Errorf(fmsg, ss.logprefix, ss.datafile, err)
-			return err
-		} else {
-			log.Infof("%v removing datafile %q\n", ss.logprefix, ss.datafile)
-		}
-	}
-	if err := os.Remove(ss.path); err != nil {
-		fmsg := "%v while removing path %q: %v\n"
-		log.Errorf(fmsg, ss.logprefix, ss.path, err)
-		return err
-	} else {
-		log.Infof("%v removing path %q\n", ss.logprefix, ss.path)
-	}
-
-	delete(openstores, ss.name)
-	return nil
-}
-
-//---- IndexSnapshot interface.
-
-// Getclock implement IndexSnapshot{} interface.
-func (ss *Snapshot) Getclock() api.Clock {
-	return ss.clock
-}
-
-// Refer implement IndexSnapshot{} interface.
+// Refer implement api.IndexSnapshot{} interface.
 func (ss *Snapshot) Refer() {
 	atomic.AddInt64(&ss.n_snapshots, 1)
 }
 
-// Release implement IndexSnapshot{} interface.
+// Release implement api.IndexSnapshot{} interface.
 func (ss *Snapshot) Release() {
 	atomic.AddInt64(&ss.n_snapshots, -1)
 }
 
-//---- IndexReader{} interface.
+//---- api.IndexReader{} interface.
 
-// Has implement IndexReader{} interface.
+// Has implement api.IndexReader{} interface.
 func (ss *Snapshot) Has(key []byte) bool {
 	return ss.Get(key, nil)
 }
 
-// Get implement IndexReader{} interface.
+// Get implement api.IndexReader{} interface.
 func (ss *Snapshot) Get(key []byte, callb api.NodeCallb) bool {
 	if ss.n_count == 0 {
 		if callb != nil {
@@ -360,7 +315,7 @@ func (ss *Snapshot) Get(key []byte, callb api.NodeCallb) bool {
 	return rc
 }
 
-// Min implement IndexReader{} interface.
+// Min implement api.IndexReader{} interface.
 func (ss *Snapshot) Min(callb api.NodeCallb) bool {
 	if ss.n_count == 0 {
 		if callb != nil {
@@ -391,7 +346,7 @@ func (ss *Snapshot) Min(callb api.NodeCallb) bool {
 	return rc
 }
 
-// Max implement IndexReader{} interface.
+// Max implement api.IndexReader{} interface.
 func (ss *Snapshot) Max(callb api.NodeCallb) bool {
 	if ss.n_count == 0 {
 		if callb != nil {
@@ -422,7 +377,7 @@ func (ss *Snapshot) Max(callb api.NodeCallb) bool {
 	return rc
 }
 
-// Range implement IndexReader{} interface.
+// Range implement api.IndexReader{} interface.
 func (ss *Snapshot) Range(
 	lkey, hkey []byte, incl string, reverse bool, callb api.NodeCallb) {
 
@@ -470,7 +425,7 @@ func (ss *Snapshot) Range(
 	return
 }
 
-// Iterate implement IndexReader{} interface.
+// Iterate implement api.IndexReader{} interface.
 func (ss *Snapshot) Iterate(
 	lkey, hkey []byte, incl string, r bool) api.IndexIterator {
 
@@ -527,39 +482,87 @@ func (ss *Snapshot) Iterate(
 	return iter
 }
 
-//---- IndexWriter interface{}
+//---- api.IndexWriter interface{}
 
-// Upsert IndexWriter{} method, will panic if called.
+// Upsert api.IndexWriter{} method, will panic if called.
 func (ss *Snapshot) Upsert(key, value []byte, callb api.NodeCallb) error {
 	panic("IndexWriter.Upsert() not implemented")
 }
 
-// Upsert IndexWriter{} method, will panic if called.
+// Upsert api.IndexWriter{} method, will panic if called.
 func (ss *Snapshot) UpsertCas(key, value []byte, cas uint64, callb api.NodeCallb) error {
 	panic("IndexWriter.UpsertCas() not implemented")
 }
 
-// DeleteMin IndexWriter{} method, will panic if called.
+// DeleteMin api.IndexWriter{} method, will panic if called.
 func (ss *Snapshot) DeleteMin(callb api.NodeCallb) error {
 	panic("IndexWriter.DeleteMin() not implemented")
 }
 
-// DeleteMax IndexWriter{} method, will panic if called.
+// DeleteMax api.IndexWriter{} method, will panic if called.
 func (ss *Snapshot) DeleteMax(callb api.NodeCallb) error {
 	panic("IndexWriter.DeleteMax() not implemented")
 }
 
-// Delete IndexWriter{} method, will panic if called.
+// Delete api.IndexWriter{} method, will panic if called.
 func (ss *Snapshot) Delete(key []byte, callb api.NodeCallb) error {
 	panic("IndexWriter.Delete() not implemented")
 }
 
-// Mutations IndexWriter{} method, will panic if called.
+// Mutations api.IndexWriter{} method, will panic if called.
 func (ss *Snapshot) Mutations(_ []*api.MutationCmd, callb api.NodeCallb) error {
 	panic("IndexWriter.Mutations() not implemented")
 }
 
-//---- helper methods.
+//---- local methods
+
+func (ss *Snapshot) destroy() error {
+	if atomic.LoadInt64(&ss.n_snapshots) > 0 {
+		return api.ErrorActiveSnapshots
+	} else if atomic.LoadInt64(&ss.activeiter) > 0 {
+		return api.ErrorActiveIterators
+	}
+
+	if err := ss.indexfd.Close(); err != nil {
+		fmsg := "%v closing indexfile %q: %v\n"
+		log.Errorf(fmsg, ss.logprefix, ss.indexfile, err)
+		return err
+	}
+	if ss.datafd != nil {
+		if err := ss.datafd.Close(); err != nil {
+			fmsg := "%v closing datafile %q: %v\n"
+			log.Errorf(fmsg, ss.logprefix, ss.datafile, err)
+			return err
+		}
+	}
+
+	if err := os.Remove(ss.indexfile); err != nil {
+		fmsg := "%v while removing indexfile %q: %v\n"
+		log.Errorf(fmsg, ss.logprefix, ss.indexfile, err)
+		return err
+	} else {
+		log.Infof("%v removing indexfile %q\n", ss.logprefix, ss.indexfile)
+	}
+	if ss.datafile != "" {
+		if err := os.Remove(ss.datafile); err != nil {
+			fmsg := "%v while removing datafile %q: %v\n"
+			log.Errorf(fmsg, ss.logprefix, ss.datafile, err)
+			return err
+		} else {
+			log.Infof("%v removing datafile %q\n", ss.logprefix, ss.datafile)
+		}
+	}
+	if err := os.Remove(ss.path); err != nil {
+		fmsg := "%v while removing path %q: %v\n"
+		log.Errorf(fmsg, ss.logprefix, ss.path, err)
+		return err
+	} else {
+		log.Infof("%v removing path %q\n", ss.logprefix, ss.path)
+	}
+
+	delete(openstores, ss.name)
+	return nil
+}
 
 func (ss Snapshot) ismvpos(vpos int64) (int64, bool) {
 	if (vpos & 0x1) == 1 {

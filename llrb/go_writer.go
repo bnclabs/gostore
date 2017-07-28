@@ -10,7 +10,7 @@ import "github.com/prataprc/gostore/api"
 import "github.com/prataprc/golog"
 import "github.com/prataprc/gostore/lib"
 
-// LLRBWriter defines writer routine in mvcc mode.
+// LLRBWriter to serialize write operations in MVCC mode.
 type LLRBWriter struct {
 	llrb    *LLRB
 	waiters []chan api.IndexSnapshot
@@ -318,12 +318,12 @@ loop:
 
 		case cmdLlrbWriterStats:
 			respch := msg[1].(chan []interface{})
-			stats, err := llrb.stats()
+			stats, err := llrb.stats(llrb)
 			respch <- []interface{}{stats, err}
 
 		case cmdLlrbWriterFullstats:
 			respch := msg[1].(chan []interface{})
-			stats, err := llrb.fullstats()
+			stats, err := llrb.fullstats(llrb)
 			respch <- []interface{}{stats, err}
 
 		case cmdLlrbWriterValidate:
@@ -515,13 +515,12 @@ func (writer *LLRBWriter) mvccdelmin(
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
 
 	if llrb.lsm {
-		nd, _ := getmin(llrb, llrb.getroot(), nil)
-		if nd != nil {
-			llrbnd := nd.(*Llrbnode)
+		llrbnd, _ := getmin(llrb, llrb.getroot(), nil)
+		if llrbnd != nil {
 			llrbnd.metadata().setdeleted()
 		}
 		if callb != nil {
-			callb(llrb, 0, nd, nd, nil)
+			callb(llrb, 0, llrbnd, llrbnd, nil)
 		}
 
 	} else {
@@ -580,13 +579,12 @@ func (writer *LLRBWriter) mvccdelmax(
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
 
 	if llrb.lsm {
-		nd, _ := getmax(llrb, llrb.getroot(), nil)
-		if nd != nil {
-			llrbnd := nd.(*Llrbnode)
+		llrbnd, _ := getmax(llrb, llrb.getroot(), nil)
+		if llrbnd != nil {
 			llrbnd.metadata().setdeleted()
 		}
 		if callb != nil {
-			callb(llrb, 0, nd, nd, nil)
+			callb(llrb, 0, llrbnd, llrbnd, nil)
 		}
 
 	} else {
@@ -647,12 +645,11 @@ func (writer *LLRBWriter) mvccdelete(
 	atomic.AddInt64(&llrb.mvcc.ismut, 1)
 
 	if llrb.lsm {
-		nd, _ := getkey(llrb, llrb.getroot(), key, nil)
-		if nd != nil {
-			llrbnd := nd.(*Llrbnode)
+		llrbnd, _ := getkey(llrb, llrb.getroot(), key, nil)
+		if llrbnd != nil {
 			llrbnd.metadata().setdeleted()
 			if callb != nil {
-				callb(llrb, 0, nd, nd, nil)
+				callb(llrb, 0, llrbnd, llrbnd, nil)
 			}
 		} else {
 			reclaim = writer.mvccupsert(

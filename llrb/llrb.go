@@ -15,10 +15,9 @@ import "github.com/prataprc/golog"
 import s "github.com/prataprc/gosettings"
 import humanize "github.com/dustin/go-humanize"
 
-// LLRB to manage in-memory sorted index using left-leaning-red-black trees.
+// LLRB in-memory sorted index using left-leaning-red-black trees.
 type LLRB struct { // tree container
 	// all are 64-bit aligned
-	n_activeiter int64
 	llrbstats
 
 	// mvcc
@@ -100,7 +99,6 @@ func NewLLRB(name string, setts s.Settings) *LLRB {
 	if llrb.mvcc.enabled {
 		llrb.enableMVCC()
 	}
-
 	return llrb
 }
 
@@ -113,41 +111,16 @@ func (llrb *LLRB) setroot(root *Llrbnode) {
 }
 
 // ExpectedUtilization for validating memory consumption.
-// Set this to minimum expected ratio of keymemory / allocated, before
-// calling llrb.Validate().
+// Set this to minimum expected ratio of keymemory / allocated,
+// before calling llrb.Validate().
 func (llrb *LLRB) ExpectedUtilization(ut float64) {
 	llrb.memutilization = ut
 }
 
-// ---- Index{} interface
-
-// ID implement Index{} interface.
-func (llrb *LLRB) ID() string {
-	return llrb.name
-}
-
-// Count implement Index{} interface.
-func (llrb *LLRB) Count() int64 {
-	return atomic.LoadInt64(&llrb.n_count)
-}
-
-// Isactive implement Index{} interface.
-func (llrb *LLRB) Isactive() bool {
-	return llrb.dead == false
-}
-
-// Refer implement Snapshot{} interface. Call this method on llrb-snapshot,
-// calling on this type will cause panic.
-func (llrb *LLRB) Refer() {
-	panic("Refer(): only allowed on snapshot")
-}
-
-// Release implement Snapshot{} interface. Call this method on llrb-snapshot,
-// calling on this type will cause panic.
-func (llrb *LLRB) Release() {
-	panic("Release(): only allowed on snapshot")
-}
-
+// EnableMVCC will spawn the writer routine and snapshot routine. MVCC
+// can slow down write operation, and for initial data load LLRM can be
+// instantiated with mvcc disabled. And subsequently enabled when it
+// switches to active/incremental load.
 func (llrb *LLRB) EnableMVCC() {
 	llrb.setts = (s.Settings{}).Mixin(
 		llrb.setts,
@@ -157,25 +130,85 @@ func (llrb *LLRB) EnableMVCC() {
 	llrb.enableMVCC()
 }
 
-func (llrb *LLRB) initmvccstats() {
-	llrb.mvcc.reclaim = make([]*Llrbnode, 0, 64)
-	llrb.mvcc.h_bulkfree = lib.NewhistorgramInt64(100, 1000, 1000)
-	llrb.mvcc.h_reclaims = map[string]*lib.HistogramInt64{
-		"upsert":    lib.NewhistorgramInt64(10, 200, 20),
-		"upsertcas": lib.NewhistorgramInt64(10, 200, 20),
-		"mutations": lib.NewhistorgramInt64(10, 200, 20),
-		"delmin":    lib.NewhistorgramInt64(10, 200, 20),
-		"delmax":    lib.NewhistorgramInt64(10, 200, 20),
-		"delete":    lib.NewhistorgramInt64(10, 200, 20),
+// ---- api.IndexMeta{} interface
+
+// ID implement api.IndexMeta{} interface.
+func (llrb *LLRB) ID() string {
+	return llrb.name
+}
+
+// Count implement api.IndexMeta{} interface.
+func (llrb *LLRB) Count() int64 {
+	return atomic.LoadInt64(&llrb.n_count)
+}
+
+// Isactive implement api.IndexMeta{} interface.
+func (llrb *LLRB) Isactive() bool {
+	return llrb.dead == false
+}
+
+// Getclock implement api.IndexMeta{} interface.
+func (llrb *LLRB) Getclock() api.Clock {
+	clock := (*api.Clock)(atomic.LoadPointer(&llrb.clock))
+	if clock == nil {
+		return nil
 	}
-	llrb.mvcc.h_versions = lib.NewhistorgramInt64(1, 30, 10)
+	return *clock
 }
 
-func (llrb *LLRB) enableMVCC() {
-	llrb.spawnwriter()
+// Metadata implement api.IndexMeta{} interface.
+func (llrb *LLRB) Metadata() []byte {
+	return nil
 }
 
-// RSnapshot implement Index{} interface.
+// Stats implement api.IndexMeta{} interface.
+func (llrb *LLRB) Stats() (map[string]interface{}, error) {
+	if llrb.mvcc.enabled {
+		return llrb.mvcc.writer.stats()
+	}
+	llrb.rw.RLock()
+	defer llrb.rw.RUnlock()
+	return llrb.stats(llrb)
+}
+
+// Fullstats implement api.IndexMeta{} interface.
+func (llrb *LLRB) Fullstats() (map[string]interface{}, error) {
+	if llrb.mvcc.enabled {
+		return llrb.mvcc.writer.fullstats()
+	}
+
+	llrb.rw.RLock()
+	defer llrb.rw.RUnlock()
+	return llrb.fullstats(llrb)
+}
+
+// Validate implement api.IndexMeta{} interface.
+func (llrb *LLRB) Validate() {
+	if llrb.mvcc.enabled {
+		if err := llrb.mvcc.writer.validate(); err != nil {
+			panic(fmt.Errorf("Validate(): %v", err))
+		}
+		return
+	}
+	llrb.rw.RLock()
+	llrb.validate(llrb.getroot())
+	llrb.rw.RUnlock()
+}
+
+// Log implement api.IndexMeta{} interface.
+func (llrb *LLRB) Log(involved string, humanize bool) {
+	if llrb.mvcc.enabled {
+		llrb.mvcc.writer.log(involved, humanize)
+		return
+	}
+	llrb.rw.RLock()
+	defer llrb.rw.RUnlock()
+	llrb.log(involved, humanize)
+}
+
+// ---- api.IndexSnapshot{} interface
+
+// RSnapshot implement api.IndexSnapshot{} interface.
 func (llrb *LLRB) RSnapshot(snapch chan api.IndexSnapshot, next bool) error {
 	if llrb.mvcc.enabled {
 		err := llrb.mvcc.writer.getSnapshot(snapch, next)
@@ -187,21 +220,12 @@ func (llrb *LLRB) RSnapshot(snapch chan api.IndexSnapshot, next bool) error {
 	panic("RSnapshot(): mvcc is not enabled")
 }
 
-// Getclock implement Index{} interface.
-func (llrb *LLRB) Getclock() api.Clock {
-	clock := (*api.Clock)(atomic.LoadPointer(&llrb.clock))
-	if clock == nil {
-		return nil
-	}
-	return *clock
-}
-
-// Setclock implement Index{} interface.
+// Setclock implement api.IndexSnapshot{} interface.
 func (llrb *LLRB) Setclock(clock api.Clock) {
 	atomic.StorePointer(&llrb.clock, unsafe.Pointer(&clock))
 }
 
-// Clone implement Index{} interface.
+// Clone implement api.IndexSnapshot{} interface.
 func (llrb *LLRB) Clone(name string) (api.Index, error) {
 	if llrb.mvcc.enabled {
 		newllrb, err := llrb.mvcc.writer.clone(name)
@@ -217,27 +241,9 @@ func (llrb *LLRB) Clone(name string) (api.Index, error) {
 	return llrb.doclone(name)
 }
 
-func (llrb *LLRB) doclone(name string) (*LLRB, error) {
-	n_activeiter := atomic.LoadInt64(&llrb.n_activeiter)
-	if n_activeiter > 0 {
-		fmsg := "Clone(): unexpected active-iterators %v"
-		panic(fmt.Errorf(fmsg, n_activeiter))
-	}
-
-	newllrb := NewLLRB(llrb.name, llrb.setts)
-	clock := llrb.Getclock()
-	atomic.StorePointer(&newllrb.clock, unsafe.Pointer(&clock))
-	newllrb.dead = llrb.dead
-
-	newllrb.setroot(newllrb.clonetree(llrb.getroot()))
-
-	return newllrb, nil
-}
-
-// Destroy implement Index{} interface.
+// Destroy implement api.Index{} interface.
 func (llrb *LLRB) Destroy() error {
-	n_activeiter := atomic.LoadInt64(&llrb.n_activeiter)
-	if n_activeiter > 0 {
+	if n_activeiter := atomic.LoadInt64(&llrb.n_activeiter); n_activeiter > 0 {
 		log.Infof("%v n_activeiter: %v\n", llrb.logprefix, n_activeiter)
 		return api.ErrorActiveIterators
 	}
@@ -257,65 +263,71 @@ func (llrb *LLRB) Destroy() error {
 	panic("Destroy(): already dead tree")
 }
 
-// Stats implement api.Index{} interface.
-func (llrb *LLRB) Stats() (map[string]interface{}, error) {
-	if llrb.mvcc.enabled {
-		return llrb.mvcc.writer.stats()
+// ---- api.IndexSnapshot{} interface
+
+// Refer implement api.IndexSnapshot{} interface. Call this method on
+// llrb-snapshot, calling on this type will cause panic.
+func (llrb *LLRB) Refer() {
+	panic("Refer(): only allowed on snapshot")
+}
+
+// Release implement api.IndexSnapshot{} interface. Call this method on
+// llrb-snapshot, calling on this type will cause panic.
+func (llrb *LLRB) Release() {
+	panic("Release(): only allowed on snapshot")
+}
+
+//---- local functions
+
+func (llrb *LLRB) initmvccstats() {
+	llrb.mvcc.reclaim = make([]*Llrbnode, 0, 64)
+	llrb.mvcc.h_bulkfree = lib.NewhistorgramInt64(100, 1000, 1000)
+	llrb.mvcc.h_reclaims = map[string]*lib.HistogramInt64{
+		"upsert":    lib.NewhistorgramInt64(10, 200, 20),
+		"upsertcas": lib.NewhistorgramInt64(10, 200, 20),
+		"mutations": lib.NewhistorgramInt64(10, 200, 20),
+		"delmin":    lib.NewhistorgramInt64(10, 200, 20),
+		"delmax":    lib.NewhistorgramInt64(10, 200, 20),
+		"delete":    lib.NewhistorgramInt64(10, 200, 20),
 	}
-	llrb.rw.RLock()
-	defer llrb.rw.RUnlock()
-	return llrb.stats()
+	llrb.mvcc.h_versions = lib.NewhistorgramInt64(1, 30, 10)
 }
 
-// Fullstats implement api.Index{} interface.
-func (llrb *LLRB) Fullstats() (map[string]interface{}, error) {
-	if llrb.mvcc.enabled {
-		return llrb.mvcc.writer.fullstats()
+func (llrb *LLRB) enableMVCC() {
+	llrb.spawnwriter()
+}
+
+func (llrb *LLRB) doclone(name string) (*LLRB, error) {
+	if n_activeiter := atomic.LoadInt64(&llrb.n_activeiter); n_activeiter > 0 {
+		fmsg := "Clone(): unexpected active-iterators %v"
+		panic(fmt.Errorf(fmsg, n_activeiter))
 	}
 
-	llrb.rw.RLock()
-	defer llrb.rw.RUnlock()
-	return llrb.fullstats()
+	newllrb := NewLLRB(llrb.name, llrb.setts)
+	clock := llrb.Getclock()
+	atomic.StorePointer(&newllrb.clock, unsafe.Pointer(&clock))
+	newllrb.dead = llrb.dead
+
+	newllrb.setroot(newllrb.clonetree(llrb.getroot()))
+
+	return newllrb, nil
 }
 
-// Metadata implement api.Index{} interface.
-func (llrb *LLRB) Metadata() []byte {
-	return nil
-}
-
-// Validate implement api.Index{} interface.
-func (llrb *LLRB) Validate() {
+func (llrb *LLRB) assertnomvcc() {
 	if llrb.mvcc.enabled {
-		if err := llrb.mvcc.writer.validate(); err != nil {
-			panic(fmt.Errorf("Validate(): %v", err))
-		}
-		return
+		panic("mvcc enabled, use snapshots for reading")
 	}
-	llrb.rw.RLock()
-	llrb.validate(llrb.getroot())
-	llrb.rw.RUnlock()
 }
 
-// Log implement api.Index{} interface.
-func (llrb *LLRB) Log(involved string, humanize bool) {
-	if llrb.mvcc.enabled {
-		llrb.mvcc.writer.log(involved, humanize)
-		return
-	}
-	llrb.rw.RLock()
-	defer llrb.rw.RUnlock()
-	llrb.log(involved, humanize)
-}
+//---- api.IndexReader{} interface.
 
-//---- IndexReader{} interface.
-
-// Has implement IndexReader{} interface.
+// Has implement api.IndexReader{} interface.
 func (llrb *LLRB) Has(key []byte) bool {
 	llrb.assertnomvcc()
 	return llrb.Get(key, nil)
 }
 
-// Get implement IndexReader{} interface, acquires a read lock.
+// Get implement api.IndexReader{} interface, acquires a read lock.
 func (llrb *LLRB) Get(key []byte, callb api.NodeCallb) bool {
 	llrb.assertnomvcc()
 
@@ -326,7 +338,7 @@ func (llrb *LLRB) Get(key []byte, callb api.NodeCallb) bool {
 	return ok
 }
 
-// Min implement IndexReader{} interface.
+// Min implement api.IndexReader{} interface.
 func (llrb *LLRB) Min(callb api.NodeCallb) bool {
 	llrb.assertnomvcc()
 
@@ -337,7 +349,7 @@ func (llrb *LLRB) Min(callb api.NodeCallb) bool {
 	return ok
 }
 
-// Max implement IndexReader{} interface.
+// Max implement api.IndexReader{} interface.
 func (llrb *LLRB) Max(callb api.NodeCallb) bool {
 	llrb.assertnomvcc()
 
@@ -367,7 +379,7 @@ func (llrb *LLRB) Range(
 	atomic.AddInt64(&llrb.n_ranges, 1)
 }
 
-// Iterate implement IndexReader{} interface.
+// Iterate implement api.IndexReader{} interface.
 func (llrb *LLRB) Iterate(lk, hk []byte, incl string, r bool) api.IndexIterator {
 	llrb.assertnomvcc()
 
@@ -385,9 +397,9 @@ func (llrb *LLRB) Iterate(lk, hk []byte, incl string, r bool) api.IndexIterator 
 	return iter
 }
 
-//---- IndexWriter{} interface
+//---- api.IndexWriter{} interface
 
-// Upsert implement IndexWriter{} interface.
+// Upsert implement api.IndexWriter{} interface.
 func (llrb *LLRB) Upsert(key, value []byte, callb api.NodeCallb) error {
 	if key == nil {
 		panic("Upsert(): upserting nil key")
@@ -518,7 +530,7 @@ func (llrb *LLRB) upsert(
 	return nd, newnd, oldnd
 }
 
-// DeleteMin implement IndexWriter{} interface.
+// DeleteMin implement api.IndexWriter{} interface.
 func (llrb *LLRB) DeleteMin(callb api.NodeCallb) (e error) {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.wdeleteMin(callb)
@@ -527,13 +539,12 @@ func (llrb *LLRB) DeleteMin(callb api.NodeCallb) (e error) {
 	llrb.rw.Lock()
 
 	if llrb.lsm {
-		nd, _ := getmin(llrb, llrb.getroot(), nil)
-		if nd != nil {
-			llrbnd := nd.(*Llrbnode)
+		llrbnd, _ := getmin(llrb, llrb.getroot(), nil)
+		if llrbnd != nil {
 			llrbnd.metadata().setdeleted()
 		}
 		if callb != nil {
-			callb(llrb, 0, nd, nd, nil)
+			callb(llrb, 0, llrbnd, llrbnd, nil)
 		}
 
 	} else {
@@ -570,7 +581,7 @@ func (llrb *LLRB) deletemin(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 	return llrb.fixup(nd), deleted
 }
 
-// DeleteMax implements IndexWriter{} interface.
+// DeleteMax implements api.IndexWriter{} interface.
 func (llrb *LLRB) DeleteMax(callb api.NodeCallb) (e error) {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.wdeleteMax(callb)
@@ -579,13 +590,12 @@ func (llrb *LLRB) DeleteMax(callb api.NodeCallb) (e error) {
 	llrb.rw.Lock()
 
 	if llrb.lsm {
-		nd, _ := getmax(llrb, llrb.getroot(), nil)
-		if nd != nil {
-			llrbnd := nd.(*Llrbnode)
+		llrbnd, _ := getmax(llrb, llrb.getroot(), nil)
+		if llrbnd != nil {
 			llrbnd.metadata().setdeleted()
 		}
 		if callb != nil {
-			callb(llrb, 0, nd, nd, nil)
+			callb(llrb, 0, llrbnd, llrbnd, nil)
 		}
 
 	} else {
@@ -625,7 +635,7 @@ func (llrb *LLRB) deletemax(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 	return llrb.fixup(nd), deleted
 }
 
-// Delete implement IndexWriter{} interface.
+// Delete implement api.IndexWriter{} interface.
 func (llrb *LLRB) Delete(key []byte, callb api.NodeCallb) (e error) {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.wdelete(key, callb)
@@ -634,12 +644,11 @@ func (llrb *LLRB) Delete(key []byte, callb api.NodeCallb) (e error) {
 	llrb.rw.Lock()
 
 	if llrb.lsm {
-		nd, _ := getkey(llrb, llrb.getroot(), key, nil)
-		if nd != nil {
-			llrbnd := nd.(*Llrbnode)
+		llrbnd, _ := getkey(llrb, llrb.getroot(), key, nil)
+		if llrbnd != nil {
 			llrbnd.metadata().setdeleted()
 			if callb != nil {
-				callb(llrb, 0, nd, nd, nil)
+				callb(llrb, 0, llrbnd, llrbnd, nil)
 			}
 
 		} else {
@@ -739,7 +748,7 @@ func (llrb *LLRB) delete(nd *Llrbnode, key []byte) (newnd, deleted *Llrbnode) {
 	return llrb.fixup(nd), deleted
 }
 
-// Mutations implement IndexWriter{} interface.
+// Mutations implement api.IndexWriter{} interface.
 func (llrb *LLRB) Mutations(cmds []*api.MutationCmd, callb api.NodeCallb) error {
 	if llrb.mvcc.enabled {
 		return llrb.mvcc.writer.wmutations(cmds, callb)
@@ -1022,7 +1031,7 @@ func (llrb *LLRB) equivalent(n1, n2 *Llrbnode) bool {
 
 func (llrb *LLRB) logarenasettings() {
 	// key arena
-	stats, err := llrb.stats()
+	stats, err := llrb.stats(llrb)
 	if err != nil {
 		panic(fmt.Errorf("logarenasettings(): %v", err))
 	}
@@ -1075,10 +1084,4 @@ func (llrb *LLRB) walkuprot234(nd *Llrbnode) *Llrbnode {
 		nd = llrb.rotateright(nd)
 	}
 	return nd
-}
-
-func (llrb *LLRB) assertnomvcc() {
-	if llrb.mvcc.enabled {
-		panic("mvcc enabled, use snapshots for reading")
-	}
 }

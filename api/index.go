@@ -5,20 +5,20 @@ const (
 	// To be used with MutationCmd.
 	UpsertCmd byte = iota + 1
 
-	// CasCmd to insert or update a key,value pair in index, if CAS matches.
-	// To enforce a fresh insert of key,value pair CAS should be ZERO.
-	// Don't use CASCmd on index instance that holds a subset of full dataset.
-	// To be used with MutationCmd.
+	// CasCmd to insert or update a key,value pair in index, if
+	// CAS matches. To enforce a fresh insert of key,value pair CAS
+	// should be ZERO. Don't use CASCmd on index instance that holds
+	// a subset of full dataset. To be used with MutationCmd.
 	CasCmd
 
 	// DelminCmd to delete the first key, and its value, from index.
-	// Don't use DelminCmd on index instance that holds a subset of full
-	// dataset. To be used with MutationCmd.
+	// Don't use DelminCmd on index instance that holds a subset
+	// of full dataset. To be used with MutationCmd.
 	DelminCmd
 
 	// DelmaxCmd to delete the last key, and its value, from index.
-	// Don't use DelmaxCmd on index instance that holds a subset of full
-	// dataset. To be used with MutationCmd.
+	// Don't use DelmaxCmd on index instance that holds a subset of
+	// full dataset. To be used with MutationCmd.
 	DelmaxCmd
 
 	// DeleteCmd to delete a key,value pair in index.
@@ -41,7 +41,8 @@ type MutationCmd struct {
 //  * newnd can be read or, for Upsert calls, updated.
 //  * Other than Mutations and Range API, `i` will always be ZERO.
 //  * for IndexReader API, newnd and oldnd will be SAME.
-//  * for Delete APIs, newnd and oldnd will be SAME and point to DELETED node.
+//  * for Delete APIs, newnd and oldnd will be SAME and point to
+//    DELETED node.
 type NodeCallb func(index Index, i int64, newnd, oldnd Node, err error) bool
 
 // Node accessor methods.
@@ -58,10 +59,12 @@ type NodeGetter interface {
 	// Access return entry's access timestamp.
 	Access() (ts uint64)
 
-	// Bornseqno return vbucket-seqno at which this entry was upserted.
+	// Bornseqno return vbucket-seqno at which this entry was
+	// upserted.
 	Bornseqno() (seqno uint64)
 
-	// Deadseqno return vbucket-seqno at which this entry was deleted.
+	// Deadseqno return vbucket-seqno at which this entry was
+	// deleted.
 	Deadseqno() (seqno uint64)
 
 	// IsDeleted return true if node is marked as deleted.
@@ -70,8 +73,9 @@ type NodeGetter interface {
 	// Vbuuid return entry's unique vbucket id.
 	Vbuuid() (uuid uint64)
 
-	// Fpos return disk backed position for value. Returned offset points
-	// to value on disk encoded as {8byte-len, value-byte-array}
+	// Fpos return disk backed position for value. Returned
+	// offset points to value on disk encoded as
+	// {8byte-len, value-byte-array}
 	Fpos() (level byte, offset uint64)
 
 	// Key return entry key as byte slice.
@@ -89,10 +93,12 @@ type NodeSetter interface {
 	// Setaccess to set access timestamp for this entry.
 	Setaccess(access uint64) Node
 
-	// SetBornseqno to set vbucket-seqno at which this entry was upserted.
+	// SetBornseqno to set vbucket-seqno at which this entry was
+	// upserted.
 	SetBornseqno(seqno uint64) Node
 
-	// SetDeadseqno to set vbucket-seqno at which this entry was deleted.
+	// SetDeadseqno to set vbucket-seqno at which this entry was
+	// deleted.
 	SetDeadseqno(seqno uint64) Node
 
 	// SetVbuuid to set unique vbucket id for this entry
@@ -103,8 +109,8 @@ type NodeSetter interface {
 }
 
 type Clock interface {
-	// Update clock to latest write operation. Typically `msg` indicates
-	// a write operation.
+	// Update clock to latest write operation. Typically `msg`
+	// indicates a write operation.
 	Update(msg interface{}) Clock
 
 	// Clone creates a copy of the clock.
@@ -113,8 +119,8 @@ type Clock interface {
 	// Less compare wether this clock is less than other clock
 	Less(other Clock) bool
 
-	// LessEqual compare wether this clock is less than or equal to the
-	// other clock
+	// LessEqual compare wether this clock is less than or equal to
+	// the other clock.
 	LessEqual(other Clock) bool
 
 	// JSONMarshal return clock in JSON encoded format.
@@ -130,8 +136,7 @@ type Clock interface {
 	Unmarshal(data []byte) Clock
 }
 
-// Index interface for managing key,value pairs.
-type Index interface {
+type IndexMeta interface {
 	// Id return index id. Typically, it is human readable and unique.
 	ID() string
 
@@ -141,14 +146,39 @@ type Index interface {
 	// Isactive return whether index is active or not.
 	Isactive() bool
 
-	// RSnapshot return snapshot that shan't be disturbed by subsequent writes.
-	// Caller should make sure to call snapshot.Release() once it is done with
-	// the snapshot, which also implies that all iterators on the snapshot are
-	// closed. If `next` is true block till next snapshot is made.
-	RSnapshot(snapch chan IndexSnapshot, next bool) error
-
-	// Getclock return current clock attached to the index.
+	// Getclock return current clock attached to the index/snapshot.
 	Getclock() Clock
+
+	// Metadata return index/snapshot properties as json encoded
+	// object. Purpose of metadata is to save and restore the context
+	// of underlying index.
+	Metadata() []byte
+
+	// Stats return a set of index statistics.
+	Stats() (map[string]interface{}, error)
+
+	// Fullstats return an involved set of index statistics, calling
+	// this function may lead to a full table scan.
+	Fullstats() (map[string]interface{}, error)
+
+	// Validate check whether index is in sane state.
+	Validate()
+
+	// Log current statistics, if humanize is true log in human
+	// readable format.
+	Log(what string, humanize bool)
+}
+
+// Index interface for managing key,value pairs.
+type Index interface {
+	IndexMeta
+
+	// RSnapshot return snapshot that shan't be disturbed by
+	// subsequent writes. Caller should make sure to call
+	// snapshot.Release() once it is done with the snapshot, which
+	// also implies that all iterators on the snapshot are closed.
+	// If `next` is true block till next snapshot is made.
+	RSnapshot(snapch chan IndexSnapshot, next bool) error
 
 	// Setclock attaches a new clock to the index.
 	Setclock(clock Clock)
@@ -157,25 +187,9 @@ type Index interface {
 	// return the new copy.
 	Clone(name string) (Index, error)
 
-	// Stats return a set of index statistics.
-	Stats() (map[string]interface{}, error)
-
-	// Fullstats return an involved set of index statistics, calling this
-	// function may lead to a full table scan.
-	Fullstats() (map[string]interface{}, error)
-
-	// Log current statistics, if humanize is true log some or all of the stats
-	// in human readable format.
-	Log(what string, humanize bool)
-
-	// Metadata return index properties as json encoded object.
-	Metadata() []byte
-
-	// Validate check whether index is in sane state.
-	Validate()
-
-	// Destroy to delete an index and clean up its resources. Calling this
-	// method while keeping references to its resources will return error.
+	// Destroy to delete an index and clean up its resources. Calling
+	// this method while keeping references to its resources will return
+	// error.
 	Destroy() error
 
 	IndexReader
@@ -184,32 +198,16 @@ type Index interface {
 
 // IndexSnapshot for read-only operation into the index.
 type IndexSnapshot interface {
-	// Id return index id. Typically, it is human readable and unique.
-	ID() string
-
-	// Count return the number of entries indexed.
-	Count() int64
-
-	// Isactive return whether the index is active or not.
-	Isactive() bool
-
-	// Getclock return the clock at which this snapshot was created.
-	Getclock() Clock
+	IndexMeta
 
 	// Refer snapshot before reading, don't hold on to it for long time.
-	// Note that RSnapshot() implicitly call a Refer() and there after Refer()
-	// should be called once of every new reference.
+	// Note that RSnapshot() implicitly call a Refer() and there after
+	// Refer() should be called once of every new reference.
 	Refer()
 
-	// Release snapshot after reading. Should be called after RSnapshot() and
-	// for every Refer() calls made on that snapshot.
+	// Release snapshot after reading. Should be called after
+	// RSnapshot() and for every Refer() calls made on that snapshot.
 	Release()
-
-	// Metadata return snapshot properties as json encoded object.
-	Metadata() []byte
-
-	// Validate check whether index is in sane state.
-	Validate()
 
 	IndexReader
 }
@@ -234,23 +232,20 @@ type IndexReader interface {
 	//	"low"  - include lowkey but ignore highkey
 	//	"high" - ignore lowkey but include highkey
 	//	"both" - include both lowkey and highkey
-	//
 	// If LSM is enabled, Range should include deleted entries.
 	Range(lowkey, highkey []byte, incl string, reverse bool, iter NodeCallb)
 
-	// Iterate over entries between lowkey and highkey
-	// incl,
+	// Iterate over entries between lowkey and highkey incl,
 	//  "none" - ignore lowkey and highkey while iterating
 	//  "low"  - include lowkey but ignore highkey
 	//  "high" - ignore lowkey but include highkey
 	//  "both" - include both lowkey and highkey
-	//
 	// If LSM is enabled, Iterate should include deleted entries.
 	Iterate(lowkey, highkey []byte, incl string, reverse bool) IndexIterator
 }
 
-// IndexIterator interface to pull entries from index over a range of low key
-// and high key.
+// IndexIterator interface to pull entries from index over a range
+// of low key and high key.
 type IndexIterator interface {
 	// Next node if present, else nil.
 	Next() Node

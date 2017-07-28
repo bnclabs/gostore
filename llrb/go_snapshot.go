@@ -79,9 +79,8 @@ func newsnapshot(llrb *LLRB, id string) *LLRBSnapshot {
 		root:  llrb.getroot(),
 		clock: llrb.Getclock(),
 		dead:  llrb.dead,
-		// writer statistics
-		llrbstats: llrb.llrbstats,
 	}
+	snapshot.copystats(llrb)
 	snapshot.logprefix = fmt.Sprintf("[LLRBSnapshot-%s/%s]", llrb.name, id)
 
 	snapshot.reclaim = make([]*Llrbnode, len(llrb.mvcc.reclaim))
@@ -114,37 +113,78 @@ func countreclaimnodes(head *LLRBSnapshot) (total int64) {
 	return total
 }
 
-//---- IndexSnapshot{} interface.
+func (snapshot *LLRBSnapshot) copystats(llrb *LLRB) *LLRBSnapshot {
+	// writer statistics
+	snapshot.llrbstats = llrb.llrbstats
+	snapshot.n_lookups, snapshot.n_ranges = 0, 0
+	snapshot.n_activeiter, snapshot.n_cclookups, snapshot.n_ccranges = 0, 0, 0
+	return snapshot
+}
 
-// ID implement IndexSnapshot{} interface.
+//---- implement api.IndexMeta interface.
+
+// ID implement api.IndexMeta{} interface.
 func (snapshot *LLRBSnapshot) ID() string {
 	return snapshot.id
 }
 
-// Count implement IndexSnapshot{} interface.
+// Count implement api.IndexMeta{} interface.
 func (snapshot *LLRBSnapshot) Count() int64 {
 	return snapshot.n_count
 }
 
-// Isactive implement IndexSnapshot{} interface.
+// Isactive implement api.IndexMeta{} interface.
 func (snapshot *LLRBSnapshot) Isactive() bool {
 	return snapshot.dead == false
 }
 
-// Getclock implement IndexSnapshot{} inteface.
+// Getclock implement api.IndexMeta{} inteface.
 func (snapshot *LLRBSnapshot) Getclock() api.Clock {
 	return snapshot.clock
 }
 
-// Refer implement IndexSnapshot interface.
+// Metadata implement api.IndexMeta{} interface.
+func (snapshot *LLRBSnapshot) Metadata() []byte {
+	return nil
+}
+
+// Validate implement api.IndexMeta{} interface.
+func (snapshot *LLRBSnapshot) Validate() {
+	snapshot.validate(snapshot.root)
+}
+
+// Stats implement api.IndexMeta{} interface.
+func (snapshot *LLRBSnapshot) Stats() (map[string]interface{}, error) {
+	return snapshot.stats(snapshot)
+}
+
+// Fullstats implement api.IndexMeta{} interface.
+func (snapshot *LLRBSnapshot) Fullstats() (map[string]interface{}, error) {
+	return snapshot.fullstats(snapshot)
+}
+
+// Log implement api.IndexMeta{} interface.
+func (snapshot *LLRBSnapshot) Log(string, bool) {
+	panic("call this method on the index, snapshot don't support it")
+}
+
+//---- api.IndexSnapshot{} interface.
+
+// Refer implement api.IndexSnapshot interface.
 func (snapshot *LLRBSnapshot) Refer() {
 	log.Debugf("%v snapshot REF\n", snapshot.logprefix)
 	atomic.AddInt64(&snapshot.refcount, 1)
 }
 
-// Release implement IndexSnapshot interface.
+// Release implement api.IndexSnapshot interface.
 func (snapshot *LLRBSnapshot) Release() {
 	log.Debugf("%v snapshot DEREF\n", snapshot.logprefix)
+	// TODO: is there a way to make sure that this won't end up in
+	// forever loop.
+	for n := atomic.LoadInt64(&snapshot.n_activeiter); n > 0; {
+		time.Sleep(1 * time.Millisecond)
+		n = atomic.LoadInt64(&snapshot.n_activeiter)
+	}
 	refcount := atomic.AddInt64(&snapshot.refcount, -1)
 	if refcount == 0 {
 		if err := snapshot.llrb.mvcc.writer.purgeSnapshot(); err != nil {
@@ -153,16 +193,6 @@ func (snapshot *LLRBSnapshot) Release() {
 	} else if refcount < 0 {
 		panic("Release(): snapshot refcount gone negative")
 	}
-}
-
-// Metadata implement api.Index{} interface.
-func (snapshot *LLRBSnapshot) Metadata() []byte {
-	return nil
-}
-
-// Validate implement IndexSnapshot interface.
-func (snapshot *LLRBSnapshot) Validate() {
-	snapshot.validate(snapshot.root)
 }
 
 // Dotdump to convert whole tree into dot script that can be visualized using
@@ -179,35 +209,35 @@ func (snapshot *LLRBSnapshot) Dotdump(buffer io.Writer) {
 	buffer.Write([]byte(lines[len(lines)-1]))
 }
 
-//---- IndexReader{} interface.
+//---- api.IndexReader{} interface.
 
-// Has implement IndexReader{} interface.
+// Has implement api.IndexReader{} interface.
 func (snapshot *LLRBSnapshot) Has(key []byte) bool {
 	return snapshot.Get(key, nil)
 }
 
-// Get implement IndexReader{} interface.
+// Get implement api.IndexReader{} interface.
 func (snapshot *LLRBSnapshot) Get(key []byte, callb api.NodeCallb) bool {
 	snapshot.countlookup(atomic.LoadInt64(&snapshot.llrb.mvcc.ismut))
 	_, ok := getkey(snapshot.llrb, snapshot.root, key, callb)
 	return ok
 }
 
-// Min implement IndexReader{} interface.
+// Min implement api.IndexReader{} interface.
 func (snapshot *LLRBSnapshot) Min(callb api.NodeCallb) bool {
 	snapshot.countlookup(atomic.LoadInt64(&snapshot.llrb.mvcc.ismut))
 	_, ok := getmin(snapshot.llrb, snapshot.root, callb)
 	return ok
 }
 
-// Max implement IndexReader{} interface.
+// Max implement api.IndexReader{} interface.
 func (snapshot *LLRBSnapshot) Max(callb api.NodeCallb) bool {
 	snapshot.countlookup(atomic.LoadInt64(&snapshot.llrb.mvcc.ismut))
 	_, ok := getmax(snapshot.llrb, snapshot.root, callb)
 	return ok
 }
 
-// Range implement IndexReader{} interface.
+// Range implement api.IndexReader{} interface.
 func (snapshot *LLRBSnapshot) Range(
 	lkey, hkey []byte, incl string, reverse bool, callb api.NodeCallb) {
 
@@ -220,7 +250,7 @@ func (snapshot *LLRBSnapshot) Range(
 	snapshot.countrange(atomic.LoadInt64(&snapshot.llrb.mvcc.ismut))
 }
 
-// Iterate implement IndexReader{} interface.
+// Iterate implement api.IndexReader{} interface.
 func (snapshot *LLRBSnapshot) Iterate(
 	lkey, hkey []byte, incl string, r bool) api.IndexIterator {
 
@@ -234,7 +264,7 @@ func (snapshot *LLRBSnapshot) Iterate(
 	iter := inititerator(llrb, snapshot, lkey, hkey, incl, r)
 
 	snapshot.countrange(atomic.LoadInt64(&snapshot.llrb.mvcc.ismut))
-	atomic.AddInt64(&llrb.n_activeiter, 1)
+	atomic.AddInt64(&snapshot.n_activeiter, 1)
 	return iter
 }
 

@@ -48,6 +48,7 @@ func (iter *iterator) Next() api.Node {
 	return nil
 }
 
+// Close implement IndexIterator{} interface.
 func (iter *iterator) Close() {
 	iter.closed, iter.nodes = true, iter.nodes[:cap(iter.nodes)]
 	for i := range iter.nodes {

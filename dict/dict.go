@@ -39,35 +39,67 @@ func NewDict(id string) *Dict {
 	}
 }
 
-//---- api.Index{} interface.
+//---- api.IndexMeta{} interface.
 
-// Count implement api.Index{} / api.IndexSnapshot{} interface.
+// ID implement api.IndexMeta interface.
+func (d *Dict) ID() string {
+	return d.id
+}
+
+// Count implement api.IndexMeta interface.
 func (d *Dict) Count() int64 {
 	return int64(len(d.dict))
 }
 
-// Isactive implement api.Index{} / api.IndexSnapshot{} interface.
+// Isactive implement api.IndexMeta interface.
 func (d *Dict) Isactive() bool {
 	return atomic.LoadUint32(&d.dead) == 0
 }
 
-// RSnapshot implement api.Index{} interface.
+// Getclock implement api.IndexMeta interface.
+func (d *Dict) Getclock() api.Clock {
+	return d.clock
+}
+
+// Metadata implement api.IndeMeta interface.
+func (d *Dict) Metadata() []byte {
+	return nil
+}
+
+// Stats implement api.IndexMeta interface.
+func (d *Dict) Stats() (map[string]interface{}, error) {
+	panic("dict.Stats() not implemented for Dict")
+}
+
+// Fullstats implement api.IndexMeta interface.
+func (d *Dict) Fullstats() (map[string]interface{}, error) {
+	panic("dict.Fullstats() not implemented for Dict")
+}
+
+// Validate implement api.IndexMeta interface.
+func (d *Dict) Validate() {
+	panic("dict.Validate() not implemented for Dict")
+}
+
+// Log implement api.IndexMeta interface.
+func (d *Dict) Log(involved string, humanize bool) {
+	panic("dict.Log() not implemented for Dict")
+}
+
+//---- api.Index{} interface.
+
+// RSnapshot implement api.Index interface.
 func (d *Dict) RSnapshot(snapch chan api.IndexSnapshot, next bool) error {
 	snapch <- d.NewDictSnapshot()
 	return nil
 }
 
-// Getclock implement api.Index{} interface.
-func (d *Dict) Getclock() api.Clock {
-	return d.clock
-}
-
-// Setclock implement api.Index{} interface.
+// Setclock implement api.Index interface.
 func (d *Dict) Setclock(clock api.Clock) {
 	d.clock = clock
 }
 
-// Clone implement api.Index{} interface.
+// Clone implement api.Index interface.
 func (d *Dict) Clone(name string) (api.Index, error) {
 	newd := NewDict(name)
 	newd.dead, newd.snapn = d.dead, d.snapn
@@ -82,7 +114,7 @@ func (d *Dict) Clone(name string) (api.Index, error) {
 	return newd, nil
 }
 
-// Destroy implement api.Index{} interface.
+// Destroy implement api.Index interface.
 func (d *Dict) Destroy() error {
 	if atomic.LoadInt64(&d.activeiter) > 0 {
 		return api.ErrorActiveIterators
@@ -93,58 +125,28 @@ func (d *Dict) Destroy() error {
 	return nil
 }
 
-// Stats implement api.Index{} interface.
-func (d *Dict) Stats() (map[string]interface{}, error) {
-	panic("dict.Stats() not implemented for Dict")
-}
-
-// Fullstats implement api.Index{} interface.
-func (d *Dict) Fullstats() (map[string]interface{}, error) {
-	panic("dict.Fullstats() not implemented for Dict")
-}
-
-// Metadata implement api.IndexSnapshot{} interface.
-func (d *Dict) Metadata() []byte {
-	return nil
-}
-
-// Validate implement api.Index{} interface.
-func (d *Dict) Validate() {
-	panic("dict.Validate() not implemented for Dict")
-}
-
-// Log implement api.Index{} interface.
-func (d *Dict) Log(involved string, humanize bool) {
-	panic("dict.Log() not implemented for Dict")
-}
-
 //---- api.IndexSnapshot{} interface{}
 
-// ID implement api.IndexSnapshot{} interface.
-func (d *Dict) ID() string {
-	return d.id
-}
-
-// Refer implement api.IndexSnapshot{} interface.
+// Refer implement api.IndexSnapshot interface.
 func (d *Dict) Refer() {
 	return
 }
 
-// Release implement api.IndexSnapshot{} interface.
+// Release implement api.IndexSnapshot interface.
 func (d *Dict) Release() {
 	d.Destroy()
 }
 
 //---- IndexReader{} interface.
 
-// Has implement IndexReader{} interface.
+// Has implement api.IndexReader interface.
 func (d *Dict) Has(key []byte) bool {
 	hashv := crc64.Checksum(key, crcisotab)
 	_, ok := d.dict[hashv]
 	return ok
 }
 
-// Get implement IndexReader{} interface.
+// Get implement api.IndexReader interface.
 func (d *Dict) Get(key []byte, callb api.NodeCallb) bool {
 	hashv := crc64.Checksum(key, crcisotab)
 	nd, ok := d.dict[hashv]
@@ -158,7 +160,7 @@ func (d *Dict) Get(key []byte, callb api.NodeCallb) bool {
 	return false
 }
 
-// Min implement IndexReader{} interface.
+// Min implement api.IndexReader interface.
 func (d *Dict) Min(callb api.NodeCallb) bool {
 	if len(d.dict) == 0 {
 		if callb != nil {
@@ -174,7 +176,7 @@ func (d *Dict) Min(callb api.NodeCallb) bool {
 	return true
 }
 
-// Max implement IndexReader{} interface.
+// Max implement api.IndexReader interface.
 func (d *Dict) Max(callb api.NodeCallb) bool {
 	if len(d.dict) == 0 {
 		if callb != nil {
@@ -190,12 +192,142 @@ func (d *Dict) Max(callb api.NodeCallb) bool {
 	return true
 }
 
-// Range implement IndexReader{} interface.
+// Range implement api.IndexReader interface.
 func (d *Dict) Range(lk, hk []byte, incl string, r bool, callb api.NodeCallb) {
 	lk, hk = d.fixrangeargs(lk, hk)
 	d.sorted()
 	d.rangeover(lk, hk, incl, r, callb)
 }
+
+// Iterate implement api.IndexReader interface.
+func (d *Dict) Iterate(lkey, hkey []byte, incl string, r bool) api.IndexIterator {
+	lkey, hkey = d.fixrangeargs(lkey, hkey)
+	d.sorted()
+	return d.iterate(lkey, hkey, incl, r)
+}
+
+//---- IndexWriter{} interface.
+
+// Upsert implement api.IndexWriter interface.
+func (d *Dict) Upsert(key, value []byte, callb api.NodeCallb) error {
+	newnd := newdictnode(key, value)
+	hashv := crc64.Checksum(key, crcisotab)
+	oldnd, ok := d.dict[hashv]
+	if callb != nil {
+		if ok == false {
+			callb(d, 0, newnd, nil, nil)
+		} else {
+			callb(d, 0, newnd, oldnd, nil)
+		}
+	}
+	d.dict[hashv] = newnd
+	return nil
+}
+
+// Upsert implement api.IndexWriter interface.
+func (d *Dict) UpsertCas(key, value []byte, cas uint64, callb api.NodeCallb) error {
+	ndcas := uint64(0)
+	d.Get(key, func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
+		if err == nil {
+			ndcas = nd.Bornseqno()
+			if ndcas != cas {
+				if callb != nil {
+					callb(d, 0, nd, nd, api.ErrorInvalidCAS)
+				}
+			}
+		}
+		return true
+	})
+	if ndcas == cas {
+		return d.Upsert(key, value, callb)
+	}
+	return api.ErrorInvalidCAS
+}
+
+// DeleteMin implement api.IndexWriter interface.
+func (d *Dict) DeleteMin(callb api.NodeCallb) (err error) {
+	if len(d.dict) > 0 {
+		d.Min(func(idx api.Index, i int64, nnd, ond api.Node, e error) bool {
+			if e != nil {
+				err = e
+				callb(idx, i, nnd, ond, e)
+			} else {
+				err = d.Delete(ond.Key(), callb)
+			}
+			return false
+		})
+	}
+	return
+}
+
+// DeleteMax implement api.IndexWriter interface.
+func (d *Dict) DeleteMax(callb api.NodeCallb) (err error) {
+	if len(d.dict) > 0 {
+		d.Max(func(idx api.Index, i int64, nnd, ond api.Node, e error) bool {
+			if e != nil {
+				err = e
+				callb(idx, i, nnd, ond, e)
+			} else {
+				err = d.Delete(ond.Key(), callb)
+			}
+			return false
+		})
+	}
+	return
+}
+
+// Delete implement api.IndexWriter interface.
+func (d *Dict) Delete(key []byte, callb api.NodeCallb) error {
+	if len(d.dict) > 0 {
+		hashv := crc64.Checksum(key, crcisotab)
+		deleted, ok := d.dict[hashv]
+		if callb == nil && !ok {
+			return api.ErrorKeyMissing
+
+		} else if callb != nil {
+			if !ok {
+				callb(d, 0, nil, nil, api.ErrorKeyMissing)
+			} else {
+				callb(d, 0, deleted, deleted, nil)
+			}
+		}
+		delete(d.dict, hashv)
+	}
+	return nil
+}
+
+// Mutations implement api.IndexWriter interface.
+func (d *Dict) Mutations(cmds []*api.MutationCmd, callb api.NodeCallb) error {
+	var i int
+	var mcmd *api.MutationCmd
+
+	localfn := func(idx api.Index, _ int64, nnd, ond api.Node, err error) bool {
+		if callb != nil {
+			callb(idx, int64(i), nnd, ond, err)
+		}
+		return false
+	}
+
+	for i, mcmd = range cmds {
+		switch mcmd.Cmd {
+		case api.UpsertCmd:
+			d.Upsert(mcmd.Key, mcmd.Value, localfn)
+		case api.CasCmd:
+			d.UpsertCas(mcmd.Key, mcmd.Value, mcmd.Cas, localfn)
+		case api.DelminCmd:
+			d.DeleteMin(localfn)
+		case api.DelmaxCmd:
+			d.DeleteMax(localfn)
+		case api.DeleteCmd:
+			d.Delete(mcmd.Key, localfn)
+		default:
+			panic("invalid mutation command")
+		}
+	}
+	return nil
+}
+
+//---- local function.
 
 func (d *Dict) rangeover(
 	lk, hk []byte, incl string, r bool, callb api.NodeCallb) {
@@ -351,13 +483,6 @@ func (d *Dict) startbackward(hk []byte, incl string) (start int) {
 	return
 }
 
-// Iterate implement IndexReader{} interface.
-func (d *Dict) Iterate(lkey, hkey []byte, incl string, r bool) api.IndexIterator {
-	lkey, hkey = d.fixrangeargs(lkey, hkey)
-	d.sorted()
-	return d.iterate(lkey, hkey, incl, r)
-}
-
 func (d *Dict) iterate(lkey, hkey []byte, incl string, r bool) api.IndexIterator {
 	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
 		if incl == "none" {
@@ -386,127 +511,6 @@ func (d *Dict) iterate(lkey, hkey []byte, incl string, r bool) api.IndexIterator
 		iter.index = d.startbackward(hkey, incl)
 	}
 	return iter
-}
-
-//---- IndexWriter{} interface.
-
-// Upsert implement IndexWriter{} interface.
-func (d *Dict) Upsert(key, value []byte, callb api.NodeCallb) error {
-	newnd := newdictnode(key, value)
-	hashv := crc64.Checksum(key, crcisotab)
-	oldnd, ok := d.dict[hashv]
-	if callb != nil {
-		if ok == false {
-			callb(d, 0, newnd, nil, nil)
-		} else {
-			callb(d, 0, newnd, oldnd, nil)
-		}
-	}
-	d.dict[hashv] = newnd
-	return nil
-}
-
-// Upsert implement IndexWriter{} interface.
-func (d *Dict) UpsertCas(key, value []byte, cas uint64, callb api.NodeCallb) error {
-	ndcas := uint64(0)
-	d.Get(key, func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
-		if err == nil {
-			ndcas = nd.Bornseqno()
-			if ndcas != cas {
-				if callb != nil {
-					callb(d, 0, nd, nd, api.ErrorInvalidCAS)
-				}
-			}
-		}
-		return true
-	})
-	if ndcas == cas {
-		return d.Upsert(key, value, callb)
-	}
-	return api.ErrorInvalidCAS
-}
-
-// DeleteMin implement IndexWriter{} interface.
-func (d *Dict) DeleteMin(callb api.NodeCallb) (err error) {
-	if len(d.dict) > 0 {
-		d.Min(func(idx api.Index, i int64, nnd, ond api.Node, e error) bool {
-			if e != nil {
-				err = e
-				callb(idx, i, nnd, ond, e)
-			} else {
-				err = d.Delete(ond.Key(), callb)
-			}
-			return false
-		})
-	}
-	return
-}
-
-// DeleteMax implement IndexWriter{} interface.
-func (d *Dict) DeleteMax(callb api.NodeCallb) (err error) {
-	if len(d.dict) > 0 {
-		d.Max(func(idx api.Index, i int64, nnd, ond api.Node, e error) bool {
-			if e != nil {
-				err = e
-				callb(idx, i, nnd, ond, e)
-			} else {
-				err = d.Delete(ond.Key(), callb)
-			}
-			return false
-		})
-	}
-	return
-}
-
-// Delete implement IndexWriter{} interface.
-func (d *Dict) Delete(key []byte, callb api.NodeCallb) error {
-	if len(d.dict) > 0 {
-		hashv := crc64.Checksum(key, crcisotab)
-		deleted, ok := d.dict[hashv]
-		if callb == nil && !ok {
-			return api.ErrorKeyMissing
-
-		} else if callb != nil {
-			if !ok {
-				callb(d, 0, nil, nil, api.ErrorKeyMissing)
-			} else {
-				callb(d, 0, deleted, deleted, nil)
-			}
-		}
-		delete(d.dict, hashv)
-	}
-	return nil
-}
-
-// Mutations implement IndexWriter{} interface.
-func (d *Dict) Mutations(cmds []*api.MutationCmd, callb api.NodeCallb) error {
-	var i int
-	var mcmd *api.MutationCmd
-
-	localfn := func(idx api.Index, _ int64, nnd, ond api.Node, err error) bool {
-		if callb != nil {
-			callb(idx, int64(i), nnd, ond, err)
-		}
-		return false
-	}
-
-	for i, mcmd = range cmds {
-		switch mcmd.Cmd {
-		case api.UpsertCmd:
-			d.Upsert(mcmd.Key, mcmd.Value, localfn)
-		case api.CasCmd:
-			d.UpsertCas(mcmd.Key, mcmd.Value, mcmd.Cas, localfn)
-		case api.DelminCmd:
-			d.DeleteMin(localfn)
-		case api.DelmaxCmd:
-			d.DeleteMax(localfn)
-		case api.DeleteCmd:
-			d.Delete(mcmd.Key, localfn)
-		default:
-			panic("invalid mutation command")
-		}
-	}
-	return nil
 }
 
 func (d *Dict) sorted() []uint64 {

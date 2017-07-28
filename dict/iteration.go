@@ -19,7 +19,7 @@ type iterator struct {
 	activeiter *int64
 }
 
-// Next implement IndexIterator{} interface.
+// Next implement api.IndexIterator interface.
 func (iter *iterator) Next() api.Node {
 	if iter.closed {
 		panic("cannot iterate over a closed iterator")
@@ -65,6 +65,7 @@ func (iter *iterator) Next() api.Node {
 	return nil
 }
 
+// Close implement api.IndexIterator method
 func (iter *iterator) Close() {
 	iter.closed = true
 	// give it back to the pool if not overflowing.

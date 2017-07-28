@@ -11,7 +11,7 @@ import "github.com/prataprc/gostore/lib"
 // lift Get() call, either from LLRB or from LLRBSnapshot.
 func getkey(
 	llrb *LLRB, root *Llrbnode,
-	key []byte, callb api.NodeCallb) (api.Node, bool) {
+	key []byte, callb api.NodeCallb) (*Llrbnode, bool) {
 
 	nd := root
 	for nd != nil {
@@ -33,7 +33,7 @@ func getkey(
 }
 
 // lift Min() call, either from LLRB or from LLRBSnapshot
-func getmin(llrb *LLRB, root *Llrbnode, callb api.NodeCallb) (api.Node, bool) {
+func getmin(llrb *LLRB, root *Llrbnode, callb api.NodeCallb) (*Llrbnode, bool) {
 	nd, _ := getmin1(root)
 	if nd == nil {
 		if callb != nil {
@@ -47,7 +47,7 @@ func getmin(llrb *LLRB, root *Llrbnode, callb api.NodeCallb) (api.Node, bool) {
 }
 
 // recurse until minimum is found.
-func getmin1(nd *Llrbnode) (api.Node, bool) {
+func getmin1(nd *Llrbnode) (*Llrbnode, bool) {
 	if nd == nil {
 		return nil, false
 	} else if minnd, ok := getmin1(nd.left); ok {
@@ -59,7 +59,7 @@ func getmin1(nd *Llrbnode) (api.Node, bool) {
 }
 
 // lift Max() call, either from LLRB or from LLRBSnapshot
-func getmax(llrb *LLRB, root *Llrbnode, callb api.NodeCallb) (api.Node, bool) {
+func getmax(llrb *LLRB, root *Llrbnode, callb api.NodeCallb) (*Llrbnode, bool) {
 	nd, _ := getmax1(root)
 	if nd == nil {
 		if callb != nil {
@@ -73,7 +73,7 @@ func getmax(llrb *LLRB, root *Llrbnode, callb api.NodeCallb) (api.Node, bool) {
 }
 
 // recurse until maximum is found.
-func getmax1(nd *Llrbnode) (api.Node, bool) {
+func getmax1(nd *Llrbnode) (*Llrbnode, bool) {
 	if nd == nil {
 		return nil, false
 	} else if maxnd, ok := getmax1(nd.right); ok {
@@ -150,7 +150,16 @@ func inititerator(
 	iter.endkey = iter.endkey[:n]
 	// other params
 	iter.incl, iter.reverse = incl, r
-	iter.closed, iter.n_activeiter = false, &llrb.n_activeiter
+	iter.closed = false
+	// get n_activeiter address
+	switch tree := reader.(type) {
+	case *LLRB:
+		iter.n_activeiter = &tree.n_activeiter
+	case *LLRBSnapshot:
+		iter.n_activeiter = &tree.n_activeiter
+	default:
+		panic("unreachable code")
+	}
 
 	iter.rangefill()
 
