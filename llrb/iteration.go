@@ -51,10 +51,6 @@ func (iter *iterator) Next() api.Node {
 // Close implement IndexIterator interface.
 func (iter *iterator) Close() {
 	iter.closed, iter.nodes = true, iter.nodes[:cap(iter.nodes)]
-	// TODO: remove this loop.
-	for i := range iter.nodes {
-		iter.nodes[i] = nil
-	}
 	iter.nodes = iter.nodes[:0]
 	atomic.AddInt64(iter.n_activeiter, -1)
 
