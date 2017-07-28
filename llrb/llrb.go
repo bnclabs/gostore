@@ -119,7 +119,7 @@ func (llrb *LLRB) ExpectedUtilization(ut float64) {
 }
 
 // EnableMVCC will spawn the writer routine and snapshot routine. MVCC
-// can slow down write operation, and for initial data load LLRM can be
+// can slow down write operation, and for initial data load LLRB can be
 // instantiated with mvcc disabled. And subsequently enabled when it
 // switches to active/incremental load.
 func (llrb *LLRB) EnableMVCC() {
@@ -300,13 +300,15 @@ func (llrb *LLRB) Release() {
 
 //---- api.IndexReader interface.
 
-// Has implement api.IndexReader interface.
+// Has implement api.IndexReader interface. Acquires a read
+// lock, can be called only when MVCC is disabled.
 func (llrb *LLRB) Has(key []byte) bool {
 	llrb.assertnomvcc()
 	return llrb.Get(key, nil)
 }
 
-// Get implement api.IndexReader interface, acquires a read lock.
+// Get implement api.IndexReader interface. Acquires a read
+// lock, can be called only when MVCC is disabled.
 func (llrb *LLRB) Get(key []byte, callb api.NodeCallb) bool {
 	llrb.assertnomvcc()
 
@@ -317,7 +319,8 @@ func (llrb *LLRB) Get(key []byte, callb api.NodeCallb) bool {
 	return ok
 }
 
-// Min implement api.IndexReader interface.
+// Min implement api.IndexReader interface. Acquires a read
+// lock, can be called only when MVCC is disabled.
 func (llrb *LLRB) Min(callb api.NodeCallb) bool {
 	llrb.assertnomvcc()
 
@@ -328,7 +331,8 @@ func (llrb *LLRB) Min(callb api.NodeCallb) bool {
 	return ok
 }
 
-// Max implement api.IndexReader interface.
+// Max implement api.IndexReader interface. Acquires a read
+// lock, can be called only when MVCC is disabled.
 func (llrb *LLRB) Max(callb api.NodeCallb) bool {
 	llrb.assertnomvcc()
 
@@ -339,7 +343,8 @@ func (llrb *LLRB) Max(callb api.NodeCallb) bool {
 	return ok
 }
 
-// Range from lkey to hkey, incl can be "both", "low", "high", "none"
+// Range implement api.IndexReader interface. Acquires a read
+// lock, can be called only when MVCC is disabled.
 func (llrb *LLRB) Range(
 	lkey, hkey []byte, incl string, reverse bool, callb api.NodeCallb) {
 
@@ -358,7 +363,8 @@ func (llrb *LLRB) Range(
 	atomic.AddInt64(&llrb.n_ranges, 1)
 }
 
-// Iterate implement api.IndexReader interface.
+// Iterate implement api.IndexReader interface. Acquires a read
+// lock, can be called only when MVCC is disabled.
 func (llrb *LLRB) Iterate(lk, hk []byte, incl string, r bool) api.IndexIterator {
 	llrb.assertnomvcc()
 

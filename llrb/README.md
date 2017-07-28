@@ -1,3 +1,6 @@
+Left Leaning Red Black tree (LLRB)
+==================================
+
 LLRB can manage an in-memory instance of sorted index using
 left-leaning-red-black tree. LLRB is self balancing tree that supports
 all basic write operations, like create, update, delete. Additionally

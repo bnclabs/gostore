@@ -271,13 +271,13 @@ type IndexWriter interface {
 	// Upsert a key/value pair.
 	UpsertCas(key, value []byte, cas uint64, callb NodeCallb) error
 
-	// DeleteMin delete the last entry in the index.
+	// DeleteMin delete last entry in the index.
 	DeleteMin(callb NodeCallb) error
 
-	// Delete the first entry in the index.
+	// Delete first entry in the index.
 	DeleteMax(callb NodeCallb) error
 
-	// Delete entry specified by key.
+	// Delete key from index.
 	Delete(key []byte, callb NodeCallb) error
 
 	// Mutations upsert one or more key/value pairs.

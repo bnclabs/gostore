@@ -51,6 +51,11 @@ loop:
 }
 
 // LLRBSnapshot holds on to a read-only version of the LLRB tree.
+// An llrb snapshot gaurantees a point in time snapshot of the entire
+// tree, as a side-effect this will put memory pressure when there
+// is a continuous stream of background mutations. Hence applications
+// are adviced to hold on to this snapshot not exceeding couple of
+// milliseconds.
 type LLRBSnapshot struct {
 	refcount int64
 	llrbstats
@@ -143,7 +148,8 @@ func (snapshot *LLRBSnapshot) Getclock() api.Clock {
 	return snapshot.clock
 }
 
-// Metadata implement api.IndexMeta interface.
+// Metadata implement api.IndexMeta interface. Call method
+// on index instance, this will return nil.
 func (snapshot *LLRBSnapshot) Metadata() []byte {
 	return nil
 }
