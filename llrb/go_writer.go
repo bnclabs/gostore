@@ -197,7 +197,9 @@ func (writer *LLRBWriter) run() {
 		}
 
 		close(writer.finch)
-		time.Sleep(100 * time.Millisecond) // TODO: no magic
+
+		// NOTE: wait for things to settle down ?
+		time.Sleep(100 * time.Millisecond)
 
 		for _, waiter := range writer.waiters {
 			close(waiter)

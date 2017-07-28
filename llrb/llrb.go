@@ -255,7 +255,6 @@ func (llrb *LLRB) Clone(name string) (api.Index, error) {
 		return newllrb, err
 	}
 
-	// TODO: convert this into read lock ?
 	llrb.rw.Lock()
 	defer llrb.rw.Unlock()
 
