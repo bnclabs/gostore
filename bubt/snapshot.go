@@ -146,6 +146,10 @@ func OpenBubtstore(name, path string) (ss *Snapshot, err error) {
 		return ss, err
 	}
 
+	// TODO: validate the rootblock file-position in the header
+	// is same as what we have obtained after reading the statistics
+	// field
+
 	// open datafile, if present
 	if ss.datafile != "" {
 		if _, err = os.Stat(ss.datafile); os.IsNotExist(err) {

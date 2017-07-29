@@ -2,37 +2,39 @@ package bubt
 
 import s "github.com/prataprc/gosettings"
 
-// Defaultsettings for bubt instance, tuned for SSD without map-reduce.
-//
-// Configurable parameters:
-//
-// "zblocksize" (int64, default: 4096),
-//		disk block size for leaf nodes (z-nodes)
-//
-// "mblocksize" (int64, default: 4096),
-//		disk block size for intermediate nodes (m-nodes)
-//
-// "mreduce" (bool, default: false),
-//		reduce entries at block level.
-//
-// "iterpool.size" (int64, default: 8),
-//		maximum number of iterators that can be active.
+// Defaultsettings for bubt instance.
 //
 // "level" (int64, default: 1),
-//		disk level if applicable.
+//		Disk level, if applicable, can be used for implementing
+//		multi level log-structured-merge index.
+//
+// "zblocksize" (int64, default: 4096)
+//		Disk block size for leaf nodes (z-nodes).
+//
+// "mblocksize" (int64, default: 4096),
+//		Disk block size for intermediate nodes (m-nodes).
+//
+// "mreduce" (bool, default: false),
+//		Reduce entries at block level.
 //
 // "datafile" (bool, default: false),
-//		store values in a separate datafile.
-//
-// "metadata.vbuuid" (bool, default: true),
-//		store vbuuid, as metadata, for each entry.
+//		If true, store values in a separate datafile. This
+//		can give better density in leaf nodes, favourable for
+//      buffer caching.
 //
 // "metadata.bornseqno" (bool, default: true),
-//		store bornseqno, as metadata, for each entry.
+//		If true, use metadata field to book-keep entry's born
+//		sequence number.
 //
 // "metadata.deadseqno" (bool, default: true),
-//		store deadseqno, as metadata, for each entry.
+//		If true, use metadata field to book-keep entry's dead
+//		sequence number.
 //
+// "metadata.vbuuid" (bool, default: true),
+//		If true, use metadata field to book-keep entry's vbuuid.
+//
+// "iterpool.size" (int64, default: 100),
+//		Maximum number of iterators that can be active.
 func Defaultsettings() s.Settings {
 	// when changing this also change in other places,
 	// Bubt{}, Snapshot{} strucutres
@@ -40,14 +42,14 @@ func Defaultsettings() s.Settings {
 	// setts2json()
 	// json2setts()
 	return s.Settings{
+		"level":              1,
 		"zblocksize":         4096,
 		"mblocksize":         4096,
 		"mreduce":            false,
-		"iterpool.size":      8,
-		"level":              1,
 		"datafile":           false,
 		"metadata.vbuuid":    true,
 		"metadata.bornseqno": true,
 		"metadata.deadseqno": true,
+		"iterpool.size":      100,
 	}
 }

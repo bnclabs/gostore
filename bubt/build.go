@@ -92,15 +92,15 @@ func NewBubt(name, path string, setts s.Settings) *Bubt {
 		f.datafile, f.datafd = "", nil
 	}
 
-	if f.zblocksize > maxBlock { // 1 TB
-		panic(fmt.Errorf("zblocksize %v > %v\n", f.zblocksize, maxBlock))
-	} else if f.zblocksize < minBlock { // 512 byte, HDD sector size.
-		panic(fmt.Errorf("zblocksize %v < %v\n", f.zblocksize, minBlock))
+	if f.zblocksize > Maxblock { // 1 TB
+		panic(fmt.Errorf("zblocksize %v > %v\n", f.zblocksize, Maxblock))
+	} else if f.zblocksize < Minblock {
+		panic(fmt.Errorf("zblocksize %v < %v\n", f.zblocksize, Minblock))
 	}
-	if f.mblocksize > maxBlock {
-		panic(fmt.Errorf("mblocksize %v > %v\n", f.mblocksize, maxBlock))
-	} else if f.mblocksize < minBlock {
-		panic(fmt.Errorf("mblocksize %v < %v\n", f.mblocksize, minBlock))
+	if f.mblocksize > Maxblock {
+		panic(fmt.Errorf("mblocksize %v > %v\n", f.mblocksize, Maxblock))
+	} else if f.mblocksize < Minblock {
+		panic(fmt.Errorf("mblocksize %v < %v\n", f.mblocksize, Minblock))
 	}
 	if f.hasdatafile == false && f.mreduce == true {
 		panic("cannot mreduce without datafile")

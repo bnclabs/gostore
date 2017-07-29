@@ -42,7 +42,7 @@ func (flusher *bubtflusher) run(
 	// flush marker block
 	markerblock := make([]byte, MarkerBlocksize)
 	for i := 0; i < len(markerblock); i++ {
-		markerblock[i] = markerByte
+		markerblock[i] = MarkerByte
 	}
 	fmsg := "%v %q flusher writing marker block for %v\n"
 	log.Infof(fmsg, logprefix, name, fd.Name())
