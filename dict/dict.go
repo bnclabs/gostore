@@ -61,27 +61,31 @@ func (d *Dict) Getclock() api.Clock {
 	return d.clock
 }
 
-// Metadata implement api.IndeMeta interface.
+// Metadata implement api.IndeMeta interface. Return nil.
 func (d *Dict) Metadata() []byte {
 	return nil
 }
 
-// Stats implement api.IndexMeta interface.
+// Stats does not implement api.IndexMeta interface, call will
+// panic.
 func (d *Dict) Stats() (map[string]interface{}, error) {
 	panic("dict.Stats() not implemented for Dict")
 }
 
-// Fullstats implement api.IndexMeta interface.
+// Fullstats does not implement api.IndexMeta interface, call will
+// panic.
 func (d *Dict) Fullstats() (map[string]interface{}, error) {
 	panic("dict.Fullstats() not implemented for Dict")
 }
 
-// Validate implement api.IndexMeta interface.
+// Validate does not implement api.IndexMeta interface, call will
+// panic.
 func (d *Dict) Validate() {
 	panic("dict.Validate() not implemented for Dict")
 }
 
-// Log implement api.IndexMeta interface.
+// Log does not implement api.IndexMeta interface, call will
+// panic.
 func (d *Dict) Log(involved string, humanize bool) {
 	panic("dict.Log() not implemented for Dict")
 }
