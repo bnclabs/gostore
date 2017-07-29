@@ -1164,7 +1164,7 @@ func TestLLRBMvccIterate(t *testing.T) {
 	}
 
 	snapshot.Release()
-	llrb.ExpectedUtilization(0.36)
+	llrb.ExpectedUtilization(0.28)
 	llrb.Validate()
 
 	if err := llrb.Destroy(); err != nil {

@@ -15,6 +15,18 @@ and NodeGetter APIs to include a time order for LLRB entries. Check
 out `Bornseqno` and `Deadseqno` APIs. They are specially important when
 LLRB is used in `lsm` mode.
 
+* **Entry** also called as **llrb-node** has a key, value pair.
+* **Key** are binary string that can handle comparision operation.
+* **Value** can be a blob of binary, text or JSON. LLRB don't interpret
+  the shape of Value.
+* **Metadata** other than key and value each entry can have zero or
+  more optional metadata fields. Like:
+  * **Vbno** for pointing the vbucket shard in which this key/value
+    originaly belong.
+  * **Vbuuid** unique uuid for handing failures and rollbacks.
+  * **Access-time** for managing cache eviction and memory recylcing.
+  * **Bornseqno** for implementing log-structured-merge.
+  * **Deadseqno** for implementing log-structured-merge.
 
 Background routines
 -------------------
