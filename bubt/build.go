@@ -55,8 +55,12 @@ type Bubt struct {
 	hasdeadseqno bool
 }
 
+// block level api common to both z-node and m-node.
 type blocker interface {
+	// start key in the block.
 	startkey() (kpos int64, key []byte)
+
+	// reduced or re-reduced value from z-node or m-node.
 	reduce() []byte
 	offset() int64
 	backref() int64
