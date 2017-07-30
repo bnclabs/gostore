@@ -24,7 +24,7 @@ func (m mnode) rangeforward(
 	}
 
 	for x := from; x < int32(len(entries)/4); x++ {
-		vpos := m.getentry(uint32(x), entries).vpos()
+		vpos := int64(m.getentry(uint32(x), entries).valuepos())
 		if ss.rangeforward(lkey, hkey, vpos, cmp, callb) == false {
 			return false
 		}
@@ -72,7 +72,7 @@ func (m mnode) rangebackward(
 	}
 
 	for x := from; x >= 0; x-- {
-		vpos := m.getentry(uint32(x), entries).vpos()
+		vpos := int64(m.getentry(uint32(x), entries).valuepos())
 		if ss.rangebackward(lkey, hkey, vpos, cmp, callb) == false {
 			return false
 		}
@@ -126,23 +126,7 @@ func (m mnode) dumpkeys(ss *Snapshot, prefix string) {
 		koff := binary.BigEndian.Uint32(entries[off : off+4])
 		klen := uint32(binary.BigEndian.Uint16(m[koff:]))
 		fmt.Println(prefix, string(m[koff+2:koff+2+klen]))
-		ss.dumpkeys(m.getentry(uint32(x), entries).vpos(), prefix+"  ")
+		vpos := int64(m.getentry(uint32(x), entries).valuepos())
+		ss.dumpkeys(vpos, prefix+"  ")
 	}
-}
-
-type mentry []byte
-
-func (m mentry) key() []byte {
-	klen := binary.BigEndian.Uint16(m[:2])
-	return m[2 : 2+klen]
-}
-
-func (m mentry) vpos() int64 {
-	klen := binary.BigEndian.Uint16(m[:2])
-	return int64(binary.BigEndian.Uint64(m[2+klen:]))
-}
-
-func (m mentry) rpos() int64 {
-	klen := binary.BigEndian.Uint16(m[:2])
-	return int64(binary.BigEndian.Uint64(m[2+klen+8:]))
 }

@@ -57,13 +57,24 @@ type Bubt struct {
 
 // block level api common to both z-node and m-node.
 type blocker interface {
-	// start key in the block.
-	startkey() (kpos int64, key []byte)
+	// start key is the first key in the block, fpos is
+	// file-position in index file where key is present.
+	startkey() (fpos int64, key []byte)
 
 	// reduced or re-reduced value from z-node or m-node.
 	reduce() []byte
+
+	// return file-position pointing to location of z-block
+	// or m-block.
 	offset() int64
+
+	// same as offset() except that it is used as reference
+	// withing parent block, which means LSM will be set for
+	// m-block
 	backref() int64
+
+	// file-position where the reduced or re-reduced value
+	// is stored.
 	roffset() int64
 }
 
@@ -326,13 +337,13 @@ func (f *Bubt) flush(block blocker, fpos [2]int64) (blocker, [2]int64) {
 		return nil, fpos
 
 	case *mblock:
-		if len(blk.entries) > 0 {
+		if len(blk.index) > 0 {
 			fmsg := "%v flush mblock %v entries\n"
-			log.Debugf(fmsg, logprefix, len(blk.entries))
+			log.Debugf(fmsg, logprefix, len(blk.index))
 
 			f.mnodes++
 
-			f.a_mentries.Add(int64(len(blk.entries)))
+			f.a_mentries.Add(int64(len(blk.index)))
 			blk.finalize()
 			// reduce
 			blk.fpos, blk.rpos = fpos, fpos[1]
@@ -353,7 +364,7 @@ func (f *Bubt) flush(block blocker, fpos [2]int64) (blocker, [2]int64) {
 			return blk, [2]int64{kpos, vpos}
 		}
 		fmsg := "%v flush skipping mblock %v entries\n"
-		log.Debugf(fmsg, logprefix, len(blk.entries))
+		log.Debugf(fmsg, logprefix, len(blk.index))
 		return nil, fpos
 	}
 	panic("unreachable code")

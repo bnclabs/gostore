@@ -27,9 +27,7 @@ const zentryLen = zeoffVlenEnd
 // deadseqno uint64
 // klen      uint16
 // vlen      uint64 fpos-valuefile, if value is in seperate file
-// key
-// value, if vlen is not fpos-valuefile.
-type zentry []byte
+type zentry []byte // key, and optionally value shall follow.
 
 //---- get methods
 
