@@ -18,8 +18,8 @@ import s "github.com/prataprc/gosettings"
 //		Reduce entries at block level.
 //
 // "datafile" (bool, default: false),
-//		If true, store values in a separate datafile. This
-//		can give better density in leaf nodes, favourable for
+//      If true, store values in a separate datafile. This
+//      can give better density in leaf nodes, favourable for
 //      buffer caching.
 //
 // "metadata.bornseqno" (bool, default: true),

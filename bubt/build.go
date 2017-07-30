@@ -3,7 +3,6 @@ package bubt
 import "encoding/binary"
 import "encoding/json"
 import "fmt"
-import "path/filepath"
 import "os"
 
 import "github.com/prataprc/gostore/api"
@@ -238,9 +237,12 @@ func (f *Bubt) Build(iter api.IndexIterator, metadata []byte) {
 	log.Infof("%v ... build completed\n", f.logprefix)
 }
 
+// Count return number of items indexed.
 func (f *Bubt) Count() int64 {
 	return f.n_count
 }
+
+//---- local methods
 
 func (f *Bubt) buildm(ms []*mblock, fpos [2]int64) ([]*mblock, blocker, [2]int64, bool) {
 	var block blocker
@@ -436,11 +438,6 @@ func (f *Bubt) flushheader(header []byte) {
 	} else if ln := len(header); n != ln {
 		log.Errorf("%v partial write of header %v,%v\n", f.logprefix, n, ln)
 	}
-}
-
-func mkfilenames(path string) (string, string) {
-	index, data := filepath.Join(path, "index"), filepath.Join(path, "data")
-	return index, data
 }
 
 func createfile(name string) *os.File {

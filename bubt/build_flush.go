@@ -6,6 +6,7 @@ import "github.com/prataprc/golog"
 
 var indexname, dataname = "index", "data"
 
+// concurrent flusher
 type bubtflusher struct {
 	f                *Bubt
 	idxch, datach    chan []byte

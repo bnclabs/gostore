@@ -19,54 +19,54 @@ func (ss *Snapshot) newznode(nd *node, ze zentry) {
 	}
 }
 
-//---- NodeGetter implementation
+//---- api.NodeGetter implementation
 
-// Vbno implement NodeGetter{} interface.
+// Vbno implement api.NodeGetter interface.
 func (nd *node) Vbno() uint16 {
 	return nd.ze.getvbno()
 }
 
-// Access implement NodeGetter{} interface.
+// Access implement api.NodeGetter interface.
 func (nd *node) Access() (ts uint64) {
 	return 0
 }
 
-// Vbuuid implement NodeGetter{} interface.
+// Vbuuid implement api.NodeGetter interface.
 func (nd *node) Vbuuid() uint64 {
 	if nd.ss.hasvbuuid {
 		return nd.ze.getvbuuid()
 	}
-	return 0 // TODO: should we panic
+	return 0
 }
 
-// Bornseqno implement NodeGetter{} interface.
+// Bornseqno implement api.NodeGetter interface.
 func (nd *node) Bornseqno() uint64 {
 	if nd.ss.hasbornseqno {
 		return nd.ze.getbornseqno()
 	}
-	return 0 // TODO: should we panic
+	return 0
 }
 
-// Deadseqno implement NodeGetter{} interface.
+// Deadseqno implement api.NodeGetter interface.
 func (nd *node) Deadseqno() uint64 {
 	if nd.ss.hasdeadseqno {
 		return nd.ze.getdeadseqno()
 	}
-	return 0 // TODO: should we panic
+	return 0
 }
 
-// IsDeleted implement NodeGetter{} interface.
+// IsDeleted implement api.NodeGetter interface.
 func (nd *node) IsDeleted() bool {
 	return zentryFlags(nd.ze.getflags()).isdeleted()
 }
 
-// Key implement NodeGetter{} interface.
+// Key implement api.NodeGetter interface.
 func (nd *node) Key() []byte {
 	start, end := zentryLen, zentryLen+nd.ze.keylen()
 	return nd.ze[start:end]
 }
 
-// Value implement NodeGetter{} interface.
+// Value implement api.NodeGetter interface.
 func (nd *node) Value() []byte {
 	if len(nd.value) > 0 {
 		return nd.value
@@ -99,7 +99,7 @@ func (nd *node) Value() []byte {
 	return nd.value
 }
 
-// Fpos implement NodeGetter{} interface.
+// Fpos implement api.NodeGetter interface.
 func (nd *node) Fpos() (level byte, offset uint64) {
 	if nd.ss.hasdatafile == false {
 		return nd.ss.level, uint64(zentryLen + nd.ze.keylen())
@@ -108,34 +108,34 @@ func (nd *node) Fpos() (level byte, offset uint64) {
 	return nd.ss.level, vpos
 }
 
-//---- NodeSetter implementation
+//---- api.NodeSetter implementation
 
-// Setvbno implement NodeSetter{} interface.
+// Setvbno implement api.NodeSetter interface.
 func (nd *node) Setvbno(vbno uint16) api.Node {
 	panic("Setvbno(): not implemented for bubt node")
 }
 
-// Setaccess implement NodeSetter{} interface.
+// Setaccess implement api.NodeSetter interface.
 func (nd *node) Setaccess(access uint64) api.Node {
 	panic("Setaccess(): not implemented for bubt node")
 }
 
-// SetVbuuid implement NodeSetter{} interface.
+// SetVbuuid implement api.NodeSetter interface.
 func (nd *node) SetVbuuid(uuid uint64) api.Node {
 	panic("SetVbuuid(): not implemented for bubt node")
 }
 
-// SetFpos implement NodeSetter{} interface.
+// SetFpos implement api.NodeSetter interface.
 func (nd *node) SetFpos(level byte, offset uint64) api.Node {
 	panic("SetFpos(): not implemented for bubt node")
 }
 
-// SetBornseqno implement NodeSetter{} interface.
+// SetBornseqno implement api.NodeSetter interface.
 func (nd *node) SetBornseqno(seqno uint64) api.Node {
 	panic("SetBornseqno(): not implemented for bubt node")
 }
 
-// SetDeadseqno implement NodeSetter{} interface.
+// SetDeadseqno implement api.NodeSetter interface.
 func (nd *node) SetDeadseqno(seqno uint64) api.Node {
 	panic("SetDeadseqno(): not implemented for bubt node")
 }

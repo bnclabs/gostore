@@ -3,7 +3,6 @@ package bubt
 import "os"
 import "fmt"
 import "bytes"
-import "sync"
 import "sync/atomic"
 import "encoding/json"
 import "encoding/binary"
@@ -12,9 +11,6 @@ import "github.com/prataprc/gostore/api"
 import "github.com/prataprc/gostore/lib"
 import "github.com/prataprc/golog"
 import s "github.com/prataprc/gosettings"
-
-var readmu sync.Mutex
-var openstores = make(map[string]*Snapshot)
 
 // Snapshot manages sorted key,value entries in persisted, immutable btree
 // built bottoms up and not updated there after.
@@ -44,24 +40,33 @@ type Snapshot struct {
 
 	// settings, this must be consistent with Bubt{}.
 	name         string
-	mblocksize   int64
-	zblocksize   int64
-	mreduce      bool
-	iterpoolsize int64
 	level        byte
+	zblocksize   int64
+	mblocksize   int64
+	mreduce      bool
 	hasdatafile  bool
+	iterpoolsize int64
 	hasvbuuid    bool
 	hasbornseqno bool
 	hasdeadseqno bool
 }
 
+// OpenBubtstore index, since the index is immutable it is returned
+// as a snapshot which implements IndexMeta, Index, IndexReader and
+// IndexWriter interfaces. If this index is going to be shared
+// between multiple go-routines make sure to call RSnapshot() for
+// reference counting. Before this index can be destoryed, all its
+// snapshots released and iterators closed.
 func OpenBubtstore(name, path string) (ss *Snapshot, err error) {
-	var ok bool
+	defer func() {
+		if err != nil {
+			ss.destroy()
+			ss = nil
+		}
+	}()
 
-	readmu.Lock()
-	defer readmu.Unlock()
-
-	if ss, ok = openstores[name]; ok {
+	ss = getstore(name)
+	if ss != nil {
 		return ss, nil
 	}
 
@@ -72,78 +77,50 @@ func OpenBubtstore(name, path string) (ss *Snapshot, err error) {
 		indexfile: indexfile,
 		datafile:  datafile,
 	}
-	defer func() {
-		if err != nil {
-			ss.destroy()
-			ss = nil
-		}
-	}()
-
 	ss.logprefix = fmt.Sprintf("BUBT [%s]", name)
 
 	// open indexfile
 	if _, err = os.Stat(ss.indexfile); os.IsNotExist(err) {
 		log.Errorf("%v file %q not present\n", ss.logprefix, ss.indexfile)
-		return ss, err
+		return nil, err
 	}
 	ss.indexfd, err = os.OpenFile(ss.indexfile, os.O_RDONLY, 0666)
 	if err != nil {
 		fmsg := "%v indexfile %q (os.O_RDONLY, 0666): %v\n"
 		log.Errorf(fmsg, ss.logprefix, ss.datafile, err)
-		return ss, err
+		return nil, err
 	}
 
 	var fi os.FileInfo
-
-	fi, err = ss.indexfd.Stat()
-	if err != nil {
+	if fi, err = ss.indexfd.Stat(); err != nil {
 		fmsg := "%v unable to stat %q: %v\n"
 		log.Errorf(fmsg, ss.logprefix, ss.indexfile, err)
-		return ss, err
+		return nil, err
 	}
+
 	eof := fi.Size()
 
-	// header
-	var header [40]byte
-	var statslen, settslen, mdlen int64
-	var n int
-
-	headerat := eof - int64(len(header))
-	n, err = ss.indexfd.ReadAt(header[:], headerat)
-	if err != nil {
-		fmsg := "%v reading %q header: %v\n"
-		log.Errorf(fmsg, ss.logprefix, ss.indexfile, err)
-		return ss, err
-
-	} else if n != len(header) {
-		err = fmt.Errorf("partial header read: %v != %v", n, len(header))
-		log.Errorf("%v %v\n", ss.logprefix, err)
-		return ss, err
+	var header [5]int64
+	if header, err = ss.readheader(eof); err != nil {
+		return nil, err
 	}
-	statslen, n = int64(binary.BigEndian.Uint64(header[:])), 8
-	settslen, n = int64(binary.BigEndian.Uint64(header[n:])), n+8
-	mdlen, n = int64(binary.BigEndian.Uint64(header[n:])), n+8
-	ss.rootblock, n = int64(binary.BigEndian.Uint64(header[n:])), n+8
-	ss.rootreduce, n = int64(binary.BigEndian.Uint64(header[n:])), n+8
-
-	markerat := headerat - MarkerBlocksize
+	statslen, settslen, mdlen := header[0], header[1], header[2]
+	ss.rootblock, ss.rootreduce = header[3], header[4]
+	markerat := eof - int64(len(header)*8) - MarkerBlocksize
 	if err = ss.validateMarker(markerat, MarkerBlocksize); err != nil {
-		return ss, err
+		return nil, err
 	}
-
 	mdat := markerat - mdlen
 	if err = ss.loadMetadata(mdat, mdlen); err != nil {
-		return ss, err
+		return nil, err
 	}
-
 	settsat := mdat - settslen
 	if err = ss.loadSettings(settsat, settslen); err != nil {
-		return ss, err
+		return nil, err
 	}
-
 	statsat := settsat - statslen
 	if err = ss.loadStats(statsat, statslen); err != nil {
-		return ss, err
+		return nil, err
 	}
 
 	// TODO: validate the rootblock file-position in the header
@@ -154,13 +131,13 @@ func OpenBubtstore(name, path string) (ss *Snapshot, err error) {
 	if ss.datafile != "" {
 		if _, err = os.Stat(ss.datafile); os.IsNotExist(err) {
 			log.Errorf("%v file %q not present\n", ss.logprefix, ss.datafile)
-			return ss, err
+			return nil, err
 		}
 		ss.datafd, err = os.OpenFile(ss.datafile, os.O_RDONLY, 0666)
 		if err != nil {
 			fmsg := "%v datafile %q (os.O_RDONLY, 0666): %v\n"
 			log.Errorf(fmsg, ss.logprefix, ss.datafile, err)
-			return ss, err
+			return nil, err
 		}
 	}
 
@@ -168,12 +145,111 @@ func OpenBubtstore(name, path string) (ss *Snapshot, err error) {
 
 	log.Infof("%v opening snapshot ...\n", ss.logprefix)
 
-	openstores[ss.name] = ss
+	setstore(name, ss)
 	return ss, nil
 }
 
+func (ss *Snapshot) readsettings(setts s.Settings) {
+	ss.zblocksize = setts.Int64("zblocksize")
+	ss.mblocksize = setts.Int64("mblocksize")
+	ss.mreduce = setts.Bool("mreduce")
+	ss.iterpoolsize = setts.Int64("iterpool.size")
+	ss.level = byte(setts.Int64("level"))
+	ss.hasdatafile = setts.Bool("datafile")
+	if ss.hasdatafile == false {
+		ss.datafile = ""
+	}
+	ss.hasvbuuid = setts.Bool("metadata.vbuuid")
+	ss.hasbornseqno = setts.Bool("metadata.bornseqno")
+	ss.hasdeadseqno = setts.Bool("metadata.deadseqno")
+}
+
+func (ss *Snapshot) readheader(eof int64) (fields [5]int64, err error) {
+	var header [40]byte
+	var statslen, settslen, mdlen, rootblock, rootreduce int64
+	var n int
+
+	headerat := eof - int64(len(header))
+	n, err = ss.indexfd.ReadAt(header[:], headerat)
+	if err != nil {
+		fmsg := "%v reading %q header: %v\n"
+		log.Errorf(fmsg, ss.logprefix, ss.indexfile, err)
+		return
+
+	} else if n != len(header) {
+		err = fmt.Errorf("partial header read: %v != %v", n, len(header))
+		log.Errorf("%v %v\n", ss.logprefix, err)
+		return
+	}
+	statslen, n = int64(binary.BigEndian.Uint64(header[:])), 8
+	settslen, n = int64(binary.BigEndian.Uint64(header[n:])), n+8
+	mdlen, n = int64(binary.BigEndian.Uint64(header[n:])), n+8
+	rootblock, n = int64(binary.BigEndian.Uint64(header[n:])), n+8
+	rootreduce, n = int64(binary.BigEndian.Uint64(header[n:])), n+8
+	fields = [5]int64{statslen, settslen, mdlen, rootblock, rootreduce}
+	return fields, nil
+}
+
+func (ss *Snapshot) loadMetadata(mdat int64, mdlen int64) error {
+	ss.metadata = make([]byte, mdlen)
+	n, err := ss.indexfd.ReadAt(ss.metadata, mdat)
+	if err != nil {
+		log.Errorf("%v settings ReadAt: %v\n", ss.logprefix, err)
+		return err
+	} else if int64(n) != mdlen {
+		err := fmt.Errorf("partial read: %v != %v", n, mdlen)
+		log.Errorf("%v %v\n", ss.logprefix, err)
+		return err
+	}
+	return nil
+}
+
+func (ss *Snapshot) loadSettings(statsat int64, statslen int64) error {
+	block := make([]byte, statslen)
+	n, err := ss.indexfd.ReadAt(block, statsat)
+	if err != nil {
+		log.Errorf("%v settings ReadAt: %v\n", ss.logprefix, err)
+		return err
+	} else if int64(n) != statslen {
+		err := fmt.Errorf("partial read: %v != %v", n, statslen)
+		log.Errorf("%v %v\n", ss.logprefix, err)
+		return err
+	}
+	var setts s.Settings
+	if err := json.Unmarshal(block, &setts); err != nil {
+		err := fmt.Errorf("setts.Unmarhsal(): %v", err)
+		log.Errorf("%v %v\n", ss.logprefix, err)
+		return err
+	}
+	ss.readsettings(setts)
+	return nil
+}
+
+func (ss *Snapshot) loadStats(statsat int64, statslen int64) error {
+	block := make([]byte, statslen)
+	n, err := ss.indexfd.ReadAt(block, statsat)
+	if err != nil {
+		log.Errorf("%v settings ReadAt: %v\n", ss.logprefix, err)
+		return err
+	} else if int64(n) != statslen {
+		err := fmt.Errorf("partial read: %v != %v", n, statslen)
+		log.Errorf("%v %v\n", ss.logprefix, err)
+		return err
+	}
+	if err := json.Unmarshal(block, &ss.builderstats); err != nil {
+		err := fmt.Errorf("json.Unmarshal: %v", err)
+		log.Errorf("%v %v\n", ss.logprefix, err)
+		return err
+	}
+	ss.n_count = int64(ss.builderstats["n_count"].(float64))
+	return nil
+}
+
+//---- exported methods
+
+// Return snapshot name
 func (ss *Snapshot) Name() string {
-	return ss.path
+	return ss.name
 }
 
 // Indexfile return the indexfile backing this snapshot.
@@ -186,7 +262,12 @@ func (ss *Snapshot) Datafile() string {
 	return ss.datafile
 }
 
-//---- IndexMeta{} interface.
+// Dumpkeys in index
+func (ss *Snapshot) Dumpkeys() {
+	ss.dumpkeys(ss.rootblock, "")
+}
+
+//---- api.IndexMeta interface.
 
 // ID implement api.IndexMeta interface.
 func (ss *Snapshot) ID() string {
@@ -208,17 +289,18 @@ func (ss *Snapshot) Getclock() api.Clock {
 	return ss.clock
 }
 
-// Metadata implement api.IndexMeta interface.
+// Metadata implement api.IndexMeta interface. Opaque binary blob
+// persisted by builder as per application's call.
 func (ss *Snapshot) Metadata() []byte {
 	return ss.metadata
 }
 
-// Stats implement api.IndexMeta interface.
+// Stats implement api.IndexMeta interface. TBD
 func (ss *Snapshot) Stats() (map[string]interface{}, error) {
 	panic("TBD")
 }
 
-// Fullstats implement api.IndexMeta interface.
+// Fullstats implement api.IndexMeta interface. TBD
 func (ss *Snapshot) Fullstats() (map[string]interface{}, error) {
 	panic("TBD")
 }
@@ -260,9 +342,6 @@ func (ss *Snapshot) Clone(name string) (api.Index, error) {
 
 // Destroy implement Index{} interface.
 func (ss *Snapshot) Destroy() error {
-	readmu.Lock()
-	defer readmu.Unlock()
-
 	if ss == nil {
 		return nil
 	}
@@ -281,14 +360,14 @@ func (ss *Snapshot) Release() {
 	atomic.AddInt64(&ss.n_snapshots, -1)
 }
 
-//---- api.IndexReader{} interface.
+//---- api.IndexReader interface.
 
-// Has implement api.IndexReader{} interface.
+// Has implement api.IndexReader interface.
 func (ss *Snapshot) Has(key []byte) bool {
 	return ss.Get(key, nil)
 }
 
-// Get implement api.IndexReader{} interface.
+// Get implement api.IndexReader interface.
 func (ss *Snapshot) Get(key []byte, callb api.NodeCallb) bool {
 	if ss.n_count == 0 {
 		if callb != nil {
@@ -319,7 +398,7 @@ func (ss *Snapshot) Get(key []byte, callb api.NodeCallb) bool {
 	return rc
 }
 
-// Min implement api.IndexReader{} interface.
+// Min implement api.IndexReader interface.
 func (ss *Snapshot) Min(callb api.NodeCallb) bool {
 	if ss.n_count == 0 {
 		if callb != nil {
@@ -350,7 +429,7 @@ func (ss *Snapshot) Min(callb api.NodeCallb) bool {
 	return rc
 }
 
-// Max implement api.IndexReader{} interface.
+// Max implement api.IndexReader interface.
 func (ss *Snapshot) Max(callb api.NodeCallb) bool {
 	if ss.n_count == 0 {
 		if callb != nil {
@@ -381,7 +460,7 @@ func (ss *Snapshot) Max(callb api.NodeCallb) bool {
 	return rc
 }
 
-// Range implement api.IndexReader{} interface.
+// Range implement api.IndexReader interface.
 func (ss *Snapshot) Range(
 	lkey, hkey []byte, incl string, reverse bool, callb api.NodeCallb) {
 
@@ -429,7 +508,7 @@ func (ss *Snapshot) Range(
 	return
 }
 
-// Iterate implement api.IndexReader{} interface.
+// Iterate implement api.IndexReader interface.
 func (ss *Snapshot) Iterate(
 	lkey, hkey []byte, incl string, r bool) api.IndexIterator {
 
@@ -527,25 +606,29 @@ func (ss *Snapshot) destroy() error {
 		return api.ErrorActiveIterators
 	}
 
-	if err := ss.indexfd.Close(); err != nil {
-		fmsg := "%v closing indexfile %q: %v\n"
-		log.Errorf(fmsg, ss.logprefix, ss.indexfile, err)
-		return err
-	}
-	if ss.datafd != nil {
-		if err := ss.datafd.Close(); err != nil {
-			fmsg := "%v closing datafile %q: %v\n"
-			log.Errorf(fmsg, ss.logprefix, ss.datafile, err)
+	defer delstore(ss.name)
+
+	if ss.indexfd != nil {
+		if err := ss.indexfd.Close(); err != nil {
+			fmsg := "%v closing indexfile %q: %v\n"
+			log.Errorf(fmsg, ss.logprefix, ss.indexfile, err)
 			return err
 		}
 	}
-
 	if err := os.Remove(ss.indexfile); err != nil {
 		fmsg := "%v while removing indexfile %q: %v\n"
 		log.Errorf(fmsg, ss.logprefix, ss.indexfile, err)
 		return err
 	} else {
 		log.Infof("%v removing indexfile %q\n", ss.logprefix, ss.indexfile)
+	}
+
+	if ss.datafd != nil {
+		if err := ss.datafd.Close(); err != nil {
+			fmsg := "%v closing datafile %q: %v\n"
+			log.Errorf(fmsg, ss.logprefix, ss.datafile, err)
+			return err
+		}
 	}
 	if ss.datafile != "" {
 		if err := os.Remove(ss.datafile); err != nil {
@@ -556,6 +639,7 @@ func (ss *Snapshot) destroy() error {
 			log.Infof("%v removing datafile %q\n", ss.logprefix, ss.datafile)
 		}
 	}
+
 	if err := os.Remove(ss.path); err != nil {
 		fmsg := "%v while removing path %q: %v\n"
 		log.Errorf(fmsg, ss.logprefix, ss.path, err)
@@ -563,8 +647,6 @@ func (ss *Snapshot) destroy() error {
 	} else {
 		log.Infof("%v removing path %q\n", ss.logprefix, ss.path)
 	}
-
-	delete(openstores, ss.name)
 	return nil
 }
 
@@ -573,34 +655,6 @@ func (ss Snapshot) ismvpos(vpos int64) (int64, bool) {
 		return int64(uint64(vpos) & 0xFFFFFFFFFFFFFFF8), true
 	}
 	return int64(uint64(vpos) & 0xFFFFFFFFFFFFFFF8), false
-}
-
-func (ss *Snapshot) json2setts(data []byte) error {
-	var setts s.Settings
-	if err := json.Unmarshal(data, &setts); err != nil {
-		return err
-	}
-	ss.zblocksize = setts.Int64("zblocksize")
-	ss.mblocksize = setts.Int64("mblocksize")
-	ss.mreduce = setts.Bool("mreduce")
-	ss.iterpoolsize = setts.Int64("iterpool.size")
-	ss.level = byte(setts.Int64("level"))
-	ss.hasdatafile = setts.Bool("datafile")
-	if ss.hasdatafile == false {
-		ss.datafile = ""
-	}
-	ss.hasvbuuid = setts.Bool("metadata.vbuuid")
-	ss.hasbornseqno = setts.Bool("metadata.bornseqno")
-	ss.hasdeadseqno = setts.Bool("metadata.deadseqno")
-	return nil
-}
-
-func (ss *Snapshot) json2stats(data []byte) error {
-	if err := json.Unmarshal(data, &ss.builderstats); err != nil {
-		return err
-	}
-	ss.n_count = int64(ss.builderstats["n_count"].(float64))
-	return nil
 }
 
 func (ss *Snapshot) rangeforward(
@@ -651,10 +705,6 @@ func (ss *Snapshot) readat(fpos int64) (nd interface{}) {
 	return
 }
 
-func (ss *Snapshot) Dumpkeys() {
-	ss.dumpkeys(ss.rootblock, "")
-}
-
 func (ss *Snapshot) dumpkeys(fpos int64, prefix string) {
 	switch ndblk := ss.readat(fpos).(type) {
 	case mnode:
@@ -696,61 +746,6 @@ func (ss *Snapshot) validateMarker(markerat int64, markerlen int64) error {
 				log.Errorf("%v %v\n", ss.logprefix, err)
 				return err
 			}
-		}
-	}
-	return nil
-}
-
-func (ss *Snapshot) loadMetadata(mdat int64, mdlen int64) error {
-	metadata := make([]byte, mdlen)
-	n, err := ss.indexfd.ReadAt(ss.metadata, mdat)
-	if err != nil {
-		log.Errorf("%v settings ReadAt: %v\n", ss.logprefix, err)
-		return err
-	} else if int64(n) != mdlen {
-		err := fmt.Errorf("partial read: %v != %v", n, mdlen)
-		log.Errorf("%v %v\n", ss.logprefix, err)
-		return err
-	}
-	ss.metadata = metadata
-	return nil
-}
-
-func (ss *Snapshot) loadSettings(statsat int64, statslen int64) error {
-	block := make([]byte, statslen)
-	n, err := ss.indexfd.ReadAt(block, statsat)
-	if err != nil {
-		log.Errorf("%v settings ReadAt: %v\n", ss.logprefix, err)
-		return err
-	} else if int64(n) != statslen {
-		err := fmt.Errorf("partial read: %v != %v", n, statslen)
-		log.Errorf("%v %v\n", ss.logprefix, err)
-		return err
-	} else {
-		if err = ss.json2setts(block); err != nil {
-			err := fmt.Errorf("json2setts: %v", err)
-			log.Errorf("%v %v\n", ss.logprefix, err)
-			return err
-		}
-	}
-	return nil
-}
-
-func (ss *Snapshot) loadStats(statsat int64, statslen int64) error {
-	block := make([]byte, statslen)
-	n, err := ss.indexfd.ReadAt(block, statsat)
-	if err != nil {
-		log.Errorf("%v settings ReadAt: %v\n", ss.logprefix, err)
-		return err
-	} else if int64(n) != statslen {
-		err := fmt.Errorf("partial read: %v != %v", n, statslen)
-		log.Errorf("%v %v\n", ss.logprefix, err)
-		return err
-	} else {
-		if err = ss.json2stats(block); err != nil {
-			err := fmt.Errorf("json2stats: %v", err)
-			log.Errorf("%v %v\n", ss.logprefix, err)
-			return err
 		}
 	}
 	return nil

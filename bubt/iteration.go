@@ -25,7 +25,7 @@ type iterator struct {
 	closed     bool
 }
 
-// Next implement api.IndexIterator{} interface.
+// Next implement api.IndexIterator interface.
 func (iter *iterator) Next() api.Node {
 	if iter.closed {
 		panic("cannot iterate over a closed iterator")
@@ -46,7 +46,7 @@ func (iter *iterator) Next() api.Node {
 	return nil
 }
 
-// Close implement api.IndexIterator{} interface.
+// Close implement api.IndexIterator interface.
 func (iter *iterator) Close() {
 	iter.closed, iter.nodes = true, iter.nodes[:cap(iter.nodes)]
 	for i := range iter.nodes {
