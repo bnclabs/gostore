@@ -123,10 +123,6 @@ func OpenBubtstore(name, path string) (ss *Snapshot, err error) {
 		return nil, err
 	}
 
-	// TODO: validate the rootblock file-position in the header
-	// is same as what we have obtained after reading the statistics
-	// field
-
 	// open datafile, if present
 	if ss.datafile != "" {
 		if _, err = os.Stat(ss.datafile); os.IsNotExist(err) {
@@ -741,7 +737,7 @@ func (ss *Snapshot) validateMarker(markerat int64, markerlen int64) error {
 
 	} else {
 		for _, byt := range block {
-			if byt != 0xAB { // TODO: not magic numbers
+			if byt != MarkerByte {
 				err = fmt.Errorf("invalid marker")
 				log.Errorf("%v %v\n", ss.logprefix, err)
 				return err
