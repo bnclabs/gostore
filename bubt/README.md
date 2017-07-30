@@ -37,6 +37,11 @@ Bottoms up construction
 * After metadata, marker-block is flushed.
 * And finally bubt-header is flushed.
 
+Both for each entry keys and values are stored in the index file.
+Optionally if datafile is enabled, values shall be appended to the
+datafile and leaf-nodes in index file will holds value's file-position
+as reference.
+
 Header
 ------
 
@@ -70,3 +75,12 @@ Metadata, Settings and Statistics
 
 Background routines
 -------------------
+
+While building the btree, separate go-routines are spawned to flush data
+into file. If values are configured to be stored in separate data-file there
+will 2 go-routines, lese there will be just 1 go-routine flushing into
+index file.
+
+A fully formed bubt instance can be opened and any number of snapshots can
+be created on that. None of the snapshots spawn go-routines. Only when all
+snapshots are released, index file can be closed.
