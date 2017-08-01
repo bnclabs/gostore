@@ -84,3 +84,16 @@ index file.
 A fully formed bubt instance can be opened and any number of snapshots can
 be created on that. None of the snapshots spawn go-routines. Only when all
 snapshots are released, index file can be closed.
+
+Panic and Recovery
+------------------
+
+Panics are to expected when APIs are misused. Programmers might choose
+to ignore the errors, but not panics. For example:
+
+- When settings exceed allowed range of values.
+- When trying to iterate on snapshot after it is closed.
+- Using api.NodeSetter methods.
+- Using api.IndexWriter methods.
+- When Clone() is called on the snapshot.
+- Disk error.
