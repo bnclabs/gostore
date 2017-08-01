@@ -3,18 +3,18 @@ Storage algorithms in golang
 
 Package storage implement a collection of storage algorithm and necessary
 tools and libraries. Applications wishing to this package please checkout
-interfaces defined under api/.
+interfaces defined under [api/](api/README.md).
 
 As of now, two data structures are available for indexing key,value entries:
-* **llrb** left-leaning black tree
-* **bubt** bottoms up btree.
+* [**llrb**](llrb/README.md) left-leaning black tree
+* [**bubt**](bubt/README.md)bottoms up btree.
 
 There are some sub-packages that are common to all storage algorithms:
-* **lib** collections of helper functions.
-* **dict** implements a mock index that can be used for test and
+* [**lib**](lib/README.md) collections of helper functions.
+* [**dict**](dict/README.md) implements a mock index that can be used for test and
   verification.
-* **lsm** implements log-structured-merge.
-* **malloc** custom memory alloctor, can be used instead of golang's
+* [**lsm**](dict/README.md) implements log-structured-merge.
+* [**malloc**](dict/README.md) custom memory alloctor, can be used instead of golang's
   memory allocator or OS allocator.
 
 How to contribute
