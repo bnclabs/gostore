@@ -13,8 +13,8 @@ There are some sub-packages that are common to all storage algorithms:
 * [**lib**](lib/README.md) collections of helper functions.
 * [**dict**](dict/README.md) implements a mock index that can be used for test and
   verification.
-* [**lsm**](dict/README.md) implements log-structured-merge.
-* [**malloc**](dict/README.md) custom memory alloctor, can be used instead of golang's
+* [**lsm**](lsm/README.md) implements log-structured-merge.
+* [**malloc**](malloc/README.md) custom memory alloctor, can be used instead of golang's
   memory allocator or OS allocator.
 
 How to contribute
