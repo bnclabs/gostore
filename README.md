@@ -7,7 +7,7 @@ interfaces defined under [api/](api/README.md).
 
 As of now, two data structures are available for indexing key,value entries:
 * [**llrb**](llrb/README.md) left-leaning black tree
-* [**bubt**](bubt/README.md)bottoms up btree.
+* [**bubt**](bubt/README.md) bottoms up btree.
 
 There are some sub-packages that are common to all storage algorithms:
 * [**lib**](lib/README.md) collections of helper functions.
