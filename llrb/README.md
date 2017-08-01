@@ -141,6 +141,9 @@ index and convert the CAS operation into plain Upsert operation.
 Panic and Recovery
 ------------------
 
+Panics are to expected when APIs are misused. Programmers might choose
+to ignore the errors, but not panics. For example:
+
 - When trying to upsert a nil key.
 - When Log() is called on snapshots.
 - When a snapshot is released more than it is refered.
