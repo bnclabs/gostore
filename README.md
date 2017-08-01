@@ -1,0 +1,31 @@
+Storage algorithms in golang
+============================
+
+Package storage implement a collection of storage algorithm and necessary
+tools and libraries. Applications wishing to this package please checkout
+interfaces defined under api/.
+
+As of now, two data structures are available for indexing key,value entries:
+* **llrb** left-leaning black tree
+* **bubt** bottoms up btree.
+
+There are some sub-packages that are common to all storage algorithms:
+* **lib** collections of helper functions.
+* **dict** implements a mock index that can be used for test and
+  verification.
+* **lsm** implements log-structured-merge.
+* **malloc** custom memory alloctor, can be used instead of golang's
+  memory allocator or OS allocator.
+
+How to contribute
+-----------------
+
+* Pick an issue, or create an new issue. Provide adequate documentation for
+  the issue.
+* Assign the issue or get it assigned.
+* Work on the code, once finished, raise a pull request.
+* Gostore is written in [golang](https://golang.org/), hence expected to follow the
+  global guidelines for writing go programs.
+* If the changeset is more than few lines, please generate a
+  [report card](https://goreportcard.com/report/github.com/prataprc/gostore).
+* As of now, branch ``master`` is the development branch.
