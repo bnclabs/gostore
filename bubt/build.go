@@ -192,7 +192,7 @@ func (f *Bubt) Build(iter api.IndexIterator, metadata []byte) {
 	for ms, block, fpos, fin = f.buildm(ms, fpos); fin == false; {
 		mblock := f.newmblock()
 		if mblock.insert(block) == false {
-			panic("inserting first entry into mblock")
+			panic("inserting first entry into mblock, call the programmer")
 		}
 		ms, block, fpos, fin = f.buildm(prependlevel(ms, mblock), fpos)
 	}

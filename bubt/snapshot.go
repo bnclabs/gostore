@@ -291,12 +291,12 @@ func (ss *Snapshot) Metadata() []byte {
 	return ss.metadata
 }
 
-// Stats implement api.IndexMeta interface. TBD
+// Stats implement api.IndexMeta interface.
 func (ss *Snapshot) Stats() (map[string]interface{}, error) {
 	panic("TBD")
 }
 
-// Fullstats implement api.IndexMeta interface. TBD
+// Fullstats implement api.IndexMeta interface.
 func (ss *Snapshot) Fullstats() (map[string]interface{}, error) {
 	panic("TBD")
 }
