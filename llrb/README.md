@@ -137,3 +137,15 @@ next write operation. CAS operation has the following effects:
 If LLRB tree is holding only a subset, called the working-set, of an index,
 it is application's responsibility to do CAS match with full set of
 index and convert the CAS operation into plain Upsert operation.
+
+Panic and Recovery
+------------------
+
+- When trying to upsert a nil key.
+- When Log() is called on snapshots.
+- When a snapshot is released more than it is refered.
+- When a snapshot is released when there is un-closed iteration on the
+  snapshot.
+- Validate() will panic if there is a fatal error.
+- When trying to iterate on index/snapshot after it is closed.
+- When RSnapshot() is requested with mvcc disabled.
