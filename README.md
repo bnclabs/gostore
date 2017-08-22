@@ -2,11 +2,11 @@ Storage algorithms in golang
 ============================
 
 Package storage implement a collection of storage algorithm and necessary
-tools and libraries. Applications wishing to this package please checkout
+tools and libraries. Applications wishing to use this package please checkout
 interfaces defined under [api/](api/README.md).
 
 As of now, two data structures are available for indexing key,value entries:
-* [**llrb**](llrb/README.md) left-leaning black tree
+* [**llrb**](llrb/README.md) left-leaning red-black tree
 * [**bubt**](bubt/README.md) bottoms up btree.
 
 There are some sub-packages that are common to all storage algorithms:
