@@ -34,6 +34,50 @@ func TestPKSize(t *testing.T) {
 	}
 }
 
+func TestParametriseKey(t *testing.T) {
+	txn, bornseqno := uint64(0x1234567890abcdef), uint64(0x1243567890abcdef)
+	deadseqno := uint64(0x1234657890abcdef)
+	uuid, value := uint64(0x1234568790abcdef), uint64(0x1234567809abcdef)
+
+	var values [32]uint64
+
+	mask := KeyParamTxn | KeyParamValue | KeyParamBornseqno |
+		KeyParamDeadseqno | KeyParamUuid
+	key, vbno := []byte("aaaaaaaaaaaaaaaaaaaaaaaa"), uint16(0x0101)
+	key = append(key, 0, 1, 'a')
+	values = AddKeyparameter(KeyParamTxn, txn, values)
+	values = AddKeyparameter(KeyParamUuid, uuid, values)
+	values = AddKeyparameter(KeyParamBornseqno, bornseqno, values)
+	values = AddKeyparameter(KeyParamDeadseqno, deadseqno, values)
+	values = AddKeyparameter(KeyParamValue, value, values)
+	out := make([]byte, PKSize(key, mask))
+	pk := ParametriseKey(key, mask, vbno, values, out)
+
+	var params [32]uint64
+	outkey := make([]byte, len(key))
+	validate := func() {
+		outkey, params, outvb, ok := pk.Parameters(outkey, params)
+		if ok == false {
+			t.Errorf("unexpected false")
+		} else if reflect.DeepEqual(key, outkey) == false {
+			t.Errorf("expected %v, got %v", key, outkey)
+		} else if params[0] != txn {
+			t.Errorf("expected %x, got %x", txn, params[0])
+		} else if params[1] != value {
+			t.Errorf("expected %x, got %x", value, params[1])
+		} else if params[2] != bornseqno {
+			t.Errorf("expected %x, got %x", bornseqno, params[2])
+		} else if params[3] != deadseqno {
+			t.Errorf("expected %x, got %x", deadseqno, params[3])
+		} else if params[4] != uuid {
+			t.Errorf("expected %x, got %x", uuid, params[4])
+		} else if outvb != 0x0101 {
+			t.Errorf("expected %x, got %x", outvb, 0x101)
+		}
+	}
+	validate()
+}
+
 func TestBytestuff(t *testing.T) {
 	in := []byte{0, 1, 1, 0}
 	in = append(in, []byte("hello world")...)
@@ -123,6 +167,81 @@ func TestKeyflags(t *testing.T) {
 		t.Errorf("unexpected false")
 	} else if f.Setred().Isred() == false {
 		t.Errorf("unexpected false")
+	}
+}
+
+func BenchmarkPKSize(b *testing.B) {
+	params := KeyParamTxn | KeyParamValue | KeyParamBornseqno |
+		KeyParamDeadseqno | KeyParamUuid
+	key := make([]byte, 64)
+	for i := 0; i < b.N; i++ {
+		PKSize(key, params)
+	}
+}
+
+func BenchmarkAddkeyparameter(b *testing.B) {
+	txn, bornseqno := uint64(0x1234567890abcdef), uint64(0x1243567890abcdef)
+	deadseqno := uint64(0x1234657890abcdef)
+	uuid, value := uint64(0x1234568790abcdef), uint64(0x1234567809abcdef)
+
+	var values [32]uint64
+
+	for i := 0; i < b.N; i++ {
+		values = AddKeyparameter(KeyParamTxn, txn, values)
+		values = AddKeyparameter(KeyParamUuid, uuid, values)
+		values = AddKeyparameter(KeyParamBornseqno, bornseqno, values)
+		values = AddKeyparameter(KeyParamDeadseqno, deadseqno, values)
+		values = AddKeyparameter(KeyParamValue, value, values)
+	}
+}
+
+func BenchmarkParametriseKey(b *testing.B) {
+	txn, bornseqno := uint64(0x1234567890abcdef), uint64(0x1243567890abcdef)
+	deadseqno := uint64(0x1234657890abcdef)
+	uuid, value := uint64(0x1234568790abcdef), uint64(0x1234567809abcdef)
+
+	var values [32]uint64
+
+	mask := KeyParamTxn | KeyParamValue | KeyParamBornseqno |
+		KeyParamDeadseqno | KeyParamUuid
+	key, vbno := []byte("aaaaaaaaaaaaaaaaaaaaaaaa"), uint16(0x0101)
+	key = append(key, 0, 1, 'a')
+	values = AddKeyparameter(KeyParamTxn, txn, values)
+	values = AddKeyparameter(KeyParamUuid, uuid, values)
+	values = AddKeyparameter(KeyParamBornseqno, bornseqno, values)
+	values = AddKeyparameter(KeyParamDeadseqno, deadseqno, values)
+	values = AddKeyparameter(KeyParamValue, value, values)
+	out := make([]byte, PKSize(key, mask))
+
+	for i := 0; i < b.N; i++ {
+		ParametriseKey(key, mask, vbno, values, out)
+	}
+}
+
+func BenchmarkParameters(b *testing.B) {
+	txn, bornseqno := uint64(0x1234567890abcdef), uint64(0x1243567890abcdef)
+	deadseqno := uint64(0x1234657890abcdef)
+	uuid, value := uint64(0x1234568790abcdef), uint64(0x1234567809abcdef)
+
+	var values [32]uint64
+
+	mask := KeyParamTxn | KeyParamValue | KeyParamBornseqno |
+		KeyParamDeadseqno | KeyParamUuid
+	key, vbno := []byte("aaaaaaaaaaaaaaaaaaaaaaaa"), uint16(0x0101)
+	key = append(key, 0, 1, 'a')
+	values = AddKeyparameter(KeyParamTxn, txn, values)
+	values = AddKeyparameter(KeyParamUuid, uuid, values)
+	values = AddKeyparameter(KeyParamBornseqno, bornseqno, values)
+	values = AddKeyparameter(KeyParamDeadseqno, deadseqno, values)
+	values = AddKeyparameter(KeyParamValue, value, values)
+	out := make([]byte, PKSize(key, mask))
+	pk := ParametriseKey(key, mask, vbno, values, out)
+
+	var params [32]uint64
+	outkey := make([]byte, len(key))
+
+	for i := 0; i < b.N; i++ {
+		pk.Parameters(outkey, params)
 	}
 }
 

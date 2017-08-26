@@ -17,11 +17,29 @@ func PKSize(key []byte, params Keymask) int {
 	return n
 }
 
+// UpdateKeyparameter for a single parameter field.
+func AddKeyparameter(param Keymask, val uint64, values [32]uint64) [32]uint64 {
+	values[lookupones[param-1]] = val
+	return values
+}
+
 // ParametriseKey create a new parametric-key with key, params
 // of key fields and vbno. If no parameters are used with key, params
 // can be ZERO, similarly vbucket number can be ZERO.
 func ParametriseKey(
-	key []byte, out []byte, params Keymask, vbno uint16) ParametrisedKey {
+	key []byte, params Keymask, vbno uint16, values [32]uint64,
+	out []byte) ParametrisedKey {
+
+	storeparam := func(out []byte, off int, mask Keymask, n int) int {
+		for i := off; i < off+8; i++ {
+			if (mask & 1) != 0 {
+				atomicstore(out, n, values[i])
+				n += 8
+			}
+			mask >>= 1
+		}
+		return n
+	}
 
 	out = keystuff(key, out)
 	n := ((len(out) + 8 - 1) >> 3) << 3 // make it 8-byte aligned.
@@ -32,22 +50,36 @@ func ParametriseKey(
 	hdr := Keyhdr(0).setmask(params).setvbno(vbno)
 	atomicstore(out, n, uint64(hdr))
 	n += 8
-	return ParametrisedKey(out[:cn])
-}
 
-// Setparameter for key, p can be KeyParamTxn, KeyParamValue,
-// KeyParamBornseqno, KeyParamDeadseqno, KeyParamUuid etc.
-func (pk ParametrisedKey) Setparameter(p Keymask, v uint64) ParametrisedKey {
-	off := int(lookupones[p-1])
-	atomicstore([]byte(pk), off, v)
-	return pk
+	mask, off := params, 0
+	if (mask & 0xff) > 0 {
+		n += storeparam(out, off, mask, n)
+	}
+	mask, off = mask>>8, off+8
+
+	if (mask & 0xff) > 0 {
+		n += storeparam(out, off, mask, n)
+	}
+	mask, off = mask>>8, off+8
+
+	if (mask & 0xff) > 0 {
+		n += storeparam(out, off, mask, n)
+	}
+	mask, off = mask>>8, off+8
+
+	if (mask & 0xff) > 0 {
+		n += storeparam(out, off, mask, n)
+	}
+	mask, off = mask>>8, off+8
+
+	return ParametrisedKey(out[:cn])
 }
 
 // Parameters return the parameters associated with this key.
 func (pk ParametrisedKey) Parameters(
 	key []byte, params [32]uint64) ([]byte, [32]uint64, uint16, bool) {
 
-	fillparam := func(off int, mask Keymask, n int) {
+	loadparam := func(off int, mask Keymask, n int) int {
 		for i := off; i < off+8; i++ {
 			params[i] = 0
 			if (mask & 1) != 0 {
@@ -56,6 +88,7 @@ func (pk ParametrisedKey) Parameters(
 			}
 			mask >>= 1
 		}
+		return n
 	}
 
 	key, n := keyunstuff([]byte(pk), key)
@@ -70,24 +103,25 @@ func (pk ParametrisedKey) Parameters(
 
 	off := 0
 	if (mask & 0xff) > 0 {
-		fillparam(off, mask, n)
+		n += loadparam(off, mask, n)
 	}
 	mask, off = mask>>8, off+8
 
 	if (mask & 0xff) > 0 {
-		fillparam(off, mask, n)
+		n += loadparam(off, mask, n)
 	}
 	mask, off = mask>>8, off+8
 
 	if (mask & 0xff) > 0 {
-		fillparam(off, mask, n)
+		n += loadparam(off, mask, n)
 	}
 	mask, off = mask>>8, off+8
 
 	if (mask & 0xff) > 0 {
-		fillparam(off, mask, n)
+		n += loadparam(off, mask, n)
 	}
 	mask, off = mask>>8, off+8
+
 	return key, params, vbno, true
 }
 
