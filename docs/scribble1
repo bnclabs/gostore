@@ -1,0 +1,31 @@
+Looking at the feature list, BNC has exact match except
+for ACID transactions. On the other hand BNC can be
+shipped as storage application, as apposed to lmdb
+library, and in future multi-node support shall be added
+as well.
+
+One key design difference that is worth noting, in comparison
+to lmdb, is that developers try to work an alogrithm that works
+well for all hardware, like:
+* with cache or without cache.
+* single-threaded or multi-threaded.
+* Memory based store or Disk based store.
+* Random access or Block access.
+* SSD or Spinning disk.
+
+Design of lmdb takes one solution for all h/w:
+* it is cache optimised especially when there is cache-prefetch.
+* readers are friendly with multi-threads (more cores).
+* same datastructure i.e BTREE for memory and disk.
+* essentially block access, but by using an index array at each
+  block also friendly with random access.
+
+Design of BNC takes the route of high-performance grounds up.
+It uses two different datastructure, one memory optimised and
+other disk optimized. Unlike most other storage algorithm
+memory optimized structure is a first class citizen and operates
+in tandem with disk structures. There is a challege in stitching
+them together, and giving a transparent interface to user.
+Provided those challenges are solved in high-performant scalable
+manner. I believe this approach will yield better result on
+the longer run on variety of hardware.
