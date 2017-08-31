@@ -52,10 +52,6 @@ type LLRB struct { // tree container
 	mdsize         int
 	iterpoolsize   int64 // iterpool.size
 	lsm            bool
-	minkeysize     int64
-	maxkeysize     int64
-	minvalsize     int64
-	maxvalsize     int64
 	keycapacity    int64
 	valcapacity    int64
 	maxlimit       int64
@@ -536,14 +532,13 @@ func (llrb *LLRB) upsert(
 		oldnd, dirty = llrb.clonenode(nd), false
 		if nd.metadata().ismvalue() {
 			if nv := nd.nodevalue(); nv != nil { // free the value if present
-				nv.pool.Free(unsafe.Pointer(nv))
+				llrb.valarena.Free(unsafe.Pointer(nv))
 				nd, dirty = nd.setnodevalue(nil), true
 			}
 		}
 		if nd.metadata().ismvalue() && len(value) > 0 { // add new value if req.
-			ptr, mpool := llrb.valarena.Alloc(int64(nvaluesize + len(value)))
+			ptr := llrb.valarena.Alloc(int64(nvaluesize + len(value)))
 			nv := (*nodevalue)(ptr)
-			nv.pool = mpool
 			nd, dirty = nd.setnodevalue(nv.setvalue(value)), true
 		}
 		newnd = nd
@@ -905,20 +900,19 @@ func (llrb *LLRB) fixup(nd *Llrbnode) *Llrbnode {
 //---- local functions
 
 func (llrb *LLRB) newnode(k, v []byte) *Llrbnode {
-	ptr, mpool := llrb.nodearena.Alloc(int64(nodesize + llrb.mdsize + len(k)))
+	ptr := llrb.nodearena.Alloc(int64(nodesize + llrb.mdsize + len(k)))
 	nd := (*Llrbnode)(ptr)
 	nd.metadata().initMetadata(0, llrb.fmask).setdirty().setred()
 	nd.setkey(llrb.mdsize, k)
-	nd.pool, nd.left, nd.right = mpool, nil, nil
+	nd.left, nd.right = nil, nil
 
 	if llrb.fmask.isDeadSeqno() {
 		nd.SetDeadseqno(0)
 	}
 
 	if v != nil && nd.metadata().ismvalue() {
-		ptr, mpool = llrb.valarena.Alloc(int64(nvaluesize + len(v)))
+		ptr = llrb.valarena.Alloc(int64(nvaluesize + len(v)))
 		nv := (*nodevalue)(ptr)
-		nv.pool = mpool
 		nvarg := (uintptr)(unsafe.Pointer(nv.setvalue(v)))
 		nd.metadata().setmvalue((uint64)(nvarg))
 	} else if v != nil {
@@ -934,11 +928,11 @@ func (llrb *LLRB) freenode(nd *Llrbnode) {
 		if nd.metadata().ismvalue() {
 			nv := nd.nodevalue()
 			if nv != nil {
-				nv.pool.Free(unsafe.Pointer(nv))
+				llrb.valarena.Free(unsafe.Pointer(nv))
 				nd.setnodevalue(nil)
 			}
 		}
-		nd.pool.Free(unsafe.Pointer(nd))
+		llrb.nodearena.Free(unsafe.Pointer(nd))
 		llrb.n_frees++
 	}
 }
@@ -958,19 +952,18 @@ func (llrb *LLRB) clonetree(nd *Llrbnode) *Llrbnode {
 
 func (llrb *LLRB) clonenode(nd *Llrbnode) (newnd *Llrbnode) {
 	// clone Llrbnode.
-	newndptr, mpool := llrb.nodearena.Alloc(nd.pool.Slabsize())
-	newnd = (*Llrbnode)(newndptr)
-	size := int(nd.pool.Slabsize())
-	lib.Memcpy(unsafe.Pointer(newnd), unsafe.Pointer(nd), size)
-	newnd.pool = mpool
+	size := llrb.nodearena.Slabsize(unsafe.Pointer(nd))
+	newptr := llrb.nodearena.Alloc(size)
+	newnd = (*Llrbnode)(newptr)
+	lib.Memcpy(unsafe.Pointer(newnd), unsafe.Pointer(nd), int(size))
 	// clone value if value is present.
 	if nd.metadata().ismvalue() {
 		if mvalue := nd.metadata().mvalue(); mvalue != 0 {
 			nv := (*nodevalue)(unsafe.Pointer((uintptr)(mvalue)))
-			newnvptr, mpool := llrb.valarena.Alloc(nv.pool.Slabsize())
-			lib.Memcpy(newnvptr, unsafe.Pointer(nv), int(nv.pool.Slabsize()))
+			size = llrb.valarena.Slabsize(unsafe.Pointer(nv))
+			newnvptr := llrb.valarena.Alloc(size)
+			lib.Memcpy(newnvptr, unsafe.Pointer(nv), int(size))
 			newnv := (*nodevalue)(newnvptr)
-			newnv.pool = mpool
 			newnd.setnodevalue(newnv)
 		}
 	}
@@ -1050,19 +1043,15 @@ func (llrb *LLRB) logarenasettings() {
 		panic(fmt.Errorf("logarenasettings(): %v", err))
 	}
 	kblocks := len(stats["node.blocks"].([]int64))
-	min := humanize.Bytes(uint64(llrb.minkeysize))
-	max := humanize.Bytes(uint64(llrb.maxkeysize))
 	cp := humanize.Bytes(uint64(stats["node.capacity"].(int64)))
-	fmsg := "%v key arena %v blocks over {%v %v} cap %v\n"
-	log.Infof(fmsg, llrb.logprefix, kblocks, min, max, cp)
+	fmsg := "%v key arena %v with capacity %v\n"
+	log.Infof(fmsg, llrb.logprefix, kblocks, cp)
 
 	// value arena
 	vblocks := len(stats["value.blocks"].([]int64))
-	min = humanize.Bytes(uint64(llrb.minvalsize))
-	max = humanize.Bytes(uint64(llrb.maxvalsize))
 	cp = humanize.Bytes(uint64(stats["value.capacity"].(int64)))
-	fmsg = "%v val arena %v blocks over {%v %v} cap %v\n"
-	log.Infof(fmsg, llrb.logprefix, vblocks, min, max, cp)
+	fmsg = "%v val arena %v blocks with capacity %v\n"
+	log.Infof(fmsg, llrb.logprefix, vblocks, cp)
 }
 
 func (llrb *LLRB) getiterator() (iter *iterator) {

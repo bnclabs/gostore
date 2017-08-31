@@ -8,8 +8,6 @@ import "C"
 import "unsafe"
 import "fmt"
 
-import "github.com/prataprc/gostore/api"
-
 // poolflist manages a memory block sliced up into equal sized chunks.
 type poolflist struct {
 	// 64-bit aligned stats
@@ -46,19 +44,16 @@ func newpoolflist(
 	return pool
 }
 
-// Chunksize implement api.MemoryPool{} interface.
-func (pool *poolflist) Slabsize() int64 {
-	return pool.size
+func (pool *poolflist) slabsize() int64 {
+	return pool.size - 8
 }
 
-// Less import api.MemoryPool{} interface.
-func (pool *poolflist) Less(other interface{}) bool {
+func (pool *poolflist) less(other interface{}) bool {
 	oth := other.(*poolflist)
 	return uintptr(pool.base) < uintptr(oth.base)
 }
 
-// Allocchunk implement api.MemoryPool{} interface.
-func (pool *poolflist) Allocchunk() (unsafe.Pointer, bool) {
+func (pool *poolflist) allocchunk() (unsafe.Pointer, bool) {
 	if pool.mallocated == pool.capacity {
 		return nil, false
 	}
@@ -76,8 +71,7 @@ func (pool *poolflist) Allocchunk() (unsafe.Pointer, bool) {
 	return unsafe.Pointer(ptr), true
 }
 
-// Free implement api.MemoryPool{} interface.
-func (pool *poolflist) Free(ptr unsafe.Pointer) {
+func (pool *poolflist) free(ptr unsafe.Pointer) {
 	if ptr == nil {
 		panic("poolflist.free(): nil pointer")
 	}
@@ -99,15 +93,13 @@ func (pool *poolflist) Free(ptr unsafe.Pointer) {
 	}
 }
 
-// Info implement api.MemoryPool{} interface.
-func (pool *poolflist) Info() (capacity, heap, alloc, overhead int64) {
+func (pool *poolflist) info() (capacity, heap, alloc, overhead int64) {
 	self := int64(unsafe.Sizeof(*pool))
 	slicesz := int64(unsafe.Sizeof(pool.freelist))
 	return pool.capacity, pool.capacity, pool.mallocated, slicesz + self
 }
 
-// Release implement api.MemoryPool{} interface.
-func (pool *poolflist) Release() {
+func (pool *poolflist) release() {
 	C.free(pool.base)
 	pool.freelist, pool.freeoff = nil, -1
 	pool.capacity, pool.base = 0, nil
@@ -178,41 +170,36 @@ func (pools *flistPools) toheadfree(pool *poolflist) *flistPools {
 	return pools
 }
 
-// Allocchunk implement MemoryPools interface.
-func (pools *flistPools) Allocchunk(
-	mallocer api.Mallocer, size int64) (unsafe.Pointer, api.MemoryPool) {
-
-	arena := mallocer.(*Arena)
+func (pools *flistPools) allocchunk(arena *Arena, size int64) unsafe.Pointer {
 	if pools.free == nil {
 		numchunks := arena.adaptiveNumchunks(size, pools.npools)
 		pools.free = newpoolflist(size, numchunks, pools, &pools.free, nil)
 		pools.npools++
 	}
-	ptr, ok := pools.free.Allocchunk()
+	ptr, ok := pools.free.allocchunk()
 	if !ok { // full
-		return pools.movetofull().Allocchunk(arena, size)
+		return pools.movetofull().allocchunk(arena, size)
 	}
-	return ptr, pools.free
+	*((**poolflist)(ptr)) = pools.free
+	return unsafe.Pointer(uintptr(ptr) + 8)
 }
 
-// Release implement MemoryPools interface.
-func (pools *flistPools) Release() {
+func (pools *flistPools) release() {
 	for pool := pools.full; pool != nil; pool = pool.next {
-		pool.Release()
+		pool.release()
 	}
 	for pool := pools.free; pool != nil; pool = pool.next {
-		pool.Release()
+		pool.release()
 	}
 }
 
-// Info implement MemoryPools interface.
-func (pools *flistPools) Info() (capacity, heap, alloc, overhead int64) {
+func (pools *flistPools) info() (capacity, heap, alloc, overhead int64) {
 	for pool := pools.full; pool != nil; pool = pool.next {
-		c, h, a, o := pool.Info()
+		c, h, a, o := pool.info()
 		capacity, heap, alloc, overhead = capacity+c, heap+h, alloc+a, overhead+o
 	}
 	for pool := pools.free; pool != nil; pool = pool.next {
-		c, h, a, o := pool.Info()
+		c, h, a, o := pool.info()
 		capacity, heap, alloc, overhead = capacity+c, heap+h, alloc+a, overhead+o
 	}
 	return

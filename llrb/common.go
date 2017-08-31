@@ -141,11 +141,11 @@ func inititerator(
 	iter.continuate = false
 	iter.nodes, iter.index, iter.limit = iter.nodes[:0], 0, startlimit
 	// startkey
-	iter.startkey = lib.Fixbuffer(iter.startkey, llrb.maxkeysize)
+	iter.startkey = lib.Fixbuffer(iter.startkey, 256 /*typical keysize*/)
 	n := copy(iter.startkey, lk)
 	iter.startkey = iter.startkey[:n]
 	// endkey
-	iter.endkey = lib.Fixbuffer(iter.endkey, llrb.maxkeysize)
+	iter.endkey = lib.Fixbuffer(iter.endkey, 256 /*typical keysize*/)
 	n = copy(iter.endkey, hk)
 	iter.endkey = iter.endkey[:n]
 	// other params

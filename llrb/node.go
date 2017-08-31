@@ -14,7 +14,6 @@ const nodesize = int(unsafe.Sizeof(Llrbnode{})) - 8 // + metadatasize + keysize
 type Llrbnode struct {
 	left     *Llrbnode
 	right    *Llrbnode
-	pool     api.MemoryPool
 	mdmarker unsafe.Pointer
 }
 

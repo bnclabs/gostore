@@ -1,11 +1,10 @@
 package malloc
 
-import "fmt"
-
+import "unsafe"
 import s "github.com/prataprc/gosettings"
 
-// Alignment minblock and maxblocks should be multiples of Alignment.
-const Alignment = int64(8)
+// Alignment blocks and chunks should be multiples of Alignment.
+const Alignment = int64(16)
 
 // MEMUtilization is the ratio between allocated memory to application
 // and useful memory allocated from OS.
@@ -21,23 +20,24 @@ const Maxpools = int64(512)
 // Maxchunks maximum number of chunks allowed in a pool.
 const Maxchunks = int64(1024)
 
+type memoryPools interface {
+	// Allocate a new chunk from pool, no more memory available get a
+	// new pool from OS for numchunks for slab size.
+	allocchunk(arena *Arena, numchunks int64) unsafe.Pointer
+
+	// Release all memory pools for this slab.
+	release()
+
+	// Info return memory accouting for this slab.
+	info() (capacity, heap, alloc, overhead int64)
+}
+
 // Malloc configurable parameters and default settings.
-//
-// "minblock" (int64, default: <minblock>)
-//		Minimum size of a chunk. Must be confirm to 8-byte alignment.
-//
-// "maxblock" (int64, default: <maxblock>)
-//		Maximum size of a chunk. Must be confirm to 8-byte alignment.
 //
 // "allocator" (string, default: "flist")
 //		Allocater algorithm, should be "flist"
-func Defaultsettings(minblock, maxblock int64) s.Settings {
-	if minblock > maxblock {
-		panic(fmt.Errorf("minblock(%v) > maxblock(%v)", minblock, maxblock))
-	}
+func Defaultsettings() s.Settings {
 	return s.Settings{
-		"minblock":  minblock,
-		"maxblock":  maxblock,
 		"allocator": "flist",
 	}
 }

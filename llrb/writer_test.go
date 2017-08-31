@@ -31,14 +31,14 @@ func TestNewLLRBMvcc(t *testing.T) {
 
 	if kcap := stats["node.capacity"].(int64); kcap != keycapacity {
 		t.Errorf("expected %v, got %v", 600, kcap)
-	} else if overhead := stats["node.overhead"].(int64); overhead != 632 {
+	} else if overhead := stats["node.overhead"].(int64); overhead != 12064 {
 		t.Errorf("expected %v, got %v", 632, overhead)
 	} else if heap := stats["node.heap"].(int64); heap != 0 {
 		t.Errorf("expected %v, got %v", 0, heap)
 	} else if vcap := stats["value.capacity"].(int64); vcap != valcapacity {
 		t.Errorf("expected %v, got %v", 600, vcap)
-	} else if overhead = stats["value.overhead"].(int64); overhead != 2168 {
-		t.Errorf("expected %v, got %v", 2168, overhead)
+	} else if overhead = stats["value.overhead"].(int64); overhead != 12064 {
+		t.Errorf("expected %v, got %v", 12064, overhead)
 	} else if heap = stats["value.heap"].(int64); heap != 0 {
 		t.Errorf("expected %v, got %v", 0, heap)
 	} else if x, y := int64(0), stats["node.alloc"].(int64); x != y {
@@ -1202,12 +1202,12 @@ func TestLLRBMvccInsert(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	alloc := int64(1680000)
+	alloc := int64(800000)
 	if x := stats["node.alloc"].(int64); x != alloc {
 		t.Errorf("expected %v, got %v", alloc, x)
 	}
 	//useful := int64(25165824)
-	alloc = int64(1360000)
+	alloc = int64(1280000)
 	if x := stats["value.alloc"].(int64); x != alloc {
 		t.Errorf("expected %v, got %v", alloc, x)
 	}
@@ -1393,7 +1393,7 @@ func TestLLRBMvccDelete(t *testing.T) {
 	// insert 10K items
 	count := 10 * 1000
 	for i := 0; i < count; i++ {
-		key, value := makekeyvalue(make([]byte, 10), make([]byte, 100))
+		key, value := makekeyvalue(make([]byte, 32), make([]byte, 100))
 		inserts = append(inserts, [2][]byte{key, value})
 		keys, values = append(keys, key), append(values, value)
 	}

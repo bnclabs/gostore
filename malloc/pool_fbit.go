@@ -43,19 +43,16 @@ func newpoolfbit(
 	return pool
 }
 
-// Chunksize implement api.MemoryPool{} interface.
-func (pool *poolfbit) Slabsize() int64 {
+func (pool *poolfbit) slabsize() int64 {
 	return pool.size
 }
 
-// Less implement api.MemoryPool{} interface.
-func (pool *poolfbit) Less(other interface{}) bool {
+func (pool *poolfbit) less(other interface{}) bool {
 	oth := other.(*poolfbit)
 	return uintptr(pool.base) < uintptr(oth.base)
 }
 
-// Allocchunk implement api.MemoryPool{} interface.
-func (pool *poolfbit) Allocchunk() (unsafe.Pointer, bool) {
+func (pool *poolfbit) allocchunk() (unsafe.Pointer, bool) {
 	if pool.base == nil {
 		panic(fmt.Errorf("pool already released"))
 	} else if pool.mallocated == pool.capacity {
@@ -76,8 +73,7 @@ func (pool *poolfbit) Allocchunk() (unsafe.Pointer, bool) {
 	return unsafe.Pointer(ptr), true
 }
 
-// Free implement api.MemoryPool{} interface.
-func (pool *poolfbit) Free(ptr unsafe.Pointer) {
+func (pool *poolfbit) free(ptr unsafe.Pointer) {
 	if ptr == nil {
 		panic("poolfbit.free(): nil pointer")
 	}
@@ -92,14 +88,14 @@ func (pool *poolfbit) Free(ptr unsafe.Pointer) {
 }
 
 // Info implement api.MemoryPool{} interface.
-func (pool *poolfbit) Info() (capacity, heap, alloc, overhead int64) {
+func (pool *poolfbit) info() (capacity, heap, alloc, overhead int64) {
 	self := int64(unsafe.Sizeof(*pool))
 	slicesz := int64(pool.fbits.sizeof())
 	return pool.capacity, pool.capacity, pool.mallocated, slicesz + self
 }
 
-// Release implement api.MemoryPool{} interface.
-func (pool *poolfbit) Release() {
+// release implement api.MemoryPool{} interface.
+func (pool *poolfbit) release() {
 	C.free(pool.base)
 	pool.fbits = nil
 	pool.capacity, pool.base = 0, nil
@@ -172,11 +168,7 @@ func (pools *fbitPools) toheadfree(pool *poolfbit) *fbitPools {
 	return pools
 }
 
-// Allocchunk implement MemoryPools interface.
-func (pools *fbitPools) Allocchunk(
-	mallocer api.Mallocer, size int64) (unsafe.Pointer, api.MemoryPool) {
-
-	arena := mallocer.(*Arena)
+func (pools *fbitPools) allocchunk(arena *Arena, size int64) unsafe.Pointer {
 	if pools.free == nil {
 		numchunks := arena.adaptiveNumchunks(size, pools.cpools)
 		pools.free = newpoolfbit(size, numchunks, pools, &pools.free, nil)
@@ -187,34 +179,32 @@ func (pools *fbitPools) Allocchunk(
 		if (pools.free.capacity / size) < 64 { // release pool to OS
 			C.free(pools.free.base)
 			pools.npools--
-			return pools.shiftupFree().Allocchunk(arena, size)
+			return pools.shiftupFree().allocchunk(arena, size)
 		}
 	}
-	ptr, ok := pools.free.Allocchunk()
+	ptr, ok := pools.free.allocchunk()
 	if !ok { // full
-		return pools.movetofull().Allocchunk(arena, size)
+		return pools.movetofull().allocchunk(arena, size)
 	}
 	return ptr, pools.free
 }
 
-// Release implement MemoryPools interface.
-func (pools *fbitPools) Release() {
+func (pools *fbitPools) release() {
 	for pool := pools.full; pool != nil; pool = pool.next {
-		pool.Release()
+		pool.release()
 	}
 	for pool := pools.free; pool != nil; pool = pool.next {
-		pool.Release()
+		pool.release()
 	}
 }
 
-// Info implement MemoryPools interface.
-func (pools *fbitPools) Info() (capacity, heap, alloc, overhead int64) {
+func (pools *fbitPools) info() (capacity, heap, alloc, overhead int64) {
 	for pool := pools.full; pool != nil; pool = pool.next {
-		c, h, a, o := pool.Info()
+		c, h, a, o := pool.info()
 		capacity, heap, alloc, overhead = capacity+c, heap+h, alloc+a, overhead+o
 	}
 	for pool := pools.free; pool != nil; pool = pool.next {
-		c, h, a, o := pool.Info()
+		c, h, a, o := pool.info()
 		capacity, heap, alloc, overhead = capacity+c, heap+h, alloc+a, overhead+o
 	}
 	return

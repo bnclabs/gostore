@@ -770,9 +770,5 @@ func getreader(t *testing.T, index api.Index, mvcc bool) api.IndexReader {
 }
 
 func llrbsetts(setts s.Settings) s.Settings {
-	setts["minkeysize"] = int64(96)
-	setts["maxkeysize"] = int64(1024)
-	setts["minvalsize"] = int64(96)
-	setts["maxvalsize"] = int64(10 * 1024 * 1024)
 	return setts
 }

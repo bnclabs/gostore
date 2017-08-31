@@ -7,7 +7,6 @@ import "strings"
 import "unsafe"
 
 import "github.com/prataprc/gostore/malloc"
-import "github.com/prataprc/gostore/api"
 import s "github.com/prataprc/gosettings"
 
 var _ = fmt.Sprintf("dummy")
@@ -17,30 +16,19 @@ func TestConstants(t *testing.T) {
 		t.Fatalf("Llrbnode{} size has changed")
 	} else if int(unsafe.Sizeof(nodevalue{})) != (nvaluesize + 8) {
 		t.Fatalf("nodevalue{} size has changed")
-	} else if api.MinKeysize != 32 {
-		t.Fatalf("MinKeysize has changed")
-	} else if api.MaxKeysize != 4096 {
-		t.Fatalf("MaxKeysize has changed")
-	} else if api.MinValsize != 0 {
-		t.Fatalf("MinValsize has changed")
-	} else if api.MaxValsize != 10*1024*1024 {
-		t.Fatalf("MaxValsize has changed")
 	}
 }
 
 func TestNode(t *testing.T) {
 	capacity := int64(1024 * 1024 * 1024)
 	marena := malloc.NewArena(capacity, s.Settings{
-		"minblock":  int64(96),
-		"maxblock":  int64(1024 * 1024 * 10),
 		"allocator": "flist",
 	})
 	blocksize, key := int64(1024), make([]byte, 512)
 	copy(key, "hello world")
 
-	ptr, mpool := marena.Alloc(blocksize)
+	ptr := marena.Alloc(blocksize)
 	nd := (*Llrbnode)(ptr)
-	nd.pool = mpool
 
 	vbno, fmask := uint16(0x1234), metadataMask(0).enableMvalue()
 	nd.metadata().initMetadata(vbno, fmask)
@@ -49,13 +37,12 @@ func TestNode(t *testing.T) {
 		t.Errorf("expected %v, got %v", vbno, x)
 	} else if nd.keysize() != len(key) {
 		t.Errorf("expected %v, got %v", len(key), nd.keysize())
-	} else if nd.sizeof() != 40 {
-		t.Errorf("expected %v, got %v", 40, nd.sizeof())
+	} else if nd.sizeof() != 24 {
+		t.Errorf("expected %v, got %v", 24, nd.sizeof())
 	}
 
-	vptr, mpool := marena.Alloc(20)
+	vptr := marena.Alloc(20)
 	nv := (*nodevalue)(vptr)
-	nv.pool = mpool
 
 	if nd.setnodevalue(nv); nd.nodevalue() != nv {
 		t.Errorf("expected %v, got %v", nv, nd.nodevalue())
@@ -87,29 +74,25 @@ func TestNode(t *testing.T) {
 		t.Errorf("expected %v, got %v", key, nd.key(mdsize))
 	}
 
-	nd.pool.Free(ptr)
+	marena.Free(ptr)
 }
 
 func TestNodeFields(t *testing.T) {
 	capacity := int64(1024 * 1024 * 1024)
 	marena := malloc.NewArena(capacity, s.Settings{
-		"minblock":  int64(96),
-		"maxblock":  int64(1024 * 1024 * 10),
 		"allocator": "flist",
 	})
 	blocksize, key := int64(1024), make([]byte, 512)
 	copy(key, "hello world")
 
-	ptr, mpool := marena.Alloc(blocksize)
+	ptr := marena.Alloc(blocksize)
 	nd := (*Llrbnode)(ptr)
 	fmask := metadataMask(0).enableBornSeqno().enableDeadSeqno().enableVbuuid()
 	fmask = fmask.enableMvalue().enableFpos()
 	nd.metadata().initMetadata(0, fmask)
-	nd.pool = mpool
 
-	ptr, mpool = marena.Alloc(blocksize)
+	ptr = marena.Alloc(blocksize)
 	nv := (*nodevalue)(ptr)
-	nv.pool = mpool
 	nd.metadata().setmvalue((uint64)((uintptr)(unsafe.Pointer(nv))))
 	level, offset := byte(1), uint64(0x1234)
 	nd.metadata().setfpos(level, offset)
@@ -167,15 +150,12 @@ func TestNodeFields(t *testing.T) {
 func TestLtkey(t *testing.T) {
 	capacity := int64(1024 * 1024 * 1024)
 	marena := malloc.NewArena(capacity, s.Settings{
-		"minblock":  int64(96),
-		"maxblock":  int64(1024 * 1024 * 10),
 		"allocator": "flist",
 	})
 	blocksize, key := int64(1024), []byte("abcdef")
 
-	ptr, mpool := marena.Alloc(blocksize)
+	ptr := marena.Alloc(blocksize)
 	nd := (*Llrbnode)(ptr)
-	nd.pool = mpool
 
 	// check with empty key
 	nd.metadata().initMetadata(0x1234, 0)
@@ -197,21 +177,18 @@ func TestLtkey(t *testing.T) {
 	} else if nd.ltkey(mdsize, []byte("abcdef"), false) != false {
 		t.Errorf("expected false")
 	}
-	mpool.Free(ptr)
+	marena.Free(ptr)
 }
 
 func TestLekey(t *testing.T) {
 	capacity := int64(1024 * 1024 * 1024)
 	marena := malloc.NewArena(capacity, s.Settings{
-		"minblock":  int64(96),
-		"maxblock":  int64(1024 * 1024 * 10),
 		"allocator": "flist",
 	})
 	blocksize, key := int64(1024), []byte("abcdef")
 
-	ptr, mpool := marena.Alloc(blocksize)
+	ptr := marena.Alloc(blocksize)
 	nd := (*Llrbnode)(ptr)
-	nd.pool = mpool
 
 	// check with empty key
 	vbno, fmask := uint16(0x1234), metadataMask(0)
@@ -235,21 +212,18 @@ func TestLekey(t *testing.T) {
 		t.Errorf("expected true")
 	}
 
-	mpool.Free(ptr)
+	marena.Free(ptr)
 }
 
 func TestGtkey(t *testing.T) {
 	capacity := int64(1024 * 1024 * 1024)
 	marena := malloc.NewArena(capacity, s.Settings{
-		"minblock":  int64(96),
-		"maxblock":  int64(1024 * 1024 * 10),
 		"allocator": "flist",
 	})
 	blocksize, key := int64(1024), []byte("abcdef")
 
-	ptr, mpool := marena.Alloc(blocksize)
+	ptr := marena.Alloc(blocksize)
 	nd := (*Llrbnode)(ptr)
-	nd.pool = mpool
 
 	// check with empty key
 	vbno, fmask := uint16(0x1234), metadataMask(0)
@@ -273,21 +247,18 @@ func TestGtkey(t *testing.T) {
 		t.Errorf("expected false")
 	}
 
-	mpool.Free(ptr)
+	marena.Free(ptr)
 }
 
 func TestGekey(t *testing.T) {
 	capacity := int64(1024 * 1024 * 1024)
 	marena := malloc.NewArena(capacity, s.Settings{
-		"minblock":  int64(96),
-		"maxblock":  int64(1024 * 1024 * 10),
 		"allocator": "flist",
 	})
 	blocksize, key := int64(1024), []byte("abcdef")
 
-	ptr, mpool := marena.Alloc(blocksize)
+	ptr := marena.Alloc(blocksize)
 	nd := (*Llrbnode)(ptr)
-	nd.pool = mpool
 
 	// check with empty key
 	vbno, fmask := uint16(0x1234), metadataMask(0)
@@ -311,21 +282,18 @@ func TestGekey(t *testing.T) {
 		t.Errorf("expected true")
 	}
 
-	mpool.Free(ptr)
+	marena.Free(ptr)
 }
 
 func BenchmarkNodefields(b *testing.B) {
 	capacity := int64(1024 * 1024 * 1024)
 	marena := malloc.NewArena(capacity, s.Settings{
-		"minblock":  int64(96),
-		"maxblock":  int64(1024 * 1024 * 10),
 		"allocator": "flist",
 	})
 	blocksize, key := int64(1024), []byte("abcdef")
 
-	ptr, mpool := marena.Alloc(blocksize)
+	ptr := marena.Alloc(blocksize)
 	nd := (*Llrbnode)(ptr)
-	nd.pool = mpool
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -344,21 +312,18 @@ func BenchmarkNodefields(b *testing.B) {
 		md.access()
 	}
 
-	mpool.Free(ptr)
+	marena.Free(ptr)
 }
 
 func BenchmarkNodeSetKey(b *testing.B) {
 	capacity := int64(1024 * 1024 * 1024)
 	marena := malloc.NewArena(capacity, s.Settings{
-		"minblock":  int64(96),
-		"maxblock":  int64(1024 * 1024 * 10),
 		"allocator": "flist",
 	})
 	blocksize, key := int64(1024), make([]byte, 215)
 
-	ptr, mpool := marena.Alloc(blocksize)
+	ptr := marena.Alloc(blocksize)
 	nd := (*Llrbnode)(ptr)
-	nd.pool = mpool
 	mdsize := nd.metadata().sizeof()
 
 	b.ResetTimer()
@@ -367,21 +332,18 @@ func BenchmarkNodeSetKey(b *testing.B) {
 		nd.setkey(mdsize, key)
 	}
 
-	mpool.Free(ptr)
+	marena.Free(ptr)
 }
 
 func BenchmarkNodeGetKey(b *testing.B) {
 	capacity := int64(1024 * 1024 * 1024)
 	marena := malloc.NewArena(capacity, s.Settings{
-		"minblock":  int64(96),
-		"maxblock":  int64(1024 * 1024 * 10),
 		"allocator": "flist",
 	})
 	blocksize, key := int64(1024), make([]byte, 512)
 
-	ptr, mpool := marena.Alloc(blocksize)
+	ptr := marena.Alloc(blocksize)
 	nd := (*Llrbnode)(ptr)
-	nd.pool = mpool
 	nd.metadata().initMetadata(0x1234, 0)
 	mdsize := nd.metadata().sizeof()
 	nd.setkey(mdsize, key)
@@ -395,16 +357,13 @@ func BenchmarkNodeGetKey(b *testing.B) {
 func BenchmarkCompareLtkey(b *testing.B) {
 	capacity := int64(1024 * 1024 * 1024)
 	marena := malloc.NewArena(capacity, s.Settings{
-		"minblock":  int64(96),
-		"maxblock":  int64(1024 * 1024 * 10),
 		"allocator": "flist",
 	})
 	blocksize, key := int64(1024), make([]byte, 512)
 	otherkey := make([]byte, 512)
 
-	ptr, mpool := marena.Alloc(blocksize)
+	ptr := marena.Alloc(blocksize)
 	nd := (*Llrbnode)(ptr)
-	nd.pool = mpool
 	nd.metadata().initMetadata(0x1234, 0)
 	mdsize := nd.metadata().sizeof()
 	nd.setkey(mdsize, key)
@@ -414,22 +373,19 @@ func BenchmarkCompareLtkey(b *testing.B) {
 		nd.ltkey(mdsize, otherkey, false)
 	}
 
-	mpool.Free(ptr)
+	marena.Free(ptr)
 }
 
 func BenchmarkCompareLekey(b *testing.B) {
 	capacity := int64(1024 * 1024 * 1024)
 	marena := malloc.NewArena(capacity, s.Settings{
-		"minblock":  int64(96),
-		"maxblock":  int64(1024 * 1024 * 10),
 		"allocator": "flist",
 	})
 	blocksize, key := int64(1024), make([]byte, 512)
 	otherkey := make([]byte, 512)
 
-	ptr, mpool := marena.Alloc(blocksize)
+	ptr := marena.Alloc(blocksize)
 	nd := (*Llrbnode)(ptr)
-	nd.pool = mpool
 	nd.metadata().initMetadata(0x1234, 0)
 	mdsize := nd.metadata().sizeof()
 	nd.setkey(mdsize, key)
@@ -439,22 +395,19 @@ func BenchmarkCompareLekey(b *testing.B) {
 		nd.lekey(mdsize, otherkey, false)
 	}
 
-	mpool.Free(ptr)
+	marena.Free(ptr)
 }
 
 func BenchmarkCompareGtkey(b *testing.B) {
 	capacity := int64(1024 * 1024 * 1024)
 	marena := malloc.NewArena(capacity, s.Settings{
-		"minblock":  int64(96),
-		"maxblock":  int64(1024 * 1024 * 10),
 		"allocator": "flist",
 	})
 	blocksize, key := int64(1024), make([]byte, 512)
 	otherkey := make([]byte, 512)
 
-	ptr, mpool := marena.Alloc(blocksize)
+	ptr := marena.Alloc(blocksize)
 	nd := (*Llrbnode)(ptr)
-	nd.pool = mpool
 	nd.metadata().initMetadata(0x1234, 0)
 	mdsize := nd.metadata().sizeof()
 	nd.setkey(mdsize, key)
@@ -464,22 +417,19 @@ func BenchmarkCompareGtkey(b *testing.B) {
 		nd.gtkey(mdsize, otherkey, false)
 	}
 
-	mpool.Free(ptr)
+	marena.Free(ptr)
 }
 
 func BenchmarkCompareGekey(b *testing.B) {
 	capacity := int64(1024 * 1024 * 1024)
 	marena := malloc.NewArena(capacity, s.Settings{
-		"minblock":  int64(96),
-		"maxblock":  int64(1024 * 1024 * 10),
 		"allocator": "flist",
 	})
 	blocksize, key := int64(1024), make([]byte, 512)
 	otherkey := make([]byte, 512)
 
-	ptr, mpool := marena.Alloc(blocksize)
+	ptr := marena.Alloc(blocksize)
 	nd := (*Llrbnode)(ptr)
-	nd.pool = mpool
 	nd.metadata().initMetadata(0x1234, 0)
 	mdsize := nd.metadata().sizeof()
 	nd.setkey(mdsize, key)
@@ -489,5 +439,5 @@ func BenchmarkCompareGekey(b *testing.B) {
 		nd.gekey(mdsize, otherkey, false)
 	}
 
-	mpool.Free(ptr)
+	marena.Free(ptr)
 }

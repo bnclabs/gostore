@@ -17,15 +17,3 @@ var ErrorKeyMissing = errors.New("keyMissing")
 // ErrorInvalidCAS operation cannot succeed because CAS value does not
 // match with the document.
 var ErrorInvalidCAS = errors.New("invalidCAS")
-
-// MinKeysize minimum key size.
-const MinKeysize = int64(32)
-
-// MaxKeysize maximum key size.
-const MaxKeysize = int64(4096)
-
-// MinValsize minimum value size.
-const MinValsize = int64(0)
-
-// MaxValsize maximum value size.
-const MaxValsize = int64(10 * 1024 * 1024)

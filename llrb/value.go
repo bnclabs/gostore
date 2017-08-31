@@ -7,13 +7,10 @@ package llrb
 import "unsafe"
 import "reflect"
 
-import "github.com/prataprc/gostore/api"
-
 const nvaluesize = int(unsafe.Sizeof(nodevalue{})) - 8 // + valuesize
 
 type nodevalue struct {
-	hdr1     uint64 // valuesize[39:]
-	pool     api.MemoryPool
+	hdr1     uint64         // valuesize[39:]
 	valstart unsafe.Pointer // just a place-holder
 }
 

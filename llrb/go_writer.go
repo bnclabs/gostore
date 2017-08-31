@@ -487,14 +487,13 @@ func (writer *LLRBWriter) upsert(
 		oldnd = nd
 		if ndmvcc.metadata().ismvalue() {
 			if nv := ndmvcc.nodevalue(); nv != nil { // free the value if pres.
-				nv.pool.Free(unsafe.Pointer(nv))
+				llrb.valarena.Free(unsafe.Pointer(nv))
 				ndmvcc = ndmvcc.setnodevalue(nil)
 			}
 		}
 		if ndmvcc.metadata().ismvalue() && value != nil { // add new value.
-			ptr, mpool := llrb.valarena.Alloc(int64(nvaluesize + len(value)))
+			ptr := llrb.valarena.Alloc(int64(nvaluesize + len(value)))
 			nv := (*nodevalue)(ptr)
-			nv.pool = mpool
 			ndmvcc = ndmvcc.setnodevalue(nv.setvalue(value))
 		}
 		ndmvcc.metadata().setdirty()

@@ -28,7 +28,7 @@ func TestNewLLRB(t *testing.T) {
 		t.Error(err)
 	}
 
-	ovrhd, used, allc := int64(632), int64(0), int64(0)
+	ovrhd, used, allc := int64(12064), int64(0), int64(0)
 	keycapacity := setts.Int64("keycapacity")
 	if x := stats["node.capacity"].(int64); x != keycapacity {
 		t.Errorf("expected %v, got %v", keycapacity, x)
@@ -40,7 +40,7 @@ func TestNewLLRB(t *testing.T) {
 		t.Errorf("expected %v, got %v", allc, x)
 	}
 
-	ovrhd, used, allc = int64(2168), int64(0), int64(0)
+	ovrhd, used, allc = int64(12064), int64(0), int64(0)
 	valcapacity := setts.Int64("valcapacity")
 	if x := stats["value.capacity"].(int64); x != valcapacity {
 		t.Errorf("expected %v, got %v", valcapacity, x)
@@ -1169,16 +1169,16 @@ func TestInsert(t *testing.T) {
 		t.Error(err)
 	}
 
-	useful := int64(1687896)
-	allocated := int64(1680000)
+	useful := int64(1607520)
+	allocated := int64(1600000)
 	if x := stats["node.heap"].(int64); x != useful {
 		t.Errorf("expected %v, got %v", useful, x)
 	}
 	if x := stats["node.alloc"].(int64); x != allocated {
 		t.Errorf("expected %v, got %v", allocated, x)
 	}
-	useful = int64(1366392)
-	allocated = int64(1360000)
+	useful = int64(1286016)
+	allocated = int64(1280000)
 	if x := stats["value.heap"].(int64); x != useful {
 		t.Errorf("expected %v, got %v", useful, x)
 	}
@@ -1299,17 +1299,17 @@ func TestUpsert(t *testing.T) {
 		t.Error(err)
 	}
 
-	if useful := stats["node.heap"].(int64); useful != 1687896 {
-		t.Errorf("expected %v, got %v", 1687896, useful)
+	if useful := stats["node.heap"].(int64); useful != 1607520 {
+		t.Errorf("expected %v, got %v", 1607520, useful)
 	}
-	if useful := stats["value.heap"].(int64); useful != 2330904 {
-		t.Errorf("expected %v, got %v", 2330904, useful)
+	if useful := stats["value.heap"].(int64); useful != 2250528 {
+		t.Errorf("expected %v, got %v", 2250528, useful)
 	}
-	x, y := int64(1680000), stats["node.alloc"].(int64)
+	x, y := int64(1600000), stats["node.alloc"].(int64)
 	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
-	x, y = int64(2320000), stats["value.alloc"].(int64)
+	x, y = int64(2240000), stats["value.alloc"].(int64)
 	if x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
@@ -1612,6 +1612,8 @@ func BenchmarkCloneLarge(b *testing.B) {
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
+	setts["keycapacity"] = 1024 * 1024 * 100
+	setts["valcapacity"] = 1024 * 1024 * 100
 	llrb := NewLLRB("test", setts)
 
 	b.ResetTimer()
@@ -1628,6 +1630,8 @@ func BenchmarkRange10000(b *testing.B) {
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
+	setts["keycapacity"] = 1024 * 1024 * 100
+	setts["valcapacity"] = 1024 * 1024 * 100
 	llrb := NewLLRB("test", setts)
 	// Insert 10000 items
 	for i := 0; i < 10000; i++ {
@@ -1655,6 +1659,8 @@ func BenchmarkIter10000(b *testing.B) {
 	setts["metadata.mvalue"] = true
 	setts["metadata.bornseqno"] = true
 	setts["metadata.vbuuid"] = true
+	setts["keycapacity"] = 1024 * 1024 * 100
+	setts["valcapacity"] = 1024 * 1024 * 100
 	llrb := NewLLRB("test", setts)
 	// Insert 10000 items
 	for i := 0; i < 10000; i++ {
@@ -1729,11 +1735,7 @@ func makellrb(
 }
 
 func testsetts(setts s.Settings) s.Settings {
-	setts["minkeysize"] = int64(96)
-	setts["maxkeysize"] = int64(1024)
-	setts["minvalsize"] = int64(96)
-	setts["maxvalsize"] = int64(10 * 1024 * 1024)
-	setts["keycapacity"] = 1024 * 1024 * 100
-	setts["valcapacity"] = 1024 * 1024 * 100
+	setts["keycapacity"] = 1024 * 1024 * 10
+	setts["valcapacity"] = 1024 * 1024 * 10
 	return setts
 }

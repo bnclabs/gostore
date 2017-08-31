@@ -1,7 +1,5 @@
 package malloc
 
-import "fmt"
-
 // SuitableSlab return an optimal block-size for required size.
 // Argument slabs should be sorted array of int64.
 func SuitableSlab(slabs []int64, size int64) int64 {
@@ -29,21 +27,9 @@ func SuitableSlab(slabs []int64, size int64) int64 {
 	}
 }
 
-// Computeslabs generate suitable block-sizes between minblock-size and
-// maxblock-size. This is to achieve optimal memory-utilization. If
-// minblock is less than or equal to maxblock, or minblock and maxblock
-// are not aligned, this function will panic.
-func Computeslabs(minblock, maxblock int64) []int64 {
-	if maxblock < minblock { // validate and cure the input params
-		panic("minblock < maxblock")
-	} else if (minblock % Alignment) != 0 {
-		fmsg := "minblock %v is not multiple of %v"
-		panic(fmt.Errorf(fmsg, minblock, Alignment))
-	} else if (maxblock % Alignment) != 0 {
-		fmsg := "maxblock %v is not multiple of %v"
-		panic(fmt.Errorf(fmsg, maxblock, Alignment))
-	}
-
+// Computeslabs generate suitable block-sizes between 0 bytes to 1TB.
+// This is to achieve optimal memory-utilization.
+func Computeslabs() []int64 {
 	nextsize := func(from int64) int64 {
 		addby := int64(float64(from) * (1.0 - MEMUtilization))
 		if addby <= Alignment {
@@ -55,6 +41,7 @@ func Computeslabs(minblock, maxblock int64) []int64 {
 		return size
 	}
 
+	minblock, maxblock := int64(0), int64(1024*1024*1024*1024)
 	sizes := make([]int64, 0, 64)
 	for from := minblock + Alignment; from < maxblock; {
 		sizes = append(sizes, from)
