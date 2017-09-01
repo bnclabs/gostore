@@ -45,6 +45,10 @@ func newpoolflist(
 }
 
 func (pool *poolflist) slabsize() int64 {
+	return pool.size
+}
+
+func (pool *poolflist) chunklen() int64 {
 	return pool.size - 8
 }
 

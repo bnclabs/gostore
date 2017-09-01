@@ -12,8 +12,15 @@ type Mallocer interface {
 	// memory is always 64-bit aligned.
 	Alloc(n int64) unsafe.Pointer
 
+	// Allocslab allocate a chunk from slab. Use this only if slab size
+	// is known in exist with mallocer.
+	Allocslab(slab int64) unsafe.Pointer
+
 	// Slabsize return the size of the chunk's slab size.
 	Slabsize(ptr unsafe.Pointer) int64
+
+	// Chunklen return the length of the chunk usable by application.
+	Chunklen(ptr unsafe.Pointer) int64
 
 	// Free chunk from arena/pool.
 	Free(ptr unsafe.Pointer)

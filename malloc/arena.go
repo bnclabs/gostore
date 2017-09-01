@@ -89,6 +89,11 @@ func (arena *Arena) Alloc(n int64) unsafe.Pointer {
 	return arena.mpools[size].allocchunk(arena, size)
 }
 
+// Allocslab implement api.Mallocer{} interface.
+func (arena *Arena) Allocslab(slab int64) unsafe.Pointer {
+	return arena.mpools[slab].allocchunk(arena, slab)
+}
+
 // Slabsize implement api.Mallocer{} interface.
 func (arena *Arena) Slabsize(ptr unsafe.Pointer) int64 {
 	switch arena.allocator {
@@ -97,6 +102,18 @@ func (arena *Arena) Slabsize(ptr unsafe.Pointer) int64 {
 		poolptr := (**poolflist)(ptr)
 		pool := *poolptr
 		return pool.slabsize()
+	}
+	panic("unreachable code")
+}
+
+// Chunklen implement api.Mallocer{} interface.
+func (arena *Arena) Chunklen(ptr unsafe.Pointer) int64 {
+	switch arena.allocator {
+	case "flist":
+		ptr = unsafe.Pointer(uintptr(ptr) - 8)
+		poolptr := (**poolflist)(ptr)
+		pool := *poolptr
+		return pool.chunklen()
 	}
 	panic("unreachable code")
 }
