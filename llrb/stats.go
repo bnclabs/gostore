@@ -249,9 +249,13 @@ func (llrb *LLRB) log(what string, humanize bool) {
 	}
 
 	// log statistics
-	text := lib.Prettystats(llrb.statskey(map[string]interface{}{}), false)
+	m := llrb.statskey(map[string]interface{}{})
+	delete(m, "node.blocks")
+	text := lib.Prettystats(m, false)
 	log.Infof("%v keystats %v\n", llrb.logprefix, string(text))
-	text = lib.Prettystats(llrb.statsval(map[string]interface{}{}), false)
+	m = llrb.statsval(map[string]interface{}{})
+	delete(m, "value.blocks")
+	text = lib.Prettystats(m, false)
 	log.Infof("%v valstats %v\n", llrb.logprefix, string(text))
 	text = lib.Prettystats(llrb.statswt(map[string]interface{}{}), false)
 	log.Infof("%v writestats %v\n", llrb.logprefix, string(text))
