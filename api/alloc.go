@@ -13,7 +13,7 @@ type Mallocer interface {
 	Alloc(n int64) unsafe.Pointer
 
 	// Allocslab allocate a chunk from slab. Use this only if slab size
-	// is known in exist with mallocer.
+	// is known to exist with mallocer.
 	Allocslab(slab int64) unsafe.Pointer
 
 	// Slabsize return the size of the chunk's slab size.
