@@ -397,43 +397,17 @@ func buildlsmindexes(
 
 		} else {
 			index := indexes[rand.Intn(len(indexes))]
-			if rnd < 85 {
-				index.DeleteMin(
-					func(_ api.Index, _ int64, nnd, _ api.Node, err error) bool {
-						if err != nil {
-							t.Error(err)
-						} else if nnd != nil {
-							key = nnd.Key()
-							nnd.Setvbno(100).SetVbuuid(1000).SetDeadseqno(seqno)
-						}
-						return true
-					})
-				//fmt.Printf("delmin %q %q %q\n", index.ID(), key, value)
-			} else if rnd < 90 {
-				index.DeleteMax(
-					func(_ api.Index, _ int64, nnd, _ api.Node, err error) bool {
-						if err != nil {
-							t.Error(err)
-						} else if nnd != nil {
-							key = nnd.Key()
-							nnd.Setvbno(100).SetVbuuid(1000).SetDeadseqno(seqno)
-						}
-						return true
-					})
-				//fmt.Printf("delmax %q %q %q\n", index.ID(), key, value)
-			} else {
-				//fmt.Printf("delete %q %q %q\n", index.ID(), key, value)
-				index.Delete(
-					key,
-					func(_ api.Index, _ int64, nnd, _ api.Node, err error) bool {
-						if err != nil {
-							t.Error(err)
-						} else if nnd != nil {
-							nnd.Setvbno(100).SetVbuuid(1000).SetDeadseqno(seqno)
-						}
-						return true
-					})
-			}
+			//fmt.Printf("delete %q %q %q\n", index.ID(), key, value)
+			index.Delete(
+				key,
+				func(_ api.Index, _ int64, nnd, _ api.Node, err error) bool {
+					if err != nil {
+						t.Error(err)
+					} else if nnd != nil {
+						nnd.Setvbno(100).SetVbuuid(1000).SetDeadseqno(seqno)
+					}
+					return true
+				})
 			refllrb.Delete(
 				key,
 				func(_ api.Index, _ int64, nnd, ond api.Node, err error) bool {

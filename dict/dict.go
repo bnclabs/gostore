@@ -164,38 +164,6 @@ func (d *Dict) Get(key []byte, callb api.NodeCallb) bool {
 	return false
 }
 
-// Min implement api.IndexReader interface.
-func (d *Dict) Min(callb api.NodeCallb) bool {
-	if len(d.dict) == 0 {
-		if callb != nil {
-			callb(d, 0, nil, nil, api.ErrorKeyMissing)
-		}
-		return false
-	}
-	hashv := d.sorted()[0]
-	if callb != nil {
-		nd := d.dict[hashv]
-		callb(d, 0, nd, nd, nil)
-	}
-	return true
-}
-
-// Max implement api.IndexReader interface.
-func (d *Dict) Max(callb api.NodeCallb) bool {
-	if len(d.dict) == 0 {
-		if callb != nil {
-			callb(d, 0, nil, nil, api.ErrorKeyMissing)
-		}
-		return false
-	}
-	hashks := d.sorted()
-	if callb != nil {
-		nd := d.dict[hashks[len(hashks)-1]]
-		callb(d, 0, nd, nd, nil)
-	}
-	return true
-}
-
 // Range implement api.IndexReader interface.
 func (d *Dict) Range(lk, hk []byte, incl string, r bool, callb api.NodeCallb) {
 	lk, hk = d.fixrangeargs(lk, hk)
@@ -248,38 +216,6 @@ func (d *Dict) UpsertCas(key, value []byte, cas uint64, callb api.NodeCallb) err
 	return api.ErrorInvalidCAS
 }
 
-// DeleteMin implement api.IndexWriter interface.
-func (d *Dict) DeleteMin(callb api.NodeCallb) (err error) {
-	if len(d.dict) > 0 {
-		d.Min(func(idx api.Index, i int64, nnd, ond api.Node, e error) bool {
-			if e != nil {
-				err = e
-				callb(idx, i, nnd, ond, e)
-			} else {
-				err = d.Delete(ond.Key(), callb)
-			}
-			return false
-		})
-	}
-	return
-}
-
-// DeleteMax implement api.IndexWriter interface.
-func (d *Dict) DeleteMax(callb api.NodeCallb) (err error) {
-	if len(d.dict) > 0 {
-		d.Max(func(idx api.Index, i int64, nnd, ond api.Node, e error) bool {
-			if e != nil {
-				err = e
-				callb(idx, i, nnd, ond, e)
-			} else {
-				err = d.Delete(ond.Key(), callb)
-			}
-			return false
-		})
-	}
-	return
-}
-
 // Delete implement api.IndexWriter interface.
 func (d *Dict) Delete(key []byte, callb api.NodeCallb) error {
 	if len(d.dict) > 0 {
@@ -318,10 +254,6 @@ func (d *Dict) Mutations(cmds []*api.MutationCmd, callb api.NodeCallb) error {
 			d.Upsert(mcmd.Key, mcmd.Value, localfn)
 		case api.CasCmd:
 			d.UpsertCas(mcmd.Key, mcmd.Value, mcmd.Cas, localfn)
-		case api.DelminCmd:
-			d.DeleteMin(localfn)
-		case api.DelmaxCmd:
-			d.DeleteMax(localfn)
 		case api.DeleteCmd:
 			d.Delete(mcmd.Key, localfn)
 		default:

@@ -183,43 +183,6 @@ func TestBasicLookup(t *testing.T) {
 		t.Errorf("expected nil when Get() on missing key")
 	}
 
-	// min
-	nd = nil
-	rc = llrb.Min(func(_ api.Index, _ int64, _, x api.Node, err error) bool {
-		if err != nil {
-			t.Error(err)
-		}
-		nd = x
-		return true
-	})
-	if rc == false {
-		t.Errorf("missing minimum key")
-	}
-	if k, v := nd.Key(), nd.Value(); bytes.Compare(k, inserts[0][0]) != 0 {
-		t.Errorf("expected %v, got %v", string(inserts[0][0]), string(k))
-	} else if bytes.Compare(v, inserts[0][1]) != 0 {
-		t.Errorf("expected %v, got %v", string(inserts[0][1]), string(v))
-	}
-
-	// max
-	nd = nil
-	rc = llrb.Max(func(_ api.Index, _ int64, _, x api.Node, err error) bool {
-		if err != nil {
-			t.Error(err)
-		}
-		nd = x
-		return true
-	})
-	if rc == false {
-		t.Errorf("missing maximum key")
-	}
-	k, v := nd.Key(), nd.Value()
-	if bytes.Compare(k, []byte("key5")) != 0 {
-		t.Errorf("expected %v, got %v", "key5", string(k))
-	} else if bytes.Compare(v, []byte("value5")) != 0 {
-		t.Errorf("expected %v, got %v", "value5", string(v))
-	}
-
 	if err := llrb.Destroy(); err != nil {
 		t.Fatal(err)
 	}
@@ -287,64 +250,7 @@ func TestBasicUpdates(t *testing.T) {
 	llrb.ExpectedUtilization(0.019)
 	llrb.Validate()
 
-	// delete
-	countref, key, value := llrb.Count(), []byte(nil), []byte(nil)
-	llrb.DeleteMin(
-		func(index api.Index, _ int64, _, nd api.Node, err error) bool {
-			if err != nil {
-				t.Error(err)
-			}
-			key, value = nd.Key(), nd.Value()
-			fmsg := "expected %v, got %v"
-			if bytes.Compare(key, inserts[0][0]) != 0 {
-				t.Errorf(fmsg, string(inserts[0][0]), string(key))
-			} else if bytes.Compare(value, []byte("value11")) != 0 {
-				t.Errorf(fmsg, string(inserts[0][1]), string(value))
-			} else if index.Count() != int64(len(inserts)-1) {
-				t.Errorf(fmsg, len(inserts)-1, index.Count())
-			}
-			return false
-		})
-	// check
-	if countref-1 != llrb.Count() {
-		t.Errorf("expected %v, got %v", countref-1, llrb.Count())
-	} else if rc := llrb.Get(key, nil); rc == true {
-		t.Errorf("expected missing key")
-	}
-
-	llrb.ExpectedUtilization(0.015)
-	llrb.Validate()
-
-	// delete-max
-	countref, key, value = llrb.Count(), nil, nil
-	llrb.DeleteMax(
-		func(index api.Index, _ int64, _, nd api.Node, err error) bool {
-			if err != nil {
-				t.Error(err)
-			}
-			k, v := nd.Key(), nd.Value()
-			fmsg := "expected %v, got %v"
-			if bytes.Compare(k, []byte("key5")) != 0 {
-				t.Errorf(fmsg, "key5", string(k))
-			} else if bytes.Compare(v, []byte("value5")) != 0 {
-				t.Errorf(fmsg, "value5", string(v))
-			} else if index.Count() != int64(len(inserts)-2) {
-				t.Errorf(fmsg, len(inserts)-2, index.Count())
-			}
-			return false
-		})
-	// check
-	if countref-1 != llrb.Count() {
-		t.Errorf("expected %v, got %v", countref-1, llrb.Count())
-	} else if rc := llrb.Get(key, nil); rc == true {
-		t.Errorf("expeced missing key")
-	}
-
-	llrb.ExpectedUtilization(0.011)
-	llrb.Validate()
-
-	// delete-min
-	countref, key, value = llrb.Count(), nil, nil
+	countref, key := llrb.Count(), []byte(nil)
 	llrb.Delete(
 		[]byte("key2"),
 		func(index api.Index, _ int64, _, nd api.Node, err error) bool {
@@ -355,8 +261,8 @@ func TestBasicUpdates(t *testing.T) {
 			fmsg := "expected %v, got %v"
 			if bytes.Compare(v, []byte("value2")) != 0 {
 				t.Errorf(fmsg, "value2", string(v))
-			} else if index.Count() != int64(len(inserts)-3) {
-				t.Errorf(fmsg, len(inserts)-3, index.Count())
+			} else if index.Count() != int64(len(inserts)-1) {
+				t.Errorf(fmsg, len(inserts)-1, index.Count())
 			}
 			return false
 		})
@@ -1422,44 +1328,7 @@ func TestDelete(t *testing.T) {
 	llrb.ExpectedUtilization(0.13)
 	llrb.Validate()
 
-	// delete minimums
-	for i := 0; i < len(keys[count/2:(3*count)/4]); i++ {
-		llrb.DeleteMin(
-			func(index api.Index, _ int64, _, nd api.Node, err error) bool {
-				if err != nil {
-					t.Error(err)
-				} else if nd == nil {
-					t.Errorf("unexpected nil")
-				} else if x := nd.Vbno(); x != vbno {
-					t.Errorf("expected %v, got %v", vbno, x)
-				} else if x := nd.Vbuuid(); x != vbuuid {
-					t.Errorf("expected %v, got %v", vbuuid, x)
-				}
-				return false
-			})
-	}
-
-	llrb.Validate()
-
-	// delete maximums
-	for i := 0; i < len(keys[(3*count)/4:]); i++ {
-		llrb.DeleteMax(
-			func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
-				if err != nil {
-					t.Error(err)
-				} else if nd == nil {
-					t.Errorf("unexpected nil")
-				} else if x := nd.Vbno(); x != vbno {
-					t.Errorf("expected %v, got %v", vbno, x)
-				} else if x := nd.Vbuuid(); x != vbuuid {
-					t.Errorf("expected %v, got %v", vbuuid, x)
-				}
-				return false
-			})
-	}
-
-	llrb.ExpectedUtilization(0)
-	llrb.Validate()
+	time.Sleep(1 * time.Second)
 
 	// check memory accounting
 	stats, err := llrb.Fullstats()
@@ -1467,19 +1336,19 @@ func TestDelete(t *testing.T) {
 		t.Error(err)
 	}
 
-	if useful := stats["node.heap"].(int64); useful != 0 {
-		t.Errorf("expected %v, got %v", 0, useful)
+	if useful := stats["node.heap"].(int64); useful != 1607360 {
+		t.Errorf("expected %v, got %v", 1607360, useful)
 	}
-	if useful := stats["value.heap"].(int64); useful != 0 {
-		t.Errorf("expected %v, got %v", 0, useful)
-	} else if x, y := int64(0), stats["node.alloc"].(int64); x != y {
+	if useful := stats["value.heap"].(int64); useful != 1285888 {
+		t.Errorf("expected %v, got %v", 1285888, useful)
+	} else if x, y := int64(800000), stats["node.alloc"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(0), stats["value.alloc"].(int64); x != y {
+	} else if x, y = int64(640000), stats["value.alloc"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
-	if x, y := int64(0), stats["keymemory"].(int64); x != y {
+	if x, y := int64(500000), stats["keymemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(0), stats["valmemory"].(int64); x != y {
+	} else if x, y = int64(500000), stats["valmemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
 

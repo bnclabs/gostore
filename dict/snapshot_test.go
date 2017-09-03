@@ -60,27 +60,6 @@ func TestSnapshot(t *testing.T) {
 		t.Errorf("expected %v, got %v", refclock, clock)
 	}
 
-	snap.Min(
-		func(_ api.Index, _ int64, nd, _ api.Node, err error) bool {
-			if bytes.Compare(nd.Key(), refkeys[0]) != 0 {
-				t.Errorf("expected %q, got %q", refkeys[0], nd.Key())
-			}
-			if bytes.Compare(nd.Value(), refvals[0]) != 0 {
-				t.Errorf("expected %q, got %q", refvals[0], nd.Value())
-			}
-			return true
-		})
-	snap.Max(
-		func(_ api.Index, _ int64, nd, _ api.Node, err error) bool {
-			if bytes.Compare(nd.Key(), refkeys[3]) != 0 {
-				t.Errorf("expected %q, got %q", refkeys[3], nd.Key())
-			}
-			if bytes.Compare(nd.Value(), refvals[3]) != 0 {
-				t.Errorf("expected %q, got %q", refvals[3], nd.Value())
-			}
-			return true
-		})
-
 	index := 0
 	snap.Range(nil, nil, "both", false, /*reverse*/
 		func(_ api.Index, _ int64, nd, _ api.Node, err error) bool {

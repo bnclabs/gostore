@@ -109,10 +109,6 @@ func TestMissing(t *testing.T) {
 		t.Fatalf("expected missing key %q", missingkey)
 	} else if s.Get(missingkey, nil) == true {
 		t.Fatalf("expected missing key %v")
-	} else if s.Min(nil) == false {
-		t.Fatalf("expected minimum key")
-	} else if s.Max(nil) == false {
-		t.Fatalf("expected maximum key")
 	}
 
 	s.Release()
@@ -166,22 +162,6 @@ func TestLookup(t *testing.T) {
 					return true
 				})
 		}
-		s.Min(func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
-			if err != nil {
-				t.Error(err)
-			}
-			verifynode(refnds[0], nd)
-			return true
-		})
-		last := len(refnds) - 1
-		s.Max(func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
-			if err != nil {
-				t.Error(err)
-			}
-			verifynode(refnds[last], nd)
-			return true
-		})
-
 		s.Release()
 	}
 

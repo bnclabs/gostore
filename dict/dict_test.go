@@ -38,10 +38,6 @@ func TestDict(t *testing.T) {
 				return false
 			})
 	}
-	// lookups
-	if d.Has(inserts[1][0]) == false {
-		t.Errorf("expected key %v", string(inserts[0][0]))
-	}
 
 	var nd api.Node
 	rc := d.Get(
@@ -72,38 +68,6 @@ func TestDict(t *testing.T) {
 		t.Errorf("expected %v", nil)
 	}
 
-	nd = nil
-	rc = d.Min(func(_ api.Index, _ int64, _, x api.Node, err error) bool {
-		if err != nil {
-			t.Error(err)
-		}
-		nd = x
-		return true
-	})
-	if rc == false {
-		t.Errorf("missing minimum key")
-	} else if bytes.Compare(nd.Key(), inserts[0][0]) != 0 {
-		t.Errorf("expected %v, got %v", string(inserts[0][0]), string(nd.Key()))
-	} else if bytes.Compare(nd.Value(), inserts[0][1]) != 0 {
-		t.Errorf("expected %v, got %v", string(inserts[0][1]), string(nd.Value()))
-	}
-
-	nd = nil
-	rc = d.Max(func(_ api.Index, _ int64, _, x api.Node, err error) bool {
-		if err != nil {
-			t.Error(err)
-		}
-		nd = x
-		return true
-	})
-	if rc == false {
-		t.Errorf("missing maximum key")
-	} else if bytes.Compare(nd.Key(), []byte("key5")) != 0 {
-		t.Errorf("expected %v, got %v", "key5", string(nd.Key()))
-	} else if bytes.Compare(nd.Value(), []byte("value5")) != 0 {
-		t.Errorf("expected %v, got %v", "value5", string(nd.Value()))
-	}
-
 	// upsert
 	d.Upsert(
 		inserts[0][0], []byte("value11"),
@@ -116,34 +80,6 @@ func TestDict(t *testing.T) {
 			}
 			return false
 		})
-	// delete-min
-	d.DeleteMin(func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
-		if err != nil {
-			t.Error(err)
-		} else if k := nd.Key(); bytes.Compare(k, inserts[0][0]) != 0 {
-			t.Errorf("expected %v, got %v", string(inserts[0][0]), string(k))
-		} else if v := nd.Value(); bytes.Compare(v, []byte("value11")) != 0 {
-			t.Errorf("expected %v, got %v", string(inserts[0][1]), string(v))
-		}
-		return false
-	})
-	if int(d.Count()) != (len(inserts) - 1) {
-		t.Errorf("expected %v, got %v", len(inserts)-1, d.Count())
-	}
-	// delete-max
-	d.DeleteMax(func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
-		if err != nil {
-			t.Error(err)
-		} else if k := nd.Key(); bytes.Compare(k, []byte("key5")) != 0 {
-			t.Errorf("expected %v, got %v", "key5", string(k))
-		} else if v := nd.Value(); bytes.Compare(v, []byte("value5")) != 0 {
-			t.Errorf("expected %v, got %v", "value5", string(v))
-		}
-		return false
-	})
-	if int(d.Count()) != (len(inserts) - 2) {
-		t.Errorf("expected %v, got %v", len(inserts)-2, d.Count())
-	}
 	// delete
 	d.Delete(
 		[]byte("key2"),
@@ -155,54 +91,14 @@ func TestDict(t *testing.T) {
 			}
 			return false
 		})
-	if int(d.Count()) != (len(inserts) - 3) {
+	if int(d.Count()) != (len(inserts) - 1) {
 		t.Errorf("expected %v, got %v", len(inserts)-3, d.Count())
 	}
-	// test corner cases for Min, Max, DeleteMin, DeleteMax
-	d.DeleteMin(nil)
-	d.DeleteMin(nil)
-	rc = d.Min(func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
-		if err.Error() != api.ErrorKeyMissing.Error() {
-			t.Errorf("expected missing key")
-		}
-		return true
-	})
-	if rc == true {
-		t.Errorf("expected false")
-	}
-	rc = d.Max(func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
-		if err.Error() != api.ErrorKeyMissing.Error() {
-			t.Errorf("expected missing key")
-		}
-		return true
-	})
-	if rc == true {
-		t.Errorf("expected false")
-	}
-	d.DeleteMin(
-		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
-			if err != nil {
-				t.Error(err)
-			} else if k, v := nd.Key(), nd.Value(); k != nil || v != nil {
-				t.Errorf("expected {nil,nil}, got {%v,%v}", k, v)
-			}
-			return false
-		})
-	d.DeleteMax(func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
-		if err != nil {
-			t.Error(err)
-		} else if k, v := nd.Key(), nd.Value(); k != nil || v != nil {
-			t.Errorf("expected {nil,nil}, got {%v,%v}", k, v)
-		}
-		return false
-	})
 	d.Delete(
 		[]byte("hello"),
-		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
-			if err != nil {
-				t.Error(err)
-			} else if v := nd.Value(); v != nil {
-				t.Errorf("expected nil, got %v", v)
+		func(_ api.Index, _ int64, _, _ api.Node, err error) bool {
+			if err == nil {
+				t.Errorf("expected nil")
 			}
 			return false
 		})
@@ -234,13 +130,17 @@ func TestMutations(t *testing.T) {
 		&api.MutationCmd{
 			Cmd: api.UpsertCmd, Key: []byte("key6"), Value: []byte("value6"),
 		},
-		&api.MutationCmd{Cmd: api.DelminCmd},
-		&api.MutationCmd{Cmd: api.DelmaxCmd},
 		&api.MutationCmd{Cmd: api.DeleteCmd, Key: []byte("key5")},
 	}
 
-	refkeys := [][]byte{[]byte("key2"), []byte("key3"), []byte("key4")}
-	refvals := [][]byte{[]byte("value2"), []byte("value3"), []byte("value4")}
+	refkeys := [][]byte{
+		[]byte("key1"), []byte("key2"), []byte("key3"), []byte("key4"),
+		[]byte("key6"),
+	}
+	refvals := [][]byte{
+		[]byte("value11"), []byte("value2"), []byte("value3"), []byte("value4"),
+		[]byte("value6"),
+	}
 
 	seqno := uint64(0)
 	d.Mutations(
@@ -255,10 +155,6 @@ func TestMutations(t *testing.T) {
 				nd.SetBornseqno(seqno)
 			case api.UpsertCmd:
 				nd.SetBornseqno(seqno)
-			case api.DelminCmd:
-				nd.SetDeadseqno(seqno)
-			case api.DelmaxCmd:
-				nd.SetDeadseqno(seqno)
 			case api.DeleteCmd:
 				nd.SetDeadseqno(seqno)
 			}
@@ -274,7 +170,7 @@ func TestMutations(t *testing.T) {
 		}
 		i++
 	}
-	if i != 3 {
+	if i != 5 {
 		t.Errorf("expected %v, got %v", 3, i)
 	}
 	iter.Close()

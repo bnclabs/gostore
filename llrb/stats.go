@@ -272,9 +272,7 @@ func (llrb *LLRB) log(what string, humanize bool) {
 		text = llrb.mvcc.h_versions.Logstring()
 		log.Infof("%v h_versions %v\n", llrb.logprefix, text)
 		// log reclaim histograms
-		keys := []string{
-			"upsert", "upsertcas", "delmin", "delmax", "delete", "mutations",
-		}
+		keys := []string{"upsert", "upsertcas", "delete", "mutations"}
 		for _, key := range keys {
 			if h := llrb.mvcc.h_reclaims[key]; h.Samples() > 0 {
 				text = h.Logstring()

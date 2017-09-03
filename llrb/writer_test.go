@@ -146,42 +146,6 @@ func TestLLRBMvccBasicLookup(t *testing.T) {
 	if rc := snapshot.Get([]byte("key10"), nil); rc == true {
 		t.Errorf("expected nil when Get() on missing key")
 	}
-	// min
-	nd = nil
-	rc = snapshot.Min(func(_ api.Index, _ int64, _, x api.Node, err error) bool {
-		if err != nil {
-			t.Error(err)
-		}
-		nd = x
-		return true
-	})
-	if rc == false {
-		t.Errorf("missing minimum key")
-	}
-	k, v := nd.Key(), nd.Value()
-	if bytes.Compare(k, inserts[0][0]) != 0 {
-		t.Errorf("expected %v, got %v", string(inserts[0][0]), string(k))
-	} else if bytes.Compare(v, inserts[0][1]) != 0 {
-		t.Errorf("expected %v, got %v", string(inserts[0][1]), string(v))
-	}
-	// max
-	nd = nil
-	rc = snapshot.Max(func(_ api.Index, _ int64, _, x api.Node, err error) bool {
-		if err != nil {
-			t.Error(err)
-		}
-		nd = x
-		return true
-	})
-	if rc == false {
-		t.Errorf("missing maximum key")
-	}
-	k, v = nd.Key(), nd.Value()
-	if bytes.Compare(k, []byte("key5")) != 0 {
-		t.Errorf("expected %v, got %v", "key5", string(k))
-	} else if bytes.Compare(v, []byte("value5")) != 0 {
-		t.Errorf("expected %v, got %v", "value5", string(v))
-	}
 
 	snapshot.Release()
 
@@ -267,115 +231,10 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 		t.Error(err)
 	}
 
-	//-- delete-min
-	countref, key, value := llrb.Count(), []byte(nil), []byte(nil)
-	llrb.DeleteMin(
-		func(index api.Index, _ int64, _, nd api.Node, err error) bool {
-			if err != nil {
-				t.Error(err)
-			}
-			key, value = nd.Key(), nd.Value()
-			fmsg := "expected %v, got %v"
-			if bytes.Compare(key, inserts[0][0]) != 0 {
-				t.Errorf(fmsg, string(inserts[0][0]), string(key))
-			} else if bytes.Compare(value, []byte("value11")) != 0 {
-				t.Errorf(fmsg, string(inserts[0][1]), string(value))
-			} else if index.Count() != int64(len(inserts)-1) {
-				t.Errorf(fmsg, len(inserts)-1, index.Count())
-			}
-			return false
-		})
-
 	time.Sleep(100 * time.Millisecond)
-
-	// check with old snapshot
-	if countref-1 != llrb.Count() {
-		t.Errorf("expected %v, got %v", countref-1, llrb.Count())
-	}
-	nd = nil
-	rc = snapshot.Get(
-		key,
-		func(_ api.Index, _ int64, _, x api.Node, err error) bool {
-			if err != nil {
-				t.Error(err)
-			}
-			nd = x
-			return true
-		})
-	if rc == false {
-		t.Errorf("missing key %v", string(key))
-	} else if bytes.Compare(nd.Value(), value) != 0 {
-		t.Errorf("expected %q, got %q", string(value), string(nd.Value()))
-	}
-
-	snapshot.Release()
-
-	// snapshot
-	snapshot, err = validatesnapshot(100 /*mS*/, writer)
-	if err != nil {
-		t.Error(err)
-	}
-
-	// and then with new snapshot
-	if rc := snapshot.Get(key, nil); rc == true {
-		t.Errorf("expected false")
-	}
-
-	// delete-max
-	countref, key, value = llrb.Count(), nil, nil
-	llrb.DeleteMax(
-		func(index api.Index, _ int64, _, nd api.Node, err error) bool {
-			if err != nil {
-				t.Error(err)
-			}
-			key, value = nd.Key(), nd.Value()
-			fmsg := "expected %v, got %v"
-			if bytes.Compare(key, []byte("key5")) != 0 {
-				t.Errorf(fmsg, "key5", string(key))
-			} else if bytes.Compare(value, []byte("value5")) != 0 {
-				t.Errorf(fmsg, "value5", string(value))
-			} else if index.Count() != int64(len(inserts)-2) {
-				t.Errorf(fmsg, len(inserts)-2, index.Count())
-			}
-			return false
-		})
-
-	time.Sleep(100 * time.Millisecond)
-
-	// check
-	if countref-1 != llrb.Count() {
-		t.Errorf("expected %v, got %v", countref-1, llrb.Count())
-	}
-	nd = nil
-	rc = snapshot.Get(
-		key,
-		func(_ api.Index, _ int64, _, x api.Node, err error) bool {
-			if err != nil {
-				t.Error(err)
-			}
-			nd = x
-			return true
-		})
-	if rc == false {
-		t.Errorf("missing key %v", string(key))
-	} else if bytes.Compare(nd.Value(), value) != 0 {
-		t.Errorf("expected %v, got %v", value, nd.Value())
-	}
-
-	snapshot.Release()
-
-	// snapshot
-	snapshot, err = validatesnapshot(100 /*mS*/, writer)
-	if err != nil {
-		t.Error(err)
-	}
-
-	if rc := snapshot.Get(key, nil); rc == true {
-		t.Errorf("expected false")
-	}
 
 	// delete
-	countref, key, value = llrb.Count(), []byte("key2"), nil
+	countref, key, value := llrb.Count(), []byte("key2"), []byte(nil)
 	llrb.Delete(
 		key,
 		func(index api.Index, _ int64, _, nd api.Node, err error) bool {
@@ -386,8 +245,8 @@ func TestLLRBMvccBasicUpdates(t *testing.T) {
 			fmsg := "expected %v, got %v"
 			if bytes.Compare(value, []byte("value2")) != 0 {
 				t.Errorf(fmsg, "value2", string(value))
-			} else if index.Count() != int64(len(inserts)-3) {
-				t.Errorf(fmsg, len(inserts)-3, index.Count())
+			} else if index.Count() != int64(len(inserts)-1) {
+				t.Errorf(fmsg, len(inserts)-1, index.Count())
 			}
 			return false
 		})
@@ -1337,50 +1196,6 @@ func TestLLRBMvccUpsert(t *testing.T) {
 	}
 }
 
-func TestLLRBMvccDeleteMin(t *testing.T) {
-	setts := testsetts(Defaultsettings())
-	setts["mvcc.enable"] = true
-	setts["metadata.mvalue"] = true
-	setts["metadata.fpos"] = true
-	setts["metadata.bornseqno"] = true
-	setts["metadata.vbuuid"] = true
-
-	var inserts [][2][]byte
-	keys, values := make([][]byte, 0), make([][]byte, 0)
-	// insert 1 item
-	count := 1
-	for i := 0; i < count; i++ {
-		key, value := makekeyvalue(make([]byte, 10), make([]byte, 100))
-		inserts = append(inserts, [2][]byte{key, value})
-		keys, values = append(keys, key), append(values, value)
-	}
-
-	llrb := makellrbmvcc(t, "mvccdelete", inserts, setts)
-
-	// delete first item
-	vbno, vbuuid := uint16(10), uint64(0xABCD)
-	llrb.DeleteMin(
-		func(index api.Index, _ int64, _, nd api.Node, err error) bool {
-			if err != nil {
-				t.Error(err)
-			} else if nd == nil {
-				t.Errorf("unexpected nil")
-			} else if x := nd.Vbno(); x != vbno {
-				t.Errorf("expected %v, got %v", vbno, x)
-			} else if x := nd.Vbuuid(); x != vbuuid {
-				t.Errorf("expected %v, got %v", vbuuid, x)
-			}
-			return false
-		})
-
-	if x := llrb.Count(); x > 0 {
-		t.Errorf("expected 0, got %v", x)
-	}
-	if err := llrb.Destroy(); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestLLRBMvccDelete(t *testing.T) {
 	setts := testsetts(Defaultsettings())
 	setts["mvcc.enable"] = true
@@ -1439,45 +1254,11 @@ func TestLLRBMvccDelete(t *testing.T) {
 	}
 	snapshot.Release()
 
-	// delete minimums
-	for i := 0; i < len(keys[count/2:(2*count)/3]); i++ {
-		llrb.DeleteMin(
-			func(index api.Index, _ int64, _, nd api.Node, err error) bool {
-				if err != nil {
-					t.Error(err)
-				} else if nd == nil {
-					t.Errorf("unexpected nil")
-				} else if x := nd.Vbno(); x != vbno {
-					t.Errorf("expected %v, got %v", vbno, x)
-				} else if x := nd.Vbuuid(); x != vbuuid {
-					t.Errorf("expected %v, got %v", vbuuid, x)
-				}
-				return false
-			})
-	}
-
 	snapshot, err = validatesnapshot(100 /*mS*/, writer)
 	if err != nil {
 		t.Error(err)
 	}
 	snapshot.Release()
-
-	// delete maximums
-	for i := 0; i < len(keys[(2*count)/3:]); i++ {
-		llrb.DeleteMax(
-			func(index api.Index, _ int64, _, nd api.Node, err error) bool {
-				if err != nil {
-					t.Error(err)
-				} else if nd == nil {
-					t.Errorf("unexpected nil")
-				} else if x := nd.Vbno(); x != vbno {
-					t.Errorf("expected %v, got %v", vbno, x)
-				} else if x := nd.Vbuuid(); x != vbuuid {
-					t.Errorf("expected %v, got %v", vbuuid, x)
-				}
-				return false
-			})
-	}
 
 	snapshot, err = validatesnapshot(100 /*mS*/, writer)
 	if err != nil {
@@ -1487,20 +1268,20 @@ func TestLLRBMvccDelete(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	if x := llrb.Count(); x > 0 {
-		t.Errorf("expected 0, got %v", x)
+	if x := llrb.Count(); x > 5000 {
+		t.Errorf("expected 5000, got %v", x)
 	}
 	// check memory accounting
 	stats, err := llrb.Fullstats()
 	if err != nil {
 		t.Error(err)
 	}
-	if x, y := int64(0), stats["node.alloc"].(int64); x != y {
+	if x, y := int64(480000), stats["node.alloc"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
-	if x, y := int64(0), stats["keymemory"].(int64); x != y {
+	if x, y := int64(160000), stats["keymemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
-	} else if x, y = int64(0), stats["valmemory"].(int64); x != y {
+	} else if x, y = int64(500000), stats["valmemory"].(int64); x != y {
 		t.Errorf("expected %v, got %v", x, y)
 	}
 

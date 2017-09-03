@@ -32,58 +32,6 @@ func getkey(
 	return nd, false
 }
 
-// lift Min() call, either from LLRB or from LLRBSnapshot
-func getmin(llrb *LLRB, root *Llrbnode, callb api.NodeCallb) (*Llrbnode, bool) {
-	nd, _ := getmin1(root)
-	if nd == nil {
-		if callb != nil {
-			callb(llrb, 0, nil, nil, api.ErrorKeyMissing)
-		}
-		return nd, false
-	} else if callb != nil {
-		callb(llrb, 0, nd, nd, nil)
-	}
-	return nd, true
-}
-
-// recurse until minimum is found.
-func getmin1(nd *Llrbnode) (*Llrbnode, bool) {
-	if nd == nil {
-		return nil, false
-	} else if minnd, ok := getmin1(nd.left); ok {
-		return minnd, ok
-	} else if nd.IsDeleted() {
-		return getmin1(nd.right)
-	}
-	return nd, true
-}
-
-// lift Max() call, either from LLRB or from LLRBSnapshot
-func getmax(llrb *LLRB, root *Llrbnode, callb api.NodeCallb) (*Llrbnode, bool) {
-	nd, _ := getmax1(root)
-	if nd == nil {
-		if callb != nil {
-			callb(llrb, 0, nil, nil, api.ErrorKeyMissing)
-		}
-		return nd, false
-	} else if callb != nil {
-		callb(llrb, 0, nd, nd, nil)
-	}
-	return nd, true
-}
-
-// recurse until maximum is found.
-func getmax1(nd *Llrbnode) (*Llrbnode, bool) {
-	if nd == nil {
-		return nil, false
-	} else if maxnd, ok := getmax1(nd.right); ok {
-		return maxnd, ok
-	} else if nd.IsDeleted() {
-		return getmax1(nd.left)
-	}
-	return nd, true
-}
-
 func fixrangeargs(lk, hk []byte, incl string) ([]byte, []byte, string, bool) {
 	if len(lk) == 0 {
 		lk = nil

@@ -11,16 +11,6 @@ const (
 	// a subset of full dataset. To be used with MutationCmd.
 	CasCmd
 
-	// DelminCmd to delete the first key, and its value, from index.
-	// Don't use DelminCmd on index instance that holds a subset
-	// of full dataset. To be used with MutationCmd.
-	DelminCmd
-
-	// DelmaxCmd to delete the last key, and its value, from index.
-	// Don't use DelmaxCmd on index instance that holds a subset of
-	// full dataset. To be used with MutationCmd.
-	DelmaxCmd
-
 	// DeleteCmd to delete a key,value pair in index.
 	// To be used with MutationCmd.
 	DeleteCmd
@@ -229,12 +219,6 @@ type IndexReader interface {
 	// Get entry for key.
 	Get(key []byte, callb NodeCallb) bool
 
-	// Min get entry that sort before every other entries in the index.
-	Min(callb NodeCallb) bool
-
-	// Max get entry that sort after every other entries in the index.
-	Max(callb NodeCallb) bool
-
 	// Range iterate over entries between lowkey and highkey
 	// incl,
 	//	"none" - ignore lowkey and highkey while iterating
@@ -270,12 +254,6 @@ type IndexWriter interface {
 
 	// Upsert a key/value pair.
 	UpsertCas(key, value []byte, cas uint64, callb NodeCallb) error
-
-	// DeleteMin delete last entry in the index.
-	DeleteMin(callb NodeCallb) error
-
-	// Delete first entry in the index.
-	DeleteMax(callb NodeCallb) error
 
 	// Delete key from index.
 	Delete(key []byte, callb NodeCallb) error

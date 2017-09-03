@@ -235,20 +235,6 @@ func (snapshot *LLRBSnapshot) Get(key []byte, callb api.NodeCallb) bool {
 	return ok
 }
 
-// Min implement api.IndexReader{} interface.
-func (snapshot *LLRBSnapshot) Min(callb api.NodeCallb) bool {
-	snapshot.countlookup(atomic.LoadInt64(&snapshot.llrb.mvcc.ismut))
-	_, ok := getmin(snapshot.llrb, snapshot.root, callb)
-	return ok
-}
-
-// Max implement api.IndexReader{} interface.
-func (snapshot *LLRBSnapshot) Max(callb api.NodeCallb) bool {
-	snapshot.countlookup(atomic.LoadInt64(&snapshot.llrb.mvcc.ismut))
-	_, ok := getmax(snapshot.llrb, snapshot.root, callb)
-	return ok
-}
-
 // Range implement api.IndexReader{} interface.
 func (snapshot *LLRBSnapshot) Range(
 	lkey, hkey []byte, incl string, reverse bool, callb api.NodeCallb) {

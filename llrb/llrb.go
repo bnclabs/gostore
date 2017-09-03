@@ -314,30 +314,6 @@ func (llrb *LLRB) Get(key []byte, callb api.NodeCallb) bool {
 	return ok
 }
 
-// Min implement api.IndexReader interface. Acquires a read
-// lock, can be called only when MVCC is disabled.
-func (llrb *LLRB) Min(callb api.NodeCallb) bool {
-	llrb.assertnomvcc()
-
-	llrb.rw.RLock()
-	defer llrb.rw.RUnlock()
-	atomic.AddInt64(&llrb.n_lookups, 1)
-	_, ok := getmin(llrb, llrb.getroot(), callb)
-	return ok
-}
-
-// Max implement api.IndexReader interface. Acquires a read
-// lock, can be called only when MVCC is disabled.
-func (llrb *LLRB) Max(callb api.NodeCallb) bool {
-	llrb.assertnomvcc()
-
-	llrb.rw.RLock()
-	defer llrb.rw.RUnlock()
-	atomic.AddInt64(&llrb.n_lookups, 1)
-	_, ok := getmax(llrb, llrb.getroot(), callb)
-	return ok
-}
-
 // Range implement api.IndexReader interface. Acquires a read
 // lock, can be called only when MVCC is disabled.
 func (llrb *LLRB) Range(
@@ -386,8 +362,6 @@ func (llrb *LLRB) initmvccstats() {
 		"upsert":    lib.NewhistorgramInt64(10, 200, 20),
 		"upsertcas": lib.NewhistorgramInt64(10, 200, 20),
 		"mutations": lib.NewhistorgramInt64(10, 200, 20),
-		"delmin":    lib.NewhistorgramInt64(10, 200, 20),
-		"delmax":    lib.NewhistorgramInt64(10, 200, 20),
 		"delete":    lib.NewhistorgramInt64(10, 200, 20),
 	}
 	llrb.mvcc.h_versions = lib.NewhistorgramInt64(1, 30, 10)
@@ -483,6 +457,7 @@ func (llrb *LLRB) UpsertCas(key, value []byte, cas uint64, callb api.NodeCallb) 
 			if callb != nil {
 				callb(llrb, 0, nil, nil, api.ErrorInvalidCAS)
 			}
+			llrb.rw.Unlock()
 			return api.ErrorInvalidCAS
 		}
 	}
@@ -552,42 +527,6 @@ func (llrb *LLRB) upsert(
 	return nd, newnd, oldnd
 }
 
-// DeleteMin implement api.IndexWriter interface.
-func (llrb *LLRB) DeleteMin(callb api.NodeCallb) (e error) {
-	if llrb.mvcc.enabled {
-		return llrb.mvcc.writer.wdeleteMin(callb)
-	}
-
-	llrb.rw.Lock()
-
-	if llrb.lsm {
-		llrbnd, _ := getmin(llrb, llrb.getroot(), nil)
-		if llrbnd != nil {
-			llrbnd.metadata().setdeleted()
-		}
-		if callb != nil {
-			callb(llrb, 0, llrbnd, llrbnd, nil)
-		}
-
-	} else {
-		root, deleted := llrb.deletemin(llrb.getroot())
-		if root != nil {
-			root.metadata().setblack()
-		}
-		llrb.setroot(root)
-
-		llrb.delcount(deleted)
-
-		if callb != nil {
-			nd := llndornil(deleted)
-			callb(llrb, 0, nd, nd, nil)
-		}
-		llrb.freenode(deleted)
-	}
-	llrb.rw.Unlock()
-	return
-}
-
 // using 2-3 trees
 func (llrb *LLRB) deletemin(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 	if nd == nil {
@@ -601,42 +540,6 @@ func (llrb *LLRB) deletemin(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 	}
 	nd.left, deleted = llrb.deletemin(nd.left)
 	return llrb.fixup(nd), deleted
-}
-
-// DeleteMax implements api.IndexWriter interface.
-func (llrb *LLRB) DeleteMax(callb api.NodeCallb) (e error) {
-	if llrb.mvcc.enabled {
-		return llrb.mvcc.writer.wdeleteMax(callb)
-	}
-
-	llrb.rw.Lock()
-
-	if llrb.lsm {
-		llrbnd, _ := getmax(llrb, llrb.getroot(), nil)
-		if llrbnd != nil {
-			llrbnd.metadata().setdeleted()
-		}
-		if callb != nil {
-			callb(llrb, 0, llrbnd, llrbnd, nil)
-		}
-
-	} else {
-		root, deleted := llrb.deletemax(llrb.getroot())
-		if root != nil {
-			root.metadata().setblack()
-		}
-		llrb.setroot(root)
-
-		llrb.delcount(deleted)
-
-		if callb != nil {
-			nd := llndornil(deleted)
-			callb(llrb, 0, nd, nd, nil)
-		}
-		llrb.freenode(deleted)
-	}
-	llrb.rw.Unlock()
-	return
 }
 
 // using 2-3 trees
@@ -792,10 +695,6 @@ func (llrb *LLRB) Mutations(cmds []*api.MutationCmd, callb api.NodeCallb) error 
 			llrb.Upsert(mcmd.Key, mcmd.Value, localfn)
 		case api.CasCmd:
 			llrb.UpsertCas(mcmd.Key, mcmd.Value, mcmd.Cas, localfn)
-		case api.DelminCmd:
-			llrb.DeleteMin(localfn)
-		case api.DelmaxCmd:
-			llrb.DeleteMax(localfn)
 		case api.DeleteCmd:
 			llrb.Delete(mcmd.Key, localfn)
 		default:

@@ -394,68 +394,6 @@ func (ss *Snapshot) Get(key []byte, callb api.NodeCallb) bool {
 	return rc
 }
 
-// Min implement api.IndexReader interface.
-func (ss *Snapshot) Min(callb api.NodeCallb) bool {
-	if ss.n_count == 0 {
-		if callb != nil {
-			callb(ss, 0, nil, nil, api.ErrorKeyMissing)
-		}
-		return false
-	}
-
-	rc := false
-	ss.rangeforward(
-		nil, nil, ss.rootblock, [2]int{0, 0},
-		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
-			if err == nil && nd != nil {
-				rc = true
-			}
-			if callb != nil {
-				if err != nil {
-					callb(ss, 0, nil, nil, err)
-				} else if nd == nil {
-					callb(ss, 0, nil, nil, api.ErrorKeyMissing)
-				} else {
-					callb(ss, 0, nd, nd, nil)
-				}
-			}
-			return false
-		})
-	atomic.AddInt64(&ss.n_lookups, 1)
-	return rc
-}
-
-// Max implement api.IndexReader interface.
-func (ss *Snapshot) Max(callb api.NodeCallb) bool {
-	if ss.n_count == 0 {
-		if callb != nil {
-			callb(ss, 0, nil, nil, api.ErrorKeyMissing)
-		}
-		return false
-	}
-
-	rc := false
-	ss.rangebackward(
-		nil, nil, ss.rootblock, [2]int{0, 0},
-		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
-			if err == nil && nd != nil {
-				rc = true
-			}
-			if callb != nil {
-				if err != nil {
-					callb(ss, 0, nil, nil, err)
-				} else if nd == nil {
-					callb(ss, 0, nil, nil, api.ErrorKeyMissing)
-				} else {
-					callb(ss, 0, nd, nd, nil)
-				}
-			}
-			return false
-		})
-	atomic.AddInt64(&ss.n_lookups, 1)
-	return rc
-}
-
 // Range implement api.IndexReader interface.
 func (ss *Snapshot) Range(
 	lkey, hkey []byte, incl string, reverse bool, callb api.NodeCallb) {
@@ -571,16 +509,6 @@ func (ss *Snapshot) Upsert(key, value []byte, callb api.NodeCallb) error {
 // Upsert api.IndexWriter{} method, will panic if called.
 func (ss *Snapshot) UpsertCas(key, value []byte, cas uint64, callb api.NodeCallb) error {
 	panic("IndexWriter.UpsertCas() not implemented")
-}
-
-// DeleteMin api.IndexWriter{} method, will panic if called.
-func (ss *Snapshot) DeleteMin(callb api.NodeCallb) error {
-	panic("IndexWriter.DeleteMin() not implemented")
-}
-
-// DeleteMax api.IndexWriter{} method, will panic if called.
-func (ss *Snapshot) DeleteMax(callb api.NodeCallb) error {
-	panic("IndexWriter.DeleteMax() not implemented")
 }
 
 // Delete api.IndexWriter{} method, will panic if called.

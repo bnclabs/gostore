@@ -54,8 +54,6 @@ const (
 	cmdLlrbWriterUpsert byte = iota + 1
 	cmdLlrbWriterUpsertCas
 	cmdLlrbWriterMutations
-	cmdLlrbWriterDeleteMin
-	cmdLlrbWriterDeleteMax
 	cmdLlrbWriterDelete
 	cmdLlrbWriterMakeSnapshot
 	cmdLlrbWriterGetSnapshot
@@ -79,20 +77,6 @@ func (writer *LLRBWriter) wupsert(key, value []byte, callb api.NodeCallb) error 
 func (writer *LLRBWriter) wupsertcas(key, value []byte, cas uint64, callb api.NodeCallb) error {
 	respch := make(chan []interface{}, 0)
 	cmd := []interface{}{cmdLlrbWriterUpsertCas, key, value, cas, callb, respch}
-	_, err := lib.FailsafeRequest(writer.reqch, respch, cmd, writer.finch)
-	return err
-}
-
-func (writer *LLRBWriter) wdeleteMin(callb api.NodeCallb) error {
-	respch := make(chan []interface{}, 0)
-	cmd := []interface{}{cmdLlrbWriterDeleteMin, callb, respch}
-	_, err := lib.FailsafeRequest(writer.reqch, respch, cmd, writer.finch)
-	return err
-}
-
-func (writer *LLRBWriter) wdeleteMax(callb api.NodeCallb) error {
-	respch := make(chan []interface{}, 0)
-	cmd := []interface{}{cmdLlrbWriterDeleteMax, callb, respch}
 	_, err := lib.FailsafeRequest(writer.reqch, respch, cmd, writer.finch)
 	return err
 }
@@ -261,22 +245,6 @@ loop:
 				reclaim = writer.mvccupsert(key, value, callb, reclaim)
 				reclaimNodes("upsert", reclaim)
 			}
-			close(respch)
-
-		case cmdLlrbWriterDeleteMin:
-			callb := msg[1].(api.NodeCallb)
-			respch := msg[2].(chan []interface{})
-
-			reclaim = writer.mvccdelmin(callb, reclaim)
-			reclaimNodes("delmin", reclaim)
-			close(respch)
-
-		case cmdLlrbWriterDeleteMax:
-			callb := msg[1].(api.NodeCallb)
-			respch := msg[2].(chan []interface{})
-
-			reclaim = writer.mvccdelmax(callb, reclaim)
-			reclaimNodes("delmax", reclaim)
 			close(respch)
 
 		case cmdLlrbWriterDelete:
@@ -505,42 +473,6 @@ func (writer *LLRBWriter) upsert(
 	return ndmvcc, newnd, oldnd, reclaim
 }
 
-func (writer *LLRBWriter) mvccdelmin(
-	callb api.NodeCallb, reclaim []*Llrbnode) []*Llrbnode {
-
-	var root, deleted *Llrbnode
-
-	llrb := writer.llrb
-	llrb.mvcc.h_versions.Add(atomic.LoadInt64(&llrb.n_activess))
-
-	atomic.AddInt64(&llrb.mvcc.ismut, 1)
-
-	if llrb.lsm {
-		llrbnd, _ := getmin(llrb, llrb.getroot(), nil)
-		if llrbnd != nil {
-			llrbnd.metadata().setdeleted()
-		}
-		if callb != nil {
-			callb(llrb, 0, llrbnd, llrbnd, nil)
-		}
-
-	} else {
-		root, deleted, reclaim = writer.deletemin(llrb.getroot(), reclaim)
-		if root != nil {
-			root.metadata().setblack()
-		}
-		llrb.setroot(root)
-		llrb.delcount(deleted)
-		if callb != nil {
-			nd := llndornil(deleted)
-			callb(llrb, 0, nd, nd, nil)
-		}
-	}
-
-	atomic.AddInt64(&llrb.mvcc.ismut, -1)
-	return reclaim
-}
-
 // using 2-3 trees, returns root, deleted, reclaim
 func (writer *LLRBWriter) deletemin(
 	nd *Llrbnode, reclaim []*Llrbnode) (*Llrbnode, *Llrbnode, []*Llrbnode) {
@@ -567,42 +499,6 @@ func (writer *LLRBWriter) deletemin(
 	ndmvcc, reclaim = writer.fixup(ndmvcc, reclaim)
 
 	return ndmvcc, deleted, reclaim
-}
-
-func (writer *LLRBWriter) mvccdelmax(
-	callb api.NodeCallb, reclaim []*Llrbnode) []*Llrbnode {
-
-	var root, deleted *Llrbnode
-
-	llrb := writer.llrb
-	llrb.mvcc.h_versions.Add(atomic.LoadInt64(&llrb.n_activess))
-
-	atomic.AddInt64(&llrb.mvcc.ismut, 1)
-
-	if llrb.lsm {
-		llrbnd, _ := getmax(llrb, llrb.getroot(), nil)
-		if llrbnd != nil {
-			llrbnd.metadata().setdeleted()
-		}
-		if callb != nil {
-			callb(llrb, 0, llrbnd, llrbnd, nil)
-		}
-
-	} else {
-		root, deleted, reclaim = writer.deletemax(llrb.getroot(), reclaim)
-		if root != nil {
-			root.metadata().setblack()
-		}
-		llrb.setroot(root)
-		llrb.delcount(deleted)
-		if callb != nil {
-			nd := llndornil(deleted)
-			callb(llrb, 0, nd, nd, nil)
-		}
-	}
-
-	atomic.AddInt64(&llrb.mvcc.ismut, -1)
-	return reclaim
 }
 
 // using 2-3 trees, returns root, deleted, reclaim
@@ -786,13 +682,6 @@ func (writer *LLRBWriter) mvccmutations(
 		case api.CasCmd:
 			key, value, cas := mcmd.Key, mcmd.Value, mcmd.Cas
 			reclaim = writer.mvccupsertcas(key, value, cas, lfn, reclaim)
-			reclaim = rfn(reclaim)
-
-		case api.DelminCmd:
-			reclaim = writer.mvccdelmin(lfn, reclaim)
-			reclaim = rfn(reclaim)
-		case api.DelmaxCmd:
-			reclaim = writer.mvccdelmax(lfn, reclaim)
 			reclaim = rfn(reclaim)
 		case api.DeleteCmd:
 			reclaim = writer.mvccdelete(mcmd.Key, lfn, reclaim)
