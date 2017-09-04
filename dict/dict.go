@@ -25,7 +25,7 @@ type Dict struct {
 	hashks     []uint64
 	dead       uint32
 	snapn      int
-	clock      api.Clock
+	seqno      uint64
 	activeiter int64
 }
 
@@ -54,11 +54,6 @@ func (d *Dict) Count() int64 {
 // Isactive implement api.IndexMeta interface.
 func (d *Dict) Isactive() bool {
 	return atomic.LoadUint32(&d.dead) == 0
-}
-
-// Getclock implement api.IndexMeta interface.
-func (d *Dict) Getclock() api.Clock {
-	return d.clock
 }
 
 // Metadata implement api.IndeMeta interface. Return nil.
@@ -98,16 +93,11 @@ func (d *Dict) RSnapshot(snapch chan api.IndexSnapshot, next bool) error {
 	return nil
 }
 
-// Setclock implement api.Index interface.
-func (d *Dict) Setclock(clock api.Clock) {
-	d.clock = clock
-}
-
 // Clone implement api.Index interface.
 func (d *Dict) Clone(name string) (api.Index, error) {
 	newd := NewDict(name)
 	newd.dead, newd.snapn = d.dead, d.snapn
-	newd.clock, newd.activeiter = d.clock, d.activeiter
+	newd.seqno, newd.activeiter = d.seqno, d.activeiter
 	for hash, dn := range d.dict {
 		newd.dict[hash] = dn.clone()
 	}

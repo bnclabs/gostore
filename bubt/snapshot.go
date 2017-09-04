@@ -18,7 +18,7 @@ type Snapshot struct {
 	rootblock  int64
 	rootreduce int64
 	metadata   []byte
-	clock      api.Clock
+	seqno      uint64
 
 	// statisitcs, need to be 8 byte aligned.
 	n_snapshots int64
@@ -280,11 +280,6 @@ func (ss *Snapshot) Isactive() bool {
 	return atomic.LoadInt64(&ss.n_snapshots) > 0
 }
 
-// Getclock implement api.IndexMeta interface.
-func (ss *Snapshot) Getclock() api.Clock {
-	return ss.clock
-}
-
 // Metadata implement api.IndexMeta interface. Opaque binary blob
 // persisted by builder as per application's call.
 func (ss *Snapshot) Metadata() []byte {
@@ -324,11 +319,6 @@ func (ss *Snapshot) RSnapshot(snapch chan api.IndexSnapshot, next bool) error {
 	ss.Refer()
 	snapch <- ss
 	return nil
-}
-
-// Setclock implement api.Index interface.
-func (ss *Snapshot) Setclock(clock api.Clock) {
-	ss.clock = clock
 }
 
 // Clone api.Index interface is not supported

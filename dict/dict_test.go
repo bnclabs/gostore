@@ -176,15 +176,6 @@ func TestMutations(t *testing.T) {
 	iter.Close()
 }
 
-func TestClock(t *testing.T) {
-	d := NewDict("testdict")
-	refclock := api.Scalarclock(0)
-	d.Setclock(refclock)
-	if clock := d.Getclock(); clock != refclock {
-		t.Errorf("expected %v, got %v", refclock, clock)
-	}
-}
-
 func TestDestroy(t *testing.T) {
 	d := NewDict("testdict")
 	if err := d.Destroy(); err != nil {

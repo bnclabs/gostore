@@ -11,7 +11,7 @@ import "github.com/prataprc/gostore/api"
 type DictSnapshot struct {
 	Dict
 	wd    *Dict
-	clock api.Clock
+	seqno uint64
 }
 
 // NewDictSnapshot create a new instance of DictSnapshot.
@@ -22,7 +22,7 @@ func (d *Dict) NewDictSnapshot() api.IndexSnapshot {
 			id: d.id, snapn: d.snapn, dead: atomic.LoadUint32(&d.dead),
 		},
 		wd:    d,
-		clock: d.clock,
+		seqno: d.seqno,
 	}
 	snapshot.dict = make(map[uint64]*dictnode)
 	for k, node := range d.dict {
@@ -48,11 +48,6 @@ func (d *DictSnapshot) Count() int64 {
 // ID implement api.IndexSnapshot{} interface.
 func (d *DictSnapshot) ID() string {
 	return d.id
-}
-
-// Getclock implement api.IndexSnapshot{} interface.
-func (d *DictSnapshot) Getclock() api.Clock {
-	return d.clock
 }
 
 // Refer implement api.IndexSnapshot{} interface.

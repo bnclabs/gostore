@@ -65,7 +65,7 @@ type LLRBSnapshot struct {
 	llrb  *LLRB
 	id    string // snapshot id
 	root  *Llrbnode
-	clock api.Clock
+	seqno uint64
 	dead  bool
 
 	// snapshot specific fields
@@ -82,7 +82,7 @@ func newsnapshot(llrb *LLRB, id string) *LLRBSnapshot {
 		llrb:  llrb,
 		id:    id,
 		root:  llrb.getroot(),
-		clock: llrb.Getclock(),
+		seqno: llrb.seqno,
 		dead:  llrb.dead,
 	}
 	snapshot.copystats(llrb)
@@ -141,11 +141,6 @@ func (snapshot *LLRBSnapshot) Count() int64 {
 // Isactive implement api.IndexMeta interface.
 func (snapshot *LLRBSnapshot) Isactive() bool {
 	return snapshot.dead == false
-}
-
-// Getclock implement api.IndexMeta inteface.
-func (snapshot *LLRBSnapshot) Getclock() api.Clock {
-	return snapshot.clock
 }
 
 // Metadata implement api.IndexMeta interface. Call method

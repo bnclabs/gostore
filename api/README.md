@@ -12,8 +12,6 @@ defined under this package.
 * Define Index operations, like, Upsert, CAS, Delete, and Get, Range.
 * Index iteration.
 * Snapshotted index.
-* Clock operations, for index that include time order for Index
-  operations.
 * Types and constants to batch several write-operations on an index instance.
 * Index Node abstractions, each entry in an index is encapsulated as node.
 * Node read/write/metadata operations.
@@ -33,9 +31,6 @@ defined under this package.
 
 **Although minor updates are to be expected on APIs, they are stable enough
 for building storage application**.
-
-**NOTE:** Check out `Scalarclock` implementation to get an idea on
-implementing timestamps for index write-operations.
 
 Panic and Recovery
 ------------------

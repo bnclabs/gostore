@@ -42,7 +42,7 @@ type LLRB struct { // tree container
 	valarena  api.Mallocer
 	root      unsafe.Pointer // *Llrbnode
 	borntime  time.Time
-	clock     unsafe.Pointer // api.Clock
+	seqno     uint64
 	dead      bool
 	rw        sync.RWMutex
 	iterpool  chan *iterator
@@ -157,15 +157,6 @@ func (llrb *LLRB) Isactive() bool {
 	return llrb.dead == false
 }
 
-// Getclock implement api.IndexMeta interface.
-func (llrb *LLRB) Getclock() api.Clock {
-	clock := (*api.Clock)(atomic.LoadPointer(&llrb.clock))
-	if clock == nil {
-		return nil
-	}
-	return *clock
-}
-
 // Metadata implement api.IndexMeta interface. LLRB instances
 // are transient and don't support backup and restore of context.
 // Return nil.
@@ -233,11 +224,6 @@ func (llrb *LLRB) RSnapshot(snapch chan api.IndexSnapshot, next bool) error {
 		return nil
 	}
 	panic("RSnapshot(): mvcc is not enabled")
-}
-
-// Setclock implement api.Index interface.
-func (llrb *LLRB) Setclock(clock api.Clock) {
-	atomic.StorePointer(&llrb.clock, unsafe.Pointer(&clock))
 }
 
 // Clone implement api.Index interface. Avoid clone while there are
@@ -378,8 +364,7 @@ func (llrb *LLRB) doclone(name string) (*LLRB, error) {
 	}
 
 	newllrb := NewLLRB(llrb.name, llrb.setts)
-	clock := llrb.Getclock()
-	atomic.StorePointer(&newllrb.clock, unsafe.Pointer(&clock))
+	newllrb.seqno = llrb.seqno
 	newllrb.dead = llrb.dead
 
 	newllrb.setroot(newllrb.clonetree(llrb.getroot()))

@@ -98,36 +98,6 @@ type NodeSetter interface {
 	SetFpos(level byte, offset uint64) Node
 }
 
-// Clock defines timestamp versioning for storage instances.
-type Clock interface {
-	// Update clock to latest write operation. Typically `msg`
-	// indicates a mutation that will take the storage instance to
-	// next point in time.
-	Update(msg interface{}) Clock
-
-	// Clone creates a copy of the clock.
-	Clone() Clock
-
-	// Less compare wether this clock is less than other clock
-	Less(other Clock) bool
-
-	// LessEqual compare wether this clock is less than or equal to
-	// the other clock.
-	LessEqual(other Clock) bool
-
-	// JSONMarshal return clock in JSON encoded format.
-	JSONMarshal(buf []byte) []byte
-
-	// JSONUnmarshal populates clock from JSON encoded bytes.
-	JSONUnmarshal(data []byte) (Clock, error)
-
-	// Marshal return clock in binary encoded format.
-	Marshal(buf []byte) []byte
-
-	// Unmarshal populates clock from binary encoded bytes.
-	Unmarshal(data []byte) Clock
-}
-
 // IndexMeta defines metadata operations on storage instance. Unless
 // specified they are cheap calls and can be used at any point in time.
 type IndexMeta interface {
@@ -139,9 +109,6 @@ type IndexMeta interface {
 
 	// Isactive return whether index is active or not.
 	Isactive() bool
-
-	// Getclock return current clock attached to the index/snapshot.
-	Getclock() Clock
 
 	// Metadata return index/snapshot properties as json encoded
 	// object. Purpose of metadata is to save and restore the context
@@ -178,9 +145,6 @@ type Index interface {
 	// If `next` is true block till next snapshot is available on
 	// the index.
 	RSnapshot(snapch chan IndexSnapshot, next bool) error
-
-	// Setclock attaches a new clock to the index.
-	Setclock(clock Clock)
 
 	// Clone will do a deep copy of the underlying data structure and
 	// return the new copy.

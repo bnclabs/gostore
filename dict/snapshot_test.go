@@ -32,9 +32,6 @@ func TestSnapshot(t *testing.T) {
 				return false
 			})
 	}
-	refclock := api.Scalarclock(123)
-	d.Setclock(refclock)
-
 	snapch := make(chan api.IndexSnapshot, 1)
 	if err := d.RSnapshot(snapch, true /*next*/); err != nil {
 		t.Error(err)
@@ -55,9 +52,6 @@ func TestSnapshot(t *testing.T) {
 	}
 	if snap.ID() != id+"-snap1" {
 		t.Errorf("expected %v, got %v", id, snap.ID())
-	}
-	if clock := snap.Getclock(); clock != refclock {
-		t.Errorf("expected %v, got %v", refclock, clock)
 	}
 
 	index := 0
