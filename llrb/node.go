@@ -1,212 +1,183 @@
 package llrb
 
+import "io"
+import "fmt"
 import "unsafe"
 import "reflect"
 import "strings"
-import "fmt"
-import "io"
+import "sync/atomic"
 
 import "github.com/prataprc/gostore/api"
 
-const nodesize = int(unsafe.Sizeof(Llrbnode{})) - 8 // + metadatasize + keysize
+const nodesize1 = int(unsafe.Sizeof(Llrbnode1{})) - 8 // + metadatasize + keylen
 
-// Llrbnode defines a node in LLRB tree.
-type Llrbnode struct {
-	left     *Llrbnode
-	right    *Llrbnode
-	mdmarker unsafe.Pointer
+const (
+	ndBlack   uint64 = 0x1
+	ndDirty   uint64 = 0x2
+	ndDeleted uint64 = 0x4
+)
+
+// Llrbnode1 defines a node in LLRB tree.
+type Llrbnode1 struct {
+	left     *Llrbnode1
+	right    *Llrbnode1
+	seqflags uint64 // seqno[64:4] flags[4:0]
+	hdr      uint64 // klen[64:48] access[48:8] reserved[8:0]
+	value    unsafe.Pointer
+	key      unsafe.Pointer
 }
 
-func (nd *Llrbnode) sizeof() int {
-	return int(unsafe.Sizeof(*nd))
-}
-
-//---- Exported methods for metadata.
-
-// Setvbno implement NodeSetter method.
-func (nd *Llrbnode) Setvbno(vbno uint16) api.Node {
-	if nd != nil {
-		nd.metadata().setvbno(vbno)
-	}
+func (nd *Llrbnode1) setnodevalue(nv *nodevalue) *Llrbnode1 {
+	nd.value = unsafe.Pointer(nv)
 	return nd
 }
 
-// Setaccess implement NodeSetter method.
-func (nd *Llrbnode) Setaccess(access uint64) api.Node {
-	if nd != nil {
-		nd.metadata().setaccess(access)
+func (nd *Llrbnode1) nodevalue() *nodevalue {
+	if nd == nil || nd.value == nil {
+		return nil
 	}
+	return (*nodevalue)(nd.value)
+}
+
+//---- header fields
+
+func (nd *Llrbnode1) gethdr() uint64 {
+	return atomic.LoadUint64(&nd.hdr)
+}
+
+func (nd *Llrbnode1) sethdr(hdr uint64) *Llrbnode1 {
+	atomic.StoreUint64(&nd.hdr, hdr)
 	return nd
 }
 
-// SetBornseqno implemens NodeSetter method.
-func (nd *Llrbnode) SetBornseqno(seqno uint64) api.Node {
-	if nd != nil {
-		nd.metadata().setbnseq(seqno)
-	}
+func (nd *Llrbnode1) getkeylen() uint16 {
+	return uint16(nd.gethdr() >> 48)
+}
+
+func (nd *Llrbnode1) setkeylen(klen uint16) *Llrbnode1 {
+	hdr := nd.gethdr()
+	nd.sethdr((hdr & 0x0000ffffffffffff) | (uint64(klen) << 48))
 	return nd
 }
 
-// SetDeadseqno implement NodeSetter method.
-func (nd *Llrbnode) SetDeadseqno(seqno uint64) api.Node {
-	if nd != nil {
-		nd.metadata().setddseq(seqno)
-	}
+func (nd *Llrbnode1) getaccess() uint64 {
+	return (nd.gethdr() & 0x0000ffffffffffff) >> 8
+}
+
+func (nd *Llrbnode1) setaccess(access uint64) *Llrbnode1 {
+	hdr := nd.gethdr()
+	nd.sethdr((hdr & 0xffff0000000000ff) | (access << 8))
 	return nd
 }
 
-// SetVbuuid implement NodeSetter method.
-func (nd *Llrbnode) SetVbuuid(vbuuid uint64) api.Node {
-	if nd != nil {
-		nd.metadata().setvbuuid(vbuuid)
-	}
-	return nd
-}
-
-// SetFpos implement NodeSetter method.
-func (nd *Llrbnode) SetFpos(level byte, offset uint64) api.Node {
-	if nd != nil {
-		nd.metadata().setfpos(level, offset)
-	}
-	return nd
-}
-
-// Vbno implement NodeGetter method.
-func (nd *Llrbnode) Vbno() uint16 {
-	if nd != nil {
-		return nd.metadata().vbno()
-	}
-	return 0
-}
-
-// Access implement NodeGetter method.
-func (nd *Llrbnode) Access() uint64 {
-	if nd != nil {
-		return nd.metadata().access()
-	}
-	return 0
-}
-
-// Key implement NodeGetter method.
-func (nd *Llrbnode) Key() []byte {
-	if nd != nil {
-		return nd.key(nd.metadata().sizeof())
-	}
-	return nil
-}
-
-// Bornseqno implement NodeGetter method.
-func (nd *Llrbnode) Bornseqno() uint64 {
-	if nd != nil {
-		return nd.metadata().bnseq()
-	}
-	return 0
-}
-
-// Deadseqno implement NodeGetter method.
-func (nd *Llrbnode) Deadseqno() uint64 {
-	if nd != nil {
-		return nd.metadata().ddseq()
-	}
-	return 0
-}
-
-// IsDeleted implement NodeGetter method.
-func (nd *Llrbnode) IsDeleted() bool {
-	if nd != nil {
-		return nd.metadata().isdeleted()
-	}
-	return true
-}
-
-// Vbuuid implement NodeGetter method.
-func (nd *Llrbnode) Vbuuid() uint64 {
-	if nd != nil {
-		return nd.metadata().vbuuid()
-	}
-	return 0
-}
-
-// Fpos implement NodeGetter method.
-func (nd *Llrbnode) Fpos() (level byte, offset uint64) {
-	if nd != nil {
-		return nd.metadata().fpos()
-	}
-	return 0, 0
-}
-
-// Value implement NodeGetter method.
-func (nd *Llrbnode) Value() []byte {
-	if nd != nil && nd.metadata().ismvalue() {
-		if nv := nd.nodevalue(); nv != nil {
-			return nv.value()
-		}
-	}
-	return nil
-}
-
-//---- local methods on metadata.
-
-func (nd *Llrbnode) metadata() *metadata {
-	return (*metadata)(unsafe.Pointer(&nd.mdmarker))
-}
-
-func (nd *Llrbnode) setkey(mdsize int, key []byte) *Llrbnode {
-	var dst []byte
-	sl := (*reflect.SliceHeader)(unsafe.Pointer(&dst))
-	sl.Len = len(key)
-	sl.Cap = len(key)
-	baseptr := (uintptr)(unsafe.Pointer(&nd.mdmarker))
-	sl.Data = baseptr + uintptr(mdsize)
-	return nd.setkeysize(copy(dst, key))
-}
-
-func (nd *Llrbnode) setkeysize(size int) *Llrbnode {
-	nd.metadata().setkeysize(size)
-	return nd
-}
-
-func (nd *Llrbnode) setnodevalue(nv *nodevalue) *Llrbnode {
-	arg := (uintptr)(unsafe.Pointer(nv))
-	nd.metadata().setmvalue(uint64(arg))
-	return nd
-}
-
-func (nd *Llrbnode) key(mdsize int) (k []byte) {
-	sl := (*reflect.SliceHeader)(unsafe.Pointer(&k))
-	sl.Len = nd.keysize()
-	sl.Cap = sl.Len
-	baseptr := (uintptr)(unsafe.Pointer(&nd.mdmarker))
-	sl.Data = baseptr + uintptr(mdsize)
+func (nd *Llrbnode1) getkey() (key []byte) {
+	klen := nd.getkeylen()
+	sl := (*reflect.SliceHeader)(unsafe.Pointer(&key))
+	sl.Data = (uintptr)(unsafe.Pointer(&nd.key))
+	sl.Len, sl.Cap = int(klen), int(klen)
 	return
 }
 
-func (nd *Llrbnode) keysize() int {
-	return nd.metadata().keysize()
+func (nd *Llrbnode1) setkey(key []byte) *Llrbnode1 {
+	var dst []byte
+	klen := len(key)
+	sl := (*reflect.SliceHeader)(unsafe.Pointer(&dst))
+	sl.Data = (uintptr)(unsafe.Pointer(&nd.key))
+	sl.Len, sl.Cap = int(klen), int(klen)
+	copy(dst, key)
+	nd.setkeylen(uint16(len(key)))
+	return nd
 }
 
-func (nd *Llrbnode) nodevalue() *nodevalue {
-	nv := nd.metadata().mvalue()
-	return (*nodevalue)(unsafe.Pointer(uintptr(nv)))
+//----- seqno and flags
+
+func (nd *Llrbnode1) getseqflags() uint64 {
+	return atomic.LoadUint64(&nd.seqflags)
+}
+
+func (nd *Llrbnode1) setseqflags(seqflags uint64) *Llrbnode1 {
+	atomic.StoreUint64(&nd.seqflags, seqflags)
+	return nd
+}
+
+func (nd *Llrbnode1) getseqno() uint64 {
+	return nd.getseqflags() >> 4
+}
+
+func (nd *Llrbnode1) setseqno(seqno uint64) *Llrbnode1 {
+	nd.setseqflags((nd.getseqflags() & 0xf) | (seqno << 4))
+	return nd
+}
+
+func (nd *Llrbnode1) isblack() bool {
+	seqflags := nd.getseqflags()
+	return (seqflags & ndBlack) == uint64(ndBlack)
+}
+
+func (nd *Llrbnode1) isred() bool {
+	return !nd.isblack()
+}
+
+func (nd *Llrbnode1) setblack() *Llrbnode1 {
+	seqflags := nd.getseqflags()
+	return nd.setseqflags(seqflags | ndBlack)
+}
+
+func (nd *Llrbnode1) setred() *Llrbnode1 {
+	seqflags := nd.getseqflags()
+	return nd.setseqflags(seqflags & (^ndBlack))
+}
+
+func (nd *Llrbnode1) togglelink() *Llrbnode1 {
+	seqflags := nd.getseqflags()
+	return nd.setseqflags(seqflags ^ ndBlack)
+}
+
+func (nd *Llrbnode1) setdirty() *Llrbnode1 {
+	seqflags := nd.getseqflags()
+	return nd.setseqflags(seqflags | ndDirty)
+}
+
+func (nd *Llrbnode1) cleardirty() *Llrbnode1 {
+	seqflags := nd.getseqflags()
+	return nd.setseqflags(seqflags & (^ndDirty))
+}
+
+func (nd *Llrbnode1) isdirty() bool {
+	seqflags := nd.getseqflags()
+	return (seqflags & ndDirty) == ndDirty
+}
+
+func (nd *Llrbnode1) isdeleted() bool {
+	seqflags := nd.getseqflags()
+	return (seqflags & ndDeleted) == ndDeleted
+}
+
+func (nd *Llrbnode1) setdeleted() *Llrbnode1 {
+	seqflags := nd.getseqflags()
+	return nd.setseqflags(seqflags | ndDeleted)
+}
+
+func (nd *Llrbnode1) cleardeleted() *Llrbnode1 {
+	seqflags := nd.getseqflags()
+	return nd.setseqflags(seqflags & (^ndDeleted))
+}
+
+// Value implement NodeGetter method.
+func (nd *Llrbnode1) Value() []byte {
+	if nv := nd.nodevalue(); nv != nil {
+		return nv.value()
+	}
+	return nil
 }
 
 //---- maintanence methods.
 
-func (nd *Llrbnode) repr() string {
-	bnseqno, ddseqno := int64(-1), int64(-1)
-	if nd.metadata().isbnseq() {
-		bnseqno = int64(nd.metadata().bnseq())
-	}
-	if nd.metadata().isddseq() {
-		ddseqno = int64(nd.metadata().ddseq())
-	}
-	return fmt.Sprintf(
-		"%v %v {%v,%v} %v",
-		nd.metadata().isdirty(), nd.metadata().isblack(),
-		bnseqno, ddseqno, string(nd.key(nd.metadata().sizeof())))
+func (nd *Llrbnode1) repr() string {
+	return fmt.Sprintf("%q %v %v", nd.getkey(), nd.isdirty(), nd.isblack())
 }
 
-func (nd *Llrbnode) pprint(prefix string) {
+func (nd *Llrbnode1) pprint(prefix string) {
 	if nd == nil {
 		fmt.Printf("%v\n", nd)
 		return
@@ -219,35 +190,29 @@ func (nd *Llrbnode) pprint(prefix string) {
 	nd.right.pprint(prefix)
 }
 
-func (nd *Llrbnode) dotdump(buffer io.Writer) {
+func (nd *Llrbnode1) dotdump(buffer io.Writer) {
 	if nd == nil {
 		return
 	}
 
-	whatcolor := func(childnd *Llrbnode) string {
-		if isred(childnd) {
+	whatcolor := func(childnd *Llrbnode1) string {
+		if childnd.isred() {
 			return "red"
 		}
 		return "black"
 	}
 
-	mdsize := nd.metadata().sizeof()
-	key := string(nd.key(mdsize))
-	mddot := nd.metadata().dotdump()
+	key := nd.getkey()
 	lines := []string{
-		fmt.Sprintf("  %v [label=\"{%v|%v}\"];\n", key, key, mddot),
+		fmt.Sprintf("  %s [label=\"{%s}\"];\n", key, key),
 	}
-	fmsg := "  %v -> %v [color=%v];\n"
+	fmsg := "  %s -> %s [color=%v];\n"
 	if nd.left != nil {
-		line := fmt.Sprintf(
-			fmsg, key, string(nd.left.key(mdsize)), whatcolor(nd.left),
-		)
+		line := fmt.Sprintf(fmsg, key, nd.left.getkey(), whatcolor(nd.left))
 		lines = append(lines, line)
 	}
 	if nd.right != nil {
-		line := fmt.Sprintf(
-			fmsg, key, string(nd.right.key(mdsize)), whatcolor(nd.right),
-		)
+		line := fmt.Sprintf(fmsg, key, nd.right.getkey(), whatcolor(nd.right))
 		lines = append(lines, line)
 	}
 	buffer.Write([]byte(strings.Join(lines, "")))
@@ -261,65 +226,41 @@ func (nd *Llrbnode) dotdump(buffer io.Writer) {
 
 //---- indexer api
 
-func (nd *Llrbnode) ltkey(mdsize int, other []byte, partial bool) bool {
+func (nd *Llrbnode1) ltkey(other []byte, partial bool) bool {
 	var key []byte
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&key))
-	sl.Len = nd.keysize()
-	sl.Cap = sl.Len
-	baseptr := (uintptr)(unsafe.Pointer(&nd.mdmarker))
-	sl.Data = baseptr + uintptr(mdsize)
+	klen := nd.getkeylen()
+	sl.Data = (uintptr)(unsafe.Pointer(&nd.key))
+	sl.Len, sl.Cap = int(klen), int(klen)
 	return api.Binarycmp(key, other, partial) == -1
 }
 
-func (nd *Llrbnode) lekey(mdsize int, other []byte, partial bool) bool {
+func (nd *Llrbnode1) lekey(other []byte, partial bool) bool {
 	var key []byte
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&key))
-	sl.Len = nd.keysize()
-	sl.Cap = sl.Len
-	baseptr := (uintptr)(unsafe.Pointer(&nd.mdmarker))
-	sl.Data = baseptr + uintptr(mdsize)
+	klen := nd.getkeylen()
+	sl.Data = (uintptr)(unsafe.Pointer(&nd.key))
+	sl.Len, sl.Cap = int(klen), int(klen)
 	cmp := api.Binarycmp(key, other, partial)
 	return cmp == -1 || cmp == 0
 }
 
-func (nd *Llrbnode) gtkey(mdsize int, other []byte, partial bool) bool {
+func (nd *Llrbnode1) gtkey(other []byte, partial bool) bool {
 	var key []byte
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&key))
-	sl.Len = nd.keysize()
-	sl.Cap = sl.Len
-	baseptr := (uintptr)(unsafe.Pointer(&nd.mdmarker))
-	sl.Data = baseptr + uintptr(mdsize)
+	klen := nd.getkeylen()
+	sl.Data = (uintptr)(unsafe.Pointer(&nd.key))
+	sl.Len, sl.Cap = int(klen), int(klen)
 	cmp := api.Binarycmp(key, other, partial)
 	return cmp == 1
 }
 
-func (nd *Llrbnode) gekey(mdsize int, other []byte, partial bool) bool {
+func (nd *Llrbnode1) gekey(other []byte, partial bool) bool {
 	var key []byte
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&key))
-	sl.Len = nd.keysize()
-	sl.Cap = sl.Len
-	baseptr := (uintptr)(unsafe.Pointer(&nd.mdmarker))
-	sl.Data = baseptr + uintptr(mdsize)
+	klen := nd.getkeylen()
+	sl.Data = (uintptr)(unsafe.Pointer(&nd.key))
+	sl.Len, sl.Cap = int(klen), int(klen)
 	cmp := api.Binarycmp(key, other, partial)
 	return cmp == 0 || cmp == 1
-}
-
-//---- tree operations
-
-func isred(nd *Llrbnode) bool {
-	if nd == nil {
-		return false
-	}
-	return nd.metadata().isred()
-}
-
-func isblack(nd *Llrbnode) bool {
-	return !isred(nd)
-}
-
-func llndornil(nd *Llrbnode) api.Node {
-	if nd == nil {
-		return nil
-	}
-	return nd
 }
