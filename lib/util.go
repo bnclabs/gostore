@@ -128,7 +128,7 @@ func Fixbuffer(buffer []byte, size int64) []byte {
 	return buffer[:size]
 }
 
-// Prettystats uses json.MarshalIndent, if pretty is true, instead of
+// Prettystats uses, if pretty is true, json.MarshalIndent instead of
 // json.Marshal. If Marshal return error Prettystats will panic.
 func Prettystats(stats map[string]interface{}, pretty bool) string {
 	if pretty {
