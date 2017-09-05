@@ -183,3 +183,168 @@ func TestNodeGekey(t *testing.T) {
 		t.Errorf("expected true")
 	}
 }
+
+func BenchmarkNodeSetaccess(b *testing.B) {
+	block1 := make([]byte, 1024)
+	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
+	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	for i := 0; i < b.N; i++ {
+		nd.setaccess(0x123456789)
+	}
+}
+
+func BenchmarkNodeGetaccess(b *testing.B) {
+	block1 := make([]byte, 1024)
+	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
+	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	nd.setaccess(0x123456789)
+	for i := 0; i < b.N; i++ {
+		nd.getaccess()
+	}
+}
+
+func BenchmarkNodeSetkey(b *testing.B) {
+	block1 := make([]byte, 1024)
+	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
+	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	key := []byte("aaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	for i := 0; i < b.N; i++ {
+		nd.setkey(key)
+	}
+}
+
+func BenchmarkNodeGetkey(b *testing.B) {
+	block1 := make([]byte, 1024)
+	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
+	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	key := []byte("aaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	nd.setkey(key)
+	for i := 0; i < b.N; i++ {
+		nd.getkey()
+	}
+}
+
+func BenchmarkNodeSetseqno(b *testing.B) {
+	block1 := make([]byte, 1024)
+	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
+	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	for i := 0; i < b.N; i++ {
+		nd.setseqno(0x1234567789)
+	}
+}
+
+func BenchmarkNodeGetseqno(b *testing.B) {
+	block1 := make([]byte, 1024)
+	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
+	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	nd.setseqno(0x123456778)
+	for i := 0; i < b.N; i++ {
+		nd.getseqno()
+	}
+}
+
+func BenchmarkNodeSetred(b *testing.B) {
+	block1 := make([]byte, 1024)
+	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
+	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	for i := 0; i < b.N; i++ {
+		nd.setred()
+	}
+}
+
+func BenchmarkNodeIsred(b *testing.B) {
+	block1 := make([]byte, 1024)
+	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
+	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	for i := 0; i < b.N; i++ {
+		nd.isred()
+	}
+}
+
+func BenchmarkNodeSetdirty(b *testing.B) {
+	block1 := make([]byte, 1024)
+	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
+	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	for i := 0; i < b.N; i++ {
+		nd.setdirty()
+	}
+}
+
+func BenchmarkNodeIsdirty(b *testing.B) {
+	block1 := make([]byte, 1024)
+	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
+	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	for i := 0; i < b.N; i++ {
+		nd.isdirty()
+	}
+}
+
+func BenchmarkNodeSetdeleted(b *testing.B) {
+	block1 := make([]byte, 1024)
+	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
+	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	for i := 0; i < b.N; i++ {
+		nd.setdeleted()
+	}
+}
+
+func BenchmarkNodeIsdeleted(b *testing.B) {
+	block1 := make([]byte, 1024)
+	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
+	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	for i := 0; i < b.N; i++ {
+		nd.isdeleted()
+	}
+}
+
+func BenchmarkNodeLt(b *testing.B) {
+	block1 := make([]byte, 1024)
+	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
+	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	key, otherkey := make([]byte, 512), make([]byte, 512)
+	nd.setkey(key)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		nd.ltkey(otherkey, false)
+	}
+}
+
+func BenchmarkNodeLe(b *testing.B) {
+	block1 := make([]byte, 1024)
+	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
+	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	key, otherkey := make([]byte, 512), make([]byte, 512)
+	nd.setkey(key)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		nd.lekey(otherkey, false)
+	}
+}
+
+func BenchmarkNodeGt(b *testing.B) {
+	block1 := make([]byte, 1024)
+	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
+	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	key, otherkey := make([]byte, 512), make([]byte, 512)
+	nd.setkey(key)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		nd.gtkey(otherkey, false)
+	}
+}
+
+func BenchmarkNodeGe(b *testing.B) {
+	block1 := make([]byte, 1024)
+	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
+	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	key, otherkey := make([]byte, 512), make([]byte, 512)
+	nd.setkey(key)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		nd.gekey(otherkey, false)
+	}
+}
