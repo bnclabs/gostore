@@ -110,11 +110,17 @@ func (nd *Llrbnode1) getseqno() uint64 {
 }
 
 func (nd *Llrbnode1) isblack() bool {
+	if nd == nil {
+		return true
+	}
 	seqflags := nd.getseqflags()
 	return (seqflags & ndBlack) == uint64(ndBlack)
 }
 
 func (nd *Llrbnode1) isred() bool {
+	if nd == nil {
+		return false
+	}
 	return !nd.isblack()
 }
 
