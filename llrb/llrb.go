@@ -35,7 +35,6 @@ type llrbstats1 struct {
 type LLRB1 struct { // tree container
 	llrbstats1    // 64-bit aligned snapshot statistics.
 	h_upsertdepth *lib.HistogramInt64
-
 	// can be unaligned fields
 	name      string
 	nodearena api.Mallocer
@@ -43,7 +42,6 @@ type LLRB1 struct { // tree container
 	root      unsafe.Pointer // *Llrbnode1
 	seqno     uint64
 	rw        sync.RWMutex
-
 	// settings
 	keycapacity int64
 	valcapacity int64
@@ -529,31 +527,32 @@ func (llrb *LLRB1) Validate() {
 	llrb.rw.RLock()
 
 	root := llrb.getroot()
-	h := lib.NewhistorgramInt64(1, 256, 1)
-
-	blacks, depth := int64(0), int64(1)
-	nblacks, km, vm := llrb.validatetree(root, root.isred(), blacks, depth, h)
-	if km != llrb.keymemory {
-		fmsg := "validate(): keymemory:%v != actual:%v"
-		panic(fmt.Errorf(fmsg, llrb.keymemory, km))
-	} else if vm != llrb.valmemory {
-		fmsg := "validate(): valmemory:%v != actual:%v"
-		panic(fmt.Errorf(fmsg, llrb.valmemory, vm))
-	}
-	if samples := h.Samples(); samples != llrb.Count() {
-		fmsg := "expected h_height.samples:%v to be same as Count():%v"
-		panic(fmt.Errorf(fmsg, samples, llrb.Count()))
-	}
-	log.Infof("%v found %v blacks on both sides\n", llrb.logprefix, nblacks)
-
-	// `h_height`.max should not exceed certain limit, maxheight gives some
-	// breathing room.
-	if h.Samples() > 8 {
-		entries := llrb.Count()
-		if float64(h.Max()) > maxheight(entries) {
-			fmsg := "validate(): max height %v exceeds <factor>*log2(%v)"
-			panic(fmt.Errorf(fmsg, float64(h.Max()), entries))
+	if root != nil {
+		h := lib.NewhistorgramInt64(1, 256, 1)
+		blacks, depth, fromred := int64(0), int64(1), root.isred()
+		nblacks, km, vm := llrb.validatetree(root, fromred, blacks, depth, h)
+		if km != llrb.keymemory {
+			fmsg := "validate(): keymemory:%v != actual:%v"
+			panic(fmt.Errorf(fmsg, llrb.keymemory, km))
+		} else if vm != llrb.valmemory {
+			fmsg := "validate(): valmemory:%v != actual:%v"
+			panic(fmt.Errorf(fmsg, llrb.valmemory, vm))
 		}
+		if samples := h.Samples(); samples != llrb.Count() {
+			fmsg := "expected h_height.samples:%v to be same as Count():%v"
+			panic(fmt.Errorf(fmsg, samples, llrb.Count()))
+		}
+		log.Infof("%v found %v blacks on both sides\n", llrb.logprefix, nblacks)
+		// `h_height`.max should not exceed certain limit, maxheight
+		// gives some breathing room.
+		if h.Samples() > 8 {
+			entries := llrb.Count()
+			if float64(h.Max()) > maxheight(entries) {
+				fmsg := "validate(): max height %v exceeds <factor>*log2(%v)"
+				panic(fmt.Errorf(fmsg, float64(h.Max()), entries))
+			}
+		}
+
 	}
 
 	// Validation check based on statistics accounting.
@@ -589,7 +588,7 @@ func (llrb *LLRB1) Log() {
 		fmsg := "cap: %v {heap:%v,alloc:%v,overhd,%v}\n"
 		return fmt.Sprintf(fmsg, ss...)
 	}
-	loguz := func(sizes []int, zs []float64, arena string) {
+	loguz := func(sizes []int, zs []float64, arena string) string {
 		outs := []string{}
 		fmsg := "  %4v chunk-size, utilz: %2.2f%%"
 		for i, size := range sizes {
@@ -601,28 +600,25 @@ func (llrb *LLRB1) Log() {
 			allock, heapk = "value.alloc", "value.heap"
 		}
 		alloc, heap := stats[allock], stats[heapk]
-		uz := int64((float64(alloc.(int64)) / float64(heap.(int64))) * 100)
-		log.Infof("%v key utilization: %v%%\n%v\n", llrb.logprefix, uz, out)
+		uz := ((float64(alloc.(int64)) / float64(heap.(int64))) * 100)
+		return fmt.Sprintf("utilization: %.2f%%\n%v", uz, out)
 	}
 
 	// log information about key memory arena
 	kmem := humanize.Bytes(uint64(stats["keymemory"].(int64)))
 	as := []string{"node.capacity", "node.heap", "node.alloc", "node.overhead"}
 	log.Infof("%v keymem(%v): %v\n", llrb.logprefix, kmem, summary(as...))
-
 	// log information about key memory utilization
 	sizes, zs := llrb.nodearena.Utilization()
-	loguz(sizes, zs, "node")
+	log.Infof("%v key %v", llrb.logprefix, loguz(sizes, zs, "node"))
 
 	// log information about value memory arena
 	vmem := humanize.Bytes(uint64(stats["valmemory"].(int64)))
 	as = []string{"value.capacity", "value.heap", "value.alloc", "value.overhead"}
 	log.Infof("%v valmem(%v): %v\n", llrb.logprefix, vmem, summary(as...))
-
-	// log statistics
-	delete(stats, "node.blocks")
-	delete(stats, "value.blocks")
-	log.Infof("%v statistics %v\n", llrb.logprefix, lib.Prettystats(stats, false))
+	// log information about key memory utilization
+	sizes, zs = llrb.valarena.Utilization()
+	log.Infof("%v val %v", llrb.logprefix, loguz(sizes, zs, "node"))
 
 	llrb.rw.RUnlock()
 }
@@ -781,7 +777,7 @@ func (llrb *LLRB1) logarenasettings() {
 	// key arena
 	kblocks := len(stats["node.blocks"].([]int64))
 	cp := humanize.Bytes(uint64(stats["node.capacity"].(int64)))
-	fmsg := "%v key arena %v with capacity %v\n"
+	fmsg := "%v key arena %v blocks with capacity %v\n"
 	log.Infof(fmsg, llrb.logprefix, kblocks, cp)
 
 	// value arena
