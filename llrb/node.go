@@ -100,13 +100,13 @@ func (nd *Llrbnode1) setseqflags(seqflags uint64) *Llrbnode1 {
 	return nd
 }
 
-func (nd *Llrbnode1) getseqno() uint64 {
-	return nd.getseqflags() >> 4
-}
-
 func (nd *Llrbnode1) setseqno(seqno uint64) *Llrbnode1 {
 	nd.setseqflags((nd.getseqflags() & 0xf) | (seqno << 4))
 	return nd
+}
+
+func (nd *Llrbnode1) getseqno() uint64 {
+	return nd.getseqflags() >> 4
 }
 
 func (nd *Llrbnode1) isblack() bool {
