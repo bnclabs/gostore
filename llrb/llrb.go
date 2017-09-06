@@ -163,7 +163,7 @@ func (llrb *LLRB1) delcounts(nd *Llrbnode1) {
 // Set a key, value pair in the index, if key is already present,
 // its value will be over-written. Make sure that key is not nil.
 // Return old value.
-func (llrb *LLRB1) Set(key, value, oldvalue []byte) []byte {
+func (llrb *LLRB1) Set(key, value, oldvalue []byte) ([]byte, uint64) {
 	llrb.rw.Lock()
 	llrb.seqno++
 
@@ -172,6 +172,7 @@ func (llrb *LLRB1) Set(key, value, oldvalue []byte) []byte {
 	newnd.cleardeleted()
 	newnd.cleardirty()
 	newnd.setseqno(llrb.seqno)
+	seqno := llrb.seqno
 
 	llrb.setroot(root)
 	llrb.upsertcounts(key, value, oldnd)
@@ -186,14 +187,14 @@ func (llrb *LLRB1) Set(key, value, oldvalue []byte) []byte {
 	llrb.freenode(oldnd)
 
 	llrb.rw.Unlock()
-	return oldvalue
+	return oldvalue, seqno
 }
 
 // SetCAS a key, value pair in the index, if CAS is ZERO then key
 // should be present in the index, otherwise existing CAS should
 // match the supplied CAS. Value will be over-written. Make sure that
 // key is not nil. Return old value.
-func (llrb *LLRB1) SetCAS(key, value, oldv []byte, cas uint64) ([]byte, error) {
+func (llrb *LLRB1) SetCAS(key, value, oldv []byte, cas uint64) ([]byte, uint64, error) {
 	llrb.rw.Lock()
 
 	// Get to check for CAS
@@ -204,7 +205,7 @@ func (llrb *LLRB1) SetCAS(key, value, oldv []byte, cas uint64) ([]byte, error) {
 	}
 	if currcas != cas {
 		llrb.rw.Unlock()
-		return oldv, api.ErrorInvalidCAS
+		return oldv, 0, api.ErrorInvalidCAS
 	}
 
 	llrb.seqno++
@@ -215,6 +216,7 @@ func (llrb *LLRB1) SetCAS(key, value, oldv []byte, cas uint64) ([]byte, error) {
 	newnd.cleardeleted()
 	newnd.cleardirty()
 	newnd.setseqno(llrb.seqno)
+	seqno := llrb.seqno
 
 	llrb.setroot(root)
 	llrb.upsertcounts(key, value, oldnd)
@@ -226,7 +228,7 @@ func (llrb *LLRB1) SetCAS(key, value, oldv []byte, cas uint64) ([]byte, error) {
 	llrb.freenode(oldnd)
 
 	llrb.rw.Unlock()
-	return oldv, nil
+	return oldv, seqno, nil
 }
 
 // returns root, newnd, oldnd
@@ -390,19 +392,21 @@ func (llrb *LLRB1) deletemin(nd *Llrbnode1) (newnd, deleted *Llrbnode1) {
 
 //---- Exported Read methods
 
-func (llrb *LLRB1) Get(key []byte, value []byte) ([]byte, bool) {
+func (llrb *LLRB1) Get(key []byte, value []byte) ([]byte, uint64, bool, bool) {
 	llrb.rw.RLock()
 
+	deleted, seqno := false, uint64(0)
 	nd, ok := llrb.getkey(key)
 	if ok {
 		val := nd.Value()
 		value = lib.Fixbuffer(value, int64(len(val)))
 		copy(value, val)
+		seqno, deleted = nd.getseqno(), nd.isdeleted()
 	}
 	llrb.n_reads++
 
 	llrb.rw.RUnlock()
-	return value, ok
+	return value, seqno, deleted, ok
 }
 
 func (llrb *LLRB1) getkey(k []byte) (*Llrbnode1, bool) {
