@@ -204,6 +204,7 @@ func (llrb *LLRB1) SetCAS(key, value, oldv []byte, cas uint64) ([]byte, uint64, 
 		currcas = nd.getseqno()
 	}
 	if currcas != cas {
+		oldv = lib.Fixbuffer(oldv, 0)
 		llrb.rw.Unlock()
 		return oldv, 0, api.ErrorInvalidCAS
 	}
@@ -277,7 +278,7 @@ func (llrb *LLRB1) upsert(
 // return its value. If lsm is true, then don't delete the node
 // instead simply mark the node as deleted. Again, if lsm is true
 // but key is not found in index a new entry will inserted.
-func (llrb *LLRB1) Delete(key, oldval []byte, lsm bool) []byte {
+func (llrb *LLRB1) Delete(key, oldval []byte, lsm bool) ([]byte, uint64) {
 	llrb.rw.Lock()
 
 	var val []byte
@@ -285,10 +286,11 @@ func (llrb *LLRB1) Delete(key, oldval []byte, lsm bool) []byte {
 	llrb.seqno++
 
 	if lsm {
-		llrbnd, ok := llrb.getkey(key)
+		nd, ok := llrb.getkey(key)
 		if ok {
-			llrbnd.setdeleted()
-			val = llrbnd.Value()
+			nd.setdeleted()
+			nd.setseqno(llrb.seqno)
+			val = nd.Value()
 
 		} else {
 			root, newnd, oldnd := llrb.upsert(root, 1 /*depth*/, key, nil)
@@ -315,9 +317,10 @@ func (llrb *LLRB1) Delete(key, oldval []byte, lsm bool) []byte {
 
 	oldval = lib.Fixbuffer(oldval, int64(len(val)))
 	copy(oldval, val)
+	seqno := llrb.seqno
 
 	llrb.rw.Unlock()
-	return oldval
+	return oldval, seqno
 }
 
 func (llrb *LLRB1) delete(nd *Llrbnode1, key []byte) (newnd, deleted *Llrbnode1) {
@@ -402,6 +405,8 @@ func (llrb *LLRB1) Get(key []byte, value []byte) ([]byte, uint64, bool, bool) {
 		value = lib.Fixbuffer(value, int64(len(val)))
 		copy(value, val)
 		seqno, deleted = nd.getseqno(), nd.isdeleted()
+	} else {
+		value = lib.Fixbuffer(value, 0)
 	}
 	llrb.n_reads++
 
@@ -569,10 +574,16 @@ func (llrb *LLRB1) Validate() {
 		panic(fmt.Errorf(fmsg, n_count, n_inserts, n_deletes))
 	}
 	// n_nodes should match n_inserts
-	n_nodes := llrb.n_nodes
+	n_clones, n_nodes, n_frees := llrb.n_clones, llrb.n_nodes, llrb.n_frees
 	if n_inserts != n_nodes {
 		fmsg := "validatestats(): n_inserts:%v != n_nodes:%v"
 		panic(fmt.Errorf(fmsg, n_inserts, n_nodes))
+	}
+	if (llrb.n_nodes - llrb.n_count) == llrb.n_frees {
+	} else if llrb.n_clones+(llrb.n_nodes-llrb.n_count) == llrb.n_frees {
+	} else {
+		fmsg := "validatestats(): clones:%v+(nodes:%v-count:%v) != frees:%v"
+		panic(fmt.Errorf(fmsg, n_clones, n_nodes, n_count, n_frees))
 	}
 
 	llrb.rw.RUnlock()
