@@ -285,12 +285,16 @@ func (llrb *LLRB1) Delete(key, oldval []byte, lsm bool) ([]byte, uint64) {
 	root := llrb.getroot()
 	llrb.seqno++
 
+	oldval = lib.Fixbuffer(oldval, 0)
+	seqno := llrb.seqno
 	if lsm {
 		nd, ok := llrb.getkey(key)
 		if ok {
 			nd.setdeleted()
 			nd.setseqno(llrb.seqno)
 			val = nd.Value()
+			oldval = lib.Fixbuffer(oldval, int64(len(val)))
+			copy(oldval, val)
 
 		} else {
 			root, newnd, oldnd := llrb.upsert(root, 1 /*depth*/, key, nil)
@@ -310,14 +314,12 @@ func (llrb *LLRB1) Delete(key, oldval []byte, lsm bool) ([]byte, uint64) {
 		llrb.setroot(root)
 		llrb.delcounts(deleted)
 		if deleted != nil {
-			llrb.freenode(deleted)
 			val = deleted.Value()
+			oldval = lib.Fixbuffer(oldval, int64(len(val)))
+			copy(oldval, val)
+			llrb.freenode(deleted)
 		}
 	}
-
-	oldval = lib.Fixbuffer(oldval, int64(len(val)))
-	copy(oldval, val)
-	seqno := llrb.seqno
 
 	llrb.rw.Unlock()
 	return oldval, seqno
