@@ -5,6 +5,8 @@ import "testing"
 import "encoding/json"
 
 import "github.com/prataprc/gostore/lib"
+
+import "github.com/prataprc/gostore/api"
 import s "github.com/prataprc/gosettings"
 import "github.com/prataprc/golog"
 
@@ -56,6 +58,8 @@ func TestLLRBEmpty(t *testing.T) {
 }
 
 func TestLLRBLoad(t *testing.T) {
+	var cas uint64
+
 	setts := s.Settings{
 		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
 	}
@@ -78,16 +82,31 @@ func TestLLRBLoad(t *testing.T) {
 	oldvalue := make([]byte, 1024)
 	for i, key := range keys {
 		k, v := lib.Str2bytes(key), lib.Str2bytes(vals[i])
-		oldvalue = llrb.Set(k, v, oldvalue)
+		oldvalue, cas = llrb.Set(k, v, oldvalue)
+		if len(oldvalue) > 0 {
+			t.Errorf("unexpected old value %q", oldvalue)
+		} else if cas != uint64(i+1) {
+			t.Errorf("expected %v, got %v, key %q", i+1, cas, key)
+		}
 	}
 	// test loaded data
 	value := make([]byte, 1024)
 	for i, key := range keys {
-		if value, ok := llrb.Get(lib.Str2bytes(key), value); !ok {
+		if value, cas, _, ok := llrb.Get(lib.Str2bytes(key), value); !ok {
 			t.Errorf("expected key %q", key)
 		} else if string(value) != vals[i] {
 			t.Errorf("expected %q, got %q, key %q", vals[i], value, key)
+		} else if cas != uint64(i)+1 {
+			t.Errorf("expected %v, got %v, key %q", i+1, cas, key)
 		}
+	}
+	// test set.
+	k, v := []byte(keys[0]), []byte("newvalue")
+	oldvalue, cas = llrb.Set(k, v, oldvalue)
+	if cas != uint64(len(keys)+1) {
+		t.Errorf("expected %v, got %v, key %q", len(keys)+1, cas, k)
+	} else if string(oldvalue) != vals[0] {
+		t.Errorf("expected %s, got %s", vals[0], oldvalue)
 	}
 
 	if llrb.Count() != int64(len(keys)) {
@@ -99,21 +118,21 @@ func TestLLRBLoad(t *testing.T) {
 	stats := llrb.Stats()
 	if x := stats["keymemory"].(int64); x != 72 {
 		t.Errorf("unexpected %v", x)
-	} else if x := stats["valmemory"].(int64); x != 72 {
+	} else if x := stats["valmemory"].(int64); x != 76 {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_count"].(int64); x != int64(len(keys)) {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_inserts"].(int64); x != int64(len(keys)) {
 		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_updates"].(int64); x != 0 {
+	} else if x := stats["n_updates"].(int64); x != 1 {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_deletes"].(int64); x != 0 {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_reads"].(int64); x != int64(len(keys)) {
 		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_clones"].(int64); x != 0 {
+	} else if x := stats["n_clones"].(int64); x != 1 {
 		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_frees"].(int64); x != 0 {
+	} else if x := stats["n_frees"].(int64); x != 1 {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_nodes"].(int64); x != int64(len(keys)) {
 		t.Errorf("unexpected %v", x)
@@ -132,27 +151,31 @@ func TestLLRBLoadLarge(t *testing.T) {
 	setts := s.Settings{
 		"keycapacity": 100 * 1024 * 1024, "valcapacity": 100 * 1024 * 1024,
 	}
-	llrb := NewLLRB1("load", setts)
+	llrb := NewLLRB1("loadlarge", setts)
 	defer llrb.Destroy()
 
 	// load data
-	n, oldvalue, rkm, rvm := 1000000, make([]byte, 1024), 0, 0
+	n, oldvalue, rkm, rvm := 1000, make([]byte, 1024), 0, 0
 	for i := 0; i < n; i++ {
 		k := []byte(fmt.Sprintf("key%v", i))
 		v := []byte(fmt.Sprintf("val%v", i))
-		oldvalue = llrb.Set(k, v, oldvalue)
+		oldvalue, _ /*cas*/ = llrb.Set(k, v, oldvalue)
 		rkm, rvm = rkm+len(k), rvm+len(v)
+		llrb.Validate()
 	}
 	// test loaded data
 	value := make([]byte, 1024)
 	for i := 0; i < n; i++ {
 		key := fmt.Sprintf("key%v", i)
 		val := fmt.Sprintf("val%v", i)
-		if value, ok := llrb.Get(lib.Str2bytes(key), value); !ok {
+		if value, cas, _, ok := llrb.Get(lib.Str2bytes(key), value); !ok {
 			t.Errorf("expected key %q", key)
 		} else if string(value) != val {
 			t.Errorf("expected %q, got %q, key %q", val, value, key)
+		} else if cas != uint64(i)+1 {
+			t.Errorf("expected %v, got %v, key %q", i+1, cas, key)
 		}
+		llrb.Validate()
 	}
 
 	if llrb.Count() != int64(n) {
@@ -160,7 +183,6 @@ func TestLLRBLoadLarge(t *testing.T) {
 	}
 
 	// validate
-	llrb.Validate()
 	stats := llrb.Stats()
 	if x := stats["keymemory"].(int64); x != int64(rkm) {
 		t.Errorf("unexpected %v", x)
@@ -186,9 +208,359 @@ func TestLLRBLoadLarge(t *testing.T) {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_cursors"].(int64); x != 0 {
 		t.Errorf("unexpected %v", x)
-	} else if u := nodeutz(stats); u < 50.0 {
+	} else if u := nodeutz(stats); u < 95.0 {
 		t.Errorf("unexpected %v", u)
-	} else if u := valueutz(stats); u < 50.0 {
+	} else if u := valueutz(stats); u < 95.0 {
+		t.Errorf("unexpected %v", u)
+	}
+}
+
+func TestLLRBClone(t *testing.T) {
+	setts := s.Settings{
+		"keycapacity": 100 * 1024 * 1024, "valcapacity": 100 * 1024 * 1024,
+	}
+	llrb := NewLLRB1("clone", setts)
+	defer llrb.Destroy()
+
+	// load data
+	n, oldvalue, rkm, rvm := 1000, make([]byte, 1024), 0, 0
+	for i := 0; i < n; i++ {
+		k := []byte(fmt.Sprintf("key%v", i))
+		v := []byte(fmt.Sprintf("val%v", i))
+		oldvalue, _ /*cas*/ = llrb.Set(k, v, oldvalue)
+		rkm, rvm = rkm+len(k), rvm+len(v)
+		llrb.Validate()
+	}
+	clone := llrb.Clone("loadclone")
+	defer clone.Destroy()
+
+	// test loaded data
+	value := make([]byte, 1024)
+	for i := 0; i < n; i++ {
+		key := fmt.Sprintf("key%v", i)
+		val := fmt.Sprintf("val%v", i)
+		if value, cas, _, ok := clone.Get(lib.Str2bytes(key), value); !ok {
+			t.Errorf("expected key %q", key)
+		} else if string(value) != val {
+			t.Errorf("expected %q, got %q, key %q", val, value, key)
+		} else if cas != uint64(i)+1 {
+			t.Errorf("expected %v, got %v, key %q", i+1, cas, key)
+		}
+		llrb.Validate()
+	}
+
+	if clone.Count() != int64(n) {
+		t.Errorf("unexpected %v", clone.Count())
+	}
+
+	// validate
+	stats := clone.Stats()
+	if x := stats["keymemory"].(int64); x != int64(rkm) {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["valmemory"].(int64); x != int64(rvm) {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_count"].(int64); x != int64(n) {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_inserts"].(int64); x != int64(n) {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_updates"].(int64); x != 0 {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_deletes"].(int64); x != 0 {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_reads"].(int64); x != int64(n) {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_clones"].(int64); x != 0 {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_frees"].(int64); x != 0 {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_nodes"].(int64); x != int64(n) {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_txns"].(int64); x != 0 {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_cursors"].(int64); x != 0 {
+		t.Errorf("unexpected %v", x)
+	} else if u := nodeutz(stats); u < 95.0 {
+		t.Errorf("unexpected %v", u)
+	} else if u := valueutz(stats); u < 95.0 {
+		t.Errorf("unexpected %v", u)
+	}
+}
+
+func TestLLRBSetCAS(t *testing.T) {
+	var err error
+	var cas uint64
+
+	setts := s.Settings{
+		"keycapacity": 100 * 1024 * 1024, "valcapacity": 100 * 1024 * 1024,
+	}
+	llrb := NewLLRB1("setcas", setts)
+	defer llrb.Destroy()
+
+	// load data
+	n, oldvalue, rkm, rvm := 1000, make([]byte, 1024), 0, 0
+	for i := 0; i < n; i++ {
+		k := []byte(fmt.Sprintf("key%v", i))
+		v := []byte(fmt.Sprintf("val%v", i))
+		if oldvalue, cas, err = llrb.SetCAS(k, v, oldvalue, 0); err != nil {
+			t.Error(err)
+		} else if len(oldvalue) > 0 {
+			t.Errorf("unexpected oldvalue %q", oldvalue)
+		} else if cas != uint64(i+1) {
+			t.Errorf("expected %v, got %v, key %q", i+1, cas, k)
+		}
+		rkm, rvm = rkm+len(k), rvm+len(v)
+		llrb.Validate()
+	}
+	// set with cas
+	k, v := []byte("key100"), []byte("valu100")
+	oldvalue, cas, err = llrb.SetCAS(k, v, oldvalue, 101)
+	if err != nil {
+		t.Error(err)
+	} else if string(oldvalue) != "val100" {
+		t.Errorf("unexpected %q", oldvalue)
+	} else if cas != uint64(n+1) {
+		t.Errorf("expected %v, got %v", n+1, cas)
+	}
+	rvm = rvm - len(oldvalue) + len(v)
+	llrb.Validate()
+	// set with invalid cas
+	k = []byte("key100")
+	oldvalue, cas, err = llrb.SetCAS(k, nil, oldvalue, 100)
+	if err.Error() != api.ErrorInvalidCAS.Error() {
+		t.Errorf("expected error")
+	}
+	llrb.Validate()
+	// set with cas again
+	k, v = []byte("key100"), []byte("value100")
+	oldvalue, cas, err = llrb.SetCAS(k, v, oldvalue, uint64(n+1))
+	if err != nil {
+		t.Error(err)
+	} else if string(oldvalue) != "valu100" {
+		t.Errorf("unexpected %q", oldvalue)
+	} else if cas != uint64(n+2) {
+		t.Errorf("expected %v, got %v", n+2, cas)
+	}
+	rvm = rvm - len(oldvalue) + len(v)
+	llrb.Validate()
+
+	// test loaded data
+	value := make([]byte, 1024)
+	for i := 0; i < n; i++ {
+		key := fmt.Sprintf("key%v", i)
+		val := fmt.Sprintf("val%v", i)
+		if value, cas, _, ok := llrb.Get(lib.Str2bytes(key), value); !ok {
+			t.Errorf("expected key %q", key)
+		} else if key == "key100" {
+			if string(value) != "value100" {
+				t.Errorf("expected %q, got %q, key %q", val, value, key)
+			} else if cas != uint64(n+2) {
+				t.Errorf("expected %v, got %v, key %q", n+2, cas, key)
+			}
+		} else {
+			if string(value) != val {
+				t.Errorf("expected %q, got %q, key %q", val, value, key)
+			} else if cas != uint64(i)+1 {
+				t.Errorf("expected %v, got %v, key %q", i+1, cas, key)
+			}
+		}
+		llrb.Validate()
+	}
+
+	if llrb.Count() != int64(n) {
+		t.Errorf("unexpected %v", llrb.Count())
+	}
+
+	// validate
+	stats := llrb.Stats()
+	if x := stats["keymemory"].(int64); x != int64(rkm) {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["valmemory"].(int64); x != int64(rvm) {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_count"].(int64); x != int64(n) {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_inserts"].(int64); x != int64(n) {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_updates"].(int64); x != 2 {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_deletes"].(int64); x != 0 {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_reads"].(int64); x != int64(n) {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_clones"].(int64); x != 2 {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_frees"].(int64); x != 2 {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_nodes"].(int64); x != int64(n) {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_txns"].(int64); x != 0 {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_cursors"].(int64); x != 0 {
+		t.Errorf("unexpected %v", x)
+	} else if u := nodeutz(stats); u < 95.0 {
+		t.Errorf("unexpected %v", u)
+	} else if u := valueutz(stats); u < 95.0 {
+		t.Errorf("unexpected %v", u)
+	}
+}
+
+func TestLLRBDelete(t *testing.T) {
+	var err error
+	var cas uint64
+
+	setts := s.Settings{
+		"keycapacity": 100 * 1024 * 1024, "valcapacity": 100 * 1024 * 1024,
+	}
+	llrb := NewLLRB1("delete", setts)
+	defer llrb.Destroy()
+
+	// load data
+	n, oldvalue, rkm, rvm := 1000, make([]byte, 1024), 0, 0
+	for i := 0; i < n; i++ {
+		k := []byte(fmt.Sprintf("key%v", i))
+		v := []byte(fmt.Sprintf("val%v", i))
+		if oldvalue, cas, err = llrb.SetCAS(k, v, oldvalue, 0); err != nil {
+			t.Error(err)
+		} else if len(oldvalue) > 0 {
+			t.Errorf("unexpected oldvalue %q", oldvalue)
+		} else if cas != uint64(i+1) {
+			t.Errorf("expected %v, got %v, key %q", i+1, cas, k)
+		}
+		rkm, rvm = rkm+len(k), rvm+len(v)
+		llrb.Validate()
+	}
+	// delete missing key
+	k := []byte("missing")
+	oldvalue, cas = llrb.Delete(k, oldvalue, false /*lsm*/)
+	if cas != uint64(n+1) {
+		t.Errorf("expected %v, got %v", n+1, cas)
+	} else if len(oldvalue) > 0 {
+		t.Errorf("unexpected %q", oldvalue)
+	}
+	// mutation: delete a valid key
+	k, v := []byte("key100"), []byte("val100")
+	oldvalue, cas = llrb.Delete(k, oldvalue, false /*lsm*/)
+	if cas != uint64(n+2) {
+		t.Errorf("expected %v, got %v", n+2, cas)
+	} else if string(oldvalue) != "val100" {
+		t.Errorf("unexpected %q", oldvalue)
+	}
+	rkm, rvm = rkm-len(k), rvm-len(v)
+	// test with get
+	if oldvalue, cas, delok, ok := llrb.Get(k, oldvalue); ok {
+		t.Errorf("unexpected key %q", k)
+	} else if delok == true {
+		t.Errorf("unexpected true")
+	} else if cas != 0 {
+		t.Errorf("unexpected cas %v", cas)
+	} else if len(oldvalue) > 0 {
+		t.Errorf("unexpected %q", oldvalue)
+	}
+	// mutation: set-cas on deleted key
+	k, v = []byte("key100"), []byte("valu100")
+	oldvalue, cas, err = llrb.SetCAS(k, v, oldvalue, 0)
+	if err != nil {
+		t.Error(err)
+	} else if cas != uint64(n+3) {
+		t.Errorf("expected %v, got %v", n+3, cas)
+	}
+	rkm, rvm = rkm+len(k), rvm+len(v)
+	// mutation: delete with lsm
+	k = []byte("key100")
+	oldvalue, cas = llrb.Delete(k, oldvalue, true /*lsm*/)
+	if cas != uint64(n+4) {
+		t.Errorf("expected %v, got %v", n+4, cas)
+	} else if string(oldvalue) != "valu100" {
+		t.Errorf("unexpected %q", oldvalue)
+	}
+	rkm, rvm = rkm-len(k), rvm-len(v)
+	// test with get lsm deleted key
+	if oldvalue, cas, delok, ok := llrb.Get(k, oldvalue); !ok {
+		t.Errorf("expected key %q", k)
+	} else if delok == false {
+		t.Errorf("expected true")
+	} else if cas != uint64(n+4) {
+		t.Errorf("expected %v, got %v", n+4, cas)
+	} else if string(oldvalue) != "valu100" {
+		t.Errorf("unexpected %q", oldvalue)
+	}
+	// mutation: set-cas on deleted key
+	k, v = []byte("key100"), []byte("value100")
+	oldvalue, cas, err = llrb.SetCAS(k, v, oldvalue, uint64(n+4))
+	if err != nil {
+		t.Error(err)
+	} else if cas != uint64(n+5) {
+		t.Errorf("expected %v, got %v", n+5, cas)
+	} else if string(oldvalue) != "valu100" {
+		t.Errorf("unexpected %q", oldvalue)
+	}
+	rkm, rvm = rkm+len(k), rvm+len(v)
+	// test with get
+	if oldvalue, cas, delok, ok := llrb.Get(k, oldvalue); !ok {
+		t.Errorf("expected key %q", k)
+	} else if delok == true {
+		t.Errorf("expected false")
+	} else if cas != uint64(n+5) {
+		t.Errorf("expected %v, got %v", n+5, cas)
+	} else if string(oldvalue) != "value100" {
+		t.Errorf("unexpected %q", oldvalue)
+	}
+
+	// test loaded data
+	value := make([]byte, 1024)
+	for i := 0; i < n; i++ {
+		key := fmt.Sprintf("key%v", i)
+		val := fmt.Sprintf("val%v", i)
+		if value, cas, _, ok := llrb.Get(lib.Str2bytes(key), value); !ok {
+			t.Errorf("expected key %q", key)
+		} else if key == "key100" {
+			if string(value) != "value100" {
+				t.Errorf("expected %q, got %q, key %q", val, value, key)
+			} else if cas != uint64(n+5) {
+				t.Errorf("expected %v, got %v, key %q", n+5, cas, key)
+			}
+		} else {
+			if string(value) != val {
+				t.Errorf("expected %q, got %q, key %q", val, value, key)
+			} else if cas != uint64(i)+1 {
+				t.Errorf("expected %v, got %v, key %q", i+1, cas, key)
+			}
+		}
+		llrb.Validate()
+	}
+
+	if llrb.Count() != int64(n) {
+		t.Errorf("unexpected %v", llrb.Count())
+	}
+
+	// validate
+	stats := llrb.Stats()
+	if x := stats["keymemory"].(int64); x != int64(rkm) {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["valmemory"].(int64); x != int64(rvm) {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_count"].(int64); x != int64(n) {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_inserts"].(int64); x != int64(n+1) {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_updates"].(int64); x != 1 {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_deletes"].(int64); x != 1 {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_reads"].(int64); x != int64(n+3) {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_clones"].(int64); x != 2 {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_frees"].(int64); x != 3 {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_nodes"].(int64); x != int64(n+1) {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_txns"].(int64); x != 0 {
+		t.Errorf("unexpected %v", x)
+	} else if x := stats["n_cursors"].(int64); x != 0 {
+		t.Errorf("unexpected %v", x)
+	} else if u := nodeutz(stats); u < 95.0 {
+		t.Errorf("unexpected %v", u)
+	} else if u := valueutz(stats); u < 95.0 {
 		t.Errorf("unexpected %v", u)
 	}
 }
@@ -217,7 +589,7 @@ func printstats(stats map[string]interface{}) {
 
 func init() {
 	setts := map[string]interface{}{
-		"log.level":      "info",
+		"log.level":      "ignore",
 		"log.colorfatal": "red",
 		"log.colorerror": "hired",
 		"log.colorwarn":  "yellow",
