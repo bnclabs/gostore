@@ -17,6 +17,7 @@ import humanize "github.com/dustin/go-humanize"
 
 type llrbstats1 struct {
 	n_count   int64 // number of nodes in the tree
+	n_reads   int64
 	n_inserts int64
 	n_updates int64
 	n_deletes int64
@@ -25,9 +26,14 @@ type llrbstats1 struct {
 	n_nodes   int64 // TODO: is this field required ?
 	n_frees   int64 // TODO: is this field required ?
 	n_clones  int64 // TODO: is this field required ?
-	n_reads   int64
 	keymemory int64 // memory used by all keys
 	valmemory int64 // memory used by all values
+
+	// mvcc statistics
+	n_snapshots int64
+	n_purgedss  int64
+	n_activess  int64
+	n_reclaims  int64
 }
 
 // LLRB1 manage a single instance of in-memory sorted index using
@@ -81,11 +87,11 @@ func (llrb *LLRB1) readsettings(setts s.Settings) *LLRB1 {
 }
 
 func (llrb *LLRB1) getroot() *Llrbnode1 {
-	return (*Llrbnode1)(atomic.LoadPointer(&llrb.root))
+	return (*Llrbnode1)(llrb.root)
 }
 
 func (llrb *LLRB1) setroot(root *Llrbnode1) {
-	atomic.StorePointer(&llrb.root, unsafe.Pointer(root))
+	llrb.root = unsafe.Pointer(root)
 }
 
 func (llrb *LLRB1) newnode(k, v []byte) *Llrbnode1 {
@@ -488,8 +494,10 @@ func (llrb *LLRB1) Dotdump(buffer io.Writer) {
 		"}",
 	}
 	buffer.Write([]byte(strings.Join(lines[:len(lines)-1], "\n")))
+	llrb.rw.RLock()
 	llrb.getroot().dotdump(buffer)
 	buffer.Write([]byte(lines[len(lines)-1]))
+	llrb.rw.RUnlock()
 }
 
 // Stats return a map of data-structure statistics and operational
@@ -671,10 +679,12 @@ func (llrb *LLRB1) clonetree(nd *Llrbnode1) *Llrbnode1 {
 // Destroy releases all resources held by the tree. No other
 // method call are allowed after Destroy.
 func (llrb *LLRB1) Destroy() {
+	llrb.rw.Lock()
 	llrb.nodearena.Release()
 	llrb.valarena.Release()
 	llrb.setroot(nil)
 	llrb.setts = nil
+	llrb.rw.Unlock()
 	log.Infof("%v destroyed\n", llrb.logprefix)
 }
 
