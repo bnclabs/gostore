@@ -6,7 +6,6 @@ import "io"
 import "strings"
 import "bytes"
 import "sync"
-import "sync/atomic"
 
 import "github.com/prataprc/gostore/lib"
 import "github.com/prataprc/gostore/api"
@@ -30,10 +29,10 @@ type llrbstats1 struct {
 	valmemory int64 // memory used by all values
 
 	// mvcc statistics
+	n_reclaims  int64
 	n_snapshots int64
 	n_purgedss  int64
 	n_activess  int64
-	n_reclaims  int64
 }
 
 // LLRB1 manage a single instance of in-memory sorted index using
@@ -196,54 +195,11 @@ func (llrb *LLRB1) Set(key, value, oldvalue []byte) ([]byte, uint64) {
 	return oldvalue, seqno
 }
 
-// SetCAS a key, value pair in the index, if CAS is ZERO then key
-// should be present in the index, otherwise existing CAS should
-// match the supplied CAS. Value will be over-written. Make sure that
-// key is not nil. Return old value.
-func (llrb *LLRB1) SetCAS(key, value, oldv []byte, cas uint64) ([]byte, uint64, error) {
-	llrb.rw.Lock()
-
-	// Get to check for CAS
-	currcas := uint64(0)
-	nd, ok := llrb.getkey(key)
-	if ok {
-		currcas = nd.getseqno()
-	}
-	if currcas != cas {
-		oldv = lib.Fixbuffer(oldv, 0)
-		llrb.rw.Unlock()
-		return oldv, 0, api.ErrorInvalidCAS
-	}
-
-	llrb.seqno++
-
-	// CAS matches, go ahead with upsert.
-	root, newnd, oldnd := llrb.upsert(llrb.getroot(), 1 /*depth*/, key, value)
-	root.setblack()
-	newnd.cleardeleted()
-	newnd.cleardirty()
-	newnd.setseqno(llrb.seqno)
-	seqno := llrb.seqno
-
-	llrb.setroot(root)
-	llrb.upsertcounts(key, value, oldnd)
-
-	val := oldnd.Value()
-	oldv = lib.Fixbuffer(oldv, int64(len(val)))
-	copy(oldv, val)
-
-	llrb.freenode(oldnd)
-
-	llrb.rw.Unlock()
-	return oldv, seqno, nil
-}
-
 // returns root, newnd, oldnd
 func (llrb *LLRB1) upsert(
 	nd *Llrbnode1, depth int64,
-	key, value []byte) (*Llrbnode1, *Llrbnode1, *Llrbnode1) {
+	key, value []byte) (root, oldnd, newnd *Llrbnode1) {
 
-	var oldnd, newnd *Llrbnode1
 	var dirty bool
 
 	if nd == nil {
@@ -280,6 +236,94 @@ func (llrb *LLRB1) upsert(
 	return nd, newnd, oldnd
 }
 
+// SetCAS a key, value pair in the index, if CAS is ZERO then key
+// should be present in the index, otherwise existing CAS should
+// match the supplied CAS. Value will be over-written. Make sure that
+// key is not nil. Return old value.
+func (llrb *LLRB1) SetCAS(
+	key, value, oldvalue []byte, cas uint64) ([]byte, uint64, error) {
+
+	llrb.rw.Lock()
+
+	// CAS matches, go ahead with upsert.
+	root, depth := llrb.getroot(), int64(1)
+	root, newnd, oldnd, err := llrb.upsertcas(root, depth, key, value, cas)
+	if err != nil {
+		oldvalue = lib.Fixbuffer(oldvalue, 0)
+		llrb.rw.Unlock()
+		return oldvalue, 0, err
+	}
+	llrb.seqno++
+	root.setblack()
+	newnd.cleardeleted()
+	newnd.cleardirty()
+	newnd.setseqno(llrb.seqno)
+	seqno := llrb.seqno
+
+	llrb.setroot(root)
+	llrb.upsertcounts(key, value, oldnd)
+
+	val := oldnd.Value()
+	oldvalue = lib.Fixbuffer(oldvalue, int64(len(val)))
+	copy(oldvalue, val)
+
+	llrb.freenode(oldnd)
+
+	llrb.rw.Unlock()
+	return oldvalue, seqno, nil
+}
+
+func (llrb *LLRB1) upsertcas(
+	nd *Llrbnode1, depth int64,
+	key, value []byte,
+	cas uint64) (root, oldnd, newnd *Llrbnode1, err error) {
+
+	var dirty bool
+
+	if nd == nil && cas > 0 { // Expected an update
+		return nil, nil, nil, api.ErrorInvalidCAS
+
+	} else if nd == nil { // Expected a create
+		newnd := llrb.newnode(key, value)
+		llrb.h_upsertdepth.Add(depth)
+		return newnd, newnd, nil, nil
+	}
+
+	nd = llrb.walkdownrot23(nd)
+
+	if nd.gtkey(key, false) {
+		depth++
+		nd.left, newnd, oldnd, err =
+			llrb.upsertcas(nd.left, depth, key, value, cas)
+	} else if nd.ltkey(key, false) {
+		depth++
+		nd.right, newnd, oldnd, err =
+			llrb.upsertcas(nd.right, depth, key, value, cas)
+	} else if /*equal && */ nd.getseqno() != cas {
+		newnd = nd
+		err = api.ErrorInvalidCAS
+	} else /*equal*/ {
+		oldnd, dirty = llrb.clonenode(nd), false
+		if nv := nd.nodevalue(); nv != nil { // free the value if present
+			llrb.valarena.Free(unsafe.Pointer(nv))
+			nd, dirty = nd.setnodevalue(nil), true
+		}
+		if len(value) > 0 { // add new value if req.
+			ptr := llrb.valarena.Alloc(int64(nvaluesize + len(value)))
+			nv := (*nodevalue)(ptr)
+			nd, dirty = nd.setnodevalue(nv.setvalue(value)), true
+		}
+		newnd = nd
+		if dirty {
+			nd.setdirty()
+		}
+		llrb.h_upsertdepth.Add(depth)
+	}
+
+	nd = llrb.walkuprot23(nd)
+	return nd, newnd, oldnd, err
+}
+
 // Delete key from index. Key should not be nil and if key found,
 // return its value. If lsm is true, then don't delete the node
 // instead simply mark the node as deleted. Again, if lsm is true
@@ -294,8 +338,7 @@ func (llrb *LLRB1) Delete(key, oldval []byte, lsm bool) ([]byte, uint64) {
 	oldval = lib.Fixbuffer(oldval, 0)
 	seqno := llrb.seqno
 	if lsm {
-		nd, ok := llrb.getkey(key)
-		if ok {
+		if nd, ok := llrb.getkey(key); ok {
 			nd.setdeleted()
 			nd.setseqno(llrb.seqno)
 			val = nd.Value()
@@ -331,7 +374,9 @@ func (llrb *LLRB1) Delete(key, oldval []byte, lsm bool) ([]byte, uint64) {
 	return oldval, seqno
 }
 
-func (llrb *LLRB1) delete(nd *Llrbnode1, key []byte) (newnd, deleted *Llrbnode1) {
+func (llrb *LLRB1) delete(
+	nd *Llrbnode1, key []byte) (newnd, deleted *Llrbnode1) {
+
 	if nd == nil {
 		return nil, nil
 	}
@@ -374,7 +419,8 @@ func (llrb *LLRB1) delete(nd *Llrbnode1, key []byte) (newnd, deleted *Llrbnode1)
 			} else {
 				newnd.setred()
 			}
-			if sdnv := subdeleted.nodevalue(); sdnv != nil { // TODO: is this required ??
+			sdnv := subdeleted.nodevalue()
+			if sdnv != nil { // TODO: is this required ??
 				newnd.nodevalue().setvalue(sdnv.value())
 			}
 			deleted, nd = nd, newnd
@@ -482,7 +528,10 @@ func (llrb *LLRB1) ID() string {
 }
 
 func (llrb *LLRB1) Count() int64 {
-	return atomic.LoadInt64(&llrb.n_count)
+	llrb.rw.RLock()
+	n_count := llrb.n_count
+	llrb.rw.RUnlock()
+	return n_count
 }
 
 // Dotdump to convert whole tree into dot script that can be
@@ -636,10 +685,11 @@ func (llrb *LLRB1) Log() {
 	// log information about key memory utilization
 	sizes, zs := llrb.nodearena.Utilization()
 	log.Infof("%v key %v", llrb.logprefix, loguz(sizes, zs, "node"))
-
 	// log information about value memory arena
 	vmem := humanize.Bytes(uint64(stats["valmemory"].(int64)))
-	as = []string{"value.capacity", "value.heap", "value.alloc", "value.overhead"}
+	as = []string{
+		"value.capacity", "value.heap", "value.alloc", "value.overhead",
+	}
 	log.Infof("%v valmem(%v): %v\n", llrb.logprefix, vmem, summary(as...))
 	// log information about key memory utilization
 	sizes, zs = llrb.valarena.Utilization()
@@ -680,10 +730,12 @@ func (llrb *LLRB1) clonetree(nd *Llrbnode1) *Llrbnode1 {
 // method call are allowed after Destroy.
 func (llrb *LLRB1) Destroy() {
 	llrb.rw.Lock()
+
 	llrb.nodearena.Release()
 	llrb.valarena.Release()
 	llrb.setroot(nil)
 	llrb.setts = nil
+
 	llrb.rw.Unlock()
 	log.Infof("%v destroyed\n", llrb.logprefix)
 }
