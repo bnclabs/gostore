@@ -212,12 +212,14 @@ func (mvcc *MVCC) Set(key, value, oldvalue []byte) ([]byte, uint64) {
 	mvcc.setroot(root)
 	mvcc.upsertcounts(key, value, oldnd)
 
-	var val []byte
-	if oldnd != nil {
-		val = oldnd.Value()
+	if oldvalue != nil {
+		var val []byte
+		if oldnd != nil {
+			val = oldnd.Value()
+		}
+		oldvalue = lib.Fixbuffer(oldvalue, int64(len(val)))
+		copy(oldvalue, val)
 	}
-	oldvalue = lib.Fixbuffer(oldvalue, int64(len(val)))
-	copy(oldvalue, val)
 
 	mvcc.freenode(oldnd)
 	mvcc.appendreclaim(reclaim)
@@ -285,7 +287,9 @@ func (mvcc *MVCC) SetCAS(
 	root, newnd, oldnd, reclaim, err =
 		mvcc.upsertcas(root, depth, key, value, cas, reclaim)
 	if err != nil {
-		oldvalue = lib.Fixbuffer(oldvalue, 0)
+		if oldvalue != nil {
+			oldvalue = lib.Fixbuffer(oldvalue, 0)
+		}
 		mvcc.rw.Unlock()
 		return oldvalue, 0, err
 	}
@@ -298,12 +302,14 @@ func (mvcc *MVCC) SetCAS(
 	mvcc.setroot(root)
 	mvcc.upsertcounts(key, value, oldnd)
 
-	var val []byte
-	if oldnd != nil {
-		val = oldnd.Value()
+	if oldvalue != nil {
+		var val []byte
+		if oldnd != nil {
+			val = oldnd.Value()
+		}
+		oldvalue = lib.Fixbuffer(oldvalue, int64(len(val)))
+		copy(oldvalue, val)
 	}
-	oldvalue = lib.Fixbuffer(oldvalue, int64(len(val)))
-	copy(oldvalue, val)
 
 	mvcc.freenode(oldnd)
 	mvcc.appendreclaim(reclaim)
@@ -339,27 +345,36 @@ func (mvcc *MVCC) upsertcas(
 		depth++
 		ndmvcc.left, newnd, oldnd, reclaim, err =
 			mvcc.upsertcas(ndmvcc.left, depth, key, value, cas, reclaim)
+
 	} else if ndmvcc.ltkey(key, false) {
 		depth++
 		ndmvcc.right, newnd, oldnd, reclaim, err =
 			mvcc.upsertcas(ndmvcc.right, depth, key, value, cas, reclaim)
-	} else if /*equal && */ ndmvcc.getseqno() != cas {
-		newnd = ndmvcc
-		err = api.ErrorInvalidCAS
+
 	} else /*equal*/ {
-		oldnd = nd
-		if nv := ndmvcc.nodevalue(); nv != nil { // free the value if pres.
-			mvcc.valarena.Free(unsafe.Pointer(nv))
-			ndmvcc = ndmvcc.setnodevalue(nil)
+		if ndmvcc.isdeleted() && (cas != 0 && cas != ndmvcc.getseqno()) {
+			newnd = ndmvcc
+			err = api.ErrorInvalidCAS
+
+		} else if ndmvcc.isdeleted() == false && cas != ndmvcc.getseqno() {
+			newnd = ndmvcc
+			err = api.ErrorInvalidCAS
+
+		} else {
+			oldnd = nd
+			if nv := ndmvcc.nodevalue(); nv != nil { // free the value if pres.
+				mvcc.valarena.Free(unsafe.Pointer(nv))
+				ndmvcc = ndmvcc.setnodevalue(nil)
+			}
+			if len(value) > 0 { // add new value.
+				ptr := mvcc.valarena.Alloc(int64(nvaluesize + len(value)))
+				nv := (*nodevalue)(ptr)
+				ndmvcc = ndmvcc.setnodevalue(nv.setvalue(value))
+			}
+			ndmvcc.setdirty()
+			newnd = ndmvcc
+			mvcc.h_upsertdepth.Add(depth)
 		}
-		if len(value) > 0 { // add new value.
-			ptr := mvcc.valarena.Alloc(int64(nvaluesize + len(value)))
-			nv := (*nodevalue)(ptr)
-			ndmvcc = ndmvcc.setnodevalue(nv.setvalue(value))
-		}
-		ndmvcc.setdirty()
-		newnd = ndmvcc
-		mvcc.h_upsertdepth.Add(depth)
 	}
 
 	ndmvcc, reclaim = mvcc.walkuprot23(ndmvcc, reclaim)
@@ -373,15 +388,20 @@ func (mvcc *MVCC) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 	mvcc.seqno++
 	reclaim := mvcc.reclaim
 	mvcc.h_versions.Add(mvcc.n_activess)
-	seqno := mvcc.seqno
 
+	if oldvalue != nil {
+		oldvalue = lib.Fixbuffer(oldvalue, 0)
+	}
+	seqno := mvcc.seqno
 	if lsm {
 		if nd, ok := mvcc.getkey(key); ok {
 			nd.setdeleted()
 			nd.setseqno(seqno)
-			val := nd.Value()
-			oldvalue = lib.Fixbuffer(oldvalue, int64(len(val)))
-			copy(oldvalue, val)
+			if oldvalue != nil {
+				val := nd.Value()
+				oldvalue = lib.Fixbuffer(oldvalue, int64(len(val)))
+				copy(oldvalue, val)
+			}
 
 		} else {
 			root, depth := mvcc.getroot(), int64(1)
@@ -404,7 +424,7 @@ func (mvcc *MVCC) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 		mvcc.setroot(root)
 		mvcc.delcounts(deleted)
 
-		if deleted != nil {
+		if deleted != nil && oldvalue != nil {
 			val := deleted.Value()
 			oldvalue = lib.Fixbuffer(oldvalue, int64(len(val)))
 			copy(oldvalue, val)
@@ -561,12 +581,14 @@ func (mvcc *MVCC) Stats() map[string]interface{} {
 	m["n_inserts"] = mvcc.n_inserts
 	m["n_updates"] = mvcc.n_updates
 	m["n_deletes"] = mvcc.n_deletes
-	m["n_txns"] = mvcc.n_txns
 	m["n_cursors"] = mvcc.n_cursors
 	m["n_nodes"] = mvcc.n_nodes
 	m["n_frees"] = mvcc.n_frees
 	m["n_clones"] = mvcc.n_clones
 	m["n_reads"] = mvcc.n_reads
+	m["n_txns"] = mvcc.n_txns
+	m["n_commits"] = mvcc.n_commits
+	m["n_aborts"] = mvcc.n_aborts
 	m["keymemory"] = mvcc.keymemory
 	m["valmemory"] = mvcc.valmemory
 	// mvcc

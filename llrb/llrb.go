@@ -14,17 +14,19 @@ import "github.com/prataprc/golog"
 import s "github.com/prataprc/gosettings"
 import humanize "github.com/dustin/go-humanize"
 
-type llrbstats1 struct {
+type llrbstats1 struct { // TODO: add json tags.
 	n_count   int64 // number of nodes in the tree
 	n_reads   int64
 	n_inserts int64
 	n_updates int64
 	n_deletes int64
+	n_nodes   int64
+	n_frees   int64
+	n_clones  int64
 	n_txns    int64
+	n_commits int64
+	n_aborts  int64
 	n_cursors int64
-	n_nodes   int64 // TODO: is this field required ?
-	n_frees   int64 // TODO: is this field required ?
-	n_clones  int64 // TODO: is this field required ?
 	keymemory int64 // memory used by all keys
 	valmemory int64 // memory used by all values
 
@@ -47,16 +49,24 @@ type LLRB1 struct { // tree container
 	root      unsafe.Pointer // *Llrbnode1
 	seqno     uint64
 	rw        sync.RWMutex
+	records   chan *record
+	rotxns    chan *Txn
+	rwtxns    chan *Txn
 	// settings
 	keycapacity int64
 	valcapacity int64
 	setts       s.Settings
 	logprefix   string
+	// scratch key
+	scratchkey []byte
 }
 
 // NewLLRB1 a new instance of in-memory sorted index.
 func NewLLRB1(name string, setts s.Settings) *LLRB1 {
 	llrb := &LLRB1{name: name}
+	llrb.records = make(chan *record, 10000)
+	llrb.rotxns = make(chan *Txn, 10000)
+	llrb.rwtxns = make(chan *Txn, 10000)
 	llrb.logprefix = fmt.Sprintf("LLRB1 [%s]", name)
 
 	setts = make(s.Settings).Mixin(Defaultsettings(), setts)
@@ -182,12 +192,14 @@ func (llrb *LLRB1) Set(key, value, oldvalue []byte) ([]byte, uint64) {
 	llrb.setroot(root)
 	llrb.upsertcounts(key, value, oldnd)
 
-	var val []byte
-	if oldnd != nil {
-		val = oldnd.Value()
+	if oldvalue != nil {
+		var val []byte
+		if oldnd != nil && oldnd.isdeleted() == false {
+			val = oldnd.Value()
+		}
+		oldvalue = lib.Fixbuffer(oldvalue, int64(len(val)))
+		copy(oldvalue, val)
 	}
-	oldvalue = lib.Fixbuffer(oldvalue, int64(len(val)))
-	copy(oldvalue, val)
 
 	llrb.freenode(oldnd)
 
@@ -249,7 +261,9 @@ func (llrb *LLRB1) SetCAS(
 	root, depth := llrb.getroot(), int64(1)
 	root, newnd, oldnd, err := llrb.upsertcas(root, depth, key, value, cas)
 	if err != nil {
-		oldvalue = lib.Fixbuffer(oldvalue, 0)
+		if oldvalue != nil {
+			oldvalue = lib.Fixbuffer(oldvalue, 0)
+		}
 		llrb.rw.Unlock()
 		return oldvalue, 0, err
 	}
@@ -263,9 +277,14 @@ func (llrb *LLRB1) SetCAS(
 	llrb.setroot(root)
 	llrb.upsertcounts(key, value, oldnd)
 
-	val := oldnd.Value()
-	oldvalue = lib.Fixbuffer(oldvalue, int64(len(val)))
-	copy(oldvalue, val)
+	if oldvalue != nil {
+		var val []byte
+		if oldnd != nil && oldnd.isdeleted() == false {
+			val = oldnd.Value()
+		}
+		oldvalue = lib.Fixbuffer(oldvalue, int64(len(val)))
+		copy(oldvalue, val)
+	}
 
 	llrb.freenode(oldnd)
 
@@ -295,29 +314,38 @@ func (llrb *LLRB1) upsertcas(
 		depth++
 		nd.left, newnd, oldnd, err =
 			llrb.upsertcas(nd.left, depth, key, value, cas)
+
 	} else if nd.ltkey(key, false) {
 		depth++
 		nd.right, newnd, oldnd, err =
 			llrb.upsertcas(nd.right, depth, key, value, cas)
-	} else if /*equal && */ nd.getseqno() != cas {
-		newnd = nd
-		err = api.ErrorInvalidCAS
+
 	} else /*equal*/ {
-		oldnd, dirty = llrb.clonenode(nd), false
-		if nv := nd.nodevalue(); nv != nil { // free the value if present
-			llrb.valarena.Free(unsafe.Pointer(nv))
-			nd, dirty = nd.setnodevalue(nil), true
+		if nd.isdeleted() && (cas != 0 && cas != nd.getseqno()) {
+			newnd = nd
+			err = api.ErrorInvalidCAS
+
+		} else if nd.isdeleted() == false && cas != nd.getseqno() {
+			newnd = nd
+			err = api.ErrorInvalidCAS
+
+		} else {
+			oldnd, dirty = llrb.clonenode(nd), false
+			if nv := nd.nodevalue(); nv != nil { // free the value if present
+				llrb.valarena.Free(unsafe.Pointer(nv))
+				nd, dirty = nd.setnodevalue(nil), true
+			}
+			if len(value) > 0 { // add new value if req.
+				ptr := llrb.valarena.Alloc(int64(nvaluesize + len(value)))
+				nv := (*nodevalue)(ptr)
+				nd, dirty = nd.setnodevalue(nv.setvalue(value)), true
+			}
+			newnd = nd
+			if dirty {
+				nd.setdirty()
+			}
+			llrb.h_upsertdepth.Add(depth)
 		}
-		if len(value) > 0 { // add new value if req.
-			ptr := llrb.valarena.Alloc(int64(nvaluesize + len(value)))
-			nv := (*nodevalue)(ptr)
-			nd, dirty = nd.setnodevalue(nv.setvalue(value)), true
-		}
-		newnd = nd
-		if dirty {
-			nd.setdirty()
-		}
-		llrb.h_upsertdepth.Add(depth)
 	}
 
 	nd = llrb.walkuprot23(nd)
@@ -328,22 +356,26 @@ func (llrb *LLRB1) upsertcas(
 // return its value. If lsm is true, then don't delete the node
 // instead simply mark the node as deleted. Again, if lsm is true
 // but key is not found in index a new entry will inserted.
-func (llrb *LLRB1) Delete(key, oldval []byte, lsm bool) ([]byte, uint64) {
+func (llrb *LLRB1) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 	llrb.rw.Lock()
 
 	var val []byte
 	root := llrb.getroot()
 	llrb.seqno++
 
-	oldval = lib.Fixbuffer(oldval, 0)
+	if oldvalue != nil {
+		oldvalue = lib.Fixbuffer(oldvalue, 0)
+	}
 	seqno := llrb.seqno
 	if lsm {
 		if nd, ok := llrb.getkey(key); ok {
 			nd.setdeleted()
 			nd.setseqno(llrb.seqno)
-			val = nd.Value()
-			oldval = lib.Fixbuffer(oldval, int64(len(val)))
-			copy(oldval, val)
+			if oldvalue != nil {
+				val = nd.Value()
+				oldvalue = lib.Fixbuffer(oldvalue, int64(len(val)))
+				copy(oldvalue, val)
+			}
 
 		} else {
 			root, newnd, oldnd := llrb.upsert(root, 1 /*depth*/, key, nil)
@@ -362,16 +394,16 @@ func (llrb *LLRB1) Delete(key, oldval []byte, lsm bool) ([]byte, uint64) {
 		}
 		llrb.setroot(root)
 		llrb.delcounts(deleted)
-		if deleted != nil {
+		if deleted != nil && oldvalue != nil {
 			val = deleted.Value()
-			oldval = lib.Fixbuffer(oldval, int64(len(val)))
-			copy(oldval, val)
+			oldvalue = lib.Fixbuffer(oldvalue, int64(len(val)))
+			copy(oldvalue, val)
 			llrb.freenode(deleted)
 		}
 	}
 
 	llrb.rw.Unlock()
-	return oldval, seqno
+	return oldvalue, seqno
 }
 
 func (llrb *LLRB1) delete(
@@ -447,9 +479,71 @@ func (llrb *LLRB1) deletemin(nd *Llrbnode1) (newnd, deleted *Llrbnode1) {
 	return llrb.fixup(nd), deleted
 }
 
+func (llrb *LLRB1) BeginTxn() *Txn {
+	llrb.rw.Lock()
+	llrb.n_txns++
+	txn := llrb.gettxn(true /*rw*/)
+	return txn
+}
+
+func (llrb *LLRB1) commit(txn *Txn) error {
+	var scratchkey []byte
+	llrb.n_commits++
+	for _, head := range txn.writes {
+		scratchkey = lib.Fixbuffer(llrb.scratchkey, 0)
+		for head != nil {
+			if bytes.Compare(head.key, scratchkey) != 0 {
+				llrb.commitrecord(head)
+				scratchkey = lib.Fixbuffer(scratchkey, int64(len(head.key)))
+				copy(scratchkey, head.key)
+				continue
+			}
+		}
+	}
+	llrb.scratchkey = scratchkey
+
+	llrb.puttxn(txn)
+	llrb.rw.Unlock()
+	return nil
+}
+
+func (llrb *LLRB1) commitrecord(rec *record) {
+	switch rec.cmd {
+	case cmdSet:
+		llrb.SetCAS(rec.key, rec.value, nil, rec.seqno)
+	case cmdDelete:
+		llrb.Delete(rec.key, nil, rec.lsm)
+	default:
+		panic("unreachable code")
+	}
+}
+
+func (llrb *LLRB1) abort(txn *Txn) error {
+	llrb.n_aborts++
+	llrb.puttxn(txn)
+	if txn.rw {
+		llrb.rw.Unlock()
+	} else {
+		llrb.rw.RUnlock()
+	}
+	return nil
+}
+
+func (llrb *LLRB1) View() *Txn {
+	llrb.rw.RLock()
+	llrb.n_txns++
+	txn := llrb.gettxn(false /*rw*/)
+	return txn
+}
+
 //---- Exported Read methods
 
-func (llrb *LLRB1) Get(key []byte, value []byte) ([]byte, uint64, bool, bool) {
+// Get value for key, if value argument is not nil it will be used to copy the
+// entry's value. Also returns entry's cas, whether entry is marked as deleted
+// by LSM. If ok is false, then key is not found.
+func (llrb *LLRB1) Get(
+	key []byte, value []byte) (v []byte, cas uint64, deleted bool, ok bool) {
+
 	llrb.rw.RLock()
 
 	deleted, seqno := false, uint64(0)
@@ -559,12 +653,14 @@ func (llrb *LLRB1) Stats() map[string]interface{} {
 	m["n_inserts"] = llrb.n_inserts
 	m["n_updates"] = llrb.n_updates
 	m["n_deletes"] = llrb.n_deletes
-	m["n_txns"] = llrb.n_txns
 	m["n_cursors"] = llrb.n_cursors
 	m["n_nodes"] = llrb.n_nodes
 	m["n_frees"] = llrb.n_frees
 	m["n_clones"] = llrb.n_clones
 	m["n_reads"] = llrb.n_reads
+	m["n_txns"] = llrb.n_txns
+	m["n_commits"] = llrb.n_commits
+	m["n_aborts"] = llrb.n_aborts
 	m["keymemory"] = llrb.keymemory
 	m["valmemory"] = llrb.valmemory
 
@@ -593,59 +689,116 @@ func (llrb *LLRB1) Stats() map[string]interface{} {
 // through the entire tree and holds a read lock while doing so.
 func (llrb *LLRB1) Validate() {
 	llrb.rw.RLock()
+	defer llrb.rw.RUnlock()
 
-	root := llrb.getroot()
-	if root != nil {
-		h := lib.NewhistorgramInt64(1, 256, 1)
-		blacks, depth, fromred := int64(0), int64(1), root.isred()
-		nblacks, km, vm := llrb.validatetree(root, fromred, blacks, depth, h)
-		if km != llrb.keymemory {
-			fmsg := "validate(): keymemory:%v != actual:%v"
-			panic(fmt.Errorf(fmsg, llrb.keymemory, km))
-		} else if vm != llrb.valmemory {
-			fmsg := "validate(): valmemory:%v != actual:%v"
-			panic(fmt.Errorf(fmsg, llrb.valmemory, vm))
-		}
-		if samples := h.Samples(); samples != llrb.Count() {
-			fmsg := "expected h_height.samples:%v to be same as Count():%v"
-			panic(fmt.Errorf(fmsg, samples, llrb.Count()))
-		}
-		log.Infof("%v found %v blacks on both sides\n", llrb.logprefix, nblacks)
-		// `h_height`.max should not exceed certain limit, maxheight
-		// gives some breathing room.
-		if h.Samples() > 8 {
-			entries := llrb.Count()
-			if float64(h.Max()) > maxheight(entries) {
-				fmsg := "validate(): max height %v exceeds <factor>*log2(%v)"
-				panic(fmt.Errorf(fmsg, float64(h.Max()), entries))
-			}
-		}
+	validatellrb(llrb.getroot(), llrb.Stats(), llrb.logprefix)
+}
 
+func validatellrb(
+	root *Llrbnode1, stats map[string]interface{}, logprefix string) {
+
+	if root == nil {
+		return
+	}
+	h := lib.NewhistorgramInt64(1, 256, 1)
+	blacks, depth, fromred := int64(0), int64(1), root.isred()
+	nblacks, km, vm := validatellrbtree(root, fromred, blacks, depth, h)
+	keymemory := stats["keymemory"].(int64)
+	valmemory := stats["valmemory"].(int64)
+	if km != keymemory {
+		fmsg := "validate(): keymemory:%v != actual:%v"
+		panic(fmt.Errorf(fmsg, keymemory, km))
+	} else if vm != valmemory {
+		fmsg := "validate(): valmemory:%v != actual:%v"
+		panic(fmt.Errorf(fmsg, valmemory, vm))
+	}
+	n_count := stats["n_count"].(int64)
+	if samples := h.Samples(); samples != n_count {
+		fmsg := "expected h_height.samples:%v to be same as Count():%v"
+		panic(fmt.Errorf(fmsg, samples, n_count))
+	}
+	log.Infof("%v found %v blacks on both sides\n", logprefix, nblacks)
+	// `h_height`.max should not exceed certain limit, maxheight
+	// gives some breathing room.
+	if h.Samples() > 8 {
+		if float64(h.Max()) > maxheight(n_count) {
+			fmsg := "validate(): max height %v exceeds <factor>*log2(%v)"
+			panic(fmt.Errorf(fmsg, float64(h.Max()), n_count))
+		}
 	}
 
 	// Validation check based on statistics accounting.
 
 	// n_count should match (n_inserts - n_deletes)
-	n_count := llrb.n_count
-	n_inserts, n_deletes := llrb.n_inserts, llrb.n_deletes
+	n_inserts := stats["n_inserts"].(int64)
+	n_deletes := stats["n_deletes"].(int64)
 	if n_count != (n_inserts - n_deletes) {
 		fmsg := "validatestats(): n_count:%v != (n_inserts:%v - n_deletes:%v)"
 		panic(fmt.Errorf(fmsg, n_count, n_inserts, n_deletes))
 	}
 	// n_nodes should match n_inserts
-	n_clones, n_nodes, n_frees := llrb.n_clones, llrb.n_nodes, llrb.n_frees
+	n_clones := stats["n_clones"].(int64)
+	n_nodes, n_frees := stats["n_nodes"].(int64), stats["n_frees"].(int64)
 	if n_inserts != n_nodes {
 		fmsg := "validatestats(): n_inserts:%v != n_nodes:%v"
 		panic(fmt.Errorf(fmsg, n_inserts, n_nodes))
 	}
-	if (llrb.n_nodes - llrb.n_count) == llrb.n_frees {
-	} else if llrb.n_clones+(llrb.n_nodes-llrb.n_count) == llrb.n_frees {
+	if (n_nodes - n_count) == n_frees {
+	} else if n_clones+(n_nodes-n_count) == n_frees {
 	} else {
 		fmsg := "validatestats(): clones:%v+(nodes:%v-count:%v) != frees:%v"
 		panic(fmt.Errorf(fmsg, n_clones, n_nodes, n_count, n_frees))
 	}
+}
 
-	llrb.rw.RUnlock()
+/*
+following expectations on the tree should be met.
+* If current node is red, parent node should be black.
+* At each level, number of black-links on the left subtree should be
+  equal to number of black-links on the right subtree.
+* Make sure that the tree is in sort order.
+* Return number of blacks, cummulative memory consumed by keys,
+  cummulative memory consumed by values.
+*/
+func validatellrbtree(
+	nd *Llrbnode1, fromred bool, blacks, depth int64,
+	h *lib.HistogramInt64) (nblacks, keymem, valmem int64) {
+
+	if nd == nil {
+		return blacks, 0, 0
+	}
+
+	h.Add(depth)
+	if fromred && nd.isred() {
+		panic(redafterred)
+	}
+	if !nd.isred() {
+		blacks++
+	}
+
+	lblacks, lkm, lvm := validatellrbtree(
+		nd.left, nd.isred(), blacks, depth+1, h)
+	rblacks, rkm, rvm := validatellrbtree(
+		nd.right, nd.isred(), blacks, depth+1, h)
+
+	if lblacks != rblacks {
+		fmsg := "unbalancedblacks Left:%v Right:%v}"
+		panic(fmt.Errorf(fmsg, lblacks, rblacks))
+	}
+
+	key := nd.getkey()
+	if nd.left != nil && bytes.Compare(nd.left.getkey(), key) >= 0 {
+		fmsg := "validate(): sort order, left node %v is >= node %v"
+		panic(fmt.Errorf(fmsg, nd.left.getkey(), key))
+	}
+	if nd.left != nil && bytes.Compare(nd.left.getkey(), key) >= 0 {
+		fmsg := "validate(): sort order, node %v is >= right node %v"
+		panic(fmt.Errorf(fmsg, nd.right.getkey(), key))
+	}
+
+	keymem = lkm + rkm + int64(len(nd.getkey()))
+	valmem = lvm + rvm + int64(len(nd.Value()))
+	return lblacks, keymem, valmem
 }
 
 // Log vital information.
@@ -866,51 +1019,43 @@ func (llrb *LLRB1) logarenasettings() {
 	log.Infof(fmsg, llrb.logprefix, vblocks, cp)
 }
 
-/*
-following expectations on the tree should be met.
-* If current node is red, parent node should be black.
-* At each level, number of black-links on the left subtree should be
-  equal to number of black-links on the right subtree.
-* Make sure that the tree is in sort order.
-* Return number of blacks, cummulative memory consumed by keys,
-  cummulative memory consumed by values.
-*/
-func (llrb *LLRB1) validatetree(
-	nd *Llrbnode1, fromred bool, blacks, depth int64,
-	h *lib.HistogramInt64) (nblacks, keymem, valmem int64) {
-
-	if nd != nil {
-		h.Add(depth)
-		if fromred && nd.isred() {
-			panic(redafterred)
-		}
-		if !nd.isred() {
-			blacks++
+func (llrb *LLRB1) gettxn(rw bool) (txn *Txn) {
+	if rw {
+		select {
+		case txn = <-llrb.rwtxns:
+		default:
+			txn = newtxn(rw, llrb, llrb, llrb.records)
 		}
 
-		lblacks, lkm, lvm := llrb.validatetree(
-			nd.left, nd.isred(), blacks, depth+1, h)
-		rblacks, rkm, rvm := llrb.validatetree(
-			nd.right, nd.isred(), blacks, depth+1, h)
-
-		if lblacks != rblacks {
-			fmsg := "unbalancedblacks Left:%v Right:%v}"
-			panic(fmt.Errorf(fmsg, lblacks, rblacks))
+	} else {
+		select {
+		case txn = <-llrb.rotxns:
+		default:
+			txn = newtxn(rw, llrb, llrb, llrb.records)
 		}
-
-		key := nd.getkey()
-		if nd.left != nil && bytes.Compare(nd.left.getkey(), key) >= 0 {
-			fmsg := "validate(): sort order, left node %v is >= node %v"
-			panic(fmt.Errorf(fmsg, nd.left.getkey(), key))
-		}
-		if nd.left != nil && bytes.Compare(nd.left.getkey(), key) >= 0 {
-			fmsg := "validate(): sort order, node %v is >= right node %v"
-			panic(fmt.Errorf(fmsg, nd.right.getkey(), key))
-		}
-
-		keymem = lkm + rkm + int64(len(nd.getkey()))
-		valmem = lvm + rvm + int64(len(nd.Value()))
-		return lblacks, keymem, valmem
 	}
-	return blacks, 0, 0
+	return
+}
+
+func (llrb *LLRB1) puttxn(txn *Txn) {
+	if txn.rw {
+		for index, head := range txn.writes { // free all records in this txn.
+			for head != nil {
+				next := head.next
+				txn.putrecord(head)
+				head = next
+			}
+			delete(txn.writes, index)
+		}
+		select {
+		case llrb.rwtxns <- txn:
+		default: // Left for GC
+		}
+
+	} else {
+		select {
+		case llrb.rotxns <- txn:
+		default: // Left for GC
+		}
+	}
 }

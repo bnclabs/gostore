@@ -490,7 +490,7 @@ func TestLLRBDelete(t *testing.T) {
 		t.Error(err)
 	} else if cas != uint64(n+5) {
 		t.Errorf("expected %v, got %v", n+5, cas)
-	} else if string(oldvalue) != "valu100" {
+	} else if len(oldvalue) > 0 {
 		t.Errorf("unexpected %s", oldvalue)
 	}
 	rkm, rvm = rkm+len(k), rvm+len(v)
