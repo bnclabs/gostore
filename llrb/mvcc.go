@@ -2,7 +2,6 @@ package llrb
 
 import "io"
 import "fmt"
-import "time"
 import "sync"
 import "bytes"
 import "sync/atomic"
@@ -28,12 +27,14 @@ type MVCC struct {
 	seqno     uint64
 	rw        sync.RWMutex
 	// mvcc fields
-	snapshot   unsafe.Pointer // *MVCCSnapshot
-	reclaim    []*Llrbnode1
+	snapshot   unsafe.Pointer // *Snapshot
 	reclaims   []*Llrbnode1
 	h_bulkfree *lib.HistogramInt64
 	h_reclaims *lib.HistogramInt64
 	h_versions *lib.HistogramInt64
+	// cache
+	reclaim   []*Llrbnode1
+	snapcache chan *Snapshot
 
 	// settings
 	keycapacity int64
@@ -47,6 +48,7 @@ type MVCC struct {
 func NewMVCC(name string, setts s.Settings) *MVCC {
 	mvcc := &MVCC{name: name}
 	mvcc.logprefix = fmt.Sprintf("MVCC [%s]", name)
+	mvcc.snapcache = make(chan *Snapshot, 32)
 
 	setts = make(s.Settings).Mixin(Defaultsettings(), setts)
 	mvcc.readsettings(setts)
@@ -551,6 +553,10 @@ func (mvcc *MVCC) deletemin(
 
 //---- Exported Control methods
 
+func (mvcc *MVCC) ID() string {
+	return mvcc.name
+}
+
 func (mvcc *MVCC) Dotdump(buffer io.Writer) {
 	lines := []string{
 		"digraph llrb {",
@@ -560,10 +566,6 @@ func (mvcc *MVCC) Dotdump(buffer io.Writer) {
 	buffer.Write([]byte(strings.Join(lines[:len(lines)-1], "\n")))
 	mvcc.getroot().dotdump(buffer)
 	buffer.Write([]byte(lines[len(lines)-1]))
-}
-
-func (mvcc *MVCC) ID() string {
-	return mvcc.name
 }
 
 func (mvcc *MVCC) Count() int64 {
@@ -581,7 +583,6 @@ func (mvcc *MVCC) Stats() map[string]interface{} {
 	m["n_inserts"] = mvcc.n_inserts
 	m["n_updates"] = mvcc.n_updates
 	m["n_deletes"] = mvcc.n_deletes
-	m["n_cursors"] = mvcc.n_cursors
 	m["n_nodes"] = mvcc.n_nodes
 	m["n_frees"] = mvcc.n_frees
 	m["n_clones"] = mvcc.n_clones
@@ -727,7 +728,7 @@ func (mvcc *MVCC) Log() {
 }
 
 func (mvcc *MVCC) Clone(name string) *MVCC {
-	mvcc.rw.Lock()
+	mvcc.rw.Lock() // TODO: should we use RLock() ??
 
 	newmvcc := NewMVCC(mvcc.name, mvcc.setts)
 	newmvcc.llrbstats1 = mvcc.llrbstats1
@@ -757,21 +758,15 @@ func (mvcc *MVCC) clonetree(nd *Llrbnode1) *Llrbnode1 {
 }
 
 func (mvcc *MVCC) Destroy() {
-	for mvcc.destroy() == false { // snapshots are still there.
-		for atomic.LoadPointer(&mvcc.snapshot) == nil {
-			time.Sleep(100 * time.Millisecond)
-		}
-	}
+	// TODO: syncronize destroy with
+	// * housekeeper routines
+	// * routines that refer to this snapshots.
 	log.Infof("%v destroyed\n", mvcc.logprefix)
 }
 
 func (mvcc *MVCC) destroy() bool {
 	mvcc.rw.Lock()
 	defer mvcc.rw.Unlock()
-
-	if atomic.LoadPointer(&mvcc.snapshot) != nil {
-		return false
-	}
 
 	mvcc.nodearena.Release()
 	mvcc.valarena.Release()
@@ -781,7 +776,7 @@ func (mvcc *MVCC) destroy() bool {
 	return true
 }
 
-// rotation routines for 2-3 algorithm
+// llrb rotation routines for 2-3 algorithm
 
 func (mvcc *MVCC) walkdownrot23(nd *Llrbnode1) *Llrbnode1 {
 	return nd
@@ -960,4 +955,67 @@ func (mvcc *MVCC) validatetree(
 		return lblacks, keymem, valmem
 	}
 	return blacks, 0, 0
+}
+
+//---- snapshot routines.
+
+func (mvcc *MVCC) makesnapshot() {
+	mvcc.rw.Lock()
+	snapshot := mvcc.getsnapshot()
+	snapshot.initsnapshot(mvcc)
+	mvcc.purgesnapshot(snapshot.next)
+	mvcc.rw.Unlock()
+}
+
+func (mvcc *MVCC) latestsnapshot() *Snapshot {
+	mvcc.rw.RLock()
+	snapshot := (*Snapshot)(mvcc.snapshot)
+	snapshot.refer()
+	mvcc.rw.RUnlock()
+	return snapshot
+}
+
+func (mvcc *MVCC) releasesnapshot(snapshot *Snapshot) {
+	mvcc.rw.Lock()
+	mvcc.purgesnapshot(snapshot)
+	mvcc.rw.Unlock()
+}
+
+func (mvcc *MVCC) purgesnapshot(snapshot *Snapshot) bool {
+	if snapshot == nil {
+		return true
+	}
+	if atomic.LoadInt64(&snapshot.refcount) > 0 {
+		return false
+	}
+	if mvcc.purgesnapshot(snapshot.next) == false {
+		return false
+	}
+	// all older snapshots are purged.
+	mvcc.h_bulkfree.Add(int64(len(snapshot.reclaims)))
+	for _, nd := range snapshot.reclaims {
+		snapshot.mvcc.freenode(nd)
+	}
+	mvcc.n_activess--
+	mvcc.n_purgedss++
+	mvcc.putsnapshot(snapshot)
+	log.Debugf("%s snapshot %s PURGED...\n", mvcc.logprefix, snapshot.ID())
+	return true
+}
+
+func (mvcc *MVCC) getsnapshot() (snapshot *Snapshot) {
+	select {
+	case snapshot = <-mvcc.snapcache:
+	default:
+		snapshot = &Snapshot{}
+	}
+	return
+}
+
+func (mvcc *MVCC) putsnapshot(snapshot *Snapshot) {
+	select {
+	case mvcc.snapcache <- snapshot:
+	default: // Leave it for GC.
+	}
+	return
 }

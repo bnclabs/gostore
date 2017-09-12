@@ -1,11 +1,12 @@
 package llrb
 
-import "fmt"
-import "unsafe"
 import "io"
-import "strings"
-import "bytes"
+import "fmt"
+import "time"
 import "sync"
+import "bytes"
+import "unsafe"
+import "strings"
 
 import "github.com/prataprc/gostore/lib"
 import "github.com/prataprc/gostore/api"
@@ -26,7 +27,6 @@ type llrbstats1 struct { // TODO: add json tags.
 	n_txns    int64
 	n_commits int64
 	n_aborts  int64
-	n_cursors int64
 	keymemory int64 // memory used by all keys
 	valmemory int64 // memory used by all values
 
@@ -40,7 +40,8 @@ type llrbstats1 struct { // TODO: add json tags.
 // LLRB1 manage a single instance of in-memory sorted index using
 // left-leaning-red-black tree.
 type LLRB1 struct { // tree container
-	llrbstats1    // 64-bit aligned snapshot statistics.
+	llrbstats1           // 64-bit aligned snapshot statistics.
+	activetxns    uint64 // there can be more than on ro-txns
 	h_upsertdepth *lib.HistogramInt64
 	// can be unaligned fields
 	name      string
@@ -483,14 +484,15 @@ func (llrb *LLRB1) deletemin(nd *Llrbnode1) (newnd, deleted *Llrbnode1) {
 
 func (llrb *LLRB1) BeginTxn(id uint64) *Txn {
 	llrb.rw.Lock()
+	llrb.activetxns++
 	llrb.n_txns++
 	txn := llrb.gettxn(id, true /*rw*/)
 	return txn
 }
 
+// rollback will never happen B-)
 func (llrb *LLRB1) commit(txn *Txn) error {
 	var scratchkey []byte
-	llrb.n_commits++
 	for _, head := range txn.writes {
 		scratchkey = lib.Fixbuffer(llrb.scratchkey, 0)
 		for head != nil {
@@ -505,6 +507,8 @@ func (llrb *LLRB1) commit(txn *Txn) error {
 	llrb.scratchkey = scratchkey
 
 	llrb.puttxn(txn)
+	llrb.n_commits++
+	llrb.activetxns--
 	llrb.rw.Unlock()
 	return nil
 }
@@ -520,8 +524,9 @@ func (llrb *LLRB1) commitrecord(rec *record) error {
 }
 
 func (llrb *LLRB1) abort(txn *Txn) error {
-	llrb.n_aborts++
 	llrb.puttxn(txn)
+	llrb.n_aborts++
+	llrb.activetxns--
 	if txn.rw {
 		llrb.rw.Unlock()
 	} else {
@@ -532,6 +537,7 @@ func (llrb *LLRB1) abort(txn *Txn) error {
 
 func (llrb *LLRB1) View(id uint64) *Txn {
 	llrb.rw.RLock()
+	llrb.activetxns++
 	llrb.n_txns++
 	txn := llrb.gettxn(id, false /*rw*/)
 	return txn
@@ -579,45 +585,6 @@ func (llrb *LLRB1) getkey(k []byte) (*Llrbnode1, bool) {
 	return nil, false
 }
 
-// Range implement api.IndexReader interface. Acquires a read
-// lock, can be called only when MVCC is disabled.
-//func (llrb *LLRB1) Range(
-//	lkey, hkey []byte, incl string, reverse bool, callb api.NodeCallb) {
-//
-//	llrb.assertnomvcc()
-//
-//	var skip bool
-//	lkey, hkey, incl, skip = fixrangeargs(lkey, hkey, incl)
-//	if skip {
-//		return
-//	}
-//
-//	llrb.rw.RLock()
-//	dorange(llrb, llrb.getroot(), lkey, hkey, incl, reverse, callb)
-//	llrb.rw.RUnlock()
-//
-//	atomic.AddInt64(&llrb.n_ranges, 1)
-//}
-
-// Iterate implement api.IndexReader interface. Acquires a read
-// lock, can be called only when MVCC is disabled.
-//func (llrb *LLRB1) Iterate(lk, hk []byte, incl string, r bool) api.IndexIterator {
-//	llrb.assertnomvcc()
-//
-//	var skip bool
-//	lk, hk, incl, skip = fixrangeargs(lk, hk, incl)
-//	if skip {
-//		return nil
-//	}
-//
-//	llrb.rw.RLock()
-//	iter := inititerator(llrb, llrb, lk, hk, incl, r)
-//
-//	atomic.AddInt64(&llrb.n_ranges, 1)
-//	atomic.AddInt64(&llrb.n_activeiter, 1)
-//	return iter
-//}
-
 //---- Exported Control methods
 
 func (llrb *LLRB1) ID() string {
@@ -656,7 +623,6 @@ func (llrb *LLRB1) Stats() map[string]interface{} {
 	m["n_inserts"] = llrb.n_inserts
 	m["n_updates"] = llrb.n_updates
 	m["n_deletes"] = llrb.n_deletes
-	m["n_cursors"] = llrb.n_cursors
 	m["n_nodes"] = llrb.n_nodes
 	m["n_frees"] = llrb.n_frees
 	m["n_clones"] = llrb.n_clones
@@ -885,15 +851,24 @@ func (llrb *LLRB1) clonetree(nd *Llrbnode1) *Llrbnode1 {
 // Destroy releases all resources held by the tree. No other
 // method call are allowed after Destroy.
 func (llrb *LLRB1) Destroy() {
-	llrb.rw.Lock()
+	for llrb.dodestory() == false {
+		time.Sleep(10 * time.Millisecond)
+	}
+	log.Infof("%v destroyed\n", llrb.logprefix)
+}
 
+func (llrb *LLRB1) dodestory() bool {
+	llrb.rw.Lock()
+	defer llrb.rw.Unlock()
+
+	if llrb.activetxns > 0 {
+		return false
+	}
 	llrb.nodearena.Release()
 	llrb.valarena.Release()
 	llrb.setroot(nil)
 	llrb.setts = nil
-
-	llrb.rw.Unlock()
-	log.Infof("%v destroyed\n", llrb.logprefix)
+	return true
 }
 
 // rotation routines for 2-3 algorithm

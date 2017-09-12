@@ -50,8 +50,6 @@ func TestLLRBEmpty(t *testing.T) {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_txns"].(int64); x != 0 {
 		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_cursors"].(int64); x != 0 {
-		t.Errorf("unexpected %v", x)
 	}
 
 	llrb.Log()
@@ -138,8 +136,6 @@ func TestLLRBLoad(t *testing.T) {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_txns"].(int64); x != 0 {
 		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_cursors"].(int64); x != 0 {
-		t.Errorf("unexpected %v", x)
 	} else if u := nodeutz(stats); u < 50.0 {
 		t.Errorf("unexpected %v", u)
 	} else if u := valueutz(stats); u < 50.0 {
@@ -205,8 +201,6 @@ func TestLLRBLoadLarge(t *testing.T) {
 	} else if x := stats["n_nodes"].(int64); x != int64(n) {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_txns"].(int64); x != 0 {
-		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_cursors"].(int64); x != 0 {
 		t.Errorf("unexpected %v", x)
 	} else if u := nodeutz(stats); u < 95.0 {
 		t.Errorf("unexpected %v", u)
@@ -276,8 +270,6 @@ func TestLLRBClone(t *testing.T) {
 	} else if x := stats["n_nodes"].(int64); x != int64(n) {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_txns"].(int64); x != 0 {
-		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_cursors"].(int64); x != 0 {
 		t.Errorf("unexpected %v", x)
 	} else if u := nodeutz(stats); u < 95.0 {
 		t.Errorf("unexpected %v", u)
@@ -393,8 +385,6 @@ func TestLLRBSetCAS(t *testing.T) {
 	} else if x := stats["n_nodes"].(int64); x != int64(n) {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_txns"].(int64); x != 0 {
-		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_cursors"].(int64); x != 0 {
 		t.Errorf("unexpected %v", x)
 	} else if u := nodeutz(stats); u < 95.0 {
 		t.Errorf("unexpected %v", u)
@@ -575,8 +565,6 @@ func TestLLRBDelete(t *testing.T) {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_txns"].(int64); x != 0 {
 		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_cursors"].(int64); x != 0 {
-		t.Errorf("unexpected %v", x)
 	} else if u := nodeutz(stats); u < 95.0 {
 		t.Errorf("unexpected %v", u)
 	} else if u := valueutz(stats); u < 95.0 {
@@ -622,8 +610,6 @@ func TestLLRBDelete(t *testing.T) {
 	} else if x := stats["n_nodes"].(int64); x != int64(n+2) {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_txns"].(int64); x != 0 {
-		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_cursors"].(int64); x != 0 {
 		t.Errorf("unexpected %v", x)
 	} else if u := nodeutz(stats); u < 95.0 {
 		t.Errorf("unexpected %v", u)
