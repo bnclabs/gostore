@@ -50,6 +50,7 @@ type LLRB1 struct { // tree container
 	seqno     uint64
 	rw        sync.RWMutex
 	records   chan *record
+	cursors   chan *Cursor
 	rotxns    chan *Txn
 	rwtxns    chan *Txn
 	// settings
@@ -64,9 +65,10 @@ type LLRB1 struct { // tree container
 // NewLLRB1 a new instance of in-memory sorted index.
 func NewLLRB1(name string, setts s.Settings) *LLRB1 {
 	llrb := &LLRB1{name: name}
-	llrb.records = make(chan *record, 10000)
-	llrb.rotxns = make(chan *Txn, 10000)
-	llrb.rwtxns = make(chan *Txn, 10000)
+	llrb.records = make(chan *record, 10000) // TODO: no magic number
+	llrb.cursors = make(chan *Cursor, 1000)  // TODO: no magic number
+	llrb.rotxns = make(chan *Txn, 10000)     // TODO: no magic number
+	llrb.rwtxns = make(chan *Txn, 10000)     // TODO: no magic number
 	llrb.logprefix = fmt.Sprintf("LLRB1 [%s]", name)
 
 	setts = make(s.Settings).Mixin(Defaultsettings(), setts)
@@ -479,10 +481,10 @@ func (llrb *LLRB1) deletemin(nd *Llrbnode1) (newnd, deleted *Llrbnode1) {
 	return llrb.fixup(nd), deleted
 }
 
-func (llrb *LLRB1) BeginTxn() *Txn {
+func (llrb *LLRB1) BeginTxn(id uint64) *Txn {
 	llrb.rw.Lock()
 	llrb.n_txns++
-	txn := llrb.gettxn(true /*rw*/)
+	txn := llrb.gettxn(id, true /*rw*/)
 	return txn
 }
 
@@ -507,15 +509,14 @@ func (llrb *LLRB1) commit(txn *Txn) error {
 	return nil
 }
 
-func (llrb *LLRB1) commitrecord(rec *record) {
+func (llrb *LLRB1) commitrecord(rec *record) error {
 	switch rec.cmd {
 	case cmdSet:
 		llrb.SetCAS(rec.key, rec.value, nil, rec.seqno)
 	case cmdDelete:
 		llrb.Delete(rec.key, nil, rec.lsm)
-	default:
-		panic("unreachable code")
 	}
+	return nil
 }
 
 func (llrb *LLRB1) abort(txn *Txn) error {
@@ -529,10 +530,10 @@ func (llrb *LLRB1) abort(txn *Txn) error {
 	return nil
 }
 
-func (llrb *LLRB1) View() *Txn {
+func (llrb *LLRB1) View(id uint64) *Txn {
 	llrb.rw.RLock()
 	llrb.n_txns++
-	txn := llrb.gettxn(false /*rw*/)
+	txn := llrb.gettxn(id, false /*rw*/)
 	return txn
 }
 
@@ -548,13 +549,15 @@ func (llrb *LLRB1) Get(
 
 	deleted, seqno := false, uint64(0)
 	nd, ok := llrb.getkey(key)
-	if ok {
-		val := nd.Value()
-		value = lib.Fixbuffer(value, int64(len(val)))
-		copy(value, val)
-		seqno, deleted = nd.getseqno(), nd.isdeleted()
-	} else {
-		value = lib.Fixbuffer(value, 0)
+	if value != nil {
+		if ok {
+			val := nd.Value()
+			value = lib.Fixbuffer(value, int64(len(val)))
+			copy(value, val)
+			seqno, deleted = nd.getseqno(), nd.isdeleted()
+		} else {
+			value = lib.Fixbuffer(value, 0)
+		}
 	}
 	llrb.n_reads++
 
@@ -1019,34 +1022,40 @@ func (llrb *LLRB1) logarenasettings() {
 	log.Infof(fmsg, llrb.logprefix, vblocks, cp)
 }
 
-func (llrb *LLRB1) gettxn(rw bool) (txn *Txn) {
+func (llrb *LLRB1) gettxn(id uint64, rw bool) (txn *Txn) {
 	if rw {
 		select {
 		case txn = <-llrb.rwtxns:
 		default:
-			txn = newtxn(rw, llrb, llrb, llrb.records)
+			txn = newtxn(id, llrb, llrb, llrb.records, llrb.cursors, rw)
 		}
 
 	} else {
 		select {
 		case txn = <-llrb.rotxns:
 		default:
-			txn = newtxn(rw, llrb, llrb, llrb.records)
+			txn = newtxn(id, llrb, llrb, nil, llrb.cursors, rw)
 		}
 	}
 	return
 }
 
 func (llrb *LLRB1) puttxn(txn *Txn) {
-	if txn.rw {
-		for index, head := range txn.writes { // free all records in this txn.
-			for head != nil {
-				next := head.next
-				txn.putrecord(head)
-				head = next
-			}
-			delete(txn.writes, index)
+	// if rw tx.writes won't be empty so release the records.
+	for index, head := range txn.writes { // free all records in this txn.
+		for head != nil {
+			next := head.next
+			txn.putrecord(head)
+			head = next
 		}
+		delete(txn.writes, index)
+	}
+	// release cursors.
+	for _, cur := range txn.cursors {
+		txn.putcursor(cur)
+	}
+
+	if txn.rw {
 		select {
 		case llrb.rwtxns <- txn:
 		default: // Left for GC

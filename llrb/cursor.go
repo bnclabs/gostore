@@ -7,10 +7,9 @@ type Cursor struct {
 	stack []uintptr
 }
 
-func newcursor(txn *Txn, key []byte) *Cursor {
+func (cur *Cursor) opencursor(key []byte) *Cursor {
 	var root *Llrbnode1
-	cur := &Cursor{txn: txn, stack: make([]uintptr, 0)}
-	switch db := txn.snapshot.(type) {
+	switch db := cur.txn.snapshot.(type) {
 	case *LLRB1:
 		root = (*Llrbnode1)(db.root)
 	}
@@ -28,7 +27,8 @@ func (cur *Cursor) Key() (key []byte, deleted bool) {
 	}
 	ptr := cur.stack[len(cur.stack)-1]
 	if ptr == 0 {
-		return nil, false
+		cur.stack = cur.next(cur.stack)
+		ptr = cur.stack[len(cur.stack)-1]
 	}
 	nd := (*Llrbnode1)(unsafe.Pointer(ptr & (^uintptr(0x3))))
 	return nd.getkey(), nd.isdeleted()
@@ -40,7 +40,8 @@ func (cur *Cursor) Value() []byte {
 	}
 	ptr := cur.stack[len(cur.stack)-1]
 	if ptr == 0 {
-		return nil
+		cur.stack = cur.next(cur.stack)
+		ptr = cur.stack[len(cur.stack)-1]
 	}
 	nd := (*Llrbnode1)(unsafe.Pointer(ptr & (^uintptr(0x3))))
 	return nd.Value()

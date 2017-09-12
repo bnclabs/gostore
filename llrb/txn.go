@@ -7,12 +7,15 @@ import "hash/crc32"
 import "github.com/prataprc/gostore/lib"
 
 type Txn struct {
+	id       uint64
 	rw       bool
 	db       interface{}
 	snapshot interface{}
 	tblcrc32 *crc32.Table
 	writes   map[uint32]*record
-	records  chan *record
+	cursors  []*Cursor
+	recchan  chan *record
+	curchan  chan *Cursor
 }
 
 const (
@@ -29,13 +32,26 @@ type record struct {
 	next  *record
 }
 
-func newtxn(rw bool, db, snapshot interface{}, ch chan *record) *Txn {
-	txn := &Txn{rw: rw, db: db, snapshot: snapshot, records: ch}
+func newtxn(
+	id uint64, db, snapshot interface{},
+	rch chan *record, cch chan *Cursor, rw bool) *Txn {
+	txn := &Txn{
+		id: id, rw: rw, db: db, snapshot: snapshot,
+		recchan: rch, curchan: cch,
+	}
 	if txn.tblcrc32 == nil {
 		txn.tblcrc32 = crc32.MakeTable(crc32.IEEE)
 	}
-	if txn.records != nil && txn.writes == nil {
+	if txn.recchan != nil && txn.writes == nil {
 		txn.writes = make(map[uint32]*record)
+	}
+	if txn.id == 0 {
+		switch snap := txn.snapshot.(type) {
+		case *LLRB1:
+			txn.id = (uint64)((uintptr)(unsafe.Pointer(snap.root)))
+		case *Snapshot:
+			txn.id = (uint64)((uintptr)(unsafe.Pointer(snap.root)))
+		}
 	}
 	return txn
 }
@@ -43,14 +59,8 @@ func newtxn(rw bool, db, snapshot interface{}, ch chan *record) *Txn {
 //---- Exported Control methods
 
 // ID return transaction id.
-func (txn *Txn) ID() uintptr {
-	switch snap := txn.snapshot.(type) {
-	case *LLRB1:
-		return (uintptr)(unsafe.Pointer(snap.root))
-	case *Snapshot:
-		return (uintptr)(unsafe.Pointer(snap.root))
-	}
-	panic("unreachable code")
+func (txn *Txn) ID() uint64 {
+	return txn.id
 }
 
 func (txn *Txn) Validate() {
@@ -66,8 +76,6 @@ func (txn *Txn) Commit() {
 	switch db := txn.db.(type) {
 	case *LLRB1:
 		db.commit(txn)
-	default:
-		panic("unreachable code")
 	}
 }
 
@@ -75,9 +83,12 @@ func (txn *Txn) Abort() {
 	switch db := txn.db.(type) {
 	case *LLRB1:
 		db.abort(txn)
-	default:
-		panic("unreachable code")
 	}
+}
+
+func (txn *Txn) OpenCursor(key []byte) *Cursor {
+	cur := txn.getcursor().opencursor(key)
+	return cur
 }
 
 //---- Exported Read methods
@@ -103,7 +114,7 @@ func (txn *Txn) Set(key, value, oldvalue []byte) []byte {
 	var seqno uint64
 	var deleted bool
 
-	if txn.records == nil {
+	if txn.recchan == nil {
 		panic("Set not allowed on read-only transaction")
 	}
 
@@ -134,7 +145,7 @@ func (txn *Txn) Delete(key, oldvalue []byte, lsm bool) []byte {
 	var deleted bool
 	var seqno uint64
 
-	if txn.records == nil {
+	if txn.recchan == nil {
 		panic("Delete not allowed on read-only transaction")
 	}
 
@@ -167,14 +178,13 @@ func (txn *Txn) getsnap(key, value []byte) ([]byte, uint64, bool, bool) {
 	switch db := txn.snapshot.(type) {
 	case *LLRB1:
 		return db.Get(key, value)
-	default:
-		panic("unreachable code")
 	}
+	panic("unreachable code")
 }
 
 func (txn *Txn) getrecord() (rec *record) {
 	select {
-	case rec = <-txn.records:
+	case rec = <-txn.recchan:
 	default:
 		rec = &record{}
 	}
@@ -183,7 +193,24 @@ func (txn *Txn) getrecord() (rec *record) {
 
 func (txn *Txn) putrecord(rec *record) {
 	select {
-	case txn.records <- rec:
+	case txn.recchan <- rec:
+	default: // leave it for GC
+	}
+}
+
+func (txn *Txn) getcursor() (cur *Cursor) {
+	select {
+	case cur = <-txn.curchan:
+	default:
+		cur = &Cursor{txn: txn, stack: make([]uintptr, 32)}
+	}
+	cur.stack = cur.stack[:0]
+	return
+}
+
+func (txn *Txn) putcursor(cur *Cursor) {
+	select {
+	case txn.curchan <- cur:
 	default: // leave it for GC
 	}
 }
