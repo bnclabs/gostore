@@ -549,7 +549,7 @@ func (llrb *LLRB1) View(id uint64) *Txn {
 // entry's value. Also returns entry's cas, whether entry is marked as deleted
 // by LSM. If ok is false, then key is not found.
 func (llrb *LLRB1) Get(
-	key []byte, value []byte) (v []byte, cas uint64, deleted bool, ok bool) {
+	key, value []byte) (v []byte, cas uint64, deleted, ok bool) {
 
 	llrb.rw.RLock()
 

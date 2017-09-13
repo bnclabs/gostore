@@ -193,6 +193,232 @@ func (mvcc *MVCC) logarenasettings() {
 	log.Infof(fmsg, mvcc.logprefix, vblocks, cp)
 }
 
+//---- Exported Control methods
+
+func (mvcc *MVCC) ID() string {
+	return mvcc.name
+}
+
+func (mvcc *MVCC) Dotdump(buffer io.Writer) {
+	lines := []string{
+		"digraph llrb {",
+		"  node[shape=record];\n",
+		"}",
+	}
+	buffer.Write([]byte(strings.Join(lines[:len(lines)-1], "\n")))
+	mvcc.getroot().dotdump(buffer)
+	buffer.Write([]byte(lines[len(lines)-1]))
+}
+
+func (mvcc *MVCC) Count() int64 {
+	mvcc.rw.RLock()
+	n_count := mvcc.n_count
+	mvcc.rw.RUnlock()
+	return n_count
+}
+
+func (mvcc *MVCC) Stats() map[string]interface{} {
+	mvcc.rw.RLock()
+
+	m := make(map[string]interface{})
+	m["n_count"] = mvcc.n_count
+	m["n_inserts"] = mvcc.n_inserts
+	m["n_updates"] = mvcc.n_updates
+	m["n_deletes"] = mvcc.n_deletes
+	m["n_nodes"] = mvcc.n_nodes
+	m["n_frees"] = mvcc.n_frees
+	m["n_clones"] = mvcc.n_clones
+	m["n_reads"] = mvcc.n_reads
+	m["n_txns"] = mvcc.n_txns
+	m["n_commits"] = mvcc.n_commits
+	m["n_aborts"] = mvcc.n_aborts
+	m["keymemory"] = mvcc.keymemory
+	m["valmemory"] = mvcc.valmemory
+	// mvcc
+	m["n_reclaims"] = mvcc.n_reclaims
+	m["n_snapshots"] = mvcc.n_snapshots
+	m["n_purgedss"] = mvcc.n_purgedss
+	m["n_activess"] = mvcc.n_activess
+
+	capacity, heap, alloc, overhead := mvcc.nodearena.Info()
+	m["keymemory"] = mvcc.keymemory
+	m["node.capacity"] = capacity
+	m["node.heap"] = heap
+	m["node.alloc"] = alloc
+	m["node.overhead"] = overhead
+	m["node.blocks"] = mvcc.nodearena.Slabs()
+
+	capacity, heap, alloc, overhead = mvcc.valarena.Info()
+	m["value.capacity"] = capacity
+	m["value.heap"] = heap
+	m["value.alloc"] = alloc
+	m["value.overhead"] = overhead
+	m["value.blocks"] = mvcc.valarena.Slabs()
+
+	m["h_upsertdepth"] = mvcc.h_upsertdepth.Fullstats()
+	m["h_bulkfree"] = mvcc.h_bulkfree.Fullstats()
+	m["h_reclaims"] = mvcc.h_reclaims.Fullstats()
+	m["h_versions"] = mvcc.h_versions.Fullstats()
+
+	mvcc.rw.RUnlock()
+	return m
+}
+
+func (mvcc *MVCC) Validate() {
+	mvcc.rw.RLock()
+
+	root := mvcc.getroot()
+	if root != nil {
+		h := lib.NewhistorgramInt64(1, 256, 1)
+		blacks, depth, fromred := int64(0), int64(1), root.isred()
+		nblacks, km, vm := mvcc.validatetree(root, fromred, blacks, depth, h)
+		if km != mvcc.keymemory {
+			fmsg := "validate(): keymemory:%v != actual:%v"
+			panic(fmt.Errorf(fmsg, mvcc.keymemory, km))
+		} else if vm != mvcc.valmemory {
+			fmsg := "validate(): valmemory:%v != actual:%v"
+			panic(fmt.Errorf(fmsg, mvcc.valmemory, vm))
+		}
+		if samples := h.Samples(); samples != mvcc.Count() {
+			fmsg := "expected h_height.samples:%v to be same as Count():%v"
+			panic(fmt.Errorf(fmsg, samples, mvcc.Count()))
+		}
+		fmsg := "%v found %v blacks on both sides\n"
+		log.Infof(fmsg, mvcc.logprefix, nblacks)
+		// `h_height`.max should not exceed certain limit, maxheight
+		// gives some breathing room.
+		if h.Samples() > 8 {
+			entries := mvcc.Count()
+			if float64(h.Max()) > maxheight(entries) {
+				fmsg := "validate(): max height %v exceeds <factor>*log2(%v)"
+				panic(fmt.Errorf(fmsg, float64(h.Max()), entries))
+			}
+		}
+	}
+
+	// Validation check based on statistics accounting.
+
+	// n_count should match (n_inserts - n_deletes)
+	n_count := mvcc.n_count
+	n_inserts, n_deletes := mvcc.n_inserts, mvcc.n_deletes
+	if n_count != (n_inserts - n_deletes) {
+		fmsg := "validatestats(): n_count:%v != (n_inserts:%v - n_deletes:%v)"
+		panic(fmt.Errorf(fmsg, n_count, n_inserts, n_deletes))
+	}
+	// n_nodes should match n_inserts
+	n_clones, n_nodes, n_frees := mvcc.n_clones, mvcc.n_nodes, mvcc.n_frees
+	if n_inserts != n_nodes {
+		fmsg := "validatestats(): n_inserts:%v != n_nodes:%v"
+		panic(fmt.Errorf(fmsg, n_inserts, n_nodes))
+	}
+	if (mvcc.n_nodes - mvcc.n_count) == mvcc.n_frees {
+	} else if mvcc.n_clones+(mvcc.n_nodes-mvcc.n_count) == mvcc.n_frees {
+	} else {
+		fmsg := "validatestats(): clones:%v+(nodes:%v-count:%v) != frees:%v"
+		panic(fmt.Errorf(fmsg, n_clones, n_nodes, n_count, n_frees))
+	}
+
+	mvcc.rw.RUnlock()
+}
+
+func (mvcc *MVCC) Log() {
+	mvcc.rw.RLock()
+
+	stats := mvcc.Stats()
+
+	summary := func(args ...string) string {
+		ss := []interface{}{}
+		for _, arg := range args {
+			ss = append(ss, humanize.Bytes(uint64(stats[arg].(int64))))
+		}
+		fmsg := "cap: %v {heap:%v,alloc:%v,overhd,%v}\n"
+		return fmt.Sprintf(fmsg, ss...)
+	}
+	loguz := func(sizes []int, zs []float64, arena string) string {
+		outs := []string{}
+		fmsg := "  %4v chunk-size, utilz: %2.2f%%"
+		for i, size := range sizes {
+			outs = append(outs, fmt.Sprintf(fmsg, size, zs[i]))
+		}
+		out := strings.Join(outs, "\n")
+		allock, heapk := "node.alloc", "node.heap"
+		if arena == "value" {
+			allock, heapk = "value.alloc", "value.heap"
+		}
+		alloc, heap := stats[allock], stats[heapk]
+		uz := ((float64(alloc.(int64)) / float64(heap.(int64))) * 100)
+		return fmt.Sprintf("utilization: %.2f%%\n%v", uz, out)
+	}
+
+	// log information about key memory arena
+	kmem := humanize.Bytes(uint64(stats["keymemory"].(int64)))
+	as := []string{"node.capacity", "node.heap", "node.alloc", "node.overhead"}
+	log.Infof("%v keymem(%v): %v\n", mvcc.logprefix, kmem, summary(as...))
+	// log information about key memory utilization
+	sizes, zs := mvcc.nodearena.Utilization()
+	log.Infof("%v key %v", mvcc.logprefix, loguz(sizes, zs, "node"))
+	// log information about value memory arena
+	vmem := humanize.Bytes(uint64(stats["valmemory"].(int64)))
+	as = []string{
+		"value.capacity", "value.heap", "value.alloc", "value.overhead",
+	}
+	log.Infof("%v valmem(%v): %v\n", mvcc.logprefix, vmem, summary(as...))
+	// log information about key memory utilization
+	sizes, zs = mvcc.valarena.Utilization()
+	log.Infof("%v val %v", mvcc.logprefix, loguz(sizes, zs, "node"))
+
+	mvcc.rw.RUnlock()
+}
+
+func (mvcc *MVCC) Clone(name string) *MVCC {
+	mvcc.rw.Lock() // TODO: should we use RLock() ??
+
+	newmvcc := NewMVCC(mvcc.name, mvcc.setts)
+	newmvcc.llrbstats1 = mvcc.llrbstats1
+	newmvcc.h_upsertdepth = mvcc.h_upsertdepth.Clone()
+	newmvcc.h_bulkfree = mvcc.h_bulkfree.Clone()
+	newmvcc.h_reclaims = mvcc.h_reclaims.Clone()
+	newmvcc.h_versions = mvcc.h_versions.Clone()
+	newmvcc.seqno = mvcc.seqno
+
+	newmvcc.setroot(newmvcc.clonetree(mvcc.getroot()))
+
+	mvcc.rw.Unlock()
+	return newmvcc
+}
+
+func (mvcc *MVCC) clonetree(nd *Llrbnode1) *Llrbnode1 {
+	if nd == nil {
+		return nil
+	}
+
+	newnd := mvcc.clonenode(nd)
+	mvcc.n_clones--
+
+	newnd.left = mvcc.clonetree(nd.left)
+	newnd.right = mvcc.clonetree(nd.right)
+	return newnd
+}
+
+func (mvcc *MVCC) Destroy() {
+	// TODO: syncronize destroy with
+	// * housekeeper routines
+	// * routines that refer to this snapshots.
+	log.Infof("%v destroyed\n", mvcc.logprefix)
+}
+
+func (mvcc *MVCC) destroy() bool {
+	mvcc.rw.Lock()
+	defer mvcc.rw.Unlock()
+
+	mvcc.nodearena.Release()
+	mvcc.valarena.Release()
+	mvcc.setroot(nil)
+	mvcc.setts, mvcc.reclaim = nil, nil
+
+	return true
+}
+
 //---- Exported Write methods
 
 func (mvcc *MVCC) Set(key, value, oldvalue []byte) ([]byte, uint64) {
@@ -441,20 +667,6 @@ func (mvcc *MVCC) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 	return oldvalue, seqno
 }
 
-func (mvcc *MVCC) getkey(k []byte) (*Llrbnode1, bool) {
-	nd := mvcc.getroot()
-	for nd != nil {
-		if nd.gtkey(k, false) {
-			nd = nd.left
-		} else if nd.ltkey(k, false) {
-			nd = nd.right
-		} else {
-			return nd, true
-		}
-	}
-	return nil, false
-}
-
 func (mvcc *MVCC) delete(
 	nd *Llrbnode1, key []byte,
 	reclaim []*Llrbnode1) (*Llrbnode1, *Llrbnode1, []*Llrbnode1) {
@@ -551,229 +763,42 @@ func (mvcc *MVCC) deletemin(
 	return ndmvcc, deleted, reclaim
 }
 
-//---- Exported Control methods
+//---- Exported Read methods
 
-func (mvcc *MVCC) ID() string {
-	return mvcc.name
-}
+func (mvcc *MVCC) Get(
+	key, value []byte) (v []byte, cas uint64, deleted, ok bool) {
 
-func (mvcc *MVCC) Dotdump(buffer io.Writer) {
-	lines := []string{
-		"digraph llrb {",
-		"  node[shape=record];\n",
-		"}",
-	}
-	buffer.Write([]byte(strings.Join(lines[:len(lines)-1], "\n")))
-	mvcc.getroot().dotdump(buffer)
-	buffer.Write([]byte(lines[len(lines)-1]))
-}
+	snapshot := mvcc.getsnapshot()
 
-func (mvcc *MVCC) Count() int64 {
-	mvcc.rw.RLock()
-	n_count := mvcc.n_count
-	mvcc.rw.RUnlock()
-	return n_count
-}
-
-func (mvcc *MVCC) Stats() map[string]interface{} {
-	mvcc.rw.RLock()
-
-	m := make(map[string]interface{})
-	m["n_count"] = mvcc.n_count
-	m["n_inserts"] = mvcc.n_inserts
-	m["n_updates"] = mvcc.n_updates
-	m["n_deletes"] = mvcc.n_deletes
-	m["n_nodes"] = mvcc.n_nodes
-	m["n_frees"] = mvcc.n_frees
-	m["n_clones"] = mvcc.n_clones
-	m["n_reads"] = mvcc.n_reads
-	m["n_txns"] = mvcc.n_txns
-	m["n_commits"] = mvcc.n_commits
-	m["n_aborts"] = mvcc.n_aborts
-	m["keymemory"] = mvcc.keymemory
-	m["valmemory"] = mvcc.valmemory
-	// mvcc
-	m["n_reclaims"] = mvcc.n_reclaims
-	m["n_snapshots"] = mvcc.n_snapshots
-	m["n_purgedss"] = mvcc.n_purgedss
-	m["n_activess"] = mvcc.n_activess
-
-	capacity, heap, alloc, overhead := mvcc.nodearena.Info()
-	m["keymemory"] = mvcc.keymemory
-	m["node.capacity"] = capacity
-	m["node.heap"] = heap
-	m["node.alloc"] = alloc
-	m["node.overhead"] = overhead
-	m["node.blocks"] = mvcc.nodearena.Slabs()
-
-	capacity, heap, alloc, overhead = mvcc.valarena.Info()
-	m["value.capacity"] = capacity
-	m["value.heap"] = heap
-	m["value.alloc"] = alloc
-	m["value.overhead"] = overhead
-	m["value.blocks"] = mvcc.valarena.Slabs()
-
-	m["h_upsertdepth"] = mvcc.h_upsertdepth.Fullstats()
-	m["h_bulkfree"] = mvcc.h_bulkfree.Fullstats()
-	m["h_reclaims"] = mvcc.h_reclaims.Fullstats()
-	m["h_versions"] = mvcc.h_versions.Fullstats()
-
-	mvcc.rw.RUnlock()
-	return m
-}
-
-func (mvcc *MVCC) Validate() {
-	mvcc.rw.RLock()
-
-	root := mvcc.getroot()
-	if root != nil {
-		h := lib.NewhistorgramInt64(1, 256, 1)
-		blacks, depth, fromred := int64(0), int64(1), root.isred()
-		nblacks, km, vm := mvcc.validatetree(root, fromred, blacks, depth, h)
-		if km != mvcc.keymemory {
-			fmsg := "validate(): keymemory:%v != actual:%v"
-			panic(fmt.Errorf(fmsg, mvcc.keymemory, km))
-		} else if vm != mvcc.valmemory {
-			fmsg := "validate(): valmemory:%v != actual:%v"
-			panic(fmt.Errorf(fmsg, mvcc.valmemory, vm))
-		}
-		if samples := h.Samples(); samples != mvcc.Count() {
-			fmsg := "expected h_height.samples:%v to be same as Count():%v"
-			panic(fmt.Errorf(fmsg, samples, mvcc.Count()))
-		}
-		log.Infof("%v found %v blacks on both sides\n", mvcc.logprefix, nblacks)
-		// `h_height`.max should not exceed certain limit, maxheight
-		// gives some breathing room.
-		if h.Samples() > 8 {
-			entries := mvcc.Count()
-			if float64(h.Max()) > maxheight(entries) {
-				fmsg := "validate(): max height %v exceeds <factor>*log2(%v)"
-				panic(fmt.Errorf(fmsg, float64(h.Max()), entries))
-			}
+	deleted, seqno := false, uint64(0)
+	nd, ok := mvcc.getkey(key)
+	if value != nil {
+		if ok {
+			val := nd.Value()
+			value = lib.Fixbuffer(value, int64(len(val)))
+			copy(value, val)
+			seqno, deleted = nd.getseqno(), nd.isdeleted()
+		} else {
+			value = lib.Fixbuffer(value, 0)
 		}
 	}
-
-	// Validation check based on statistics accounting.
-
-	// n_count should match (n_inserts - n_deletes)
-	n_count := mvcc.n_count
-	n_inserts, n_deletes := mvcc.n_inserts, mvcc.n_deletes
-	if n_count != (n_inserts - n_deletes) {
-		fmsg := "validatestats(): n_count:%v != (n_inserts:%v - n_deletes:%v)"
-		panic(fmt.Errorf(fmsg, n_count, n_inserts, n_deletes))
-	}
-	// n_nodes should match n_inserts
-	n_clones, n_nodes, n_frees := mvcc.n_clones, mvcc.n_nodes, mvcc.n_frees
-	if n_inserts != n_nodes {
-		fmsg := "validatestats(): n_inserts:%v != n_nodes:%v"
-		panic(fmt.Errorf(fmsg, n_inserts, n_nodes))
-	}
-	if (mvcc.n_nodes - mvcc.n_count) == mvcc.n_frees {
-	} else if mvcc.n_clones+(mvcc.n_nodes-mvcc.n_count) == mvcc.n_frees {
-	} else {
-		fmsg := "validatestats(): clones:%v+(nodes:%v-count:%v) != frees:%v"
-		panic(fmt.Errorf(fmsg, n_clones, n_nodes, n_count, n_frees))
-	}
-
-	mvcc.rw.RUnlock()
+	mvcc.n_reads++
+	snapshot.release()
+	return value, seqno, deleted, ok
 }
 
-func (mvcc *MVCC) Log() {
-	mvcc.rw.RLock()
-
-	stats := mvcc.Stats()
-
-	summary := func(args ...string) string {
-		ss := []interface{}{}
-		for _, arg := range args {
-			ss = append(ss, humanize.Bytes(uint64(stats[arg].(int64))))
+func (mvcc *MVCC) getkey(k []byte) (*Llrbnode1, bool) {
+	nd := mvcc.getroot()
+	for nd != nil {
+		if nd.gtkey(k, false) {
+			nd = nd.left
+		} else if nd.ltkey(k, false) {
+			nd = nd.right
+		} else {
+			return nd, true
 		}
-		fmsg := "cap: %v {heap:%v,alloc:%v,overhd,%v}\n"
-		return fmt.Sprintf(fmsg, ss...)
 	}
-	loguz := func(sizes []int, zs []float64, arena string) string {
-		outs := []string{}
-		fmsg := "  %4v chunk-size, utilz: %2.2f%%"
-		for i, size := range sizes {
-			outs = append(outs, fmt.Sprintf(fmsg, size, zs[i]))
-		}
-		out := strings.Join(outs, "\n")
-		allock, heapk := "node.alloc", "node.heap"
-		if arena == "value" {
-			allock, heapk = "value.alloc", "value.heap"
-		}
-		alloc, heap := stats[allock], stats[heapk]
-		uz := ((float64(alloc.(int64)) / float64(heap.(int64))) * 100)
-		return fmt.Sprintf("utilization: %.2f%%\n%v", uz, out)
-	}
-
-	// log information about key memory arena
-	kmem := humanize.Bytes(uint64(stats["keymemory"].(int64)))
-	as := []string{"node.capacity", "node.heap", "node.alloc", "node.overhead"}
-	log.Infof("%v keymem(%v): %v\n", mvcc.logprefix, kmem, summary(as...))
-	// log information about key memory utilization
-	sizes, zs := mvcc.nodearena.Utilization()
-	log.Infof("%v key %v", mvcc.logprefix, loguz(sizes, zs, "node"))
-	// log information about value memory arena
-	vmem := humanize.Bytes(uint64(stats["valmemory"].(int64)))
-	as = []string{
-		"value.capacity", "value.heap", "value.alloc", "value.overhead",
-	}
-	log.Infof("%v valmem(%v): %v\n", mvcc.logprefix, vmem, summary(as...))
-	// log information about key memory utilization
-	sizes, zs = mvcc.valarena.Utilization()
-	log.Infof("%v val %v", mvcc.logprefix, loguz(sizes, zs, "node"))
-
-	mvcc.rw.RUnlock()
-}
-
-func (mvcc *MVCC) Clone(name string) *MVCC {
-	mvcc.rw.Lock() // TODO: should we use RLock() ??
-
-	newmvcc := NewMVCC(mvcc.name, mvcc.setts)
-	newmvcc.llrbstats1 = mvcc.llrbstats1
-	newmvcc.h_upsertdepth = mvcc.h_upsertdepth.Clone()
-	newmvcc.h_bulkfree = mvcc.h_bulkfree.Clone()
-	newmvcc.h_reclaims = mvcc.h_reclaims.Clone()
-	newmvcc.h_versions = mvcc.h_versions.Clone()
-	newmvcc.seqno = mvcc.seqno
-
-	newmvcc.setroot(newmvcc.clonetree(mvcc.getroot()))
-
-	mvcc.rw.Unlock()
-	return newmvcc
-}
-
-func (mvcc *MVCC) clonetree(nd *Llrbnode1) *Llrbnode1 {
-	if nd == nil {
-		return nil
-	}
-
-	newnd := mvcc.clonenode(nd)
-	mvcc.n_clones--
-
-	newnd.left = mvcc.clonetree(nd.left)
-	newnd.right = mvcc.clonetree(nd.right)
-	return newnd
-}
-
-func (mvcc *MVCC) Destroy() {
-	// TODO: syncronize destroy with
-	// * housekeeper routines
-	// * routines that refer to this snapshots.
-	log.Infof("%v destroyed\n", mvcc.logprefix)
-}
-
-func (mvcc *MVCC) destroy() bool {
-	mvcc.rw.Lock()
-	defer mvcc.rw.Unlock()
-
-	mvcc.nodearena.Release()
-	mvcc.valarena.Release()
-	mvcc.setroot(nil)
-	mvcc.setts, mvcc.reclaim = nil, nil
-
-	return true
+	return nil, false
 }
 
 // llrb rotation routines for 2-3 algorithm
