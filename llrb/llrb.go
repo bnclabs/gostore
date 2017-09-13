@@ -372,7 +372,7 @@ func (llrb *LLRB1) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 	}
 	seqno := llrb.seqno
 	if lsm {
-		if nd, ok := llrb.getkey(key); ok {
+		if nd, ok := llrb.getkey(llrb.getroot(), key); ok {
 			nd.setdeleted()
 			nd.setseqno(llrb.seqno)
 			if oldvalue != nil {
@@ -555,16 +555,16 @@ func (llrb *LLRB1) Get(
 	llrb.rw.RLock()
 
 	deleted, seqno := false, uint64(0)
-	nd, ok := llrb.getkey(key)
-	if value != nil {
-		if ok {
+	nd, ok := llrb.getkey(llrb.getroot(), key)
+	if ok {
+		if value != nil {
 			val := nd.Value()
 			value = lib.Fixbuffer(value, int64(len(val)))
 			copy(value, val)
-			seqno, deleted = nd.getseqno(), nd.isdeleted()
-		} else {
-			value = lib.Fixbuffer(value, 0)
 		}
+		seqno, deleted = nd.getseqno(), nd.isdeleted()
+	} else if value != nil {
+		value = lib.Fixbuffer(value, 0)
 	}
 	llrb.n_reads++
 
@@ -572,8 +572,7 @@ func (llrb *LLRB1) Get(
 	return value, seqno, deleted, ok
 }
 
-func (llrb *LLRB1) getkey(k []byte) (*Llrbnode1, bool) {
-	nd := llrb.getroot()
+func (llrb *LLRB1) getkey(nd *Llrbnode1, k []byte) (*Llrbnode1, bool) {
 	for nd != nil {
 		if nd.gtkey(k, false) {
 			nd = nd.left

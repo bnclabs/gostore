@@ -216,10 +216,10 @@ func (mvcc *MVCC) Dotdump(buffer io.Writer) {
 		"}",
 	}
 	buffer.Write([]byte(strings.Join(lines[:len(lines)-1], "\n")))
-	llrb.rw.RLock()
+	mvcc.rw.RLock()
 	mvcc.getroot().dotdump(buffer)
 	buffer.Write([]byte(lines[len(lines)-1]))
-	llrb.rw.RUnlock()
+	mvcc.rw.RUnlock()
 }
 
 func (mvcc *MVCC) Count() int64 {
@@ -744,22 +744,9 @@ func (mvcc *MVCC) Get(
 	key, value []byte) (v []byte, cas uint64, deleted, ok bool) {
 
 	snapshot := mvcc.latestsnapshot()
-
-	deleted, seqno := false, uint64(0)
-	nd, ok := mvcc.getkey(mvcc.getroot(), key)
-	if value != nil {
-		if ok {
-			val := nd.Value()
-			value = lib.Fixbuffer(value, int64(len(val)))
-			copy(value, val)
-			seqno, deleted = nd.getseqno(), nd.isdeleted()
-		} else {
-			value = lib.Fixbuffer(value, 0)
-		}
-	}
-	mvcc.n_reads++
+	v, cas, deleted, ok = snapshot.Get(key, value)
 	snapshot.release()
-	return value, seqno, deleted, ok
+	return
 }
 
 func (mvcc *MVCC) getkey(nd *Llrbnode1, k []byte) (*Llrbnode1, bool) {

@@ -3,8 +3,12 @@ package llrb
 import "io"
 import "fmt"
 import "unsafe"
-import "sync/atomic"
+import "strings"
 import "strconv"
+import "sync/atomic"
+
+import "github.com/prataprc/golog"
+import "github.com/prataprc/gostore/lib"
 
 type Snapshot struct {
 	mvcc      *MVCC
@@ -12,13 +16,14 @@ type Snapshot struct {
 	next      *Snapshot
 	reclaims  []*Llrbnode1
 	refcount  int64
+	n_count   int64
 	logprefix []byte
 }
 
 func (snap *Snapshot) initsnapshot(mvcc *MVCC) *Snapshot {
 	snap.mvcc, snap.root = mvcc, (*Llrbnode1)(mvcc.root)
 	snap.next = (*Snapshot)(mvcc.snapshot)
-	snap.refcount = 0
+	snap.refcount, snap.n_count = 0, mvcc.Count()
 
 	if cap(snap.reclaims) < len(mvcc.reclaims) {
 		snap.reclaims = make([]*Llrbnode1, len(mvcc.reclaims))
@@ -42,30 +47,71 @@ func (snap *Snapshot) ID() string {
 }
 
 func (snap *Snapshot) Dotdump(buffer io.Writer) {
-}
-
-func (snap *Snapshot) Clone(name string) *MVCC {
-	return nil
+	lines := []string{
+		"digraph llrb {",
+		"  node[shape=record];\n",
+		"}",
+	}
+	buffer.Write([]byte(strings.Join(lines[:len(lines)-1], "\n")))
+	snap.root.dotdump(buffer)
+	buffer.Write([]byte(lines[len(lines)-1]))
 }
 
 func (snap *Snapshot) Count() int64 {
-	return 0
-}
-
-func (snap *Snapshot) Log() {
-}
-
-func (snap *Snapshot) Stats() map[string]interface{} {
-	return nil
+	return snap.n_count
 }
 
 func (snap *Snapshot) Validate() {
+	if snap.root == nil {
+		return
+	}
+	h := lib.NewhistorgramInt64(1, 256, 1)
+	blacks, depth, fromred := int64(0), int64(1), snap.root.isred()
+	nblacks, _, _ := validatellrbtree(snap.root, fromred, blacks, depth, h)
+	if samples := h.Samples(); samples != snap.n_count {
+		fmsg := "expected h_height.samples:%v to be same as Count():%v"
+		panic(fmt.Errorf(fmsg, samples, snap.n_count))
+	}
+	log.Infof("%v found %v blacks on both sides\n", snap.logprefix, nblacks)
+	// `h_height`.max should not exceed certain limit, maxheight
+	// gives some breathing room.
+	if h.Samples() > 8 {
+		if float64(h.Max()) > maxheight(snap.n_count) {
+			fmsg := "validate(): max height %v exceeds <factor>*log2(%v)"
+			panic(fmt.Errorf(fmsg, float64(h.Max()), snap.n_count))
+		}
+	}
 }
 
 //---- Exported Read methods
 
 func (snap *Snapshot) Get(key, value []byte) ([]byte, uint64, bool, bool) {
-	return nil, 0, false, false
+	deleted, seqno := false, uint64(0)
+	nd, ok := snap.getkey(snap.root, key)
+	if ok {
+		if value != nil {
+			val := nd.Value()
+			value = lib.Fixbuffer(value, int64(len(val)))
+			copy(value, val)
+		}
+		seqno, deleted = nd.getseqno(), nd.isdeleted()
+	} else if value != nil {
+		value = lib.Fixbuffer(value, 0)
+	}
+	return value, seqno, deleted, ok
+}
+
+func (snap *Snapshot) getkey(nd *Llrbnode1, k []byte) (*Llrbnode1, bool) {
+	for nd != nil {
+		if nd.gtkey(k, false) {
+			nd = nd.left
+		} else if nd.ltkey(k, false) {
+			nd = nd.right
+		} else {
+			return nd, true
+		}
+	}
+	return nil, false
 }
 
 //---- local methods
