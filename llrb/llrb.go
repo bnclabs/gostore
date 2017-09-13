@@ -7,6 +7,7 @@ import "sync"
 import "bytes"
 import "unsafe"
 import "strings"
+import "sync/atomic"
 
 import "github.com/prataprc/gostore/lib"
 import "github.com/prataprc/gostore/api"
@@ -154,7 +155,7 @@ func (llrb *LLRB1) upsertcounts(key, value []byte, oldnd *Llrbnode1) {
 	llrb.keymemory += int64(len(key))
 	llrb.valmemory += int64(len(value))
 	if oldnd == nil {
-		llrb.n_count++
+		atomic.AddInt64(&llrb.n_count, 1)
 		llrb.n_inserts++
 		return
 	}
@@ -171,7 +172,7 @@ func (llrb *LLRB1) delcounts(nd *Llrbnode1) {
 		if nv := nd.nodevalue(); nv != nil {
 			llrb.valmemory -= int64(len(nv.value()))
 		}
-		llrb.n_count--
+		atomic.AddInt64(&llrb.n_count, -1)
 		llrb.n_deletes++
 	}
 }
@@ -592,10 +593,7 @@ func (llrb *LLRB1) ID() string {
 }
 
 func (llrb *LLRB1) Count() int64 {
-	llrb.rw.RLock()
-	n_count := llrb.n_count
-	llrb.rw.RUnlock()
-	return n_count
+	return atomic.LoadInt64(&llrb.n_count)
 }
 
 // Dotdump to convert whole tree into dot script that can be
@@ -619,7 +617,7 @@ func (llrb *LLRB1) Stats() map[string]interface{} {
 	llrb.rw.RLock()
 
 	m := make(map[string]interface{})
-	m["n_count"] = llrb.n_count
+	m["n_count"] = atomic.LoadInt64(&llrb.n_count)
 	m["n_inserts"] = llrb.n_inserts
 	m["n_updates"] = llrb.n_updates
 	m["n_deletes"] = llrb.n_deletes
@@ -657,10 +655,12 @@ func (llrb *LLRB1) Stats() map[string]interface{} {
 // Validate data structure. This is a costly operation, walks
 // through the entire tree and holds a read lock while doing so.
 func (llrb *LLRB1) Validate() {
+	stats := llrb.Stats()
+
 	llrb.rw.RLock()
 	defer llrb.rw.RUnlock()
 
-	validatellrb(llrb.getroot(), llrb.Stats(), llrb.logprefix)
+	validatellrb(llrb.getroot(), stats, llrb.logprefix)
 }
 
 func validatellrb(
@@ -729,6 +729,7 @@ following expectations on the tree should be met.
 * Return number of blacks, cummulative memory consumed by keys,
   cummulative memory consumed by values.
 */
+// TODO: move this to file common to LLRB1 and MVCC.
 func validatellrbtree(
 	nd *Llrbnode1, fromred bool, blacks, depth int64,
 	h *lib.HistogramInt64) (nblacks, keymem, valmem int64) {

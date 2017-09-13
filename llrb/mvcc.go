@@ -139,7 +139,7 @@ func (mvcc *MVCC) upsertcounts(key, value []byte, oldnd *Llrbnode1) {
 	mvcc.keymemory += int64(len(key))
 	mvcc.valmemory += int64(len(value))
 	if oldnd == nil {
-		mvcc.n_count++
+		atomic.AddInt64(&mvcc.n_count, 1)
 		mvcc.n_inserts++
 		return
 	}
@@ -156,7 +156,7 @@ func (mvcc *MVCC) delcounts(nd *Llrbnode1) {
 		if nv := nd.nodevalue(); nv != nil {
 			mvcc.valmemory -= int64(len(nv.value()))
 		}
-		mvcc.n_count--
+		atomic.AddInt64(&mvcc.n_count, -1)
 		mvcc.n_deletes++
 	}
 }
@@ -211,17 +211,14 @@ func (mvcc *MVCC) Dotdump(buffer io.Writer) {
 }
 
 func (mvcc *MVCC) Count() int64 {
-	mvcc.rw.RLock()
-	n_count := mvcc.n_count
-	mvcc.rw.RUnlock()
-	return n_count
+	return atomic.LoadInt64(&mvcc.n_count)
 }
 
 func (mvcc *MVCC) Stats() map[string]interface{} {
 	mvcc.rw.RLock()
 
 	m := make(map[string]interface{})
-	m["n_count"] = mvcc.n_count
+	m["n_count"] = atomic.LoadInt64(&mvcc.n_count)
 	m["n_inserts"] = mvcc.n_inserts
 	m["n_updates"] = mvcc.n_updates
 	m["n_deletes"] = mvcc.n_deletes
@@ -265,60 +262,12 @@ func (mvcc *MVCC) Stats() map[string]interface{} {
 }
 
 func (mvcc *MVCC) Validate() {
+	stats := mvcc.Stats()
+
 	mvcc.rw.RLock()
+	defer mvcc.rw.RUnlock()
 
-	root := mvcc.getroot()
-	if root != nil {
-		h := lib.NewhistorgramInt64(1, 256, 1)
-		blacks, depth, fromred := int64(0), int64(1), root.isred()
-		nblacks, km, vm := mvcc.validatetree(root, fromred, blacks, depth, h)
-		if km != mvcc.keymemory {
-			fmsg := "validate(): keymemory:%v != actual:%v"
-			panic(fmt.Errorf(fmsg, mvcc.keymemory, km))
-		} else if vm != mvcc.valmemory {
-			fmsg := "validate(): valmemory:%v != actual:%v"
-			panic(fmt.Errorf(fmsg, mvcc.valmemory, vm))
-		}
-		if samples := h.Samples(); samples != mvcc.Count() {
-			fmsg := "expected h_height.samples:%v to be same as Count():%v"
-			panic(fmt.Errorf(fmsg, samples, mvcc.Count()))
-		}
-		fmsg := "%v found %v blacks on both sides\n"
-		log.Infof(fmsg, mvcc.logprefix, nblacks)
-		// `h_height`.max should not exceed certain limit, maxheight
-		// gives some breathing room.
-		if h.Samples() > 8 {
-			entries := mvcc.Count()
-			if float64(h.Max()) > maxheight(entries) {
-				fmsg := "validate(): max height %v exceeds <factor>*log2(%v)"
-				panic(fmt.Errorf(fmsg, float64(h.Max()), entries))
-			}
-		}
-	}
-
-	// Validation check based on statistics accounting.
-
-	// n_count should match (n_inserts - n_deletes)
-	n_count := mvcc.n_count
-	n_inserts, n_deletes := mvcc.n_inserts, mvcc.n_deletes
-	if n_count != (n_inserts - n_deletes) {
-		fmsg := "validatestats(): n_count:%v != (n_inserts:%v - n_deletes:%v)"
-		panic(fmt.Errorf(fmsg, n_count, n_inserts, n_deletes))
-	}
-	// n_nodes should match n_inserts
-	n_clones, n_nodes, n_frees := mvcc.n_clones, mvcc.n_nodes, mvcc.n_frees
-	if n_inserts != n_nodes {
-		fmsg := "validatestats(): n_inserts:%v != n_nodes:%v"
-		panic(fmt.Errorf(fmsg, n_inserts, n_nodes))
-	}
-	if (mvcc.n_nodes - mvcc.n_count) == mvcc.n_frees {
-	} else if mvcc.n_clones+(mvcc.n_nodes-mvcc.n_count) == mvcc.n_frees {
-	} else {
-		fmsg := "validatestats(): clones:%v+(nodes:%v-count:%v) != frees:%v"
-		panic(fmt.Errorf(fmsg, n_clones, n_nodes, n_count, n_frees))
-	}
-
-	mvcc.rw.RUnlock()
+	validatellrb(mvcc.getroot(), stats, mvcc.logprefix)
 }
 
 func (mvcc *MVCC) Log() {
