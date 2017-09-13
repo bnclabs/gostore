@@ -51,27 +51,21 @@ type LLRB1 struct { // tree container
 	root      unsafe.Pointer // *Llrbnode1
 	seqno     uint64
 	rw        sync.RWMutex
-	records   chan *record
-	cursors   chan *Cursor
-	rotxns    chan *Txn
-	rwtxns    chan *Txn
+	txnsmeta
+
 	// settings
 	keycapacity int64
 	valcapacity int64
 	setts       s.Settings
 	logprefix   string
 	// scratch key
-	scratchkey []byte
 }
 
 // NewLLRB1 a new instance of in-memory sorted index.
 func NewLLRB1(name string, setts s.Settings) *LLRB1 {
 	llrb := &LLRB1{name: name}
-	llrb.records = make(chan *record, 10000) // TODO: no magic number
-	llrb.cursors = make(chan *Cursor, 1000)  // TODO: no magic number
-	llrb.rotxns = make(chan *Txn, 10000)     // TODO: no magic number
-	llrb.rwtxns = make(chan *Txn, 10000)     // TODO: no magic number
 	llrb.logprefix = fmt.Sprintf("LLRB1 [%s]", name)
+	llrb.inittxns()
 
 	setts = make(s.Settings).Mixin(Defaultsettings(), setts)
 	llrb.readsettings(setts)
@@ -487,25 +481,21 @@ func (llrb *LLRB1) BeginTxn(id uint64) *Txn {
 	llrb.rw.Lock()
 	llrb.activetxns++
 	llrb.n_txns++
-	txn := llrb.gettxn(id, true /*rw*/)
+	txn := llrb.gettxn(id, true /*rw*/, llrb, llrb)
 	return txn
 }
 
 // rollback will never happen B-)
 func (llrb *LLRB1) commit(txn *Txn) error {
-	var scratchkey []byte
 	for _, head := range txn.writes {
-		scratchkey = lib.Fixbuffer(llrb.scratchkey, 0)
+		prevkey := []byte(nil)
 		for head != nil {
-			if bytes.Compare(head.key, scratchkey) != 0 {
+			if prevkey == nil || bytes.Compare(head.key, prevkey) != 0 {
 				llrb.commitrecord(head)
-				scratchkey = lib.Fixbuffer(scratchkey, int64(len(head.key)))
-				copy(scratchkey, head.key)
-				continue
 			}
+			prevkey, head = head.key, head.next
 		}
 	}
-	llrb.scratchkey = scratchkey
 
 	llrb.puttxn(txn)
 	llrb.n_commits++
@@ -540,7 +530,7 @@ func (llrb *LLRB1) View(id uint64) *Txn {
 	llrb.rw.RLock()
 	llrb.activetxns++
 	llrb.n_txns++
-	txn := llrb.gettxn(id, false /*rw*/)
+	txn := llrb.gettxn(id, false /*rw*/, llrb, llrb)
 	return txn
 }
 
@@ -995,51 +985,4 @@ func (llrb *LLRB1) logarenasettings() {
 	cp = humanize.Bytes(uint64(stats["value.capacity"].(int64)))
 	fmsg = "%v val arena %v blocks with capacity %v\n"
 	log.Infof(fmsg, llrb.logprefix, vblocks, cp)
-}
-
-func (llrb *LLRB1) gettxn(id uint64, rw bool) (txn *Txn) {
-	if rw {
-		select {
-		case txn = <-llrb.rwtxns:
-		default:
-			txn = newtxn(id, llrb, llrb, llrb.records, llrb.cursors, rw)
-		}
-
-	} else {
-		select {
-		case txn = <-llrb.rotxns:
-		default:
-			txn = newtxn(id, llrb, llrb, nil, llrb.cursors, rw)
-		}
-	}
-	return
-}
-
-func (llrb *LLRB1) puttxn(txn *Txn) {
-	// if rw tx.writes won't be empty so release the records.
-	for index, head := range txn.writes { // free all records in this txn.
-		for head != nil {
-			next := head.next
-			txn.putrecord(head)
-			head = next
-		}
-		delete(txn.writes, index)
-	}
-	// release cursors.
-	for _, cur := range txn.cursors {
-		txn.putcursor(cur)
-	}
-
-	if txn.rw {
-		select {
-		case llrb.rwtxns <- txn:
-		default: // Left for GC
-		}
-
-	} else {
-		select {
-		case llrb.rotxns <- txn:
-		default: // Left for GC
-		}
-	}
 }

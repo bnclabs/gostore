@@ -6,6 +6,70 @@ import "hash/crc32"
 
 import "github.com/prataprc/gostore/lib"
 
+type txnsmeta struct {
+	records chan *record
+	cursors chan *Cursor
+	rotxns  chan *Txn
+	rwtxns  chan *Txn
+}
+
+func (txns txnsmeta) inittxns() {
+	txns.records = make(chan *record, 10000) // TODO: no magic number
+	txns.cursors = make(chan *Cursor, 1000)  // TODO: no magic number
+	txns.rotxns = make(chan *Txn, 10000)     // TODO: no magic number
+	txns.rwtxns = make(chan *Txn, 10000)     // TODO: no magic number
+}
+
+func (txns *txnsmeta) gettxn(
+	id uint64, rw bool, db, snap interface{}) (txn *Txn) {
+
+	if rw {
+		select {
+		case txn = <-txns.rwtxns:
+		default:
+			txn = newtxn(id, db, snap, txns.records, txns.cursors, rw)
+		}
+
+	} else {
+		select {
+		case txn = <-txns.rotxns:
+		default:
+			txn = newtxn(id, db, snap, nil, txns.cursors, rw)
+		}
+	}
+	txn.id, txn.rw, txn.db, txn.snapshot = id, rw, db, snap
+	return
+}
+
+func (txns *txnsmeta) puttxn(txn *Txn) {
+	// if rw tx.writes won't be empty so release the records.
+	for index, head := range txn.writes { // free all records in this txn.
+		for head != nil {
+			next := head.next
+			txn.putrecord(head)
+			head = next
+		}
+		delete(txn.writes, index)
+	}
+	// release cursors.
+	for _, cur := range txn.cursors {
+		txn.putcursor(cur)
+	}
+
+	if txn.rw {
+		select {
+		case txns.rwtxns <- txn:
+		default: // Left for GC
+		}
+
+	} else {
+		select {
+		case txns.rotxns <- txn:
+		default: // Left for GC
+		}
+	}
+}
+
 type Txn struct {
 	id       uint64
 	rw       bool
@@ -68,6 +132,8 @@ func (txn *Txn) Validate() {
 	case *LLRB1:
 		root := (*Llrbnode1)(snap.root)
 		validatellrb(root, snap.Stats(), snap.logprefix)
+	case *Snapshot:
+		snap.Validate()
 	}
 	panic("unreachable code")
 }
@@ -76,12 +142,16 @@ func (txn *Txn) Commit() {
 	switch db := txn.db.(type) {
 	case *LLRB1:
 		db.commit(txn)
+	case *MVCC:
+		db.commit(txn)
 	}
 }
 
 func (txn *Txn) Abort() {
 	switch db := txn.db.(type) {
 	case *LLRB1:
+		db.abort(txn)
+	case *MVCC:
 		db.abort(txn)
 	}
 }
@@ -177,6 +247,8 @@ func (txn *Txn) Delete(key, oldvalue []byte, lsm bool) []byte {
 func (txn *Txn) getsnap(key, value []byte) ([]byte, uint64, bool, bool) {
 	switch db := txn.snapshot.(type) {
 	case *LLRB1:
+		return db.Get(key, value)
+	case *Snapshot:
 		return db.Get(key, value)
 	}
 	panic("unreachable code")

@@ -18,7 +18,8 @@ import humanize "github.com/dustin/go-humanize"
 
 // MVCC manages a single instance of LLRB tree in MVCC mode.
 type MVCC struct {
-	llrbstats1    // 64-bit aligned snapshot statistics.
+	llrbstats1           // 64-bit aligned snapshot statistics.
+	activetxns    uint64 // there can be more than one txns.
 	h_upsertdepth *lib.HistogramInt64
 	// can be unaligned fields
 	name      string
@@ -29,6 +30,8 @@ type MVCC struct {
 	rw        sync.RWMutex
 	triggch   chan bool
 	finch     chan struct{}
+	txnsmeta
+
 	// mvcc fields
 	snapshot   unsafe.Pointer // *Snapshot
 	reclaims   []*Llrbnode1
@@ -56,6 +59,7 @@ func NewMVCC(name string, setts s.Settings) *MVCC {
 		logprefix: fmt.Sprintf("MVCC [%s]", name),
 		snapcache: make(chan *Snapshot, 32),
 	}
+	mvcc.inittxns()
 
 	setts = make(s.Settings).Mixin(Defaultsettings(), setts)
 	mvcc.readsettings(setts)
@@ -400,6 +404,7 @@ func (mvcc *MVCC) Set(key, value, oldvalue []byte) ([]byte, uint64) {
 	var newnd, oldnd *Llrbnode1
 
 	mvcc.rw.Lock()
+
 	mvcc.seqno++
 	reclaim := mvcc.reclaim
 	mvcc.h_versions.Add(mvcc.n_activess)
@@ -482,6 +487,7 @@ func (mvcc *MVCC) SetCAS(
 	var err error
 
 	mvcc.rw.Lock()
+
 	mvcc.seqno++
 	reclaim := mvcc.reclaim
 	mvcc.h_versions.Add(mvcc.n_activess)
@@ -588,6 +594,7 @@ func (mvcc *MVCC) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 	var root, newnd, oldnd, deleted *Llrbnode1
 
 	mvcc.rw.Lock()
+
 	mvcc.seqno++
 	reclaim := mvcc.reclaim
 	mvcc.h_versions.Add(mvcc.n_activess)
@@ -736,6 +743,83 @@ func (mvcc *MVCC) deletemin(
 	ndmvcc.left, deleted, reclaim = mvcc.deletemin(ndmvcc.left, reclaim)
 	ndmvcc, reclaim = mvcc.fixup(ndmvcc, reclaim)
 	return ndmvcc, deleted, reclaim
+}
+
+func (mvcc *MVCC) BeginTxn(id uint64) *Txn {
+	snapshot := mvcc.latestsnapshot()
+	mvcc.activetxns++
+	mvcc.n_txns++
+	txn := mvcc.gettxn(id, true /*rw*/, mvcc, snapshot)
+	return txn
+}
+
+func (mvcc *MVCC) commit(txn *Txn) error {
+	mvcc.rw.Lock() // no further mutations allowed until we are done.
+
+	// Check whether writes operations match the key's CAS.
+	for _, head := range txn.writes {
+		prevkey := []byte(nil)
+		for head != nil {
+			if prevkey == nil || bytes.Compare(head.key, prevkey) != 0 {
+				seqno := uint64(0)
+				if nd, ok := mvcc.getkey(mvcc.getroot(), head.key); ok {
+					seqno = nd.getseqno()
+				}
+				if seqno != head.seqno {
+					mvcc.rw.Unlock()
+					return api.ErrorRollback // rollback
+				}
+			}
+			prevkey, head = head.key, head.next
+		}
+	}
+
+	// CAS matches, proceed to commit.
+	for _, head := range txn.writes {
+		prevkey := []byte(nil)
+		for head != nil {
+			if prevkey == nil || bytes.Compare(head.key, prevkey) != 0 {
+				mvcc.commitrecord(head)
+			}
+			prevkey, head = head.key, head.next
+		}
+	}
+
+	mvcc.puttxn(txn)
+	mvcc.n_commits++
+	mvcc.activetxns--
+
+	mvcc.rw.Unlock()
+	return nil
+}
+
+func (mvcc *MVCC) commitrecord(rec *record) error {
+	switch rec.cmd {
+	case cmdSet:
+		mvcc.SetCAS(rec.key, rec.value, nil, rec.seqno)
+	case cmdDelete:
+		mvcc.Delete(rec.key, nil, rec.lsm)
+	}
+	return nil
+}
+
+func (mvcc *MVCC) abort(txn *Txn) error {
+	mvcc.rw.Lock()
+
+	mvcc.puttxn(txn)
+	mvcc.n_aborts++
+	mvcc.activetxns--
+
+	mvcc.rw.Unlock()
+	return nil
+}
+
+func (mvcc *MVCC) View(id uint64) *Txn {
+	snapshot := mvcc.latestsnapshot()
+	mvcc.activetxns++
+	mvcc.n_txns++
+	txn := mvcc.gettxn(id, false /*rw*/, mvcc, snapshot)
+	return txn
 }
 
 //---- Exported Read methods
