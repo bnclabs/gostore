@@ -216,8 +216,10 @@ func (mvcc *MVCC) Dotdump(buffer io.Writer) {
 		"}",
 	}
 	buffer.Write([]byte(strings.Join(lines[:len(lines)-1], "\n")))
+	llrb.rw.RLock()
 	mvcc.getroot().dotdump(buffer)
 	buffer.Write([]byte(lines[len(lines)-1]))
+	llrb.rw.RUnlock()
 }
 
 func (mvcc *MVCC) Count() int64 {
