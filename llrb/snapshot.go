@@ -70,6 +70,10 @@ func (snap *Snapshot) Get(key, value []byte) ([]byte, uint64, bool, bool) {
 
 //---- local methods
 
+func (snap *Snapshot) getref() int64 {
+	return atomic.LoadInt64(&snap.refcount)
+}
+
 func (snap *Snapshot) refer() int64 {
 	return atomic.AddInt64(&snap.refcount, 1)
 }

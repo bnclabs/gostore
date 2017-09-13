@@ -3,7 +3,9 @@ package llrb
 import "time"
 
 // go-routine to generate snapshots.
-func housekeeper(mvcc *MVCC, interval int64, triggch, finch chan bool) {
+func housekeeper(
+	mvcc *MVCC, interval int64, triggch chan bool, finch chan struct{}) {
+
 	tick := time.NewTicker(time.Duration(interval) * time.Millisecond)
 	defer tick.Stop()
 

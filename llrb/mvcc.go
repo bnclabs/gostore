@@ -3,10 +3,11 @@ package llrb
 import "io"
 import "fmt"
 import "sync"
+import "time"
 import "bytes"
-import "sync/atomic"
 import "unsafe"
 import "strings"
+import "sync/atomic"
 
 import "github.com/prataprc/gostore/lib"
 import "github.com/prataprc/gostore/api"
@@ -26,6 +27,8 @@ type MVCC struct {
 	root      unsafe.Pointer // *Llrbnode1
 	seqno     uint64
 	rw        sync.RWMutex
+	triggch   chan bool
+	finch     chan struct{}
 	// mvcc fields
 	snapshot   unsafe.Pointer // *Snapshot
 	reclaims   []*Llrbnode1
@@ -46,9 +49,13 @@ type MVCC struct {
 
 // NewMVCC a new instance of in-memory sorted index.
 func NewMVCC(name string, setts s.Settings) *MVCC {
-	mvcc := &MVCC{name: name}
-	mvcc.logprefix = fmt.Sprintf("MVCC [%s]", name)
-	mvcc.snapcache = make(chan *Snapshot, 32)
+	mvcc := &MVCC{
+		name:      name,
+		triggch:   make(chan bool, 1),
+		finch:     make(chan struct{}),
+		logprefix: fmt.Sprintf("MVCC [%s]", name),
+		snapcache: make(chan *Snapshot, 32),
+	}
 
 	setts = make(s.Settings).Mixin(Defaultsettings(), setts)
 	mvcc.readsettings(setts)
@@ -68,6 +75,9 @@ func NewMVCC(name string, setts s.Settings) *MVCC {
 	mvcc.h_bulkfree = lib.NewhistorgramInt64(100, 1000, 1000)
 	mvcc.h_reclaims = lib.NewhistorgramInt64(10, 200, 20)
 	mvcc.h_versions = lib.NewhistorgramInt64(1, 30, 10)
+
+	mvcc.makesnapshot()
+	go housekeeper(mvcc, mvcc.snaptick, mvcc.triggch, mvcc.finch)
 
 	log.Infof("%v started ...\n", mvcc.logprefix)
 	mvcc.logarenasettings()
@@ -350,9 +360,11 @@ func (mvcc *MVCC) clonetree(nd *Llrbnode1) *Llrbnode1 {
 }
 
 func (mvcc *MVCC) Destroy() {
-	// TODO: syncronize destroy with
-	// * housekeeper routines
-	// * routines that refer to this snapshots.
+	close(mvcc.finch) // close housekeeping routine
+	time.Sleep(time.Duration(mvcc.snaptick+10) * time.Millisecond)
+	for mvcc.destroy() == false {
+		time.Sleep(10 * time.Millisecond)
+	}
 	log.Infof("%v destroyed\n", mvcc.logprefix)
 }
 
@@ -360,11 +372,23 @@ func (mvcc *MVCC) destroy() bool {
 	mvcc.rw.Lock()
 	defer mvcc.rw.Unlock()
 
+	snapshot := (*Snapshot)(mvcc.snapshot)
+	if snapshot != nil {
+		if snapshot.getref() > 0 {
+			return false
+		} else if mvcc.purgesnapshot(snapshot) == false {
+			return false
+		}
+	}
+	if snapshot.next != nil || snapshot.getref() > 0 {
+		panic("impossible situation")
+	}
+	mvcc.snapshot = nil
 	mvcc.nodearena.Release()
 	mvcc.valarena.Release()
 	mvcc.setroot(nil)
-	mvcc.setts, mvcc.reclaim = nil, nil
-
+	close(mvcc.triggch)
+	mvcc.setts, mvcc.reclaim, mvcc.snapcache = nil, nil, nil
 	return true
 }
 
@@ -571,7 +595,7 @@ func (mvcc *MVCC) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 	}
 	seqno := mvcc.seqno
 	if lsm {
-		if nd, ok := mvcc.getkey(key); ok {
+		if nd, ok := mvcc.getkey(mvcc.getroot(), key); ok {
 			nd.setdeleted()
 			nd.setseqno(seqno)
 			if oldvalue != nil {
@@ -717,10 +741,10 @@ func (mvcc *MVCC) deletemin(
 func (mvcc *MVCC) Get(
 	key, value []byte) (v []byte, cas uint64, deleted, ok bool) {
 
-	snapshot := mvcc.getsnapshot()
+	snapshot := mvcc.latestsnapshot()
 
 	deleted, seqno := false, uint64(0)
-	nd, ok := mvcc.getkey(key)
+	nd, ok := mvcc.getkey(mvcc.getroot(), key)
 	if value != nil {
 		if ok {
 			val := nd.Value()
@@ -736,8 +760,7 @@ func (mvcc *MVCC) Get(
 	return value, seqno, deleted, ok
 }
 
-func (mvcc *MVCC) getkey(k []byte) (*Llrbnode1, bool) {
-	nd := mvcc.getroot()
+func (mvcc *MVCC) getkey(nd *Llrbnode1, k []byte) (*Llrbnode1, bool) {
 	for nd != nil {
 		if nd.gtkey(k, false) {
 			nd = nd.left
@@ -944,7 +967,9 @@ func (mvcc *MVCC) makesnapshot() {
 func (mvcc *MVCC) latestsnapshot() *Snapshot {
 	mvcc.rw.RLock()
 	snapshot := (*Snapshot)(mvcc.snapshot)
-	snapshot.refer()
+	if snapshot != nil {
+		snapshot.refer()
+	}
 	mvcc.rw.RUnlock()
 	return snapshot
 }
@@ -959,7 +984,7 @@ func (mvcc *MVCC) purgesnapshot(snapshot *Snapshot) bool {
 	if snapshot == nil {
 		return true
 	}
-	if atomic.LoadInt64(&snapshot.refcount) > 0 {
+	if snapshot.getref() > 0 {
 		return false
 	}
 	if mvcc.purgesnapshot(snapshot.next) == false {
