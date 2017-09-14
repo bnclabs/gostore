@@ -18,7 +18,7 @@ func maxheight(entries int64) float64 {
 	return 2 * math.Log2(float64(entries)) // 2x breathing space
 }
 
-func validatetree(root *Llrbnode1, logprefix string, n, kmem, vmem int64) {
+func validatetree(root *Llrbnode, logprefix string, n, kmem, vmem int64) {
 	if root == nil {
 		return
 	}
@@ -59,9 +59,8 @@ following expectations on the tree should be met.
 * Return number of blacks, cummulative memory consumed by keys,
   cummulative memory consumed by values.
 */
-// TODO: move this to file common to LLRB1 and MVCC.
 func validatellrbtree(
-	nd *Llrbnode1, fromred bool, blacks, depth int64,
+	nd *Llrbnode, fromred bool, blacks, depth int64,
 	h *lib.HistogramInt64) (nblacks, keymem, valmem int64) {
 
 	if nd == nil {

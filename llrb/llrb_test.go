@@ -14,7 +14,7 @@ func TestLLRBEmpty(t *testing.T) {
 	setts := s.Settings{
 		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
 	}
-	llrb := NewLLRB1("empty", setts)
+	llrb := NewLLRB("empty", setts)
 	defer llrb.Destroy()
 
 	if llrb.ID() != "empty" {
@@ -61,7 +61,7 @@ func TestLLRBLoad(t *testing.T) {
 	setts := s.Settings{
 		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
 	}
-	llrb := NewLLRB1("load", setts)
+	llrb := NewLLRB("load", setts)
 	defer llrb.Destroy()
 
 	if llrb.ID() != "load" {
@@ -147,7 +147,7 @@ func TestLLRBLoadLarge(t *testing.T) {
 	setts := s.Settings{
 		"keycapacity": 100 * 1024 * 1024, "valcapacity": 100 * 1024 * 1024,
 	}
-	llrb := NewLLRB1("loadlarge", setts)
+	llrb := NewLLRB("loadlarge", setts)
 	defer llrb.Destroy()
 
 	// load data
@@ -213,7 +213,7 @@ func TestLLRBClone(t *testing.T) {
 	setts := s.Settings{
 		"keycapacity": 100 * 1024 * 1024, "valcapacity": 100 * 1024 * 1024,
 	}
-	llrb := NewLLRB1("clone", setts)
+	llrb := NewLLRB("clone", setts)
 	defer llrb.Destroy()
 
 	// load data
@@ -285,7 +285,7 @@ func TestLLRBSetCAS(t *testing.T) {
 	setts := s.Settings{
 		"keycapacity": 100 * 1024 * 1024, "valcapacity": 100 * 1024 * 1024,
 	}
-	llrb := NewLLRB1("setcas", setts)
+	llrb := NewLLRB("setcas", setts)
 	defer llrb.Destroy()
 
 	// load data
@@ -400,7 +400,7 @@ func TestLLRBDelete(t *testing.T) {
 	setts := s.Settings{
 		"keycapacity": 100 * 1024 * 1024, "valcapacity": 100 * 1024 * 1024,
 	}
-	llrb := NewLLRB1("delete", setts)
+	llrb := NewLLRB("delete", setts)
 	defer llrb.Destroy()
 
 	// load data

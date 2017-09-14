@@ -11,21 +11,21 @@ import "github.com/prataprc/gostore/lib"
 
 type Snapshot struct {
 	mvcc      *MVCC
-	root      *Llrbnode1
+	root      *Llrbnode
 	next      *Snapshot
-	reclaims  []*Llrbnode1
+	reclaims  []*Llrbnode
 	refcount  int64
 	n_count   int64
 	logprefix []byte
 }
 
 func (snap *Snapshot) initsnapshot(mvcc *MVCC) *Snapshot {
-	snap.mvcc, snap.root = mvcc, (*Llrbnode1)(mvcc.root)
+	snap.mvcc, snap.root = mvcc, (*Llrbnode)(mvcc.root)
 	snap.next = (*Snapshot)(mvcc.snapshot)
 	snap.refcount, snap.n_count = 0, mvcc.Count()
 
 	if cap(snap.reclaims) < len(mvcc.reclaims) {
-		snap.reclaims = make([]*Llrbnode1, len(mvcc.reclaims))
+		snap.reclaims = make([]*Llrbnode, len(mvcc.reclaims))
 	}
 	copy(snap.reclaims, mvcc.reclaims)
 
@@ -78,7 +78,7 @@ func (snap *Snapshot) Get(key, value []byte) ([]byte, uint64, bool, bool) {
 	return value, seqno, deleted, ok
 }
 
-func (snap *Snapshot) getkey(nd *Llrbnode1, k []byte) (*Llrbnode1, bool) {
+func (snap *Snapshot) getkey(nd *Llrbnode, k []byte) (*Llrbnode, bool) {
 	for nd != nil {
 		if nd.gtkey(k, false) {
 			nd = nd.left

@@ -8,10 +8,10 @@ type Cursor struct {
 }
 
 func (cur *Cursor) opencursor(key []byte) *Cursor {
-	var root *Llrbnode1
+	var root *Llrbnode
 	switch db := cur.txn.snapshot.(type) {
-	case *LLRB1:
-		root = (*Llrbnode1)(db.root)
+	case *LLRB:
+		root = (*Llrbnode)(db.root)
 	}
 	cur.stack = cur.first(root, key, cur.stack)
 	return cur
@@ -30,7 +30,7 @@ func (cur *Cursor) Key() (key []byte, deleted bool) {
 		cur.stack = cur.next(cur.stack)
 		ptr = cur.stack[len(cur.stack)-1]
 	}
-	nd := (*Llrbnode1)(unsafe.Pointer(ptr & (^uintptr(0x3))))
+	nd := (*Llrbnode)(unsafe.Pointer(ptr & (^uintptr(0x3))))
 	return nd.getkey(), nd.isdeleted()
 }
 
@@ -43,7 +43,7 @@ func (cur *Cursor) Value() []byte {
 		cur.stack = cur.next(cur.stack)
 		ptr = cur.stack[len(cur.stack)-1]
 	}
-	nd := (*Llrbnode1)(unsafe.Pointer(ptr & (^uintptr(0x3))))
+	nd := (*Llrbnode)(unsafe.Pointer(ptr & (^uintptr(0x3))))
 	return nd.Value()
 }
 
@@ -65,14 +65,14 @@ func (cur *Cursor) Delete(key, oldvalue []byte, lsm bool) []byte {
 func (cur *Cursor) YNext() (key, value []byte, seqno uint64, deleted bool) {
 	cur.stack = cur.next(cur.stack)
 	ptr := cur.stack[len(cur.stack)-1]
-	nd := (*Llrbnode1)(unsafe.Pointer(ptr & (^uintptr(0x3))))
+	nd := (*Llrbnode)(unsafe.Pointer(ptr & (^uintptr(0x3))))
 	key, seqno, deleted = nd.getkey(), nd.getseqno(), nd.isdeleted()
 	value = nd.Value()
 	return
 }
 
 func (cur *Cursor) first(
-	root *Llrbnode1, key []byte, stack []uintptr) []uintptr {
+	root *Llrbnode, key []byte, stack []uintptr) []uintptr {
 
 	for nd := root; nd != nil; {
 		ptr := (uintptr)(unsafe.Pointer(nd))
@@ -96,7 +96,7 @@ func (cur *Cursor) next(stack []uintptr) []uintptr {
 	if ptr == 0 { // initial case
 		return cur.next(stack[:len(stack)-1])
 	}
-	nd := (*Llrbnode1)(unsafe.Pointer(ptr & (^uintptr(0x3))))
+	nd := (*Llrbnode)(unsafe.Pointer(ptr & (^uintptr(0x3))))
 	link := ptr & 0x3
 	if link != 1 { // TODO: can be removed after testing.
 		panic("impossible situation")
@@ -115,7 +115,7 @@ func (cur *Cursor) popout(stack []uintptr) []uintptr {
 	return stack
 }
 
-func (cur *Cursor) leftmost(nd *Llrbnode1, stack []uintptr) []uintptr {
+func (cur *Cursor) leftmost(nd *Llrbnode, stack []uintptr) []uintptr {
 	if nd != nil {
 		ptr := (uintptr)(unsafe.Pointer(nd)) | 0x1
 		stack = append(stack, ptr)

@@ -5,10 +5,10 @@ import "reflect"
 import "unsafe"
 import "bytes"
 
-func TestLlrbnode1(t *testing.T) {
+func TestLlrbnode(t *testing.T) {
 	block1 := make([]byte, 1024)
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
-	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	nd := (*Llrbnode)(unsafe.Pointer(sl.Data))
 
 	block2 := make([]byte, 1024)
 	sl = (*reflect.SliceHeader)(unsafe.Pointer(&block2))
@@ -83,7 +83,7 @@ func TestLlrbnode1(t *testing.T) {
 func TestNodeLtkey(t *testing.T) {
 	block1 := make([]byte, 1024)
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
-	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	nd := (*Llrbnode)(unsafe.Pointer(sl.Data))
 	key := []byte("abcdef")
 
 	// check with empty key
@@ -109,7 +109,7 @@ func TestNodeLtkey(t *testing.T) {
 func TestNodeLekey(t *testing.T) {
 	block1 := make([]byte, 1024)
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
-	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	nd := (*Llrbnode)(unsafe.Pointer(sl.Data))
 	key := []byte("abcdef")
 
 	// check with empty key
@@ -135,7 +135,7 @@ func TestNodeLekey(t *testing.T) {
 func TestNodeGtkey(t *testing.T) {
 	block1 := make([]byte, 1024)
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
-	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	nd := (*Llrbnode)(unsafe.Pointer(sl.Data))
 	key := []byte("abcdef")
 
 	// check with empty key
@@ -161,7 +161,7 @@ func TestNodeGtkey(t *testing.T) {
 func TestNodeGekey(t *testing.T) {
 	block1 := make([]byte, 1024)
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
-	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	nd := (*Llrbnode)(unsafe.Pointer(sl.Data))
 	key := []byte("abcdef")
 
 	// check with empty key
@@ -187,7 +187,7 @@ func TestNodeGekey(t *testing.T) {
 func BenchmarkNodeSetaccess(b *testing.B) {
 	block1 := make([]byte, 1024)
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
-	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	nd := (*Llrbnode)(unsafe.Pointer(sl.Data))
 	for i := 0; i < b.N; i++ {
 		nd.setaccess(0x123456789)
 	}
@@ -196,7 +196,7 @@ func BenchmarkNodeSetaccess(b *testing.B) {
 func BenchmarkNodeGetaccess(b *testing.B) {
 	block1 := make([]byte, 1024)
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
-	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	nd := (*Llrbnode)(unsafe.Pointer(sl.Data))
 	nd.setaccess(0x123456789)
 	for i := 0; i < b.N; i++ {
 		nd.getaccess()
@@ -206,7 +206,7 @@ func BenchmarkNodeGetaccess(b *testing.B) {
 func BenchmarkNodeSetkey(b *testing.B) {
 	block1 := make([]byte, 1024)
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
-	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	nd := (*Llrbnode)(unsafe.Pointer(sl.Data))
 	key := []byte("aaaaaaaaaaaaaaaaaaaaaaaaaaa")
 	for i := 0; i < b.N; i++ {
 		nd.setkey(key)
@@ -216,7 +216,7 @@ func BenchmarkNodeSetkey(b *testing.B) {
 func BenchmarkNodeGetkey(b *testing.B) {
 	block1 := make([]byte, 1024)
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
-	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	nd := (*Llrbnode)(unsafe.Pointer(sl.Data))
 	key := []byte("aaaaaaaaaaaaaaaaaaaaaaaaaaa")
 	nd.setkey(key)
 	for i := 0; i < b.N; i++ {
@@ -227,7 +227,7 @@ func BenchmarkNodeGetkey(b *testing.B) {
 func BenchmarkNodeSetseqno(b *testing.B) {
 	block1 := make([]byte, 1024)
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
-	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	nd := (*Llrbnode)(unsafe.Pointer(sl.Data))
 	for i := 0; i < b.N; i++ {
 		nd.setseqno(0x1234567789)
 	}
@@ -236,7 +236,7 @@ func BenchmarkNodeSetseqno(b *testing.B) {
 func BenchmarkNodeGetseqno(b *testing.B) {
 	block1 := make([]byte, 1024)
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
-	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	nd := (*Llrbnode)(unsafe.Pointer(sl.Data))
 	nd.setseqno(0x123456778)
 	for i := 0; i < b.N; i++ {
 		nd.getseqno()
@@ -246,7 +246,7 @@ func BenchmarkNodeGetseqno(b *testing.B) {
 func BenchmarkNodeSetred(b *testing.B) {
 	block1 := make([]byte, 1024)
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
-	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	nd := (*Llrbnode)(unsafe.Pointer(sl.Data))
 	for i := 0; i < b.N; i++ {
 		nd.setred()
 	}
@@ -255,7 +255,7 @@ func BenchmarkNodeSetred(b *testing.B) {
 func BenchmarkNodeIsred(b *testing.B) {
 	block1 := make([]byte, 1024)
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
-	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	nd := (*Llrbnode)(unsafe.Pointer(sl.Data))
 	for i := 0; i < b.N; i++ {
 		nd.isred()
 	}
@@ -264,7 +264,7 @@ func BenchmarkNodeIsred(b *testing.B) {
 func BenchmarkNodeSetdirty(b *testing.B) {
 	block1 := make([]byte, 1024)
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
-	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	nd := (*Llrbnode)(unsafe.Pointer(sl.Data))
 	for i := 0; i < b.N; i++ {
 		nd.setdirty()
 	}
@@ -273,7 +273,7 @@ func BenchmarkNodeSetdirty(b *testing.B) {
 func BenchmarkNodeIsdirty(b *testing.B) {
 	block1 := make([]byte, 1024)
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
-	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	nd := (*Llrbnode)(unsafe.Pointer(sl.Data))
 	for i := 0; i < b.N; i++ {
 		nd.isdirty()
 	}
@@ -282,7 +282,7 @@ func BenchmarkNodeIsdirty(b *testing.B) {
 func BenchmarkNodeSetdeleted(b *testing.B) {
 	block1 := make([]byte, 1024)
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
-	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	nd := (*Llrbnode)(unsafe.Pointer(sl.Data))
 	for i := 0; i < b.N; i++ {
 		nd.setdeleted()
 	}
@@ -291,7 +291,7 @@ func BenchmarkNodeSetdeleted(b *testing.B) {
 func BenchmarkNodeIsdeleted(b *testing.B) {
 	block1 := make([]byte, 1024)
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
-	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	nd := (*Llrbnode)(unsafe.Pointer(sl.Data))
 	for i := 0; i < b.N; i++ {
 		nd.isdeleted()
 	}
@@ -300,7 +300,7 @@ func BenchmarkNodeIsdeleted(b *testing.B) {
 func BenchmarkNodeLt(b *testing.B) {
 	block1 := make([]byte, 1024)
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
-	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	nd := (*Llrbnode)(unsafe.Pointer(sl.Data))
 	key, otherkey := make([]byte, 512), make([]byte, 512)
 	nd.setkey(key)
 
@@ -313,7 +313,7 @@ func BenchmarkNodeLt(b *testing.B) {
 func BenchmarkNodeLe(b *testing.B) {
 	block1 := make([]byte, 1024)
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
-	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	nd := (*Llrbnode)(unsafe.Pointer(sl.Data))
 	key, otherkey := make([]byte, 512), make([]byte, 512)
 	nd.setkey(key)
 
@@ -326,7 +326,7 @@ func BenchmarkNodeLe(b *testing.B) {
 func BenchmarkNodeGt(b *testing.B) {
 	block1 := make([]byte, 1024)
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
-	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	nd := (*Llrbnode)(unsafe.Pointer(sl.Data))
 	key, otherkey := make([]byte, 512), make([]byte, 512)
 	nd.setkey(key)
 
@@ -339,7 +339,7 @@ func BenchmarkNodeGt(b *testing.B) {
 func BenchmarkNodeGe(b *testing.B) {
 	block1 := make([]byte, 1024)
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
-	nd := (*Llrbnode1)(unsafe.Pointer(sl.Data))
+	nd := (*Llrbnode)(unsafe.Pointer(sl.Data))
 	key, otherkey := make([]byte, 512), make([]byte, 512)
 	nd.setkey(key)
 

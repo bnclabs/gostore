@@ -16,7 +16,7 @@ import "github.com/prataprc/golog"
 import s "github.com/prataprc/gosettings"
 import humanize "github.com/dustin/go-humanize"
 
-type llrbstats1 struct { // TODO: add json tags.
+type llrbstats struct { // TODO: add json tags.
 	n_count   int64 // number of nodes in the tree
 	n_reads   int64
 	n_inserts int64
@@ -38,17 +38,17 @@ type llrbstats1 struct { // TODO: add json tags.
 	n_activess  int64
 }
 
-// LLRB1 manage a single instance of in-memory sorted index using
+// LLRB manage a single instance of in-memory sorted index using
 // left-leaning-red-black tree.
-type LLRB1 struct { // tree container
-	llrbstats1           // 64-bit aligned snapshot statistics.
+type LLRB struct { // tree container
+	llrbstats            // 64-bit aligned snapshot statistics.
 	activetxns    uint64 // there can be more than on ro-txns
 	h_upsertdepth *lib.HistogramInt64
 	// can be unaligned fields
 	name      string
 	nodearena api.Mallocer
 	valarena  api.Mallocer
-	root      unsafe.Pointer // *Llrbnode1
+	root      unsafe.Pointer // *Llrbnode
 	seqno     uint64
 	rw        sync.RWMutex
 	txnsmeta
@@ -61,10 +61,10 @@ type LLRB1 struct { // tree container
 	// scratch key
 }
 
-// NewLLRB1 a new instance of in-memory sorted index.
-func NewLLRB1(name string, setts s.Settings) *LLRB1 {
-	llrb := &LLRB1{name: name}
-	llrb.logprefix = fmt.Sprintf("LLRB1 [%s]", name)
+// NewLLRB a new instance of in-memory sorted index.
+func NewLLRB(name string, setts s.Settings) *LLRB {
+	llrb := &LLRB{name: name}
+	llrb.logprefix = fmt.Sprintf("LLRB [%s]", name)
 	llrb.inittxns()
 
 	setts = make(s.Settings).Mixin(Defaultsettings(), setts)
@@ -87,23 +87,23 @@ func NewLLRB1(name string, setts s.Settings) *LLRB1 {
 
 //---- local accessor methods.
 
-func (llrb *LLRB1) readsettings(setts s.Settings) *LLRB1 {
+func (llrb *LLRB) readsettings(setts s.Settings) *LLRB {
 	llrb.keycapacity = setts.Int64("keycapacity")
 	llrb.valcapacity = setts.Int64("valcapacity")
 	return llrb
 }
 
-func (llrb *LLRB1) getroot() *Llrbnode1 {
-	return (*Llrbnode1)(llrb.root)
+func (llrb *LLRB) getroot() *Llrbnode {
+	return (*Llrbnode)(llrb.root)
 }
 
-func (llrb *LLRB1) setroot(root *Llrbnode1) {
+func (llrb *LLRB) setroot(root *Llrbnode) {
 	llrb.root = unsafe.Pointer(root)
 }
 
-func (llrb *LLRB1) newnode(k, v []byte) *Llrbnode1 {
-	ptr := llrb.nodearena.Alloc(int64(nodesize1 + len(k)))
-	nd := (*Llrbnode1)(ptr)
+func (llrb *LLRB) newnode(k, v []byte) *Llrbnode {
+	ptr := llrb.nodearena.Alloc(int64(nodesize + len(k)))
+	nd := (*Llrbnode)(ptr)
 	nd.left, nd.right, nd.value = nil, nil, nil
 	nd.seqflags, nd.hdr = 0, 0
 	nd.setdirty().setred().setkey(k)
@@ -116,7 +116,7 @@ func (llrb *LLRB1) newnode(k, v []byte) *Llrbnode1 {
 	return nd
 }
 
-func (llrb *LLRB1) freenode(nd *Llrbnode1) {
+func (llrb *LLRB) freenode(nd *Llrbnode) {
 	if nd != nil {
 		if nv := nd.nodevalue(); nv != nil {
 			llrb.valarena.Free(unsafe.Pointer(nv))
@@ -126,11 +126,11 @@ func (llrb *LLRB1) freenode(nd *Llrbnode1) {
 	}
 }
 
-func (llrb *LLRB1) clonenode(nd *Llrbnode1) (newnd *Llrbnode1) {
+func (llrb *LLRB) clonenode(nd *Llrbnode) (newnd *Llrbnode) {
 	slabsize := llrb.nodearena.Slabsize(unsafe.Pointer(nd))
 	newptr := llrb.nodearena.Allocslab(slabsize)
 	size := llrb.nodearena.Chunklen(unsafe.Pointer(nd))
-	newnd = (*Llrbnode1)(newptr)
+	newnd = (*Llrbnode)(newptr)
 	lib.Memcpy(unsafe.Pointer(newnd), unsafe.Pointer(nd), int(size))
 	// clone value if value is present.
 	if nv := nd.nodevalue(); nv != nil {
@@ -145,7 +145,7 @@ func (llrb *LLRB1) clonenode(nd *Llrbnode1) (newnd *Llrbnode1) {
 	return
 }
 
-func (llrb *LLRB1) upsertcounts(key, value []byte, oldnd *Llrbnode1) {
+func (llrb *LLRB) upsertcounts(key, value []byte, oldnd *Llrbnode) {
 	llrb.keymemory += int64(len(key))
 	llrb.valmemory += int64(len(value))
 	if oldnd == nil {
@@ -160,7 +160,7 @@ func (llrb *LLRB1) upsertcounts(key, value []byte, oldnd *Llrbnode1) {
 	}
 }
 
-func (llrb *LLRB1) delcounts(nd *Llrbnode1) {
+func (llrb *LLRB) delcounts(nd *Llrbnode) {
 	if nd != nil {
 		llrb.keymemory -= int64(len(nd.getkey()))
 		if nv := nd.nodevalue(); nv != nil {
@@ -176,7 +176,7 @@ func (llrb *LLRB1) delcounts(nd *Llrbnode1) {
 // Set a key, value pair in the index, if key is already present,
 // its value will be over-written. Make sure that key is not nil.
 // Return old value.
-func (llrb *LLRB1) Set(key, value, oldvalue []byte) ([]byte, uint64) {
+func (llrb *LLRB) Set(key, value, oldvalue []byte) ([]byte, uint64) {
 	llrb.rw.Lock()
 	llrb.seqno++
 
@@ -206,9 +206,9 @@ func (llrb *LLRB1) Set(key, value, oldvalue []byte) ([]byte, uint64) {
 }
 
 // returns root, newnd, oldnd
-func (llrb *LLRB1) upsert(
-	nd *Llrbnode1, depth int64,
-	key, value []byte) (root, oldnd, newnd *Llrbnode1) {
+func (llrb *LLRB) upsert(
+	nd *Llrbnode, depth int64,
+	key, value []byte) (root, oldnd, newnd *Llrbnode) {
 
 	var dirty bool
 
@@ -250,7 +250,7 @@ func (llrb *LLRB1) upsert(
 // should be present in the index, otherwise existing CAS should
 // match the supplied CAS. Value will be over-written. Make sure that
 // key is not nil. Return old value.
-func (llrb *LLRB1) SetCAS(
+func (llrb *LLRB) SetCAS(
 	key, value, oldvalue []byte, cas uint64) ([]byte, uint64, error) {
 
 	llrb.rw.Lock()
@@ -290,10 +290,10 @@ func (llrb *LLRB1) SetCAS(
 	return oldvalue, seqno, nil
 }
 
-func (llrb *LLRB1) upsertcas(
-	nd *Llrbnode1, depth int64,
+func (llrb *LLRB) upsertcas(
+	nd *Llrbnode, depth int64,
 	key, value []byte,
-	cas uint64) (root, oldnd, newnd *Llrbnode1, err error) {
+	cas uint64) (root, oldnd, newnd *Llrbnode, err error) {
 
 	var dirty bool
 
@@ -354,7 +354,7 @@ func (llrb *LLRB1) upsertcas(
 // return its value. If lsm is true, then don't delete the node
 // instead simply mark the node as deleted. Again, if lsm is true
 // but key is not found in index a new entry will inserted.
-func (llrb *LLRB1) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
+func (llrb *LLRB) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 	llrb.rw.Lock()
 
 	var val []byte
@@ -404,8 +404,8 @@ func (llrb *LLRB1) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 	return oldvalue, seqno
 }
 
-func (llrb *LLRB1) delete(
-	nd *Llrbnode1, key []byte) (newnd, deleted *Llrbnode1) {
+func (llrb *LLRB) delete(
+	nd *Llrbnode, key []byte) (newnd, deleted *Llrbnode) {
 
 	if nd == nil {
 		return nil, nil
@@ -433,7 +433,7 @@ func (llrb *LLRB1) delete(
 		}
 		// If @key equals @h.Item, and (from above) 'h.Right != nil'
 		if !nd.ltkey(key, false) {
-			var subdeleted *Llrbnode1
+			var subdeleted *Llrbnode
 			nd.right, subdeleted = llrb.deletemin(nd.right)
 			if subdeleted == nil {
 				panic("delete(): fatal logic, call the programmer")
@@ -463,7 +463,7 @@ func (llrb *LLRB1) delete(
 }
 
 // using 2-3 trees
-func (llrb *LLRB1) deletemin(nd *Llrbnode1) (newnd, deleted *Llrbnode1) {
+func (llrb *LLRB) deletemin(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 	if nd == nil {
 		return nil, nil
 	}
@@ -477,7 +477,7 @@ func (llrb *LLRB1) deletemin(nd *Llrbnode1) (newnd, deleted *Llrbnode1) {
 	return llrb.fixup(nd), deleted
 }
 
-func (llrb *LLRB1) BeginTxn(id uint64) *Txn {
+func (llrb *LLRB) BeginTxn(id uint64) *Txn {
 	llrb.rw.Lock()
 	llrb.activetxns++
 	llrb.n_txns++
@@ -486,7 +486,7 @@ func (llrb *LLRB1) BeginTxn(id uint64) *Txn {
 }
 
 // rollback will never happen B-)
-func (llrb *LLRB1) commit(txn *Txn) error {
+func (llrb *LLRB) commit(txn *Txn) error {
 	for _, head := range txn.writes {
 		prevkey := []byte(nil)
 		for head != nil {
@@ -504,7 +504,7 @@ func (llrb *LLRB1) commit(txn *Txn) error {
 	return nil
 }
 
-func (llrb *LLRB1) commitrecord(rec *record) error {
+func (llrb *LLRB) commitrecord(rec *record) error {
 	switch rec.cmd {
 	case cmdSet:
 		llrb.SetCAS(rec.key, rec.value, nil, rec.seqno)
@@ -514,7 +514,7 @@ func (llrb *LLRB1) commitrecord(rec *record) error {
 	return nil
 }
 
-func (llrb *LLRB1) abort(txn *Txn) error {
+func (llrb *LLRB) abort(txn *Txn) error {
 	llrb.puttxn(txn)
 	llrb.n_aborts++
 	llrb.activetxns--
@@ -526,7 +526,7 @@ func (llrb *LLRB1) abort(txn *Txn) error {
 	return nil
 }
 
-func (llrb *LLRB1) View(id uint64) *Txn {
+func (llrb *LLRB) View(id uint64) *Txn {
 	llrb.rw.RLock()
 	llrb.activetxns++
 	llrb.n_txns++
@@ -539,7 +539,7 @@ func (llrb *LLRB1) View(id uint64) *Txn {
 // Get value for key, if value argument is not nil it will be used to copy the
 // entry's value. Also returns entry's cas, whether entry is marked as deleted
 // by LSM. If ok is false, then key is not found.
-func (llrb *LLRB1) Get(
+func (llrb *LLRB) Get(
 	key, value []byte) (v []byte, cas uint64, deleted, ok bool) {
 
 	llrb.rw.RLock()
@@ -562,7 +562,7 @@ func (llrb *LLRB1) Get(
 	return value, seqno, deleted, ok
 }
 
-func (llrb *LLRB1) getkey(nd *Llrbnode1, k []byte) (*Llrbnode1, bool) {
+func (llrb *LLRB) getkey(nd *Llrbnode, k []byte) (*Llrbnode, bool) {
 	for nd != nil {
 		if nd.gtkey(k, false) {
 			nd = nd.left
@@ -577,17 +577,17 @@ func (llrb *LLRB1) getkey(nd *Llrbnode1, k []byte) (*Llrbnode1, bool) {
 
 //---- Exported Control methods
 
-func (llrb *LLRB1) ID() string {
+func (llrb *LLRB) ID() string {
 	return llrb.name
 }
 
-func (llrb *LLRB1) Count() int64 {
+func (llrb *LLRB) Count() int64 {
 	return atomic.LoadInt64(&llrb.n_count)
 }
 
 // Dotdump to convert whole tree into dot script that can be
 // visualized using graphviz.
-func (llrb *LLRB1) Dotdump(buffer io.Writer) {
+func (llrb *LLRB) Dotdump(buffer io.Writer) {
 	lines := []string{
 		"digraph llrb {",
 		"  node[shape=record];\n",
@@ -602,7 +602,7 @@ func (llrb *LLRB1) Dotdump(buffer io.Writer) {
 
 // Stats return a map of data-structure statistics and operational
 // statistics.
-func (llrb *LLRB1) Stats() map[string]interface{} {
+func (llrb *LLRB) Stats() map[string]interface{} {
 	llrb.rw.RLock()
 
 	m := make(map[string]interface{})
@@ -643,7 +643,7 @@ func (llrb *LLRB1) Stats() map[string]interface{} {
 
 // Validate data structure. This is a costly operation, walks
 // through the entire tree and holds a read lock while doing so.
-func (llrb *LLRB1) Validate() {
+func (llrb *LLRB) Validate() {
 	stats := llrb.Stats()
 
 	llrb.rw.RLock()
@@ -656,7 +656,7 @@ func (llrb *LLRB1) Validate() {
 	llrb.validatestats(stats)
 }
 
-func (llrb *LLRB1) validatestats(stats map[string]interface{}) {
+func (llrb *LLRB) validatestats(stats map[string]interface{}) {
 	// n_count should match (n_inserts - n_deletes)
 	n_count := stats["n_count"].(int64)
 	n_inserts := stats["n_inserts"].(int64)
@@ -681,7 +681,7 @@ func (llrb *LLRB1) validatestats(stats map[string]interface{}) {
 }
 
 // Log vital information.
-func (llrb *LLRB1) Log() {
+func (llrb *LLRB) Log() {
 	llrb.rw.RLock()
 
 	stats := llrb.Stats()
@@ -731,11 +731,11 @@ func (llrb *LLRB1) Log() {
 }
 
 // Clone llrb instance and return the cloned instance.
-func (llrb *LLRB1) Clone(name string) *LLRB1 {
+func (llrb *LLRB) Clone(name string) *LLRB {
 	llrb.rw.Lock()
 
-	newllrb := NewLLRB1(llrb.name, llrb.setts)
-	newllrb.llrbstats1 = llrb.llrbstats1
+	newllrb := NewLLRB(llrb.name, llrb.setts)
+	newllrb.llrbstats = llrb.llrbstats
 	newllrb.h_upsertdepth = llrb.h_upsertdepth.Clone()
 	newllrb.seqno = llrb.seqno
 
@@ -745,7 +745,7 @@ func (llrb *LLRB1) Clone(name string) *LLRB1 {
 	return newllrb
 }
 
-func (llrb *LLRB1) clonetree(nd *Llrbnode1) *Llrbnode1 {
+func (llrb *LLRB) clonetree(nd *Llrbnode) *Llrbnode {
 	if nd == nil {
 		return nil
 	}
@@ -760,14 +760,14 @@ func (llrb *LLRB1) clonetree(nd *Llrbnode1) *Llrbnode1 {
 
 // Destroy releases all resources held by the tree. No other
 // method call are allowed after Destroy.
-func (llrb *LLRB1) Destroy() {
+func (llrb *LLRB) Destroy() {
 	for llrb.dodestory() == false {
 		time.Sleep(10 * time.Millisecond)
 	}
 	log.Infof("%v destroyed\n", llrb.logprefix)
 }
 
-func (llrb *LLRB1) dodestory() bool {
+func (llrb *LLRB) dodestory() bool {
 	llrb.rw.Lock()
 	defer llrb.rw.Unlock()
 
@@ -783,11 +783,11 @@ func (llrb *LLRB1) dodestory() bool {
 
 // rotation routines for 2-3 algorithm
 
-func (llrb *LLRB1) walkdownrot23(nd *Llrbnode1) *Llrbnode1 {
+func (llrb *LLRB) walkdownrot23(nd *Llrbnode) *Llrbnode {
 	return nd
 }
 
-func (llrb *LLRB1) walkuprot23(nd *Llrbnode1) *Llrbnode1 {
+func (llrb *LLRB) walkuprot23(nd *Llrbnode) *Llrbnode {
 	if nd.right.isred() && !nd.left.isred() {
 		nd = llrb.rotateleft(nd)
 	}
@@ -800,7 +800,7 @@ func (llrb *LLRB1) walkuprot23(nd *Llrbnode1) *Llrbnode1 {
 	return nd
 }
 
-func (llrb *LLRB1) rotateleft(nd *Llrbnode1) *Llrbnode1 {
+func (llrb *LLRB) rotateleft(nd *Llrbnode) *Llrbnode {
 	y := nd.right
 	if y.isblack() {
 		panic("rotateleft(): rotating a black link ? call the programmer")
@@ -816,7 +816,7 @@ func (llrb *LLRB1) rotateleft(nd *Llrbnode1) *Llrbnode1 {
 	return y
 }
 
-func (llrb *LLRB1) rotateright(nd *Llrbnode1) *Llrbnode1 {
+func (llrb *LLRB) rotateright(nd *Llrbnode) *Llrbnode {
 	x := nd.left
 	if x.isblack() {
 		panic("rotateright(): rotating a black link ? call the programmer")
@@ -833,14 +833,14 @@ func (llrb *LLRB1) rotateright(nd *Llrbnode1) *Llrbnode1 {
 }
 
 // REQUIRE: Left and Right children must be present
-func (llrb *LLRB1) flip(nd *Llrbnode1) {
+func (llrb *LLRB) flip(nd *Llrbnode) {
 	nd.left.togglelink()
 	nd.right.togglelink()
 	nd.togglelink()
 }
 
 // REQUIRE: Left and Right children must be present
-func (llrb *LLRB1) moveredleft(nd *Llrbnode1) *Llrbnode1 {
+func (llrb *LLRB) moveredleft(nd *Llrbnode) *Llrbnode {
 	llrb.flip(nd)
 	if nd.right.left.isred() {
 		nd.right = llrb.rotateright(nd.right)
@@ -851,7 +851,7 @@ func (llrb *LLRB1) moveredleft(nd *Llrbnode1) *Llrbnode1 {
 }
 
 // REQUIRE: Left and Right children must be present
-func (llrb *LLRB1) moveredright(nd *Llrbnode1) *Llrbnode1 {
+func (llrb *LLRB) moveredright(nd *Llrbnode) *Llrbnode {
 	llrb.flip(nd)
 	if nd.left.left.isred() {
 		nd = llrb.rotateright(nd)
@@ -860,7 +860,7 @@ func (llrb *LLRB1) moveredright(nd *Llrbnode1) *Llrbnode1 {
 	return nd
 }
 
-func (llrb *LLRB1) fixup(nd *Llrbnode1) *Llrbnode1 {
+func (llrb *LLRB) fixup(nd *Llrbnode) *Llrbnode {
 	if nd.right.isred() {
 		nd = llrb.rotateleft(nd)
 	}
@@ -874,7 +874,7 @@ func (llrb *LLRB1) fixup(nd *Llrbnode1) *Llrbnode1 {
 }
 
 // using 2-3 trees
-func (llrb *LLRB1) deletemax(nd *Llrbnode1) (newnd, deleted *Llrbnode1) {
+func (llrb *LLRB) deletemax(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 	if nd == nil {
 		return nil, nil
 	}
@@ -891,7 +891,7 @@ func (llrb *LLRB1) deletemax(nd *Llrbnode1) (newnd, deleted *Llrbnode1) {
 	return llrb.fixup(nd), deleted
 }
 
-func (llrb *LLRB1) logarenasettings() {
+func (llrb *LLRB) logarenasettings() {
 	stats := llrb.Stats()
 
 	// key arena

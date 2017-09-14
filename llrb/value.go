@@ -10,7 +10,7 @@ import "reflect"
 const nvaluesize = int(unsafe.Sizeof(nodevalue{})) - 8 // + valuesize
 
 type nodevalue struct {
-	hdr1     uint64         // valuesize[39:]
+	hdr      uint64         // valuesize[39:]
 	valstart unsafe.Pointer // just a place-holder
 }
 
@@ -20,13 +20,13 @@ func (nv *nodevalue) sizeof() int {
 
 func (nv *nodevalue) setvalsize(size int64) *nodevalue {
 	if nv != nil {
-		nv.hdr1 = (nv.hdr1 & 0xffffff0000000000) | (uint64(size) & 0xffffffffff)
+		nv.hdr = (nv.hdr & 0xffffff0000000000) | (uint64(size) & 0xffffffffff)
 	}
 	return nv
 }
 
 func (nv *nodevalue) valsize() int {
-	return int(nv.hdr1 & 0xffffffffff)
+	return int(nv.hdr & 0xffffffffff)
 
 }
 

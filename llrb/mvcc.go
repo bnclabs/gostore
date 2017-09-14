@@ -19,14 +19,14 @@ import humanize "github.com/dustin/go-humanize"
 
 // MVCC manages a single instance of LLRB tree in MVCC mode.
 type MVCC struct {
-	llrbstats1           // 64-bit aligned snapshot statistics.
+	llrbstats            // 64-bit aligned snapshot statistics.
 	activetxns    uint64 // there can be more than one txns.
 	h_upsertdepth *lib.HistogramInt64
 	// can be unaligned fields
 	name      string
 	nodearena api.Mallocer
 	valarena  api.Mallocer
-	root      unsafe.Pointer // *Llrbnode1
+	root      unsafe.Pointer // *Llrbnode
 	seqno     uint64
 	rw        sync.RWMutex
 	triggch   chan bool
@@ -35,12 +35,12 @@ type MVCC struct {
 
 	// mvcc fields
 	snapshot   unsafe.Pointer // *Snapshot
-	reclaims   []*Llrbnode1
+	reclaims   []*Llrbnode
 	h_bulkfree *lib.HistogramInt64
 	h_reclaims *lib.HistogramInt64
 	h_versions *lib.HistogramInt64
 	// cache
-	reclaim   []*Llrbnode1
+	reclaim   []*Llrbnode
 	snapcache chan *Snapshot
 
 	// settings
@@ -75,8 +75,8 @@ func NewMVCC(name string, setts s.Settings) *MVCC {
 	// statistics
 	mvcc.snapshot = nil
 	mvcc.h_upsertdepth = lib.NewhistorgramInt64(10, 100, 10)
-	mvcc.reclaims = make([]*Llrbnode1, 0, 64)
-	mvcc.reclaim = make([]*Llrbnode1, 0, 64)
+	mvcc.reclaims = make([]*Llrbnode, 0, 64)
+	mvcc.reclaim = make([]*Llrbnode, 0, 64)
 	mvcc.h_bulkfree = lib.NewhistorgramInt64(100, 1000, 1000)
 	mvcc.h_reclaims = lib.NewhistorgramInt64(10, 200, 20)
 	mvcc.h_versions = lib.NewhistorgramInt64(1, 30, 10)
@@ -98,17 +98,17 @@ func (mvcc *MVCC) readsettings(setts s.Settings) *MVCC {
 	return mvcc
 }
 
-func (mvcc *MVCC) getroot() *Llrbnode1 {
-	return (*Llrbnode1)(mvcc.root)
+func (mvcc *MVCC) getroot() *Llrbnode {
+	return (*Llrbnode)(mvcc.root)
 }
 
-func (mvcc *MVCC) setroot(root *Llrbnode1) {
+func (mvcc *MVCC) setroot(root *Llrbnode) {
 	mvcc.root = unsafe.Pointer(root)
 }
 
-func (mvcc *MVCC) newnode(k, v []byte) *Llrbnode1 {
-	ptr := mvcc.nodearena.Alloc(int64(nodesize1 + len(k)))
-	nd := (*Llrbnode1)(ptr)
+func (mvcc *MVCC) newnode(k, v []byte) *Llrbnode {
+	ptr := mvcc.nodearena.Alloc(int64(nodesize + len(k)))
+	nd := (*Llrbnode)(ptr)
 	nd.left, nd.right, nd.value = nil, nil, nil
 	nd.seqflags, nd.hdr = 0, 0
 	nd.setdirty().setred().setkey(k)
@@ -121,7 +121,7 @@ func (mvcc *MVCC) newnode(k, v []byte) *Llrbnode1 {
 	return nd
 }
 
-func (mvcc *MVCC) freenode(nd *Llrbnode1) {
+func (mvcc *MVCC) freenode(nd *Llrbnode) {
 	if nd != nil {
 		if nv := nd.nodevalue(); nv != nil {
 			mvcc.valarena.Free(unsafe.Pointer(nv))
@@ -131,11 +131,11 @@ func (mvcc *MVCC) freenode(nd *Llrbnode1) {
 	}
 }
 
-func (mvcc *MVCC) clonenode(nd *Llrbnode1) (newnd *Llrbnode1) {
+func (mvcc *MVCC) clonenode(nd *Llrbnode) (newnd *Llrbnode) {
 	slabsize := mvcc.nodearena.Slabsize(unsafe.Pointer(nd))
 	newptr := mvcc.nodearena.Allocslab(slabsize)
 	size := mvcc.nodearena.Chunklen(unsafe.Pointer(nd))
-	newnd = (*Llrbnode1)(newptr)
+	newnd = (*Llrbnode)(newptr)
 	lib.Memcpy(unsafe.Pointer(newnd), unsafe.Pointer(nd), int(size))
 	// clone value if value is present.
 	if nv := nd.nodevalue(); nv != nil {
@@ -150,7 +150,7 @@ func (mvcc *MVCC) clonenode(nd *Llrbnode1) (newnd *Llrbnode1) {
 	return
 }
 
-func (mvcc *MVCC) upsertcounts(key, value []byte, oldnd *Llrbnode1) {
+func (mvcc *MVCC) upsertcounts(key, value []byte, oldnd *Llrbnode) {
 	mvcc.keymemory += int64(len(key))
 	mvcc.valmemory += int64(len(value))
 	if oldnd == nil {
@@ -165,7 +165,7 @@ func (mvcc *MVCC) upsertcounts(key, value []byte, oldnd *Llrbnode1) {
 	}
 }
 
-func (mvcc *MVCC) delcounts(nd *Llrbnode1) {
+func (mvcc *MVCC) delcounts(nd *Llrbnode) {
 	if nd != nil {
 		mvcc.keymemory -= int64(len(nd.getkey()))
 		if nv := nd.nodevalue(); nv != nil {
@@ -176,7 +176,7 @@ func (mvcc *MVCC) delcounts(nd *Llrbnode1) {
 	}
 }
 
-func (mvcc *MVCC) appendreclaim(reclaim []*Llrbnode1) {
+func (mvcc *MVCC) appendreclaim(reclaim []*Llrbnode) {
 	if len(reclaim) > 0 {
 		mvcc.h_reclaims.Add(int64(len(reclaim)))
 		mvcc.n_reclaims += int64(len(reclaim))
@@ -411,7 +411,7 @@ func (mvcc *MVCC) Clone(name string) *MVCC {
 	mvcc.rw.Lock() // TODO: should we use RLock() ??
 
 	newmvcc := NewMVCC(mvcc.name, mvcc.setts)
-	newmvcc.llrbstats1 = mvcc.llrbstats1
+	newmvcc.llrbstats = mvcc.llrbstats
 	newmvcc.h_upsertdepth = mvcc.h_upsertdepth.Clone()
 	newmvcc.h_bulkfree = mvcc.h_bulkfree.Clone()
 	newmvcc.h_reclaims = mvcc.h_reclaims.Clone()
@@ -424,7 +424,7 @@ func (mvcc *MVCC) Clone(name string) *MVCC {
 	return newmvcc
 }
 
-func (mvcc *MVCC) clonetree(nd *Llrbnode1) *Llrbnode1 {
+func (mvcc *MVCC) clonetree(nd *Llrbnode) *Llrbnode {
 	if nd == nil {
 		return nil
 	}
@@ -473,7 +473,7 @@ func (mvcc *MVCC) destroy() bool {
 //---- Exported Write methods
 
 func (mvcc *MVCC) Set(key, value, oldvalue []byte) ([]byte, uint64) {
-	var newnd, oldnd *Llrbnode1
+	var newnd, oldnd *Llrbnode
 
 	mvcc.rw.Lock()
 
@@ -510,11 +510,11 @@ func (mvcc *MVCC) Set(key, value, oldvalue []byte) ([]byte, uint64) {
 }
 
 func (mvcc *MVCC) upsert(
-	nd *Llrbnode1, depth int64,
+	nd *Llrbnode, depth int64,
 	key, value []byte,
-	reclaim []*Llrbnode1) (*Llrbnode1, *Llrbnode1, *Llrbnode1, []*Llrbnode1) {
+	reclaim []*Llrbnode) (*Llrbnode, *Llrbnode, *Llrbnode, []*Llrbnode) {
 
-	var oldnd, newnd *Llrbnode1
+	var oldnd, newnd *Llrbnode
 
 	if nd == nil {
 		newnd := mvcc.newnode(key, value)
@@ -555,7 +555,7 @@ func (mvcc *MVCC) upsert(
 func (mvcc *MVCC) SetCAS(
 	key, value, oldvalue []byte, cas uint64) ([]byte, uint64, error) {
 
-	var newnd, oldnd *Llrbnode1
+	var newnd, oldnd *Llrbnode
 	var err error
 
 	mvcc.rw.Lock()
@@ -601,12 +601,12 @@ func (mvcc *MVCC) SetCAS(
 }
 
 func (mvcc *MVCC) upsertcas(
-	nd *Llrbnode1, depth int64,
+	nd *Llrbnode, depth int64,
 	key, value []byte, cas uint64,
-	reclaim []*Llrbnode1) (
-	*Llrbnode1, *Llrbnode1, *Llrbnode1, []*Llrbnode1, error) {
+	reclaim []*Llrbnode) (
+	*Llrbnode, *Llrbnode, *Llrbnode, []*Llrbnode, error) {
 
-	var oldnd, newnd *Llrbnode1
+	var oldnd, newnd *Llrbnode
 	var err error
 
 	if nd == nil && cas > 0 { // Expected an update
@@ -663,7 +663,7 @@ func (mvcc *MVCC) upsertcas(
 }
 
 func (mvcc *MVCC) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
-	var root, newnd, oldnd, deleted *Llrbnode1
+	var root, newnd, oldnd, deleted *Llrbnode
 
 	mvcc.rw.Lock()
 
@@ -722,10 +722,10 @@ func (mvcc *MVCC) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 }
 
 func (mvcc *MVCC) delete(
-	nd *Llrbnode1, key []byte,
-	reclaim []*Llrbnode1) (*Llrbnode1, *Llrbnode1, []*Llrbnode1) {
+	nd *Llrbnode, key []byte,
+	reclaim []*Llrbnode) (*Llrbnode, *Llrbnode, []*Llrbnode) {
 
-	var newnd, deleted *Llrbnode1
+	var newnd, deleted *Llrbnode
 
 	if nd == nil {
 		return nil, nil, reclaim
@@ -758,7 +758,7 @@ func (mvcc *MVCC) delete(
 		}
 		// If @key equals @h.Item, and (from above) 'h.Right != nil'
 		if !ndmvcc.ltkey(key, false) {
-			var subd *Llrbnode1
+			var subd *Llrbnode
 			ndmvcc.right, subd, reclaim = mvcc.deletemin(ndmvcc.right, reclaim)
 			if subd == nil {
 				panic("delete(): fatal logic, call the programmer")
@@ -791,10 +791,10 @@ func (mvcc *MVCC) delete(
 
 // using 2-3 trees, returns root, deleted, reclaim
 func (mvcc *MVCC) deletemin(
-	nd *Llrbnode1,
-	reclaim []*Llrbnode1) (*Llrbnode1, *Llrbnode1, []*Llrbnode1) {
+	nd *Llrbnode,
+	reclaim []*Llrbnode) (*Llrbnode, *Llrbnode, []*Llrbnode) {
 
-	var deleted *Llrbnode1
+	var deleted *Llrbnode
 
 	if nd == nil {
 		return nil, nil, reclaim
@@ -905,7 +905,7 @@ func (mvcc *MVCC) Get(
 	return
 }
 
-func (mvcc *MVCC) getkey(nd *Llrbnode1, k []byte) (*Llrbnode1, bool) {
+func (mvcc *MVCC) getkey(nd *Llrbnode, k []byte) (*Llrbnode, bool) {
 	for nd != nil {
 		if nd.gtkey(k, false) {
 			nd = nd.left
@@ -920,12 +920,12 @@ func (mvcc *MVCC) getkey(nd *Llrbnode1, k []byte) (*Llrbnode1, bool) {
 
 // llrb rotation routines for 2-3 algorithm
 
-func (mvcc *MVCC) walkdownrot23(nd *Llrbnode1) *Llrbnode1 {
+func (mvcc *MVCC) walkdownrot23(nd *Llrbnode) *Llrbnode {
 	return nd
 }
 
 func (mvcc *MVCC) walkuprot23(
-	nd *Llrbnode1, reclaim []*Llrbnode1) (*Llrbnode1, []*Llrbnode1) {
+	nd *Llrbnode, reclaim []*Llrbnode) (*Llrbnode, []*Llrbnode) {
 
 	if nd.right.isred() && !nd.left.isred() {
 		nd, reclaim = mvcc.rotateleft(nd, reclaim)
@@ -941,7 +941,7 @@ func (mvcc *MVCC) walkuprot23(
 }
 
 func (mvcc *MVCC) rotateleft(
-	nd *Llrbnode1, reclaim []*Llrbnode1) (*Llrbnode1, []*Llrbnode1) {
+	nd *Llrbnode, reclaim []*Llrbnode) (*Llrbnode, []*Llrbnode) {
 
 	y, ok := mvcc.cloneifdirty(nd.right)
 	if ok {
@@ -963,7 +963,7 @@ func (mvcc *MVCC) rotateleft(
 }
 
 func (mvcc *MVCC) rotateright(
-	nd *Llrbnode1, reclaim []*Llrbnode1) (*Llrbnode1, []*Llrbnode1) {
+	nd *Llrbnode, reclaim []*Llrbnode) (*Llrbnode, []*Llrbnode) {
 
 	x, ok := mvcc.cloneifdirty(nd.left)
 	if ok {
@@ -985,7 +985,7 @@ func (mvcc *MVCC) rotateright(
 }
 
 // REQUIRE: Left and Right children must be present
-func (mvcc *MVCC) flip(nd *Llrbnode1, reclaim []*Llrbnode1) []*Llrbnode1 {
+func (mvcc *MVCC) flip(nd *Llrbnode, reclaim []*Llrbnode) []*Llrbnode {
 	x, ok := mvcc.cloneifdirty(nd.left)
 	if ok {
 		reclaim = append(reclaim, nd.left)
@@ -1004,7 +1004,7 @@ func (mvcc *MVCC) flip(nd *Llrbnode1, reclaim []*Llrbnode1) []*Llrbnode1 {
 
 // REQUIRE: Left and Right children must be present
 func (mvcc *MVCC) moveredleft(
-	nd *Llrbnode1, reclaim []*Llrbnode1) (*Llrbnode1, []*Llrbnode1) {
+	nd *Llrbnode, reclaim []*Llrbnode) (*Llrbnode, []*Llrbnode) {
 
 	reclaim = mvcc.flip(nd, reclaim)
 	if nd.right.left.isred() {
@@ -1017,7 +1017,7 @@ func (mvcc *MVCC) moveredleft(
 
 // REQUIRE: Left and Right children must be present
 func (mvcc *MVCC) moveredright(
-	nd *Llrbnode1, reclaim []*Llrbnode1) (*Llrbnode1, []*Llrbnode1) {
+	nd *Llrbnode, reclaim []*Llrbnode) (*Llrbnode, []*Llrbnode) {
 
 	reclaim = mvcc.flip(nd, reclaim)
 	if nd.left.left.isred() {
@@ -1029,7 +1029,7 @@ func (mvcc *MVCC) moveredright(
 
 // REQUIRE: Left and Right children must be present
 func (mvcc *MVCC) fixup(
-	nd *Llrbnode1, reclaim []*Llrbnode1) (*Llrbnode1, []*Llrbnode1) {
+	nd *Llrbnode, reclaim []*Llrbnode) (*Llrbnode, []*Llrbnode) {
 
 	if nd.right.isred() {
 		nd, reclaim = mvcc.rotateleft(nd, reclaim)
@@ -1043,7 +1043,7 @@ func (mvcc *MVCC) fixup(
 	return nd, reclaim
 }
 
-func (mvcc *MVCC) cloneifdirty(nd *Llrbnode1) (*Llrbnode1, bool) {
+func (mvcc *MVCC) cloneifdirty(nd *Llrbnode) (*Llrbnode, bool) {
 	if nd.isdirty() { // already cloned
 		return nd, false
 	}

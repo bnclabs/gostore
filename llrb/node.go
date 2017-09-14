@@ -9,7 +9,7 @@ import "sync/atomic"
 
 import "github.com/prataprc/gostore/api"
 
-const nodesize1 = int(unsafe.Sizeof(Llrbnode1{})) - 8 // + metadatasize + keylen
+const nodesize = int(unsafe.Sizeof(Llrbnode{})) - 8 // + metadatasize + keylen
 
 const (
 	ndBlack   uint64 = 0x1
@@ -17,22 +17,22 @@ const (
 	ndDeleted uint64 = 0x4
 )
 
-// Llrbnode1 defines a node in LLRB tree.
-type Llrbnode1 struct {
-	left     *Llrbnode1
-	right    *Llrbnode1
+// Llrbnode defines a node in LLRB tree.
+type Llrbnode struct {
+	left     *Llrbnode
+	right    *Llrbnode
 	seqflags uint64 // seqno[64:4] flags[4:0]
 	hdr      uint64 // klen[64:48] access[48:8] reserved[8:0]
 	value    unsafe.Pointer
 	key      unsafe.Pointer
 }
 
-func (nd *Llrbnode1) setnodevalue(nv *nodevalue) *Llrbnode1 {
+func (nd *Llrbnode) setnodevalue(nv *nodevalue) *Llrbnode {
 	nd.value = unsafe.Pointer(nv)
 	return nd
 }
 
-func (nd *Llrbnode1) nodevalue() *nodevalue {
+func (nd *Llrbnode) nodevalue() *nodevalue {
 	if nd == nil || nd.value == nil {
 		return nil
 	}
@@ -41,36 +41,36 @@ func (nd *Llrbnode1) nodevalue() *nodevalue {
 
 //---- header fields
 
-func (nd *Llrbnode1) gethdr() uint64 {
+func (nd *Llrbnode) gethdr() uint64 {
 	return atomic.LoadUint64(&nd.hdr)
 }
 
-func (nd *Llrbnode1) sethdr(hdr uint64) *Llrbnode1 {
+func (nd *Llrbnode) sethdr(hdr uint64) *Llrbnode {
 	atomic.StoreUint64(&nd.hdr, hdr)
 	return nd
 }
 
-func (nd *Llrbnode1) getkeylen() uint16 {
+func (nd *Llrbnode) getkeylen() uint16 {
 	return uint16(nd.gethdr() >> 48)
 }
 
-func (nd *Llrbnode1) setkeylen(klen uint16) *Llrbnode1 {
+func (nd *Llrbnode) setkeylen(klen uint16) *Llrbnode {
 	hdr := nd.gethdr()
 	nd.sethdr((hdr & 0x0000ffffffffffff) | (uint64(klen) << 48))
 	return nd
 }
 
-func (nd *Llrbnode1) getaccess() uint64 {
+func (nd *Llrbnode) getaccess() uint64 {
 	return (nd.gethdr() & 0x0000ffffffffffff) >> 8
 }
 
-func (nd *Llrbnode1) setaccess(access uint64) *Llrbnode1 {
+func (nd *Llrbnode) setaccess(access uint64) *Llrbnode {
 	hdr := nd.gethdr()
 	nd.sethdr((hdr & 0xffff0000000000ff) | (access << 8))
 	return nd
 }
 
-func (nd *Llrbnode1) getkey() (key []byte) {
+func (nd *Llrbnode) getkey() (key []byte) {
 	klen := nd.getkeylen()
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&key))
 	sl.Data = (uintptr)(unsafe.Pointer(&nd.key))
@@ -78,7 +78,7 @@ func (nd *Llrbnode1) getkey() (key []byte) {
 	return
 }
 
-func (nd *Llrbnode1) setkey(key []byte) *Llrbnode1 {
+func (nd *Llrbnode) setkey(key []byte) *Llrbnode {
 	var dst []byte
 	klen := len(key)
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&dst))
@@ -91,25 +91,25 @@ func (nd *Llrbnode1) setkey(key []byte) *Llrbnode1 {
 
 //----- seqno and flags
 
-func (nd *Llrbnode1) getseqflags() uint64 {
+func (nd *Llrbnode) getseqflags() uint64 {
 	return atomic.LoadUint64(&nd.seqflags)
 }
 
-func (nd *Llrbnode1) setseqflags(seqflags uint64) *Llrbnode1 {
+func (nd *Llrbnode) setseqflags(seqflags uint64) *Llrbnode {
 	atomic.StoreUint64(&nd.seqflags, seqflags)
 	return nd
 }
 
-func (nd *Llrbnode1) setseqno(seqno uint64) *Llrbnode1 {
+func (nd *Llrbnode) setseqno(seqno uint64) *Llrbnode {
 	nd.setseqflags((nd.getseqflags() & 0xf) | (seqno << 4))
 	return nd
 }
 
-func (nd *Llrbnode1) getseqno() uint64 {
+func (nd *Llrbnode) getseqno() uint64 {
 	return nd.getseqflags() >> 4
 }
 
-func (nd *Llrbnode1) isblack() bool {
+func (nd *Llrbnode) isblack() bool {
 	if nd == nil {
 		return true
 	}
@@ -117,60 +117,60 @@ func (nd *Llrbnode1) isblack() bool {
 	return (seqflags & ndBlack) == uint64(ndBlack)
 }
 
-func (nd *Llrbnode1) isred() bool {
+func (nd *Llrbnode) isred() bool {
 	if nd == nil {
 		return false
 	}
 	return !nd.isblack()
 }
 
-func (nd *Llrbnode1) setblack() *Llrbnode1 {
+func (nd *Llrbnode) setblack() *Llrbnode {
 	seqflags := nd.getseqflags()
 	return nd.setseqflags(seqflags | ndBlack)
 }
 
-func (nd *Llrbnode1) setred() *Llrbnode1 {
+func (nd *Llrbnode) setred() *Llrbnode {
 	seqflags := nd.getseqflags()
 	return nd.setseqflags(seqflags & (^ndBlack))
 }
 
-func (nd *Llrbnode1) togglelink() *Llrbnode1 {
+func (nd *Llrbnode) togglelink() *Llrbnode {
 	seqflags := nd.getseqflags()
 	return nd.setseqflags(seqflags ^ ndBlack)
 }
 
-func (nd *Llrbnode1) setdirty() *Llrbnode1 {
+func (nd *Llrbnode) setdirty() *Llrbnode {
 	seqflags := nd.getseqflags()
 	return nd.setseqflags(seqflags | ndDirty)
 }
 
-func (nd *Llrbnode1) cleardirty() *Llrbnode1 {
+func (nd *Llrbnode) cleardirty() *Llrbnode {
 	seqflags := nd.getseqflags()
 	return nd.setseqflags(seqflags & (^ndDirty))
 }
 
-func (nd *Llrbnode1) isdirty() bool {
+func (nd *Llrbnode) isdirty() bool {
 	seqflags := nd.getseqflags()
 	return (seqflags & ndDirty) == ndDirty
 }
 
-func (nd *Llrbnode1) isdeleted() bool {
+func (nd *Llrbnode) isdeleted() bool {
 	seqflags := nd.getseqflags()
 	return (seqflags & ndDeleted) == ndDeleted
 }
 
-func (nd *Llrbnode1) setdeleted() *Llrbnode1 {
+func (nd *Llrbnode) setdeleted() *Llrbnode {
 	seqflags := nd.getseqflags()
 	return nd.setseqflags(seqflags | ndDeleted)
 }
 
-func (nd *Llrbnode1) cleardeleted() *Llrbnode1 {
+func (nd *Llrbnode) cleardeleted() *Llrbnode {
 	seqflags := nd.getseqflags()
 	return nd.setseqflags(seqflags & (^ndDeleted))
 }
 
 // Value implement NodeGetter method.
-func (nd *Llrbnode1) Value() []byte {
+func (nd *Llrbnode) Value() []byte {
 	if nv := nd.nodevalue(); nv != nil {
 		return nv.value()
 	}
@@ -179,11 +179,11 @@ func (nd *Llrbnode1) Value() []byte {
 
 //---- maintanence methods.
 
-func (nd *Llrbnode1) repr() string {
+func (nd *Llrbnode) repr() string {
 	return fmt.Sprintf("%q %v %v", nd.getkey(), nd.isdirty(), nd.isblack())
 }
 
-func (nd *Llrbnode1) pprint(prefix string) {
+func (nd *Llrbnode) pprint(prefix string) {
 	if nd == nil {
 		fmt.Printf("%v\n", nd)
 		return
@@ -196,12 +196,12 @@ func (nd *Llrbnode1) pprint(prefix string) {
 	nd.right.pprint(prefix)
 }
 
-func (nd *Llrbnode1) dotdump(buffer io.Writer) {
+func (nd *Llrbnode) dotdump(buffer io.Writer) {
 	if nd == nil {
 		return
 	}
 
-	whatcolor := func(childnd *Llrbnode1) string {
+	whatcolor := func(childnd *Llrbnode) string {
 		if childnd.isred() {
 			return "red"
 		}
@@ -232,7 +232,7 @@ func (nd *Llrbnode1) dotdump(buffer io.Writer) {
 
 //---- indexer api
 
-func (nd *Llrbnode1) ltkey(other []byte, partial bool) bool {
+func (nd *Llrbnode) ltkey(other []byte, partial bool) bool {
 	var key []byte
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&key))
 	klen := nd.getkeylen()
@@ -241,7 +241,7 @@ func (nd *Llrbnode1) ltkey(other []byte, partial bool) bool {
 	return api.Binarycmp(key, other, partial) == -1
 }
 
-func (nd *Llrbnode1) lekey(other []byte, partial bool) bool {
+func (nd *Llrbnode) lekey(other []byte, partial bool) bool {
 	var key []byte
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&key))
 	klen := nd.getkeylen()
@@ -251,7 +251,7 @@ func (nd *Llrbnode1) lekey(other []byte, partial bool) bool {
 	return cmp == -1 || cmp == 0
 }
 
-func (nd *Llrbnode1) gtkey(other []byte, partial bool) bool {
+func (nd *Llrbnode) gtkey(other []byte, partial bool) bool {
 	var key []byte
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&key))
 	klen := nd.getkeylen()
@@ -261,7 +261,7 @@ func (nd *Llrbnode1) gtkey(other []byte, partial bool) bool {
 	return cmp == 1
 }
 
-func (nd *Llrbnode1) gekey(other []byte, partial bool) bool {
+func (nd *Llrbnode) gekey(other []byte, partial bool) bool {
 	var key []byte
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&key))
 	klen := nd.getkeylen()

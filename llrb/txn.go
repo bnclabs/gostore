@@ -111,7 +111,7 @@ func newtxn(
 	}
 	if txn.id == 0 {
 		switch snap := txn.snapshot.(type) {
-		case *LLRB1:
+		case *LLRB:
 			txn.id = (uint64)((uintptr)(unsafe.Pointer(snap.root)))
 		case *Snapshot:
 			txn.id = (uint64)((uintptr)(unsafe.Pointer(snap.root)))
@@ -129,7 +129,7 @@ func (txn *Txn) ID() uint64 {
 
 func (txn *Txn) Commit() {
 	switch db := txn.db.(type) {
-	case *LLRB1:
+	case *LLRB:
 		db.commit(txn)
 	case *MVCC:
 		db.commit(txn)
@@ -138,7 +138,7 @@ func (txn *Txn) Commit() {
 
 func (txn *Txn) Abort() {
 	switch db := txn.db.(type) {
-	case *LLRB1:
+	case *LLRB:
 		db.abort(txn)
 	case *MVCC:
 		db.abort(txn)
@@ -235,7 +235,7 @@ func (txn *Txn) Delete(key, oldvalue []byte, lsm bool) []byte {
 
 func (txn *Txn) getsnap(key, value []byte) ([]byte, uint64, bool, bool) {
 	switch db := txn.snapshot.(type) {
-	case *LLRB1:
+	case *LLRB:
 		return db.Get(key, value)
 	case *Snapshot:
 		return db.Get(key, value)
