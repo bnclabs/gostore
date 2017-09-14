@@ -7,6 +7,7 @@ import "time"
 import "bytes"
 import "unsafe"
 import "strings"
+import "math"
 import "sync/atomic"
 
 import "github.com/prataprc/gostore/lib"
@@ -283,7 +284,78 @@ func (mvcc *MVCC) Validate() {
 	mvcc.rw.RLock()
 	defer mvcc.rw.RUnlock()
 
-	validatellrb(mvcc.getroot(), stats, mvcc.logprefix)
+	n := stats["n_count"].(int64)
+	kmem, vmem := stats["keymemory"].(int64), stats["valmemory"].(int64)
+
+	validatetree(mvcc.getroot(), mvcc.logprefix, n, kmem, vmem)
+	mvcc.validatestats(stats)
+}
+
+func (mvcc *MVCC) validatestats(stats map[string]interface{}) {
+	// n_count should match (n_inserts - n_deletes)
+	n_count := stats["n_count"].(int64)
+	n_inserts := stats["n_inserts"].(int64)
+	n_deletes := stats["n_deletes"].(int64)
+	if n_count != (n_inserts - n_deletes) {
+		fmsg := "validatestats(): n_count:%v != (n_inserts:%v - n_deletes:%v)"
+		panic(fmt.Errorf(fmsg, n_count, n_inserts, n_deletes))
+	}
+	// n_nodes should match n_inserts
+	n_clones := stats["n_clones"].(int64)
+	n_nodes, n_frees := stats["n_nodes"].(int64), stats["n_frees"].(int64)
+	if n_inserts != n_nodes {
+		fmsg := "validatestats(): n_inserts:%v != n_nodes:%v"
+		panic(fmt.Errorf(fmsg, n_inserts, n_nodes))
+	}
+	if (n_nodes - n_count) == n_frees {
+	} else if n_clones+(n_nodes-n_count) == n_frees {
+	} else {
+		fmsg := "validatestats(): clones:%v+(nodes:%v-count:%v) != frees:%v"
+		panic(fmt.Errorf(fmsg, n_clones, n_nodes, n_count, n_frees))
+	}
+
+	// n_deletes + reclaim should match (n_frees - n_clones)
+	total_reclaim := int64(len(mvcc.reclaims)) + mvcc.countreclaimnodes()
+	x := lib.AbsInt64(n_deletes - total_reclaim)
+	y := lib.AbsInt64(n_clones - n_frees)
+	if x != y {
+		fmsg := "abs(n_deletes:%v - reclaim:%v) != " +
+			"abs(n_clones:%v - n_frees:%v)"
+		panic(fmt.Errorf(fmsg, n_deletes, total_reclaim, n_clones, n_frees))
+	}
+	// n_snapshots should match (n_activess + n_purgedss)
+	n_snapshots := stats["n_snapshots"].(int64)
+	n_purgedss := stats["n_purgedss"].(int64)
+	n_activess := stats["n_activess"].(int64)
+	if n_snapshots != (n_purgedss + n_activess) {
+		fmsg := "n_snapshots:%v != (n_activess:%v + n_purgedss:%v)"
+		panic(fmt.Errorf(fmsg, n_snapshots, n_activess, n_purgedss))
+	}
+
+	entries := mvcc.Count()
+	maxreclaim := 7 * math.Log2(float64(entries))  // 7x the height
+	meanreclaim := 3 * math.Log2(float64(entries)) // 3x the height
+	if max := float64(mvcc.h_reclaims.Max()); max > 0 {
+		if max > maxreclaim {
+			fmsg := "validatestats(): max %v reclaim exceeds 7*log2(%v)"
+			panic(fmt.Errorf(fmsg, max, entries))
+		}
+	}
+	if mean := float64(mvcc.h_reclaims.Mean()); mean > 0 {
+		if mean > meanreclaim {
+			fmsg := "validatestats(): mean %v reclaim exceeds 3*log2(%v)"
+			panic(fmt.Errorf(fmsg, mean, entries))
+		}
+	}
+}
+
+// return the sum of all nodes that needs to be reclaimed from snapshots.
+func (mvcc *MVCC) countreclaimnodes() (total int64) {
+	snapshot := (*Snapshot)(mvcc.snapshot)
+	for ; snapshot != nil; snapshot = snapshot.next {
+		total += int64(len(snapshot.reclaims))
+	}
+	return total
 }
 
 func (mvcc *MVCC) Log() {
@@ -976,55 +1048,6 @@ func (mvcc *MVCC) cloneifdirty(nd *Llrbnode1) (*Llrbnode1, bool) {
 		return nd, false
 	}
 	return mvcc.clonenode(nd), true
-}
-
-/*
-following expectations on the tree should be met.
-* If current node is red, parent node should be black.
-* At each level, number of black-links on the left subtree should be
-  equal to number of black-links on the right subtree.
-* Make sure that the tree is in sort order.
-* Return number of blacks, cummulative memory consumed by keys,
-  cummulative memory consumed by values.
-*/
-func (mvcc *MVCC) validatetree(
-	nd *Llrbnode1, fromred bool, blacks, depth int64,
-	h *lib.HistogramInt64) (nblacks, keymem, valmem int64) {
-
-	if nd != nil {
-		h.Add(depth)
-		if fromred && nd.isred() {
-			panic(redafterred)
-		}
-		if !nd.isred() {
-			blacks++
-		}
-
-		lblacks, lkm, lvm := mvcc.validatetree(
-			nd.left, nd.isred(), blacks, depth+1, h)
-		rblacks, rkm, rvm := mvcc.validatetree(
-			nd.right, nd.isred(), blacks, depth+1, h)
-
-		if lblacks != rblacks {
-			fmsg := "unbalancedblacks Left:%v Right:%v}"
-			panic(fmt.Errorf(fmsg, lblacks, rblacks))
-		}
-
-		key := nd.getkey()
-		if nd.left != nil && bytes.Compare(nd.left.getkey(), key) >= 0 {
-			fmsg := "validate(): sort order, left node %v is >= node %v"
-			panic(fmt.Errorf(fmsg, nd.left.getkey(), key))
-		}
-		if nd.left != nil && bytes.Compare(nd.left.getkey(), key) >= 0 {
-			fmsg := "validate(): sort order, node %v is >= right node %v"
-			panic(fmt.Errorf(fmsg, nd.right.getkey(), key))
-		}
-
-		keymem = lkm + rkm + int64(len(nd.getkey()))
-		valmem = lvm + rvm + int64(len(nd.Value()))
-		return lblacks, keymem, valmem
-	}
-	return blacks, 0, 0
 }
 
 //---- snapshot routines.

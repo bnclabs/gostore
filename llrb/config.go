@@ -60,20 +60,9 @@ import "github.com/cloudfoundry/gosigar"
 func Defaultsettings() s.Settings {
 	ramsize, _, _ := getsysmem()
 	setts := s.Settings{
-		"iterpool.size":        int64(100),
-		"lsm":                  false,
-		"keycapacity":          ramsize,
-		"valcapacity":          ramsize,
-		"maxlimit":             int64(100),
-		"metadata.bornseqno":   false,
-		"metadata.deadseqno":   false,
-		"metadata.mvalue":      true,
-		"metadata.vbuuid":      false,
-		"metadata.fpos":        false,
-		"mvcc.enable":          false,
-		"mvcc.snapshot.tick":   int64(5), // 5 millisecond
-		"mvcc.writer.chansize": int64(1000),
-		"nodearena.allocator":  "flist", // just a place holder
+		"keycapacity":         ramsize,
+		"valcapacity":         ramsize,
+		"nodearena.allocator": "flist", // just a place holder
 	}
 
 	nodesetts := malloc.Defaultsettings()

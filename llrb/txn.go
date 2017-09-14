@@ -127,17 +127,6 @@ func (txn *Txn) ID() uint64 {
 	return txn.id
 }
 
-func (txn *Txn) Validate() {
-	switch snap := txn.snapshot.(type) {
-	case *LLRB1:
-		root := (*Llrbnode1)(snap.root)
-		validatellrb(root, snap.Stats(), snap.logprefix)
-	case *Snapshot:
-		snap.Validate()
-	}
-	panic("unreachable code")
-}
-
 func (txn *Txn) Commit() {
 	switch db := txn.db.(type) {
 	case *LLRB1:

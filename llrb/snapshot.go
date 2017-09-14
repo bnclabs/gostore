@@ -7,7 +7,6 @@ import "strings"
 import "strconv"
 import "sync/atomic"
 
-import "github.com/prataprc/golog"
 import "github.com/prataprc/gostore/lib"
 
 type Snapshot struct {
@@ -59,28 +58,6 @@ func (snap *Snapshot) Dotdump(buffer io.Writer) {
 
 func (snap *Snapshot) Count() int64 {
 	return snap.n_count
-}
-
-func (snap *Snapshot) Validate() {
-	if snap.root == nil {
-		return
-	}
-	h := lib.NewhistorgramInt64(1, 256, 1)
-	blacks, depth, fromred := int64(0), int64(1), snap.root.isred()
-	nblacks, _, _ := validatellrbtree(snap.root, fromred, blacks, depth, h)
-	if samples := h.Samples(); samples != snap.n_count {
-		fmsg := "expected h_height.samples:%v to be same as Count():%v"
-		panic(fmt.Errorf(fmsg, samples, snap.n_count))
-	}
-	log.Infof("%v found %v blacks on both sides\n", snap.logprefix, nblacks)
-	// `h_height`.max should not exceed certain limit, maxheight
-	// gives some breathing room.
-	if h.Samples() > 8 {
-		if float64(h.Max()) > maxheight(snap.n_count) {
-			fmsg := "validate(): max height %v exceeds <factor>*log2(%v)"
-			panic(fmt.Errorf(fmsg, float64(h.Max()), snap.n_count))
-		}
-	}
 }
 
 //---- Exported Read methods

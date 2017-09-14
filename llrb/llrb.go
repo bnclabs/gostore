@@ -649,45 +649,16 @@ func (llrb *LLRB1) Validate() {
 	llrb.rw.RLock()
 	defer llrb.rw.RUnlock()
 
-	validatellrb(llrb.getroot(), stats, llrb.logprefix)
+	n := stats["n_count"].(int64)
+	kmem, vmem := stats["keymemory"].(int64), stats["valmemory"].(int64)
+
+	validatetree(llrb.getroot(), llrb.logprefix, n, kmem, vmem)
+	llrb.validatestats(stats)
 }
 
-func validatellrb(
-	root *Llrbnode1, stats map[string]interface{}, logprefix string) {
-
-	if root == nil {
-		return
-	}
-	h := lib.NewhistorgramInt64(1, 256, 1)
-	blacks, depth, fromred := int64(0), int64(1), root.isred()
-	nblacks, km, vm := validatellrbtree(root, fromred, blacks, depth, h)
-	keymemory := stats["keymemory"].(int64)
-	valmemory := stats["valmemory"].(int64)
-	if km != keymemory {
-		fmsg := "validate(): keymemory:%v != actual:%v"
-		panic(fmt.Errorf(fmsg, keymemory, km))
-	} else if vm != valmemory {
-		fmsg := "validate(): valmemory:%v != actual:%v"
-		panic(fmt.Errorf(fmsg, valmemory, vm))
-	}
-	n_count := stats["n_count"].(int64)
-	if samples := h.Samples(); samples != n_count {
-		fmsg := "expected h_height.samples:%v to be same as Count():%v"
-		panic(fmt.Errorf(fmsg, samples, n_count))
-	}
-	log.Infof("%v found %v blacks on both sides\n", logprefix, nblacks)
-	// `h_height`.max should not exceed certain limit, maxheight
-	// gives some breathing room.
-	if h.Samples() > 8 {
-		if float64(h.Max()) > maxheight(n_count) {
-			fmsg := "validate(): max height %v exceeds <factor>*log2(%v)"
-			panic(fmt.Errorf(fmsg, float64(h.Max()), n_count))
-		}
-	}
-
-	// Validation check based on statistics accounting.
-
+func (llrb *LLRB1) validatestats(stats map[string]interface{}) {
 	// n_count should match (n_inserts - n_deletes)
+	n_count := stats["n_count"].(int64)
 	n_inserts := stats["n_inserts"].(int64)
 	n_deletes := stats["n_deletes"].(int64)
 	if n_count != (n_inserts - n_deletes) {
@@ -707,57 +678,6 @@ func validatellrb(
 		fmsg := "validatestats(): clones:%v+(nodes:%v-count:%v) != frees:%v"
 		panic(fmt.Errorf(fmsg, n_clones, n_nodes, n_count, n_frees))
 	}
-}
-
-/*
-following expectations on the tree should be met.
-* If current node is red, parent node should be black.
-* At each level, number of black-links on the left subtree should be
-  equal to number of black-links on the right subtree.
-* Make sure that the tree is in sort order.
-* Return number of blacks, cummulative memory consumed by keys,
-  cummulative memory consumed by values.
-*/
-// TODO: move this to file common to LLRB1 and MVCC.
-func validatellrbtree(
-	nd *Llrbnode1, fromred bool, blacks, depth int64,
-	h *lib.HistogramInt64) (nblacks, keymem, valmem int64) {
-
-	if nd == nil {
-		return blacks, 0, 0
-	}
-
-	h.Add(depth)
-	if fromred && nd.isred() {
-		panic(redafterred)
-	}
-	if !nd.isred() {
-		blacks++
-	}
-
-	lblacks, lkm, lvm := validatellrbtree(
-		nd.left, nd.isred(), blacks, depth+1, h)
-	rblacks, rkm, rvm := validatellrbtree(
-		nd.right, nd.isred(), blacks, depth+1, h)
-
-	if lblacks != rblacks {
-		fmsg := "unbalancedblacks Left:%v Right:%v}"
-		panic(fmt.Errorf(fmsg, lblacks, rblacks))
-	}
-
-	key := nd.getkey()
-	if nd.left != nil && bytes.Compare(nd.left.getkey(), key) >= 0 {
-		fmsg := "validate(): sort order, left node %v is >= node %v"
-		panic(fmt.Errorf(fmsg, nd.left.getkey(), key))
-	}
-	if nd.left != nil && bytes.Compare(nd.left.getkey(), key) >= 0 {
-		fmsg := "validate(): sort order, node %v is >= right node %v"
-		panic(fmt.Errorf(fmsg, nd.right.getkey(), key))
-	}
-
-	keymem = lkm + rkm + int64(len(nd.getkey()))
-	valmem = lvm + rvm + int64(len(nd.Value()))
-	return lblacks, keymem, valmem
 }
 
 // Log vital information.

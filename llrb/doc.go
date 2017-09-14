@@ -1,3 +1,4 @@
+// TODO: update documentation.
 // Package llrb implement a self-balancing verions of binary-tree, called,
 // LLRB (Left Leaning Red Black).
 //
