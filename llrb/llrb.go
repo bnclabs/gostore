@@ -404,9 +404,7 @@ func (llrb *LLRB) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 	return oldvalue, seqno
 }
 
-func (llrb *LLRB) delete(
-	nd *Llrbnode, key []byte) (newnd, deleted *Llrbnode) {
-
+func (llrb *LLRB) delete(nd *Llrbnode, key []byte) (newnd, deleted *Llrbnode) {
 	if nd == nil {
 		return nil, nil
 	}
@@ -871,24 +869,6 @@ func (llrb *LLRB) fixup(nd *Llrbnode) *Llrbnode {
 		llrb.flip(nd)
 	}
 	return nd
-}
-
-// using 2-3 trees
-func (llrb *LLRB) deletemax(nd *Llrbnode) (newnd, deleted *Llrbnode) {
-	if nd == nil {
-		return nil, nil
-	}
-	if nd.left.isred() {
-		nd = llrb.rotateright(nd)
-	}
-	if nd.right == nil {
-		return nil, nd
-	}
-	if !nd.right.isred() && !nd.right.left.isred() {
-		nd = llrb.moveredright(nd)
-	}
-	nd.right, deleted = llrb.deletemax(nd.right)
-	return llrb.fixup(nd), deleted
 }
 
 func (llrb *LLRB) logarenasettings() {
