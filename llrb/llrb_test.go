@@ -106,6 +106,40 @@ func TestLLRBLoad(t *testing.T) {
 	} else if string(oldvalue) != vals[0] {
 		t.Errorf("expected %s, got %s", vals[0], oldvalue)
 	}
+	// test set with nil for oldvalue.
+	nilvalue := []byte(nil)
+	k, v = []byte(keys[0]), []byte("newvalue1")
+	nilvalue, cas = llrb.Set(k, v, nil)
+	if cas != uint64(len(keys)+2) {
+		t.Errorf("expected %v, got %v, key %s", len(keys)+1, cas, k)
+	} else if len(nilvalue) != 0 {
+		t.Errorf("unexpected %s", nilvalue)
+	}
+	// test set with value nil.
+	k, v = []byte(keys[0]), nil
+	oldvalue, cas = llrb.Set(k, v, oldvalue)
+	if cas != uint64(len(keys)+3) {
+		t.Errorf("expected %v, got %v, key %s", len(keys)+1, cas, k)
+	} else if string(oldvalue) != "newvalue1" {
+		t.Errorf("unexpected %q", oldvalue)
+	}
+	// test set with oldvalue nil.
+	k, v = []byte(keys[0]), []byte("newvalue2")
+	oldvalue, cas = llrb.Set(k, v, nil)
+	if cas != uint64(len(keys)+4) {
+		t.Errorf("expected %v, got %v, key %s", len(keys)+1, cas, k)
+	} else if len(oldvalue) != 0 {
+		t.Errorf("unexpected %s", oldvalue)
+	}
+	if value, cas, deleted, ok := llrb.Get(k, value); ok == false {
+		t.Errorf("unexpected false")
+	} else if deleted == true {
+		t.Errorf("expected key")
+	} else if cas != uint64(len(keys)+4) {
+		t.Errorf("unexpected %v", cas)
+	} else if string(value) != "newvalue2" {
+		t.Errorf("unexpected value %s", value)
+	}
 
 	if llrb.Count() != int64(len(keys)) {
 		t.Errorf("unexpected %v", llrb.Count())
@@ -116,21 +150,21 @@ func TestLLRBLoad(t *testing.T) {
 	stats := llrb.Stats()
 	if x := stats["keymemory"].(int64); x != 72 {
 		t.Errorf("unexpected %v", x)
-	} else if x := stats["valmemory"].(int64); x != 76 {
+	} else if x := stats["valmemory"].(int64); x != 77 {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_count"].(int64); x != int64(len(keys)) {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_inserts"].(int64); x != int64(len(keys)) {
 		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_updates"].(int64); x != 1 {
+	} else if x := stats["n_updates"].(int64); x != 4 {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_deletes"].(int64); x != 0 {
 		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_reads"].(int64); x != int64(len(keys)) {
+	} else if x := stats["n_reads"].(int64); x != int64(len(keys)+1) {
 		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_clones"].(int64); x != 1 {
+	} else if x := stats["n_clones"].(int64); x != 4 {
 		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_frees"].(int64); x != 1 {
+	} else if x := stats["n_frees"].(int64); x != 4 {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_nodes"].(int64); x != int64(len(keys)) {
 		t.Errorf("unexpected %v", x)
@@ -323,16 +357,61 @@ func TestLLRBSetCAS(t *testing.T) {
 	}
 	llrb.Validate()
 	// set with cas again
-	k, v = []byte("key100"), []byte("value100")
-	oldvalue, cas, err = llrb.SetCAS(k, v, oldvalue, uint64(n+1))
-	if err != nil {
-		t.Error(err)
-	} else if string(oldvalue) != "valu100" {
+	k = []byte("key100")
+	oldvalue, cas = llrb.Delete(k, oldvalue, true /*lsm*/)
+	if string(oldvalue) != "valu100" {
 		t.Errorf("unexpected %s", oldvalue)
 	} else if cas != uint64(n+2) {
 		t.Errorf("expected %v, got %v", n+2, cas)
 	}
-	rvm = rvm - len(oldvalue) + len(v)
+	rvm = rvm - len(oldvalue)
+	llrb.Validate()
+	// set with mismatch cas for deleted key.
+	k, v = []byte("key100"), []byte("value100")
+	oldvalue, cas, err = llrb.SetCAS(k, v, oldvalue, 100)
+	if err.Error() != api.ErrorInvalidCAS.Error() {
+		t.Errorf("expected error")
+	}
+	llrb.Validate()
+	// set with mismatch cas and oldvalue as nil.
+	nilvalue := []byte(nil)
+	k, v = []byte("key100"), []byte("value100")
+	nilvalue, cas, err = llrb.SetCAS(k, v, nil, 100)
+	if err.Error() != api.ErrorInvalidCAS.Error() {
+		t.Errorf("expected error")
+	} else if nilvalue != nil {
+		t.Errorf("unexpected %s", nilvalue)
+	}
+	llrb.Validate()
+	// set with cas and value nil.
+	k, v = []byte("key100"), nil
+	oldvalue, cas, err = llrb.SetCAS(k, v, oldvalue, 1002)
+	if err != nil {
+		t.Error(err)
+	} else if cas != 1003 {
+		t.Errorf("unexpected %v", cas)
+	} else if string(oldvalue) != "" {
+		t.Errorf("unexpected %s", oldvalue)
+	}
+	llrb.Validate()
+	// set with cas and oldvalue nil.
+	k, v = []byte("key100"), []byte("value100")
+	nilvalue, cas, err = llrb.SetCAS(k, v, nil, 1003)
+	if err != nil {
+		t.Error(err)
+	} else if cas != 1004 {
+		t.Errorf("unexpected %v", cas)
+	} else if nilvalue != nil {
+		t.Errorf("unexpected %s", nilvalue)
+	}
+	rvm = rvm + len(v)
+	llrb.Validate()
+	// set with cas and oldvalue nil.
+	k, v = []byte("missing"), []byte("value100")
+	oldvalue, cas, err = llrb.SetCAS(k, v, oldvalue, 1003)
+	if err.Error() != api.ErrorInvalidCAS.Error() {
+		t.Errorf("unexpected %v", err)
+	}
 	llrb.Validate()
 
 	// test loaded data
@@ -345,7 +424,7 @@ func TestLLRBSetCAS(t *testing.T) {
 		} else if key == "key100" {
 			if string(value) != "value100" {
 				t.Errorf("expected %s, got %s, key %s", val, value, key)
-			} else if cas != uint64(n+2) {
+			} else if cas != uint64(n+4) {
 				t.Errorf("expected %v, got %v, key %s", n+2, cas, key)
 			}
 		} else {
@@ -367,20 +446,20 @@ func TestLLRBSetCAS(t *testing.T) {
 	if x := stats["keymemory"].(int64); x != int64(rkm) {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["valmemory"].(int64); x != int64(rvm) {
-		t.Errorf("unexpected %v", x)
+		t.Errorf("unexpected %v, %v", x, rvm)
 	} else if x := stats["n_count"].(int64); x != int64(n) {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_inserts"].(int64); x != int64(n) {
 		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_updates"].(int64); x != 2 {
+	} else if x := stats["n_updates"].(int64); x != 3 {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_deletes"].(int64); x != 0 {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_reads"].(int64); x != int64(n) {
 		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_clones"].(int64); x != 2 {
+	} else if x := stats["n_clones"].(int64); x != 3 {
 		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_frees"].(int64); x != 2 {
+	} else if x := stats["n_frees"].(int64); x != 3 {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_nodes"].(int64); x != int64(n) {
 		t.Errorf("unexpected %v", x)
