@@ -12,7 +12,9 @@ import "github.com/prataprc/gostore/lib"
 // holds 1-million entries, a fully balanced tree shall have a height of 20
 // levels. maxheight provide some breathing space on top of ideal height.
 func maxheight(entries int64) float64 {
-	if entries < 5 {
+	if entries == 0 {
+		return 0
+	} else if entries < 5 {
 		return (3 * (math.Log2(float64(entries)) + 1)) // 3x breathing space.
 	}
 	return 2 * math.Log2(float64(entries)) // 2x breathing space
