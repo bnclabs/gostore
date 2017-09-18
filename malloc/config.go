@@ -1,9 +1,8 @@
 package malloc
 
 import "unsafe"
-import s "github.com/prataprc/gosettings"
 
-// Alignment blocks and chunks should be multiples of Alignment.
+// Alignment blocks and chunks should be multiples of alignment.
 const Alignment = int64(16)
 
 // MEMUtilization is the ratio between allocated memory to application
@@ -30,14 +29,4 @@ type memoryPools interface {
 
 	// Info return memory accouting for this slab.
 	info() (capacity, heap, alloc, overhead int64)
-}
-
-// Malloc configurable parameters and default settings.
-//
-// "allocator" (string, default: "flist")
-//		Allocater algorithm, should be "flist"
-func Defaultsettings() s.Settings {
-	return s.Settings{
-		"allocator": "flist",
-	}
 }

@@ -34,9 +34,9 @@ type LLRB struct { // tree container
 	// settings
 	keycapacity int64
 	valcapacity int64
+	allocator   string
 	setts       s.Settings
 	logprefix   string
-	// scratch key
 }
 
 // NewLLRB a new instance of in-memory sorted index.
@@ -49,11 +49,8 @@ func NewLLRB(name string, setts s.Settings) *LLRB {
 	llrb.readsettings(setts)
 	llrb.setts = setts
 
-	// setup arena for nodes and node-values.
-	memsetts := setts.Section("nodearena").Trim("nodearena.")
-	llrb.nodearena = malloc.NewArena(llrb.keycapacity, memsetts)
-	memsetts = setts.Section("valarena").Trim("valarena.")
-	llrb.valarena = malloc.NewArena(llrb.valcapacity, memsetts)
+	llrb.nodearena = malloc.NewArena(llrb.keycapacity, llrb.allocator)
+	llrb.valarena = malloc.NewArena(llrb.valcapacity, llrb.allocator)
 
 	// statistics
 	llrb.h_upsertdepth = lib.NewhistorgramInt64(10, 100, 10)
@@ -68,6 +65,7 @@ func NewLLRB(name string, setts s.Settings) *LLRB {
 func (llrb *LLRB) readsettings(setts s.Settings) *LLRB {
 	llrb.keycapacity = setts.Int64("keycapacity")
 	llrb.valcapacity = setts.Int64("valcapacity")
+	llrb.allocator = setts.String("allocator")
 	return llrb
 }
 

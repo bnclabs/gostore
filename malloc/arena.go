@@ -6,7 +6,6 @@ import "unsafe"
 import "errors"
 
 import "github.com/prataprc/gostore/api"
-import s "github.com/prataprc/gosettings"
 
 //#include <stdlib.h>
 import "C"
@@ -31,8 +30,8 @@ type Arena struct {
 }
 
 // NewArena create a new memory arena.
-func NewArena(capacity int64, setts s.Settings) *Arena {
-	arena := (&Arena{capacity: capacity}).readsettings(setts)
+func NewArena(capacity int64, allocator string) *Arena {
+	arena := (&Arena{capacity: capacity, allocator: allocator})
 	arena.slabs = Computeslabs()
 	arena.maxslab = arena.slabs[len(arena.slabs)-1]
 	arena.mpools = make(map[int64]memoryPools)
@@ -62,11 +61,6 @@ func NewArena(capacity int64, setts s.Settings) *Arena {
 		arena.maxchunksSize(capacity, 1024*1024),
 		arena.maxchunksSize(capacity, 16*1024*1024),
 	}
-	return arena
-}
-
-func (arena *Arena) readsettings(setts s.Settings) *Arena {
-	arena.allocator = setts.String("allocator")
 	return arena
 }
 

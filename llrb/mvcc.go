@@ -47,6 +47,7 @@ type MVCC struct {
 	keycapacity int64
 	valcapacity int64
 	snaptick    int64 // mvcc settings
+	allocator   string
 	setts       s.Settings
 	logprefix   string
 }
@@ -67,10 +68,8 @@ func NewMVCC(name string, setts s.Settings) *MVCC {
 	mvcc.setts = setts
 
 	// setup arena for nodes and node-values.
-	memsetts := setts.Section("nodearena").Trim("nodearena.")
-	mvcc.nodearena = malloc.NewArena(mvcc.keycapacity, memsetts)
-	memsetts = setts.Section("valarena").Trim("valarena.")
-	mvcc.valarena = malloc.NewArena(mvcc.valcapacity, memsetts)
+	mvcc.nodearena = malloc.NewArena(mvcc.keycapacity, mvcc.allocator)
+	mvcc.valarena = malloc.NewArena(mvcc.valcapacity, mvcc.allocator)
 
 	// statistics
 	mvcc.snapshot = nil
@@ -95,6 +94,7 @@ func (mvcc *MVCC) readsettings(setts s.Settings) *MVCC {
 	mvcc.keycapacity = setts.Int64("keycapacity")
 	mvcc.valcapacity = setts.Int64("valcapacity")
 	mvcc.snaptick = setts.Int64("snapshottick")
+	mvcc.allocator = setts.String("allocator")
 	return mvcc
 }
 

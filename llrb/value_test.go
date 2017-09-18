@@ -5,15 +5,12 @@ import "bytes"
 import "fmt"
 
 import "github.com/prataprc/gostore/malloc"
-import s "github.com/prataprc/gosettings"
 
 var _ = fmt.Sprintf("dummy")
 
 func TestNodeValue(t *testing.T) {
 	capacity := int64(1024 * 1024 * 1024)
-	marena := malloc.NewArena(capacity, s.Settings{
-		"allocator": "flist",
-	})
+	marena := malloc.NewArena(capacity, "flist")
 	blocksize, value := int64(1024), []byte("hello world")
 
 	ptr := marena.Alloc(blocksize)
@@ -31,9 +28,7 @@ func TestNodeValue(t *testing.T) {
 
 func BenchmarkValueSize(b *testing.B) {
 	capacity := int64(1024 * 1024 * 1024)
-	marena := malloc.NewArena(capacity, s.Settings{
-		"allocator": "flist",
-	})
+	marena := malloc.NewArena(capacity, "flist")
 	blocksize, value := int64(1024), []byte("hello world")
 	ptr := marena.Alloc(blocksize)
 	nv := (*nodevalue)(ptr)
@@ -50,9 +45,7 @@ func BenchmarkValueSize(b *testing.B) {
 
 func BenchmarkSetValue(b *testing.B) {
 	capacity := int64(1024 * 1024 * 1024)
-	marena := malloc.NewArena(capacity, s.Settings{
-		"allocator": "flist",
-	})
+	marena := malloc.NewArena(capacity, "flist")
 	blocksize, value := int64(20*1024), make([]byte, 10*1024)
 	ptr := marena.Alloc(blocksize)
 	nv := (*nodevalue)(ptr)
@@ -68,9 +61,7 @@ func BenchmarkSetValue(b *testing.B) {
 
 func BenchmarkGetValue(b *testing.B) {
 	capacity := int64(1024 * 1024 * 1024)
-	marena := malloc.NewArena(capacity, s.Settings{
-		"allocator": "flist",
-	})
+	marena := malloc.NewArena(capacity, "flist")
 	blocksize, value := int64(20*1024), make([]byte, 10*1024)
 	ptr := marena.Alloc(blocksize)
 	nv := (*nodevalue)(ptr)

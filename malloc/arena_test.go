@@ -6,13 +6,11 @@ import "unsafe"
 import "reflect"
 import "math/rand"
 
-import s "github.com/prataprc/gosettings"
-
 var _ = fmt.Sprintf("dummy")
 
 func TestNewmarena(t *testing.T) {
 	capacity := int64(10 * 1024 * 1024)
-	marena := NewArena(capacity, Defaultsettings())
+	marena := NewArena(capacity, "flist")
 	if x := len(marena.slabs); x != 463 {
 		t.Errorf("expected %v, got %v", 463, x)
 	}
@@ -29,9 +27,7 @@ func TestNewmarena(t *testing.T) {
 			}
 		}()
 		capacity := int64(10 * 1024 * 1024)
-		NewArena(capacity, s.Settings{
-			"allocator": "fbit",
-		})
+		NewArena(capacity, "fbit")
 	}()
 	func() {
 		defer func() {
@@ -40,17 +36,13 @@ func TestNewmarena(t *testing.T) {
 			}
 		}()
 		capacity := Maxarenasize + 1
-		NewArena(capacity, s.Settings{
-			"allocator": "flist",
-		})
+		NewArena(capacity, "flist")
 	}()
 }
 
 func TestArenaAlloc(t *testing.T) {
 	capacity := int64(10 * 1024 * 1024)
-	marena := NewArena(capacity, s.Settings{
-		"allocator": "flist",
-	})
+	marena := NewArena(capacity, "flist")
 	ptrs := make([]unsafe.Pointer, 1024)
 	for i := 0; i < 1024; i++ {
 		ptrs[i] = marena.Alloc(1024)
@@ -93,9 +85,7 @@ func TestArenaAlloc(t *testing.T) {
 
 func TestArenaInfo(t *testing.T) {
 	capacity := int64(10 * 1024 * 1024)
-	marena := NewArena(capacity, s.Settings{
-		"allocator": "flist",
-	})
+	marena := NewArena(capacity, "flist")
 	_, heap, _, overhead := marena.Info()
 	if overhead != 12064 {
 		t.Errorf("unexpected overhead %v", overhead)
@@ -108,27 +98,21 @@ func TestArenaInfo(t *testing.T) {
 func TestArenaMaxchunks(t *testing.T) {
 	// with capacity 1M
 	capacity := int64(1024 * 1024)
-	marena := NewArena(capacity, s.Settings{
-		"allocator": "flist",
-	})
+	marena := NewArena(capacity, "flist")
 	ref := [6]int64{20, 10, 1, 1, 1, -1}
 	if !reflect.DeepEqual(ref, marena.maxchunks) {
 		t.Errorf("expected %v, got %v", ref, marena.maxchunks)
 	}
 	// with capacity 100M
 	capacity = int64(100 * 1024 * 1024)
-	marena = NewArena(capacity, s.Settings{
-		"allocator": "flist",
-	})
+	marena = NewArena(capacity, "flist")
 	ref = [6]int64{1024, 1024, 64, 8, 1, 1}
 	if !reflect.DeepEqual(ref, marena.maxchunks) {
 		t.Errorf("expected %v, got %v", ref, marena.maxchunks)
 	}
 	// with capacity 1T
 	capacity = int64(1024 * 1024 * 1024 * 1024)
-	marena = NewArena(capacity, s.Settings{
-		"allocator": "flist",
-	})
+	marena = NewArena(capacity, "flist")
 	ref = [6]int64{1024, 1024, 1024, 1024, 1024, 655}
 	if !reflect.DeepEqual(ref, marena.maxchunks) {
 		t.Errorf("expected %v, got %v", ref, marena.maxchunks)
@@ -137,9 +121,7 @@ func TestArenaMaxchunks(t *testing.T) {
 
 func TestNumchunks(t *testing.T) {
 	capacity := int64(1024 * 1024 * 1024 * 1024)
-	marena := NewArena(capacity, s.Settings{
-		"allocator": "flist",
-	})
+	marena := NewArena(capacity, "flist")
 	// 100 byte
 	out := []int64{}
 	for npools := 0; npools < 12; npools++ {
@@ -215,19 +197,14 @@ func TestNumchunks(t *testing.T) {
 
 func BenchmarkNewarena(b *testing.B) {
 	capacity := int64(10 * 1024 * 1024)
-	setts := s.Settings{
-		"allocator": "flist",
-	}
 	for i := 0; i < b.N; i++ {
-		NewArena(capacity, setts)
+		NewArena(capacity, "flist")
 	}
 }
 
 func BenchmarkArenaAlloc(b *testing.B) {
 	capacity := int64(100 * 1024 * 1024)
-	marena := NewArena(capacity, s.Settings{
-		"allocator": "flist",
-	})
+	marena := NewArena(capacity, "flist")
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		marena.Alloc(96)
@@ -236,9 +213,7 @@ func BenchmarkArenaAlloc(b *testing.B) {
 
 func BenchmarkArenaFree(b *testing.B) {
 	capacity := int64(100 * 1024 * 1024)
-	marena := NewArena(capacity, s.Settings{
-		"allocator": "flist",
-	})
+	marena := NewArena(capacity, "flist")
 	ptrs := []unsafe.Pointer{}
 	for i := 0; i < b.N; i++ {
 		ptr := marena.Alloc(96)
@@ -252,9 +227,7 @@ func BenchmarkArenaFree(b *testing.B) {
 
 func BenchmarkArenaInfo(b *testing.B) {
 	capacity := int64(10 * 1024 * 1024)
-	marena := NewArena(capacity, s.Settings{
-		"allocator": "flist",
-	})
+	marena := NewArena(capacity, "flist")
 	for i := 0; i < 1024; i++ {
 		marena.Alloc(int64(rand.Intn(1024)))
 	}
