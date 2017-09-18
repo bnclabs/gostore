@@ -19,7 +19,6 @@ type record struct {
 // atomicity on the latest snapshot.
 type Txn struct {
 	id       uint64
-	rw       bool
 	db       interface{}
 	snapshot interface{}
 	tblcrc32 *crc32.Table
@@ -39,7 +38,7 @@ func newtxn(
 	rch chan *record, cch chan *Cursor) *Txn {
 
 	txn := &Txn{
-		id: id, rw: rw, db: db, snapshot: snapshot,
+		id: id, db: db, snapshot: snapshot,
 		recchan: rch, curchan: cch,
 	}
 	if txn.tblcrc32 == nil {
@@ -77,21 +76,22 @@ func (txn *Txn) Commit() error {
 	case *MVCC:
 		return db.commit(txn)
 	}
+	panic("unreachable code")
 }
 
 // Abort transaction, underlying index won't be touched.
 func (txn *Txn) Abort() {
 	switch db := txn.db.(type) {
 	case *LLRB:
-		db.abort(txn)
+		db.aborttxn(txn)
 	case *MVCC:
-		db.abort(txn)
+		db.aborttxn(txn)
 	}
 }
 
 // OpenCursor open an active cursor inside the index.
 func (txn *Txn) OpenCursor(key []byte) *Cursor {
-	cur := txn.getcursor().opencursor(key)
+	cur := txn.getcursor().opencursor(txn, txn.snapshot, key)
 	return cur
 }
 
@@ -213,7 +213,7 @@ func (txn *Txn) getcursor() (cur *Cursor) {
 	select {
 	case cur = <-txn.curchan:
 	default:
-		cur = &Cursor{txn: txn, stack: make([]uintptr, 32)}
+		cur = &Cursor{stack: make([]uintptr, 32)}
 	}
 	cur.stack = cur.stack[:0]
 	return
@@ -279,7 +279,6 @@ func (meta *txnsmeta) gettxn(id uint64, db, snap interface{}) (txn *Txn) {
 }
 
 func (meta *txnsmeta) puttxn(txn *Txn) {
-	// if rw tx.writes won't be empty so release the records.
 	for index, head := range txn.writes { // free all records in this txn.
 		for head != nil {
 			next := head.next

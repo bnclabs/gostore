@@ -1,10 +1,6 @@
 package llrb
 
-import "bytes"
 import "unsafe"
-import "hash/crc32"
-
-import "github.com/prataprc/gostore/lib"
 
 // View transaction definition. Read only version of Txn.
 type View struct {
@@ -36,8 +32,18 @@ func (view *View) ID() uint64 {
 
 // OpenCursor open an active cursor inside the index.
 func (view *View) OpenCursor(key []byte) *Cursor {
-	cur := view.getcursor().opencursor(key)
+	cur := view.getcursor().opencursor(nil, view.snapshot, key)
 	return cur
+}
+
+// Abort view, must be called once done with the view.
+func (view *View) Abort() {
+	switch snap := view.snapshot.(type) {
+	case *LLRB:
+		snap.abortview(view)
+	case *Snapshot:
+		snap.abortview(view)
+	}
 }
 
 //---- Exported Read methods
@@ -64,7 +70,7 @@ func (view *View) getcursor() (cur *Cursor) {
 	select {
 	case cur = <-view.curchan:
 	default:
-		cur = &Cursor{view: view, stack: make([]uintptr, 32)}
+		cur = &Cursor{stack: make([]uintptr, 32)}
 	}
 	cur.stack = cur.stack[:0]
 	return

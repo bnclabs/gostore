@@ -9,19 +9,18 @@ type Cursor struct {
 	stack []uintptr
 }
 
-func (cur *Cursor) opencursor(key []byte) *Cursor {
+func (cur *Cursor) opencursor(txn *Txn, snapshot interface{}, key []byte) *Cursor {
+	cur.txn = txn
+
 	var root *Llrbnode
-	switch db := cur.txn.snapshot.(type) {
+	switch snap := snapshot.(type) {
 	case *LLRB:
-		root = (*Llrbnode)(db.root)
+		root = (*Llrbnode)(snap.root)
+	case *Snapshot:
+		root = (*Llrbnode)(snap.root)
 	}
 	cur.stack = cur.first(root, key, cur.stack)
 	return cur
-}
-
-// Txn return the transaction object backing this cursor.
-func (cur *Cursor) Txn() *Txn {
-	return cur.txn
 }
 
 // Key return current key under the cursor. Returned byte slice will
@@ -75,12 +74,13 @@ func (cur *Cursor) Set(key, value, oldvalue []byte) []byte {
 // Delete is an alias to txn.Delete call. The current position of the
 // cursor does not affect the delete operation.
 func (cur *Cursor) Delete(key, oldvalue []byte, lsm bool) []byte {
-	return cur.Delete(key, oldvalue, lsm)
+	return cur.txn.Delete(key, oldvalue, lsm)
 }
 
 // Delcursor deletes the entry at the cursor.
 func (cur *Cursor) Delcursor(lsm bool) {
-	return cur.Delete(key, oldvalue, lsm)
+	key, _ := cur.Key()
+	cur.txn.Delete(key, nil, lsm)
 }
 
 // YNext can be used for lambda-sort or lambda-get.

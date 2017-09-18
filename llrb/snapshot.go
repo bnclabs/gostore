@@ -106,3 +106,7 @@ func (snap *Snapshot) release() int64 {
 	snap.mvcc.releasesnapshot(snap.next)
 	return refcount
 }
+
+func (snap *Snapshot) abortview(view *View) {
+	snap.mvcc.abortview(view)
+}

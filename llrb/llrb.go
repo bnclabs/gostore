@@ -490,15 +490,11 @@ func (llrb *LLRB) commitrecord(rec *record) error {
 	return nil
 }
 
-func (llrb *LLRB) abort(txn *Txn) error {
+func (llrb *LLRB) aborttxn(txn *Txn) error {
 	llrb.puttxn(txn)
 	llrb.n_aborts++
 	llrb.activetxns--
-	if txn.rw { // BeginTxn
-		llrb.rw.Unlock()
-	} else { // View
-		llrb.rw.RUnlock()
-	}
+	llrb.rw.Unlock()
 	return nil
 }
 
@@ -508,6 +504,13 @@ func (llrb *LLRB) View(id uint64) *View {
 	llrb.n_txns++
 	view := llrb.getview(id, llrb /*db*/, llrb /*snap*/)
 	return view
+}
+
+func (llrb *LLRB) abortview(view *View) error {
+	llrb.putview(view)
+	llrb.activetxns--
+	llrb.rw.RUnlock()
+	return nil
 }
 
 //---- Exported Read methods

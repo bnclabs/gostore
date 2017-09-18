@@ -875,7 +875,7 @@ func (mvcc *MVCC) commitrecord(rec *record) error {
 	return nil
 }
 
-func (mvcc *MVCC) abort(txn *Txn) error {
+func (mvcc *MVCC) aborttxn(txn *Txn) error {
 	mvcc.rw.Lock()
 
 	mvcc.puttxn(txn)
@@ -892,6 +892,15 @@ func (mvcc *MVCC) View(id uint64) *View {
 	mvcc.n_txns++
 	view := mvcc.getview(id, mvcc /*db*/, snapshot /*snap*/)
 	return view
+}
+
+func (mvcc *MVCC) abortview(view *View) {
+	mvcc.rw.Lock()
+
+	mvcc.putview(view)
+	mvcc.activetxns--
+
+	mvcc.rw.Unlock()
 }
 
 //---- Exported Read methods
