@@ -457,7 +457,7 @@ func (llrb *LLRB) BeginTxn(id uint64) *Txn {
 	llrb.rw.Lock()
 	llrb.activetxns++
 	llrb.n_txns++
-	txn := llrb.gettxn(id, true /*rw*/, llrb, llrb)
+	txn := llrb.gettxn(id, llrb /*db*/, llrb /*snap*/)
 	return txn
 }
 
@@ -502,12 +502,12 @@ func (llrb *LLRB) abort(txn *Txn) error {
 	return nil
 }
 
-func (llrb *LLRB) View(id uint64) *Txn {
+func (llrb *LLRB) View(id uint64) *View {
 	llrb.rw.RLock()
 	llrb.activetxns++
 	llrb.n_txns++
-	txn := llrb.gettxn(id, false /*rw*/, llrb, llrb)
-	return txn
+	view := llrb.getview(id, llrb /*db*/, llrb /*snap*/)
+	return view
 }
 
 //---- Exported Read methods

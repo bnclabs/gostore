@@ -36,7 +36,8 @@ const (
 
 func newtxn(
 	id uint64, db, snapshot interface{},
-	rch chan *record, cch chan *Cursor, rw bool) *Txn {
+	rch chan *record, cch chan *Cursor) *Txn {
+
 	txn := &Txn{
 		id: id, rw: rw, db: db, snapshot: snapshot,
 		recchan: rch, curchan: cch,
@@ -183,11 +184,11 @@ func (txn *Txn) Delete(key, oldvalue []byte, lsm bool) []byte {
 //---- local methods
 
 func (txn *Txn) getsnap(key, value []byte) ([]byte, uint64, bool, bool) {
-	switch db := txn.snapshot.(type) {
+	switch snap := txn.snapshot.(type) {
 	case *LLRB:
-		return db.Get(key, value)
+		return snap.Get(key, value)
 	case *Snapshot:
-		return db.Get(key, value)
+		return snap.Get(key, value)
 	}
 	panic("unreachable code")
 }
@@ -253,41 +254,31 @@ func (head *record) prepend(key []byte, node *record) (old, newhead *record) {
 //---- embed
 
 type txnsmeta struct {
-	records chan *record
-	cursors chan *Cursor
-	rotxns  chan *Txn
-	rwtxns  chan *Txn
+	records   chan *record
+	cursors   chan *Cursor
+	txncache  chan *Txn
+	viewcache chan *View
 }
 
-func (txns txnsmeta) inittxns() {
-	txns.records = make(chan *record, 1000) // TODO: no magic number
-	txns.cursors = make(chan *Cursor, 100)  // TODO: no magic number
-	txns.rotxns = make(chan *Txn, 100)      // TODO: no magic number
-	txns.rwtxns = make(chan *Txn, 100)      // TODO: no magic number
+func (meta *txnsmeta) inittxns() {
+	maxtxns := 1000 // TODO: no magic number
+	meta.records = make(chan *record, maxtxns*5)
+	meta.cursors = make(chan *Cursor, maxtxns*2)
+	meta.txncache = make(chan *Txn, maxtxns)
+	meta.viewcache = make(chan *View, maxtxns)
 }
 
-func (txns *txnsmeta) gettxn(
-	id uint64, rw bool, db, snap interface{}) (txn *Txn) {
-
-	if rw {
-		select {
-		case txn = <-txns.rwtxns:
-		default:
-			txn = newtxn(id, db, snap, txns.records, txns.cursors, rw)
-		}
-
-	} else {
-		select {
-		case txn = <-txns.rotxns:
-		default:
-			txn = newtxn(id, db, snap, nil, txns.cursors, rw)
-		}
+func (meta *txnsmeta) gettxn(id uint64, db, snap interface{}) (txn *Txn) {
+	select {
+	case txn = <-meta.txncache:
+	default:
+		txn = newtxn(id, db, snap, meta.records, meta.cursors)
 	}
-	txn.id, txn.rw, txn.db, txn.snapshot = id, rw, db, snap
+	txn.id, txn.db, txn.snapshot = id, db, snap
 	return
 }
 
-func (txns *txnsmeta) puttxn(txn *Txn) {
+func (meta *txnsmeta) puttxn(txn *Txn) {
 	// if rw tx.writes won't be empty so release the records.
 	for index, head := range txn.writes { // free all records in this txn.
 		for head != nil {
@@ -297,21 +288,33 @@ func (txns *txnsmeta) puttxn(txn *Txn) {
 		}
 		delete(txn.writes, index)
 	}
-	// release cursors.
-	for _, cur := range txn.cursors {
+	for _, cur := range txn.cursors { // release cursors.
 		txn.putcursor(cur)
 	}
+	txn.cursors = txn.cursors[:0]
+	select {
+	case meta.txncache <- txn:
+	default: // Left for GC
+	}
+}
 
-	if txn.rw {
-		select {
-		case txns.rwtxns <- txn:
-		default: // Left for GC
-		}
+func (meta *txnsmeta) getview(id uint64, db, snap interface{}) (view *View) {
+	select {
+	case view = <-meta.viewcache:
+	default:
+		view = newview(id, snap, meta.cursors)
+	}
+	view.id, view.snapshot = id, snap
+	return
+}
 
-	} else {
-		select {
-		case txns.rotxns <- txn:
-		default: // Left for GC
-		}
+func (meta *txnsmeta) putview(view *View) {
+	for _, cur := range view.cursors { // release cursors.
+		view.putcursor(cur)
+	}
+	view.cursors = view.cursors[:0]
+	select {
+	case meta.viewcache <- view:
+	default: // Left for GC
 	}
 }

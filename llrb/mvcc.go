@@ -821,7 +821,7 @@ func (mvcc *MVCC) BeginTxn(id uint64) *Txn {
 	snapshot := mvcc.latestsnapshot()
 	mvcc.activetxns++
 	mvcc.n_txns++
-	txn := mvcc.gettxn(id, true /*rw*/, mvcc, snapshot)
+	txn := mvcc.gettxn(id, mvcc /*db*/, snapshot /*snap*/)
 	return txn
 }
 
@@ -886,12 +886,12 @@ func (mvcc *MVCC) abort(txn *Txn) error {
 	return nil
 }
 
-func (mvcc *MVCC) View(id uint64) *Txn {
+func (mvcc *MVCC) View(id uint64) *View {
 	snapshot := mvcc.latestsnapshot()
 	mvcc.activetxns++
 	mvcc.n_txns++
-	txn := mvcc.gettxn(id, false /*rw*/, mvcc, snapshot)
-	return txn
+	view := mvcc.getview(id, mvcc /*db*/, snapshot /*snap*/)
+	return view
 }
 
 //---- Exported Read methods
