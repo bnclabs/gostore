@@ -2,6 +2,8 @@ package llrb
 
 import "unsafe"
 
+// Cursor object maintains an active pointer into index. Use OpenCursor
+// on Txn object to create a new cursor.
 type Cursor struct {
 	txn   *Txn
 	stack []uintptr
@@ -17,10 +19,14 @@ func (cur *Cursor) opencursor(key []byte) *Cursor {
 	return cur
 }
 
+// Txn return the transaction object backing this cursor.
 func (cur *Cursor) Txn() *Txn {
 	return cur.txn
 }
 
+// Key return current key under the cursor. Returned byte slice will
+// be a reference to index-key, hence must not be used after
+// transaction is commited or aborted.
 func (cur *Cursor) Key() (key []byte, deleted bool) {
 	if len(cur.stack) == 0 {
 		return nil, false
@@ -34,6 +40,9 @@ func (cur *Cursor) Key() (key []byte, deleted bool) {
 	return nd.getkey(), nd.isdeleted()
 }
 
+// Value return current value under the cursor. Returned byte slice will
+// be a reference to value in index, hence must not be used after
+// transaction is commited or aborted.
 func (cur *Cursor) Value() []byte {
 	if len(cur.stack) == 0 {
 		return nil
@@ -47,6 +56,9 @@ func (cur *Cursor) Value() []byte {
 	return nd.Value()
 }
 
+// GetNext move cursor to next entry in snapshot and return its key and
+// value. Returned byte slices will be a reference to index entry, hence
+// must not be used after transaction is committed or aborted.
 func (cur *Cursor) GetNext() (key, value []byte, deleted bool) {
 	cur.stack = cur.next(cur.stack)
 	key, deleted = cur.Key()
@@ -54,14 +66,24 @@ func (cur *Cursor) GetNext() (key, value []byte, deleted bool) {
 	return
 }
 
+// Set is an alias to txn.Set call. The current position of the cursor
+// does not affect the set operation.
 func (cur *Cursor) Set(key, value, oldvalue []byte) []byte {
 	return cur.txn.Set(key, value, oldvalue)
 }
 
+// Delete is an alias to txn.Delete call. The current position of the
+// cursor does not affect the delete operation.
 func (cur *Cursor) Delete(key, oldvalue []byte, lsm bool) []byte {
 	return cur.Delete(key, oldvalue, lsm)
 }
 
+// Delcursor deletes the entry at the cursor.
+func (cur *Cursor) Delcursor(lsm bool) {
+	return cur.Delete(key, oldvalue, lsm)
+}
+
+// YNext can be used for lambda-sort or lambda-get.
 func (cur *Cursor) YNext() (key, value []byte, seqno uint64, deleted bool) {
 	cur.stack = cur.next(cur.stack)
 	ptr := cur.stack[len(cur.stack)-1]

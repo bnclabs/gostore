@@ -8,6 +8,28 @@ import "errors"
 import "github.com/prataprc/golog"
 import "github.com/prataprc/gostore/lib"
 
+type llrbstats struct { // TODO: add json tags.
+	n_count   int64 // number of nodes in the tree
+	n_reads   int64
+	n_inserts int64
+	n_updates int64
+	n_deletes int64
+	n_nodes   int64
+	n_frees   int64
+	n_clones  int64
+	n_txns    int64
+	n_commits int64
+	n_aborts  int64
+	keymemory int64 // memory used by all keys
+	valmemory int64 // memory used by all values
+
+	// mvcc statistics
+	n_reclaims  int64
+	n_snapshots int64
+	n_purgedss  int64
+	n_activess  int64
+}
+
 // height of the tree cannot exceed a certain limit. For example if the tree
 // holds 1-million entries, a fully balanced tree shall have a height of 20
 // levels. maxheight provide some breathing space on top of ideal height.

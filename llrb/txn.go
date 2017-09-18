@@ -6,70 +6,17 @@ import "hash/crc32"
 
 import "github.com/prataprc/gostore/lib"
 
-type txnsmeta struct {
-	records chan *record
-	cursors chan *Cursor
-	rotxns  chan *Txn
-	rwtxns  chan *Txn
+type record struct {
+	cmd   byte
+	key   []byte
+	value []byte
+	seqno uint64
+	lsm   bool
+	next  *record
 }
 
-func (txns txnsmeta) inittxns() {
-	txns.records = make(chan *record, 10000) // TODO: no magic number
-	txns.cursors = make(chan *Cursor, 1000)  // TODO: no magic number
-	txns.rotxns = make(chan *Txn, 10000)     // TODO: no magic number
-	txns.rwtxns = make(chan *Txn, 10000)     // TODO: no magic number
-}
-
-func (txns *txnsmeta) gettxn(
-	id uint64, rw bool, db, snap interface{}) (txn *Txn) {
-
-	if rw {
-		select {
-		case txn = <-txns.rwtxns:
-		default:
-			txn = newtxn(id, db, snap, txns.records, txns.cursors, rw)
-		}
-
-	} else {
-		select {
-		case txn = <-txns.rotxns:
-		default:
-			txn = newtxn(id, db, snap, nil, txns.cursors, rw)
-		}
-	}
-	txn.id, txn.rw, txn.db, txn.snapshot = id, rw, db, snap
-	return
-}
-
-func (txns *txnsmeta) puttxn(txn *Txn) {
-	// if rw tx.writes won't be empty so release the records.
-	for index, head := range txn.writes { // free all records in this txn.
-		for head != nil {
-			next := head.next
-			txn.putrecord(head)
-			head = next
-		}
-		delete(txn.writes, index)
-	}
-	// release cursors.
-	for _, cur := range txn.cursors {
-		txn.putcursor(cur)
-	}
-
-	if txn.rw {
-		select {
-		case txns.rwtxns <- txn:
-		default: // Left for GC
-		}
-
-	} else {
-		select {
-		case txns.rotxns <- txn:
-		default: // Left for GC
-		}
-	}
-}
-
+// Txn transaction definition. Transaction gives a gaurantee of isolation and
+// atomicity on the latest snapshot.
 type Txn struct {
 	id       uint64
 	rw       bool
@@ -86,15 +33,6 @@ const (
 	cmdSet byte = iota + 1
 	cmdDelete
 )
-
-type record struct {
-	cmd   byte
-	key   []byte
-	value []byte
-	seqno uint64
-	lsm   bool
-	next  *record
-}
 
 func newtxn(
 	id uint64, db, snapshot interface{},
@@ -127,15 +65,20 @@ func (txn *Txn) ID() uint64 {
 	return txn.id
 }
 
-func (txn *Txn) Commit() {
+// Commit transaction, commit will block until all write operations
+// under the transaction are successfully applied. Return
+// ErrorRollback if ACID properties are not met while applying the
+// write operations.
+func (txn *Txn) Commit() error {
 	switch db := txn.db.(type) {
 	case *LLRB:
-		db.commit(txn)
+		return db.commit(txn)
 	case *MVCC:
-		db.commit(txn)
+		return db.commit(txn)
 	}
 }
 
+// Abort transaction, underlying index won't be touched.
 func (txn *Txn) Abort() {
 	switch db := txn.db.(type) {
 	case *LLRB:
@@ -145,6 +88,7 @@ func (txn *Txn) Abort() {
 	}
 }
 
+// OpenCursor open an active cursor inside the index.
 func (txn *Txn) OpenCursor(key []byte) *Cursor {
 	cur := txn.getcursor().opencursor(key)
 	return cur
@@ -152,6 +96,7 @@ func (txn *Txn) OpenCursor(key []byte) *Cursor {
 
 //---- Exported Read methods
 
+// Get value for key from snapshot.
 func (txn *Txn) Get(key, value []byte) (v []byte, deleted, ok bool) {
 	index := crc32.Checksum(key, txn.tblcrc32)
 	head, _ := txn.writes[index]
@@ -169,6 +114,8 @@ func (txn *Txn) Get(key, value []byte) (v []byte, deleted, ok bool) {
 
 //---- Exported Write methods
 
+// Set an entry of key, value pair. The set operation will be remembered
+// as a log entry and applied on the underlying structure during Commit.
 func (txn *Txn) Set(key, value, oldvalue []byte) []byte {
 	var seqno uint64
 	var deleted bool
@@ -200,6 +147,8 @@ func (txn *Txn) Set(key, value, oldvalue []byte) []byte {
 	return oldvalue
 }
 
+// Delete key from index. The Delete operation will be remembered as a log
+// entry and applied on the underlying structure during commit.
 func (txn *Txn) Delete(key, oldvalue []byte, lsm bool) []byte {
 	var deleted bool
 	var seqno uint64
@@ -299,4 +248,70 @@ func (head *record) prepend(key []byte, node *record) (old, newhead *record) {
 	parent, old = head.get(key)
 	parent.next, node.next = node, old
 	return old, head
+}
+
+//---- embed
+
+type txnsmeta struct {
+	records chan *record
+	cursors chan *Cursor
+	rotxns  chan *Txn
+	rwtxns  chan *Txn
+}
+
+func (txns txnsmeta) inittxns() {
+	txns.records = make(chan *record, 1000) // TODO: no magic number
+	txns.cursors = make(chan *Cursor, 100)  // TODO: no magic number
+	txns.rotxns = make(chan *Txn, 100)      // TODO: no magic number
+	txns.rwtxns = make(chan *Txn, 100)      // TODO: no magic number
+}
+
+func (txns *txnsmeta) gettxn(
+	id uint64, rw bool, db, snap interface{}) (txn *Txn) {
+
+	if rw {
+		select {
+		case txn = <-txns.rwtxns:
+		default:
+			txn = newtxn(id, db, snap, txns.records, txns.cursors, rw)
+		}
+
+	} else {
+		select {
+		case txn = <-txns.rotxns:
+		default:
+			txn = newtxn(id, db, snap, nil, txns.cursors, rw)
+		}
+	}
+	txn.id, txn.rw, txn.db, txn.snapshot = id, rw, db, snap
+	return
+}
+
+func (txns *txnsmeta) puttxn(txn *Txn) {
+	// if rw tx.writes won't be empty so release the records.
+	for index, head := range txn.writes { // free all records in this txn.
+		for head != nil {
+			next := head.next
+			txn.putrecord(head)
+			head = next
+		}
+		delete(txn.writes, index)
+	}
+	// release cursors.
+	for _, cur := range txn.cursors {
+		txn.putcursor(cur)
+	}
+
+	if txn.rw {
+		select {
+		case txns.rwtxns <- txn:
+		default: // Left for GC
+		}
+
+	} else {
+		select {
+		case txns.rotxns <- txn:
+		default: // Left for GC
+		}
+	}
 }

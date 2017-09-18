@@ -16,29 +16,7 @@ import "github.com/prataprc/golog"
 import s "github.com/prataprc/gosettings"
 import humanize "github.com/dustin/go-humanize"
 
-type llrbstats struct { // TODO: add json tags.
-	n_count   int64 // number of nodes in the tree
-	n_reads   int64
-	n_inserts int64
-	n_updates int64
-	n_deletes int64
-	n_nodes   int64
-	n_frees   int64
-	n_clones  int64
-	n_txns    int64
-	n_commits int64
-	n_aborts  int64
-	keymemory int64 // memory used by all keys
-	valmemory int64 // memory used by all values
-
-	// mvcc statistics
-	n_reclaims  int64
-	n_snapshots int64
-	n_purgedss  int64
-	n_activess  int64
-}
-
-// LLRB manage a single instance of in-memory sorted index using
+// LLRB to manage a single instance of in-memory sorted index using
 // left-leaning-red-black tree.
 type LLRB struct { // tree container
 	llrbstats            // 64-bit aligned snapshot statistics.
@@ -174,8 +152,8 @@ func (llrb *LLRB) delcounts(nd *Llrbnode) {
 //---- Exported Write methods
 
 // Set a key, value pair in the index, if key is already present,
-// its value will be over-written. Make sure that key is not nil.
-// Return old value.
+// its value will be over-written. Make sure key is not nil.
+// Return old value if oldvalue is not nil.
 func (llrb *LLRB) Set(key, value, oldvalue []byte) ([]byte, uint64) {
 	llrb.rw.Lock()
 	llrb.seqno++
@@ -247,9 +225,9 @@ func (llrb *LLRB) upsert(
 }
 
 // SetCAS a key, value pair in the index, if CAS is ZERO then key
-// should be present in the index, otherwise existing CAS should
-// match the supplied CAS. Value will be over-written. Make sure that
-// key is not nil. Return old value.
+// should not be present in the index, otherwise existing CAS should
+// match the supplied CAS. Value will be over-written. Make sure
+// key is not nil. Return old value if oldvalue is not nil.
 func (llrb *LLRB) SetCAS(
 	key, value, oldvalue []byte, cas uint64) ([]byte, uint64, error) {
 
@@ -516,9 +494,9 @@ func (llrb *LLRB) abort(txn *Txn) error {
 	llrb.puttxn(txn)
 	llrb.n_aborts++
 	llrb.activetxns--
-	if txn.rw {
+	if txn.rw { // BeginTxn
 		llrb.rw.Unlock()
-	} else {
+	} else { // View
 		llrb.rw.RUnlock()
 	}
 	return nil
