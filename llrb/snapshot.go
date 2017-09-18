@@ -9,19 +9,21 @@ import "sync/atomic"
 
 import "github.com/prataprc/gostore/lib"
 
-type Snapshot struct {
+// mvccsnapshot refers to MVCC snapshot of LLRB tree. Snapshots
+// can be used for concurrent reads.
+type mvccsnapshot struct {
 	mvcc      *MVCC
 	root      *Llrbnode
-	next      *Snapshot
+	next      *mvccsnapshot
 	reclaims  []*Llrbnode
 	refcount  int64
 	n_count   int64
 	logprefix []byte
 }
 
-func (snap *Snapshot) initsnapshot(mvcc *MVCC) *Snapshot {
+func (snap *mvccsnapshot) initsnapshot(mvcc *MVCC) *mvccsnapshot {
 	snap.mvcc, snap.root = mvcc, (*Llrbnode)(mvcc.root)
-	snap.next = (*Snapshot)(mvcc.snapshot)
+	snap.next = (*mvccsnapshot)(mvcc.snapshot)
 	snap.refcount, snap.n_count = 0, mvcc.Count()
 
 	if cap(snap.reclaims) < len(mvcc.reclaims) {
@@ -41,11 +43,14 @@ func (snap *Snapshot) initsnapshot(mvcc *MVCC) *Snapshot {
 
 //---- Exported Control methods
 
-func (snap *Snapshot) ID() string {
+// ID return unique id for snapshot.
+func (snap *mvccsnapshot) id() string {
 	return fmt.Sprintf("%p", snap.root)
 }
 
-func (snap *Snapshot) Dotdump(buffer io.Writer) {
+// Dotdump to convert whole tree into dot script that can be
+// visualized using graphviz.
+func (snap *mvccsnapshot) dotdump(buffer io.Writer) {
 	lines := []string{
 		"digraph llrb {",
 		"  node[shape=record];\n",
@@ -56,13 +61,19 @@ func (snap *Snapshot) Dotdump(buffer io.Writer) {
 	buffer.Write([]byte(lines[len(lines)-1]))
 }
 
-func (snap *Snapshot) Count() int64 {
+// Count return the number of items indexed in snapshot.
+func (snap *mvccsnapshot) count() int64 {
 	return snap.n_count
 }
 
 //---- Exported Read methods
 
-func (snap *Snapshot) Get(key, value []byte) ([]byte, uint64, bool, bool) {
+// Get value for key, if value argument is not nil it will be used to copy the
+// entry's value. Also returns entry's cas, whether entry is marked as deleted
+// by LSM. If ok is false, then key is not found.
+func (snap *mvccsnapshot) get(
+	key, value []byte) (v []byte, cas uint64, deleted bool, ok bool) {
+
 	deleted, seqno := false, uint64(0)
 	nd, ok := snap.getkey(snap.root, key)
 	if ok {
@@ -78,7 +89,7 @@ func (snap *Snapshot) Get(key, value []byte) ([]byte, uint64, bool, bool) {
 	return value, seqno, deleted, ok
 }
 
-func (snap *Snapshot) getkey(nd *Llrbnode, k []byte) (*Llrbnode, bool) {
+func (snap *mvccsnapshot) getkey(nd *Llrbnode, k []byte) (*Llrbnode, bool) {
 	for nd != nil {
 		if nd.gtkey(k, false) {
 			nd = nd.left
@@ -93,20 +104,20 @@ func (snap *Snapshot) getkey(nd *Llrbnode, k []byte) (*Llrbnode, bool) {
 
 //---- local methods
 
-func (snap *Snapshot) getref() int64 {
+func (snap *mvccsnapshot) getref() int64 {
 	return atomic.LoadInt64(&snap.refcount)
 }
 
-func (snap *Snapshot) refer() int64 {
+func (snap *mvccsnapshot) refer() int64 {
 	return atomic.AddInt64(&snap.refcount, 1)
 }
 
-func (snap *Snapshot) release() int64 {
+func (snap *mvccsnapshot) release() int64 {
 	refcount := atomic.AddInt64(&snap.refcount, -1)
 	snap.mvcc.releasesnapshot(snap.next)
 	return refcount
 }
 
-func (snap *Snapshot) abortview(view *View) {
+func (snap *mvccsnapshot) abortview(view *View) {
 	snap.mvcc.abortview(view)
 }

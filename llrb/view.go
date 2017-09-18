@@ -16,7 +16,7 @@ func newview(id uint64, snapshot interface{}, cch chan *Cursor) *View {
 		switch snap := view.snapshot.(type) {
 		case *LLRB:
 			view.id = (uint64)((uintptr)(unsafe.Pointer(snap.root)))
-		case *Snapshot:
+		case *mvccsnapshot:
 			view.id = (uint64)((uintptr)(unsafe.Pointer(snap.root)))
 		}
 	}
@@ -41,7 +41,7 @@ func (view *View) Abort() {
 	switch snap := view.snapshot.(type) {
 	case *LLRB:
 		snap.abortview(view)
-	case *Snapshot:
+	case *mvccsnapshot:
 		snap.abortview(view)
 	}
 }
@@ -60,8 +60,8 @@ func (view *View) getsnap(key, value []byte) ([]byte, uint64, bool, bool) {
 	switch snap := view.snapshot.(type) {
 	case *LLRB:
 		return snap.Get(key, value)
-	case *Snapshot:
-		return snap.Get(key, value)
+	case *mvccsnapshot:
+		return snap.get(key, value)
 	}
 	panic("unreachable code")
 }

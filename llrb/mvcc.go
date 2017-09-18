@@ -34,14 +34,14 @@ type MVCC struct {
 	txnsmeta
 
 	// mvcc fields
-	snapshot   unsafe.Pointer // *Snapshot
+	snapshot   unsafe.Pointer // *mvccsnapshot
 	reclaims   []*Llrbnode
 	h_bulkfree *lib.HistogramInt64
 	h_reclaims *lib.HistogramInt64
 	h_versions *lib.HistogramInt64
 	// cache
 	reclaim   []*Llrbnode
-	snapcache chan *Snapshot
+	snapcache chan *mvccsnapshot
 
 	// settings
 	keycapacity int64
@@ -59,7 +59,7 @@ func NewMVCC(name string, setts s.Settings) *MVCC {
 		triggch:   make(chan bool, 1),
 		finch:     make(chan struct{}),
 		logprefix: fmt.Sprintf("MVCC [%s]", name),
-		snapcache: make(chan *Snapshot, 32),
+		snapcache: make(chan *mvccsnapshot, 32),
 	}
 	mvcc.inittxns()
 
@@ -210,10 +210,19 @@ func (mvcc *MVCC) logarenasettings() {
 
 //---- Exported Control methods
 
+// ID is same as the name supplied while creating the MVCC instance.
 func (mvcc *MVCC) ID() string {
 	return mvcc.name
 }
 
+// Count return the number of items indexed.
+func (mvcc *MVCC) Count() int64 {
+	return atomic.LoadInt64(&mvcc.n_count)
+}
+
+// Dotdump to convert whole tree into dot script that can be
+// visualized using graphviz. Until dotdump exits concurrent write
+// operations will block.
 func (mvcc *MVCC) Dotdump(buffer io.Writer) {
 	lines := []string{
 		"digraph llrb {",
@@ -227,10 +236,8 @@ func (mvcc *MVCC) Dotdump(buffer io.Writer) {
 	mvcc.rw.RUnlock()
 }
 
-func (mvcc *MVCC) Count() int64 {
-	return atomic.LoadInt64(&mvcc.n_count)
-}
-
+// Stats return a map of data-structure statistics and operational
+// statistics.
 func (mvcc *MVCC) Stats() map[string]interface{} {
 	mvcc.rw.RLock()
 
@@ -278,6 +285,8 @@ func (mvcc *MVCC) Stats() map[string]interface{} {
 	return m
 }
 
+// Validate data structure. This is a costly operation, walks
+// through the entire tree and holds a read lock while doing so.
 func (mvcc *MVCC) Validate() {
 	stats := mvcc.Stats()
 
@@ -351,13 +360,14 @@ func (mvcc *MVCC) validatestats(stats map[string]interface{}) {
 
 // return the sum of all nodes that needs to be reclaimed from snapshots.
 func (mvcc *MVCC) countreclaimnodes() (total int64) {
-	snapshot := (*Snapshot)(mvcc.snapshot)
+	snapshot := (*mvccsnapshot)(mvcc.snapshot)
 	for ; snapshot != nil; snapshot = snapshot.next {
 		total += int64(len(snapshot.reclaims))
 	}
 	return total
 }
 
+// Log vital information.
 func (mvcc *MVCC) Log() {
 	mvcc.rw.RLock()
 
@@ -407,8 +417,10 @@ func (mvcc *MVCC) Log() {
 	mvcc.rw.RUnlock()
 }
 
+// Clone mvcc instance and return the clone. Clone walks the entire
+// tree and concurrent reads and writes will block until call returns.
 func (mvcc *MVCC) Clone(name string) *MVCC {
-	mvcc.rw.Lock() // TODO: should we use RLock() ??
+	mvcc.rw.Lock()
 
 	newmvcc := NewMVCC(mvcc.name, mvcc.setts)
 	newmvcc.llrbstats = mvcc.llrbstats
@@ -437,6 +449,8 @@ func (mvcc *MVCC) clonetree(nd *Llrbnode) *Llrbnode {
 	return newnd
 }
 
+// Destroy releases all resources held by the tree. No other
+// method call are allowed after Destroy.
 func (mvcc *MVCC) Destroy() {
 	close(mvcc.finch) // close housekeeping routine
 	time.Sleep(time.Duration(mvcc.snaptick+10) * time.Millisecond)
@@ -450,7 +464,7 @@ func (mvcc *MVCC) destroy() bool {
 	mvcc.rw.Lock()
 	defer mvcc.rw.Unlock()
 
-	snapshot := (*Snapshot)(mvcc.snapshot)
+	snapshot := (*mvccsnapshot)(mvcc.snapshot)
 	if snapshot != nil {
 		if snapshot.getref() > 0 {
 			return false
@@ -472,7 +486,10 @@ func (mvcc *MVCC) destroy() bool {
 
 //---- Exported Write methods
 
-func (mvcc *MVCC) Set(key, value, oldvalue []byte) ([]byte, uint64) {
+// Set a key, value pair in the index, if key is already present,
+// its value will be over-written. Make sure key is not nil.
+// Return old value if oldvalue is not nil.
+func (mvcc *MVCC) Set(key, value, oldvalue []byte) (ov []byte, cas uint64) {
 	var newnd, oldnd *Llrbnode
 
 	mvcc.rw.Lock()
@@ -552,6 +569,10 @@ func (mvcc *MVCC) upsert(
 	return ndmvcc, newnd, oldnd, reclaim
 }
 
+// SetCAS a key, value pair in the index, if CAS is ZERO then key
+// should not be present in the index, otherwise existing CAS should
+// match the supplied CAS. Value will be over-written. Make sure
+// key is not nil. Return old value if oldvalue is not nil.
 func (mvcc *MVCC) SetCAS(
 	key, value, oldvalue []byte, cas uint64) ([]byte, uint64, error) {
 
@@ -662,6 +683,10 @@ func (mvcc *MVCC) upsertcas(
 	return ndmvcc, newnd, oldnd, reclaim, err
 }
 
+// Delete key from index. Key should not be nil, if key is found
+// return its value. If lsm is true, then don't delete the node
+// instead mark the node as deleted. Again, if lsm is true
+// but key is not found in index a new entry will be inserted.
 func (mvcc *MVCC) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 	var root, newnd, oldnd, deleted *Llrbnode
 
@@ -817,6 +842,11 @@ func (mvcc *MVCC) deletemin(
 	return ndmvcc, deleted, reclaim
 }
 
+// BeginTxn starts a read-write transaction. All transactions should either
+// be committed or aborted. Every transaction holds on to a MVCC snapshot.
+// If transactions are not released for long time accumulating too many
+// background mutations, it will increase the memory pressure on the system.
+// Concurrent transactions are allowed.
 func (mvcc *MVCC) BeginTxn(id uint64) *Txn {
 	snapshot := mvcc.latestsnapshot()
 	mvcc.activetxns++
@@ -886,6 +916,8 @@ func (mvcc *MVCC) aborttxn(txn *Txn) error {
 	return nil
 }
 
+// View starts a read-only transaction. Other than that it is similar
+// to BeginTxn. All view transactions should be aborted.
 func (mvcc *MVCC) View(id uint64) *View {
 	snapshot := mvcc.latestsnapshot()
 	mvcc.activetxns++
@@ -905,11 +937,14 @@ func (mvcc *MVCC) abortview(view *View) {
 
 //---- Exported Read methods
 
+// Get value for key, if value argument is not nil it will be used to copy the
+// entry's value. Also returns entry's cas, whether entry is marked as deleted
+// by LSM. If ok is false, then key is not found.
 func (mvcc *MVCC) Get(
 	key, value []byte) (v []byte, cas uint64, deleted, ok bool) {
 
 	snapshot := mvcc.latestsnapshot()
-	v, cas, deleted, ok = snapshot.Get(key, value)
+	v, cas, deleted, ok = snapshot.get(key, value)
 	snapshot.release()
 	return
 }
@@ -1069,9 +1104,9 @@ func (mvcc *MVCC) makesnapshot() {
 	mvcc.rw.Unlock()
 }
 
-func (mvcc *MVCC) latestsnapshot() *Snapshot {
+func (mvcc *MVCC) latestsnapshot() *mvccsnapshot {
 	mvcc.rw.RLock()
-	snapshot := (*Snapshot)(mvcc.snapshot)
+	snapshot := (*mvccsnapshot)(mvcc.snapshot)
 	if snapshot != nil {
 		snapshot.refer()
 	}
@@ -1079,13 +1114,13 @@ func (mvcc *MVCC) latestsnapshot() *Snapshot {
 	return snapshot
 }
 
-func (mvcc *MVCC) releasesnapshot(snapshot *Snapshot) {
+func (mvcc *MVCC) releasesnapshot(snapshot *mvccsnapshot) {
 	mvcc.rw.Lock()
 	mvcc.purgesnapshot(snapshot)
 	mvcc.rw.Unlock()
 }
 
-func (mvcc *MVCC) purgesnapshot(snapshot *Snapshot) bool {
+func (mvcc *MVCC) purgesnapshot(snapshot *mvccsnapshot) bool {
 	if snapshot == nil {
 		return true
 	}
@@ -1103,20 +1138,20 @@ func (mvcc *MVCC) purgesnapshot(snapshot *Snapshot) bool {
 	mvcc.n_activess--
 	mvcc.n_purgedss++
 	mvcc.putsnapshot(snapshot)
-	log.Debugf("%s snapshot %s PURGED...\n", mvcc.logprefix, snapshot.ID())
+	log.Debugf("%s snapshot %s PURGED...\n", mvcc.logprefix, snapshot.id())
 	return true
 }
 
-func (mvcc *MVCC) getsnapshot() (snapshot *Snapshot) {
+func (mvcc *MVCC) getsnapshot() (snapshot *mvccsnapshot) {
 	select {
 	case snapshot = <-mvcc.snapcache:
 	default:
-		snapshot = &Snapshot{}
+		snapshot = &mvccsnapshot{}
 	}
 	return
 }
 
-func (mvcc *MVCC) putsnapshot(snapshot *Snapshot) {
+func (mvcc *MVCC) putsnapshot(snapshot *mvccsnapshot) {
 	select {
 	case mvcc.snapcache <- snapshot:
 	default: // Leave it for GC.

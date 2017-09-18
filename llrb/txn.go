@@ -51,7 +51,7 @@ func newtxn(
 		switch snap := txn.snapshot.(type) {
 		case *LLRB:
 			txn.id = (uint64)((uintptr)(unsafe.Pointer(snap.root)))
-		case *Snapshot:
+		case *mvccsnapshot:
 			txn.id = (uint64)((uintptr)(unsafe.Pointer(snap.root)))
 		}
 	}
@@ -68,7 +68,7 @@ func (txn *Txn) ID() uint64 {
 // Commit transaction, commit will block until all write operations
 // under the transaction are successfully applied. Return
 // ErrorRollback if ACID properties are not met while applying the
-// write operations.
+// write operations. Transactions are never partially committed.
 func (txn *Txn) Commit() error {
 	switch db := txn.db.(type) {
 	case *LLRB:
@@ -187,8 +187,8 @@ func (txn *Txn) getsnap(key, value []byte) ([]byte, uint64, bool, bool) {
 	switch snap := txn.snapshot.(type) {
 	case *LLRB:
 		return snap.Get(key, value)
-	case *Snapshot:
-		return snap.Get(key, value)
+	case *mvccsnapshot:
+		return snap.get(key, value)
 	}
 	panic("unreachable code")
 }

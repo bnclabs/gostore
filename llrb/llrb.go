@@ -152,7 +152,7 @@ func (llrb *LLRB) delcounts(nd *Llrbnode) {
 // Set a key, value pair in the index, if key is already present,
 // its value will be over-written. Make sure key is not nil.
 // Return old value if oldvalue is not nil.
-func (llrb *LLRB) Set(key, value, oldvalue []byte) ([]byte, uint64) {
+func (llrb *LLRB) Set(key, value, oldvalue []byte) (ov []byte, cas uint64) {
 	llrb.rw.Lock()
 	llrb.seqno++
 
@@ -326,9 +326,9 @@ func (llrb *LLRB) upsertcas(
 	return nd, newnd, oldnd, err
 }
 
-// Delete key from index. Key should not be nil and if key found,
+// Delete key from index. Key should not be nil, if is key found
 // return its value. If lsm is true, then don't delete the node
-// instead simply mark the node as deleted. Again, if lsm is true
+// instead mark the node as deleted. Again, if lsm is true
 // but key is not found in index a new entry will inserted.
 func (llrb *LLRB) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 	llrb.rw.Lock()
@@ -451,6 +451,9 @@ func (llrb *LLRB) deletemin(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 	return llrb.fixup(nd), deleted
 }
 
+// BeginTxn starts a read-write transaction. All transactions should either
+// be commited or aborted. Structure will be locked, no other read or write
+// operation can be performed, until transaction is committed or aborted.
 func (llrb *LLRB) BeginTxn(id uint64) *Txn {
 	llrb.rw.Lock()
 	llrb.activetxns++
@@ -496,6 +499,9 @@ func (llrb *LLRB) aborttxn(txn *Txn) error {
 	return nil
 }
 
+// View start a read only transactions. Structure will be read-locked,
+// no other write operations can be performed, until transaction is
+// committed or aborted. Concurrent reads are still allowed.
 func (llrb *LLRB) View(id uint64) *View {
 	llrb.rw.RLock()
 	llrb.activetxns++
@@ -554,16 +560,19 @@ func (llrb *LLRB) getkey(nd *Llrbnode, k []byte) (*Llrbnode, bool) {
 
 //---- Exported Control methods
 
+// ID is same as the name supplied while creating the LLRB instance.
 func (llrb *LLRB) ID() string {
 	return llrb.name
 }
 
+// Count return the number of items indexed.
 func (llrb *LLRB) Count() int64 {
 	return atomic.LoadInt64(&llrb.n_count)
 }
 
 // Dotdump to convert whole tree into dot script that can be
-// visualized using graphviz.
+// visualized using graphviz. Until dotdump exits concurrent write
+// operations will block.
 func (llrb *LLRB) Dotdump(buffer io.Writer) {
 	lines := []string{
 		"digraph llrb {",
@@ -707,7 +716,7 @@ func (llrb *LLRB) Log() {
 	llrb.rw.RUnlock()
 }
 
-// Clone llrb instance and return the cloned instance.
+// Clone llrb instance and return the clone.
 func (llrb *LLRB) Clone(name string) *LLRB {
 	llrb.rw.Lock()
 

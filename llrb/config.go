@@ -14,11 +14,11 @@ import "github.com/cloudfoundry/gosigar"
 //		(avgvalsize / (avgkeysize+avgvalsize)) * freeRAM
 //
 // "snapshottick" (int64, default: 1)
-//		Used only in MVCC, time period in millisecond, for generating
+//      Used only in MVCC, time period in millisecond, for generating
 //      read-snapshots.
 //
 // "allocator" (string, default: "flist")
-//		Type of allocator to use.
+//      Type of allocator to use.
 //
 func Defaultsettings() s.Settings {
 	ramsize, _, _ := getsysmem()
