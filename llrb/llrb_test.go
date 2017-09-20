@@ -5,6 +5,7 @@ import "bytes"
 import "testing"
 import "io/ioutil"
 import "encoding/json"
+import "encoding/binary"
 
 import "github.com/prataprc/gostore/lib"
 
@@ -1012,6 +1013,143 @@ func TestLLRBViewCursor(t *testing.T) {
 	}
 }
 
+func BenchmarkLLRBCount(b *testing.B) {
+	llrb := makeBenchLLRB(1000)
+	defer llrb.Destroy()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		llrb.Count()
+	}
+}
+
+func BenchmarkLLRBSet(b *testing.B) {
+	var scratch [8]byte
+
+	setts := s.Settings{
+		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
+	}
+	llrb := NewLLRB("bench", setts)
+	defer llrb.Destroy()
+
+	b.ResetTimer()
+	k, v := []byte("key000000000000"), []byte("val00000000000000")
+	for i := 0; i < b.N; i++ {
+		binary.BigEndian.PutUint64(scratch[:], uint64(i+1))
+		key, val := append(k[:3], scratch[:]...), append(v[:3], scratch[:]...)
+		llrb.Set(key, val, nil)
+	}
+}
+
+func BenchmarkLLRBCAS(b *testing.B) {
+	var scratch [8]byte
+
+	setts := s.Settings{
+		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
+	}
+	llrb := NewLLRB("bench", setts)
+	defer llrb.Destroy()
+
+	b.ResetTimer()
+	k, v := []byte("key000000000000"), []byte("val00000000000000")
+	for i := 0; i < b.N; i++ {
+		binary.BigEndian.PutUint64(scratch[:], uint64(i+1))
+		key, val := append(k[:3], scratch[:]...), append(v[:3], scratch[:]...)
+		llrb.SetCAS(key, val, nil, 0)
+	}
+}
+
+func BenchmarkLLRBDel(b *testing.B) {
+	var scratch [8]byte
+
+	llrb := makeBenchLLRB(b.N)
+	defer llrb.Destroy()
+
+	b.ResetTimer()
+	k := []byte("key000000000000")
+	for i := 0; i < b.N; i++ {
+		binary.BigEndian.PutUint64(scratch[:], uint64(i+1))
+		key := append(k[:3], scratch[:]...)
+		llrb.Delete(key, nil, false /*lsm*/)
+	}
+}
+
+func BenchmarkLLRBDelLSM(b *testing.B) {
+	var scratch [8]byte
+
+	llrb := makeBenchLLRB(b.N)
+	defer llrb.Destroy()
+
+	b.ResetTimer()
+	k := []byte("key000000000000")
+	for i := 0; i < b.N; i++ {
+		binary.BigEndian.PutUint64(scratch[:], uint64(i+1))
+		key := append(k[:3], scratch[:]...)
+		llrb.Delete(key, nil, true /*lsm*/)
+	}
+}
+
+func BenchmarkLLRBGet(b *testing.B) {
+	var scratch [8]byte
+
+	llrb := makeBenchLLRB(b.N)
+	defer llrb.Destroy()
+
+	b.ResetTimer()
+	k := []byte("key000000000000")
+	for i := 0; i < b.N; i++ {
+		binary.BigEndian.PutUint64(scratch[:], uint64(i+1))
+		key := append(k[:3], scratch[:]...)
+		llrb.Get(key, nil)
+	}
+}
+
+func BenchmarkLLRBTxn(b *testing.B) {
+	llrb := makeBenchLLRB(1000)
+	defer llrb.Destroy()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		txn := llrb.BeginTxn(0)
+		txn.Commit()
+	}
+}
+
+func BenchmarkLLRBClone(b *testing.B) {
+	llrb := makeBenchLLRB(b.N)
+	defer llrb.Destroy()
+
+	b.ResetTimer()
+	llrb.Clone("benchclone")
+}
+
+func BenchmarkLLRBView(b *testing.B) {
+	llrb := makeBenchLLRB(1000)
+	defer llrb.Destroy()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		txn := llrb.View(0)
+		txn.Abort()
+	}
+}
+
+func makeBenchLLRB(n int) *LLRB {
+	var scratch [8]byte
+
+	setts := s.Settings{
+		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
+	}
+	llrb := NewLLRB("bench", setts)
+	k, v := []byte("key000000000000"), []byte("val00000000000000")
+	for i := 0; i < n; i++ {
+		binary.BigEndian.PutUint64(scratch[:], uint64(i+1))
+		key, val := append(k[:3], scratch[:]...), append(v[:3], scratch[:]...)
+		llrb.Set(key, val, nil)
+	}
+	return llrb
+}
+
 func nodeutz(stats map[string]interface{}) float64 {
 	heap := stats["node.heap"].(int64)
 	used := stats["node.alloc"].(int64)
@@ -1032,16 +1170,6 @@ func printstats(stats map[string]interface{}) {
 		panic(err)
 	}
 	fmt.Printf("%s\n", data)
-}
-
-func init() {
-	setts := map[string]interface{}{
-		"log.level":      "ignore",
-		"log.colorfatal": "red",
-		"log.colorerror": "hired",
-		"log.colorwarn":  "yellow",
-	}
-	log.SetLogger(nil, setts)
 }
 
 func testgetnext(t *testing.T, cur *Cursor, from int, keys, vals []string) {
@@ -1098,4 +1226,14 @@ func testynext(t *testing.T, cur *Cursor, from int, keys, vals []string) {
 	if i != len(keys) {
 		t.Errorf("iterated till %v", i)
 	}
+}
+
+func init() {
+	setts := map[string]interface{}{
+		"log.level":      "ignore",
+		"log.colorfatal": "red",
+		"log.colorerror": "hired",
+		"log.colorwarn":  "yellow",
+	}
+	log.SetLogger(nil, setts)
 }
