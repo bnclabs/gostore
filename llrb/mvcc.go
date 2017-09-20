@@ -249,7 +249,6 @@ func (mvcc *MVCC) Stats() map[string]interface{} {
 	m["n_nodes"] = mvcc.n_nodes
 	m["n_frees"] = mvcc.n_frees
 	m["n_clones"] = mvcc.n_clones
-	m["n_reads"] = mvcc.n_reads
 	m["n_txns"] = mvcc.n_txns
 	m["n_commits"] = mvcc.n_commits
 	m["n_aborts"] = mvcc.n_aborts

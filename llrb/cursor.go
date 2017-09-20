@@ -1,6 +1,9 @@
 package llrb
 
+import "fmt"
 import "unsafe"
+
+var _ = fmt.Sprintf("")
 
 // Cursor object maintains an active pointer into index. Use OpenCursor
 // on Txn object to create a new cursor.
@@ -31,10 +34,6 @@ func (cur *Cursor) Key() (key []byte, deleted bool) {
 		return nil, false
 	}
 	ptr := cur.stack[len(cur.stack)-1]
-	if ptr == 0 {
-		cur.stack = cur.next(cur.stack)
-		ptr = cur.stack[len(cur.stack)-1]
-	}
 	nd := (*Llrbnode)(unsafe.Pointer(ptr & (^uintptr(0x3))))
 	return nd.getkey(), nd.isdeleted()
 }
@@ -47,10 +46,6 @@ func (cur *Cursor) Value() []byte {
 		return nil
 	}
 	ptr := cur.stack[len(cur.stack)-1]
-	if ptr == 0 {
-		cur.stack = cur.next(cur.stack)
-		ptr = cur.stack[len(cur.stack)-1]
-	}
 	nd := (*Llrbnode)(unsafe.Pointer(ptr & (^uintptr(0x3))))
 	return nd.Value()
 }
@@ -59,7 +54,14 @@ func (cur *Cursor) Value() []byte {
 // value. Returned byte slices will be a reference to index entry, hence
 // must not be used after transaction is committed or aborted.
 func (cur *Cursor) GetNext() (key, value []byte, deleted bool) {
+	//fmt.Println(cur.stack)
+	if len(cur.stack) == 0 {
+		return nil, nil, false
+	}
 	cur.stack = cur.next(cur.stack)
+	if len(cur.stack) == 0 {
+		return nil, nil, false
+	}
 	key, deleted = cur.Key()
 	value = cur.Value()
 	return
@@ -85,7 +87,13 @@ func (cur *Cursor) Delcursor(lsm bool) {
 
 // YNext can be used for lambda-sort or lambda-get.
 func (cur *Cursor) YNext() (key, value []byte, seqno uint64, deleted bool) {
+	if len(cur.stack) == 0 {
+		return nil, nil, 0, false
+	}
 	cur.stack = cur.next(cur.stack)
+	if len(cur.stack) == 0 {
+		return nil, nil, 0, false
+	}
 	ptr := cur.stack[len(cur.stack)-1]
 	nd := (*Llrbnode)(unsafe.Pointer(ptr & (^uintptr(0x3))))
 	key, seqno, deleted = nd.getkey(), nd.getseqno(), nd.isdeleted()
@@ -98,49 +106,45 @@ func (cur *Cursor) first(
 
 	for nd := root; nd != nil; {
 		ptr := (uintptr)(unsafe.Pointer(nd))
-		if (ptr & 0x7) > 0 { // TODO: can be removed after testing.
-			panic("impossible situation")
-
-		} else if nd.ltkey(key, true) {
+		if nd.ltkey(key, true) {
 			stack = append(stack, ptr|0x3)
 			nd = nd.right
 			continue
 		}
-		stack = append(stack, ptr|0x1)
+		stack = append(stack, ptr|0x0)
 		nd = nd.left
 	}
-	stack = cur.popout(stack)
-	return append(stack, 0) // NULL terminated list B-)
+	return cur.popout(stack)
 }
 
 func (cur *Cursor) next(stack []uintptr) []uintptr {
 	ptr := stack[len(stack)-1]
-	if ptr == 0 { // initial case
-		return cur.next(stack[:len(stack)-1])
-	}
 	nd := (*Llrbnode)(unsafe.Pointer(ptr & (^uintptr(0x3))))
-	link := ptr & 0x3
-	if link != 1 { // TODO: can be removed after testing.
-		panic("impossible situation")
-	}
 	stack[len(stack)-1] = ptr | 0x3
 	stack = cur.leftmost(nd.right, stack)
 	return cur.popout(stack)
 }
 
 func (cur *Cursor) popout(stack []uintptr) []uintptr {
-	for i := len(stack) - 1; i >= 0; i-- {
-		if (cur.stack[i] & 0x3) == 0x3 {
-			return stack[:i+1]
+	i := len(stack) - 1
+	for ; i >= 0; i-- {
+		if (stack[i] & 0x3) == 0x3 {
+			//fmt.Printf("popout %d\n", stack[i])
+			continue
 		}
+		break
+	}
+	if stack = stack[:i+1]; len(stack) > 0 {
+		stack[len(stack)-1] = stack[len(stack)-1] | 0x1
 	}
 	return stack
 }
 
 func (cur *Cursor) leftmost(nd *Llrbnode, stack []uintptr) []uintptr {
 	if nd != nil {
-		ptr := (uintptr)(unsafe.Pointer(nd)) | 0x1
+		ptr := (uintptr)(unsafe.Pointer(nd)) | 0x0
 		stack = append(stack, ptr)
+		//fmt.Printf("leftmost %d\n", ptr)
 		return cur.leftmost(nd.left, stack)
 	}
 	return stack

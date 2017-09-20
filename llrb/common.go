@@ -4,13 +4,13 @@ import "fmt"
 import "math"
 import "bytes"
 import "errors"
+import "unsafe"
 
 import "github.com/prataprc/golog"
 import "github.com/prataprc/gostore/lib"
 
 type llrbstats struct { // TODO: add json tags.
 	n_count   int64 // number of nodes in the tree
-	n_reads   int64
 	n_inserts int64
 	n_updates int64
 	n_deletes int64
@@ -122,4 +122,87 @@ func validatellrbtree(
 	keymem = lkm + rkm + int64(len(nd.getkey()))
 	valmem = lvm + rvm + int64(len(nd.Value()))
 	return lblacks, keymem, valmem
+}
+
+//---- embed
+
+type txnsmeta struct {
+	records   chan *record
+	cursors   chan *Cursor
+	txncache  chan *Txn
+	viewcache chan *View
+}
+
+func (meta *txnsmeta) inittxns() {
+	maxtxns := 1000 // TODO: no magic number
+	meta.txncache = make(chan *Txn, maxtxns)
+	meta.viewcache = make(chan *View, maxtxns)
+	meta.cursors = make(chan *Cursor, maxtxns*2)
+	meta.records = make(chan *record, maxtxns*5)
+}
+
+func (meta *txnsmeta) gettxn(id uint64, db, snap interface{}) (txn *Txn) {
+	select {
+	case txn = <-meta.txncache:
+	default:
+		txn = newtxn(id, db, snap, meta.records, meta.cursors)
+	}
+	txn.db, txn.snapshot = db, snap
+	if txn.id = id; txn.id == 0 {
+		switch snap := txn.snapshot.(type) {
+		case *LLRB:
+			txn.id = (uint64)((uintptr)(unsafe.Pointer(snap.root)))
+		case *mvccsnapshot:
+			txn.id = (uint64)((uintptr)(unsafe.Pointer(snap.root)))
+		}
+	}
+	return
+}
+
+func (meta *txnsmeta) puttxn(txn *Txn) {
+	for index, head := range txn.writes { // free all records in this txn.
+		for head != nil {
+			next := head.next
+			txn.putrecord(head)
+			head = next
+		}
+		delete(txn.writes, index)
+	}
+	for _, cur := range txn.cursors {
+		txn.putcursor(cur)
+	}
+	txn.cursors = txn.cursors[:0]
+	select {
+	case meta.txncache <- txn:
+	default: // Left for GC
+	}
+}
+
+func (meta *txnsmeta) getview(id uint64, db, snap interface{}) (view *View) {
+	select {
+	case view = <-meta.viewcache:
+	default:
+		view = newview(id, snap, meta.cursors)
+	}
+	view.id, view.snapshot = id, snap
+	if view.id == 0 {
+		switch snap := view.snapshot.(type) {
+		case *LLRB:
+			view.id = (uint64)((uintptr)(unsafe.Pointer(snap.root)))
+		case *mvccsnapshot:
+			view.id = (uint64)((uintptr)(unsafe.Pointer(snap.root)))
+		}
+	}
+	return
+}
+
+func (meta *txnsmeta) putview(view *View) {
+	for _, cur := range view.cursors {
+		view.putcursor(cur)
+	}
+	view.cursors = view.cursors[:0]
+	select {
+	case meta.viewcache <- view:
+	default: // Left for GC
+	}
 }

@@ -230,6 +230,14 @@ func (llrb *LLRB) SetCAS(
 	key, value, oldvalue []byte, cas uint64) ([]byte, uint64, error) {
 
 	llrb.rw.Lock()
+	oldvalue, cas, err := llrb.setcas(key, value, oldvalue, cas)
+	llrb.rw.Unlock()
+
+	return oldvalue, cas, err
+}
+
+func (llrb *LLRB) setcas(
+	key, value, oldvalue []byte, cas uint64) ([]byte, uint64, error) {
 
 	// CAS matches, go ahead with upsert.
 	root, depth := llrb.getroot(), int64(1)
@@ -238,7 +246,6 @@ func (llrb *LLRB) SetCAS(
 		if oldvalue != nil {
 			oldvalue = lib.Fixbuffer(oldvalue, 0)
 		}
-		llrb.rw.Unlock()
 		return oldvalue, 0, err
 	}
 	llrb.seqno++
@@ -262,7 +269,6 @@ func (llrb *LLRB) SetCAS(
 
 	llrb.freenode(oldnd)
 
-	llrb.rw.Unlock()
 	return oldvalue, seqno, nil
 }
 
@@ -332,7 +338,13 @@ func (llrb *LLRB) upsertcas(
 // but key is not found in index a new entry will inserted.
 func (llrb *LLRB) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 	llrb.rw.Lock()
+	oldvalue, cas := llrb.dodelete(key, oldvalue, lsm)
+	llrb.rw.Unlock()
 
+	return oldvalue, cas
+}
+
+func (llrb *LLRB) dodelete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 	var val []byte
 	root := llrb.getroot()
 	llrb.seqno++
@@ -376,7 +388,6 @@ func (llrb *LLRB) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 		}
 	}
 
-	llrb.rw.Unlock()
 	return oldvalue, seqno
 }
 
@@ -481,12 +492,12 @@ func (llrb *LLRB) commit(txn *Txn) error {
 	return nil
 }
 
-func (llrb *LLRB) commitrecord(rec *record) error {
+func (llrb *LLRB) commitrecord(rec *record) (err error) {
 	switch rec.cmd {
 	case cmdSet:
-		llrb.SetCAS(rec.key, rec.value, nil, rec.seqno)
+		_, _, err = llrb.setcas(rec.key, rec.value, nil, rec.seqno)
 	case cmdDelete:
-		llrb.Delete(rec.key, nil, rec.lsm)
+		llrb.dodelete(rec.key, nil, rec.lsm)
 	}
 	return nil
 }
@@ -539,7 +550,6 @@ func (llrb *LLRB) Get(
 	} else if value != nil {
 		value = lib.Fixbuffer(value, 0)
 	}
-	llrb.n_reads++
 
 	llrb.rw.RUnlock()
 	return value, seqno, deleted, ok
@@ -599,7 +609,6 @@ func (llrb *LLRB) Stats() map[string]interface{} {
 	m["n_nodes"] = llrb.n_nodes
 	m["n_frees"] = llrb.n_frees
 	m["n_clones"] = llrb.n_clones
-	m["n_reads"] = llrb.n_reads
 	m["n_txns"] = llrb.n_txns
 	m["n_commits"] = llrb.n_commits
 	m["n_aborts"] = llrb.n_aborts

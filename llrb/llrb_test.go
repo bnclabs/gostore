@@ -1,7 +1,9 @@
 package llrb
 
 import "fmt"
+import "bytes"
 import "testing"
+import "io/ioutil"
 import "encoding/json"
 
 import "github.com/prataprc/gostore/lib"
@@ -39,8 +41,6 @@ func TestLLRBEmpty(t *testing.T) {
 	} else if x := stats["n_inserts"].(int64); x != 0 {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_updates"].(int64); x != 0 {
-		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_reads"].(int64); x != 0 {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_clones"].(int64); x != 0 {
 		t.Errorf("unexpected %v", x)
@@ -160,8 +160,6 @@ func TestLLRBLoad(t *testing.T) {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_deletes"].(int64); x != 0 {
 		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_reads"].(int64); x != int64(len(keys)+1) {
-		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_clones"].(int64); x != 4 {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_frees"].(int64); x != 4 {
@@ -174,6 +172,41 @@ func TestLLRBLoad(t *testing.T) {
 		t.Errorf("unexpected %v", u)
 	} else if u := valueutz(stats); u < 50.0 {
 		t.Errorf("unexpected %v", u)
+	}
+}
+
+func TestLLRBDotdump(t *testing.T) {
+	setts := s.Settings{
+		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
+	}
+	llrb := NewLLRB("load", setts)
+	defer llrb.Destroy()
+
+	// load data
+	keys := []string{
+		"key1", "key2", "key3", "key4", "key5", "key6", "key7", "key8",
+		"key11", "key12", "key13", "key14", "key15", "key16", "key17", "key18",
+	}
+	vals := []string{
+		"val1", "val2", "val3", "val4", "val5", "val6", "val7", "val8",
+		"val11", "val12", "val13", "val14", "val15", "val16", "val17", "val18",
+	}
+	oldvalue := make([]byte, 1024)
+	for i, key := range keys {
+		k, v := lib.Str2bytes(key), lib.Str2bytes(vals[i])
+		llrb.Set(k, v, oldvalue)
+	}
+
+	buf := bytes.NewBuffer(nil)
+	llrb.Dotdump(buf)
+	data, err := ioutil.ReadFile("testdata/llrbload.dot")
+	if err != nil {
+		t.Error(err)
+	}
+	if out := append(buf.Bytes(), '\n'); bytes.Compare(data, out) != 0 {
+		t.Errorf("mismatch in dotdump")
+		t.Errorf("%s", out)
+		t.Errorf("%s", data)
 	}
 }
 
@@ -225,8 +258,6 @@ func TestLLRBLoadLarge(t *testing.T) {
 	} else if x := stats["n_updates"].(int64); x != 0 {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_deletes"].(int64); x != 0 {
-		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_reads"].(int64); x != int64(n) {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_clones"].(int64); x != 0 {
 		t.Errorf("unexpected %v", x)
@@ -294,8 +325,6 @@ func TestLLRBClone(t *testing.T) {
 	} else if x := stats["n_updates"].(int64); x != 0 {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_deletes"].(int64); x != 0 {
-		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_reads"].(int64); x != int64(n) {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_clones"].(int64); x != 0 {
 		t.Errorf("unexpected %v", x)
@@ -454,8 +483,6 @@ func TestLLRBSetCAS(t *testing.T) {
 	} else if x := stats["n_updates"].(int64); x != 3 {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_deletes"].(int64); x != 0 {
-		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_reads"].(int64); x != int64(n) {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_clones"].(int64); x != 3 {
 		t.Errorf("unexpected %v", x)
@@ -634,8 +661,6 @@ func TestLLRBDelete(t *testing.T) {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_deletes"].(int64); x != 1 {
 		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_reads"].(int64); x != int64(n+4) {
-		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_clones"].(int64); x != 2 {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_frees"].(int64); x != 3 {
@@ -680,8 +705,6 @@ func TestLLRBDelete(t *testing.T) {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_deletes"].(int64); x != 1002 {
 		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_reads"].(int64); x != int64(n+4) {
-		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_clones"].(int64); x != 54 {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_frees"].(int64); x != 1056 {
@@ -703,6 +726,289 @@ func TestLLRBDelete(t *testing.T) {
 		t.Errorf("unexpected %v", stats["value.alloc"])
 	} else if stats["value.alloc"].(int64) != 0 {
 		t.Errorf("unexpected %v", stats["value.alloc"])
+	}
+}
+
+func TestLLRBTxn(t *testing.T) {
+	setts := s.Settings{
+		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
+	}
+	llrb := NewLLRB("txn", setts)
+	defer llrb.Destroy()
+
+	// First transaction
+	txn := llrb.BeginTxn(0x1234)
+	if txn.ID() != 0x1234 {
+		t.Errorf("unexpected %v", txn.ID())
+	}
+	// set initial values
+	key, value, oldvalue := []byte("plumless"), []byte("value1"), []byte{}
+	oldvalue = txn.Set(key, value, oldvalue)
+	if len(oldvalue) > 0 {
+		t.Errorf("unexpected %s", oldvalue)
+	}
+	key, value = []byte("buckeroo"), []byte("value2")
+	oldvalue = txn.Set(key, value, oldvalue)
+	if len(oldvalue) > 0 {
+		t.Errorf("unexpected %s", oldvalue)
+	}
+	// get entries
+	key = []byte("plumless")
+	oldvalue, deleted, ok := txn.Get(key, oldvalue)
+	if ok == false {
+		t.Errorf("unexpected false")
+	} else if deleted == true {
+		t.Errorf("unexpected deleted")
+	} else if string(oldvalue) != "value1" {
+		t.Errorf("unexpected %s", oldvalue)
+	}
+	txn.Commit()
+	// verify first transaction
+	key, value = []byte("buckeroo"), []byte{}
+	value, _, deleted, ok = llrb.Get(key, value)
+	if ok == false {
+		t.Errorf("unexpected false")
+	} else if deleted == true {
+		t.Errorf("unexpected delete")
+	} else if string(value) != "value2" {
+		t.Errorf("unexpected %s", value)
+	}
+
+	// Second transaction
+	txn = llrb.BeginTxn(0x12345)
+	key, value, oldvalue = []byte("plumless"), []byte("value11"), []byte{}
+	oldvalue = txn.Set(key, value, oldvalue)
+	if string(oldvalue) != "value1" {
+		t.Errorf("unexpected %s", oldvalue)
+	}
+	oldvalue = txn.Delete(key, oldvalue, false)
+	if string(oldvalue) != "value11" {
+		t.Errorf("unexpected %s", oldvalue)
+	}
+	value = []byte("value111")
+	oldvalue = txn.Set(key, value, oldvalue)
+	if string(oldvalue) != "" {
+		t.Errorf("unexpected %s", oldvalue)
+	}
+	oldvalue = txn.Delete(key, oldvalue, true)
+	if string(oldvalue) != "value111" {
+		t.Errorf("unexpected %s", oldvalue)
+	}
+	value, deleted, ok = txn.Get(key, []byte{})
+	if deleted == false {
+		t.Errorf("expected as deleted")
+	} else if ok == false {
+		t.Errorf("expected key")
+	} else if len(value) > 0 {
+		t.Errorf("unexpected %s", value)
+	}
+	txn.Commit()
+	// verify second transaction
+	key, value = []byte("plumless"), []byte{}
+	value, _, deleted, ok = llrb.Get(key, value)
+	if ok == false {
+		t.Errorf("unexpected false")
+	} else if deleted == false {
+		t.Errorf("expected delete")
+	} else if string(value) != "value1" {
+		t.Errorf("unexpected %s", value)
+	}
+
+	// third transaction abort
+	txn = llrb.BeginTxn(0)
+	// set initial values
+	key, value = []byte("plumless"), []byte("aborted")
+	txn.Set(key, value, nil)
+	txn.Abort()
+	// get entries
+	key = []byte("plumless")
+	value, _, _ = txn.Get(key, value)
+	if string(value) != "value1" {
+		t.Errorf("unexpected %s", value)
+	}
+}
+
+func TestLLRBView(t *testing.T) {
+	setts := s.Settings{
+		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
+	}
+	llrb := NewLLRB("view", setts)
+	defer llrb.Destroy()
+
+	keys := []string{
+		"key1", "key2", "key3", "key4", "key5", "key6", "key7", "key8",
+		"key11", "key12", "key13", "key14", "key15", "key16", "key17", "key18",
+	}
+	vals := []string{
+		"val1", "val2", "val3", "val4", "val5", "val6", "val7", "val8",
+		"val11", "val12", "val13", "val14", "val15", "val16", "val17", "val18",
+	}
+	for i, key := range keys {
+		k, v := lib.Str2bytes(key), lib.Str2bytes(vals[i])
+		llrb.Set(k, v, nil)
+	}
+
+	view := llrb.View(0x1234)
+	defer view.Abort()
+
+	if view.ID() != 0x1234 {
+		t.Errorf("unexpected %v", view.ID())
+	}
+	var deleted, ok bool
+	value := []byte{}
+	for i, key := range keys {
+		k := lib.Str2bytes(key)
+		value, deleted, ok = view.Get(k, value)
+		if string(value) != vals[i] {
+			t.Errorf("for %v expected %v, got %v", i, vals[i], value)
+		} else if deleted == true {
+			t.Errorf("unexpected deleted")
+		} else if ok == false {
+			t.Errorf("key %s missing", k)
+		}
+	}
+}
+
+func TestLLRBTxnCursor(t *testing.T) {
+	setts := s.Settings{
+		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
+	}
+	llrb := NewLLRB("view", setts)
+	defer llrb.Destroy()
+
+	keys := []string{
+		"key1", "key11", "key12", "key13", "key14", "key15", "key16",
+		"key17", "key18",
+		"key2", "key3", "key4", "key5", "key6", "key7", "key8",
+	}
+	vals := []string{
+		"val1", "val11", "val12", "val13", "val14", "val15", "val16",
+		"val17", "val18",
+		"val2", "val3", "val4", "val5", "val6", "val7", "val8",
+	}
+	for i, key := range keys {
+		k, v := lib.Str2bytes(key), lib.Str2bytes(vals[i])
+		llrb.Set(k, v, nil)
+	}
+	llrb.Delete([]byte(keys[15]), nil, true /*lsm*/)
+
+	// llrb.getroot().ptrdump(" ")
+
+	txn := llrb.BeginTxn(0x1234)
+	for i, key := range keys {
+		cur := txn.OpenCursor([]byte(key))
+		testgetnext(t, cur, i, keys, vals)
+		if k, _, _ := cur.GetNext(); k != nil {
+			t.Errorf("unexpected %s", k)
+		}
+		cur = txn.OpenCursor([]byte(key))
+		testynext(t, cur, i, keys, vals)
+		if k, _ := cur.Key(); k != nil {
+			t.Errorf("unexpected %s", k)
+		} else if v := cur.Value(); v != nil {
+			t.Errorf("unexpected %s", v)
+		}
+	}
+	cur := txn.OpenCursor([]byte(keys[0]))
+	cur.Delcursor(true /*lsm*/)
+	cur.Delete([]byte(keys[1]), nil, true /*lsm*/)
+	value := []byte("newvalue")
+	cur.Set([]byte(keys[2]), value, nil)
+	txn.Commit()
+
+	value, _, deleted, ok := llrb.Get([]byte(keys[0]), []byte{})
+	if deleted == false {
+		t.Errorf("expected deleted")
+	} else if ok == false {
+		t.Errorf("expected key")
+	} else if string(value) != vals[0] {
+		t.Errorf("expected %s, got %s", vals[0], value)
+	}
+	value, _, deleted, ok = llrb.Get([]byte(keys[1]), []byte{})
+	if deleted == false {
+		t.Errorf("expected deleted")
+	} else if ok == false {
+		t.Errorf("expected key")
+	} else if string(value) != vals[1] {
+		t.Errorf("expected %s, got %s", vals[1], value)
+	}
+	value, _, deleted, ok = llrb.Get([]byte(keys[2]), []byte{})
+	if deleted == true {
+		t.Errorf("unexpected deleted")
+	} else if ok == false {
+		t.Errorf("expected key")
+	} else if string(value) != "newvalue" {
+		t.Errorf("unexpected %s", value)
+	}
+}
+
+func TestLLRBViewCursor(t *testing.T) {
+	setts := s.Settings{
+		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
+	}
+	llrb := NewLLRB("view", setts)
+	defer llrb.Destroy()
+
+	keys := []string{
+		"key1", "key11", "key12", "key13", "key14", "key15", "key16",
+		"key17", "key18",
+		"key2", "key3", "key4", "key5", "key6", "key7", "key8",
+	}
+	vals := []string{
+		"val1", "val11", "val12", "val13", "val14", "val15", "val16",
+		"val17", "val18",
+		"val2", "val3", "val4", "val5", "val6", "val7", "val8",
+	}
+	for i, key := range keys {
+		k, v := lib.Str2bytes(key), lib.Str2bytes(vals[i])
+		llrb.Set(k, v, nil)
+	}
+	llrb.Delete([]byte(keys[15]), nil, true /*lsm*/)
+
+	// llrb.getroot().ptrdump(" ")
+
+	for i, key := range keys {
+		view := llrb.View(0x1234 + uint64(i))
+		cur := view.OpenCursor([]byte(key))
+		testgetnext(t, cur, i, keys, vals)
+		view.Abort()
+		view = llrb.View(0)
+		cur = view.OpenCursor([]byte(key))
+		testynext(t, cur, i, keys, vals)
+		view.Abort()
+	}
+
+	txn := llrb.BeginTxn(0x12345)
+	cur := txn.OpenCursor([]byte(keys[0]))
+	cur.Delcursor(true /*lsm*/)
+	cur.Delete([]byte(keys[1]), nil, true /*lsm*/)
+	value := []byte("newvalue")
+	cur.Set([]byte(keys[2]), value, nil)
+	txn.Commit()
+
+	value, _, deleted, ok := llrb.Get([]byte(keys[0]), []byte{})
+	if deleted == false {
+		t.Errorf("expected deleted")
+	} else if ok == false {
+		t.Errorf("expected key")
+	} else if string(value) != vals[0] {
+		t.Errorf("expected %s, got %s", vals[0], value)
+	}
+	value, _, deleted, ok = llrb.Get([]byte(keys[1]), []byte{})
+	if deleted == false {
+		t.Errorf("expected deleted")
+	} else if ok == false {
+		t.Errorf("expected key")
+	} else if string(value) != vals[1] {
+		t.Errorf("expected %s, got %s", vals[1], value)
+	}
+	value, _, deleted, ok = llrb.Get([]byte(keys[2]), []byte{})
+	if deleted == true {
+		t.Errorf("unexpected deleted")
+	} else if ok == false {
+		t.Errorf("expected key")
+	} else if string(value) != "newvalue" {
+		t.Errorf("unexpected %s", value)
 	}
 }
 
@@ -736,4 +1042,60 @@ func init() {
 		"log.colorwarn":  "yellow",
 	}
 	log.SetLogger(nil, setts)
+}
+
+func testgetnext(t *testing.T, cur *Cursor, from int, keys, vals []string) {
+	i := from
+	for {
+		k, deleted := cur.Key()
+		if string(k) != keys[i] {
+			t.Errorf("for %v expected %s, got %s", i, keys[i], k)
+		} else if string(k) == keys[15] && deleted == false {
+			t.Errorf("expected key deleted")
+		} else if string(k) != keys[15] && deleted == true {
+			t.Errorf("unexpected deleted")
+		}
+		v := cur.Value()
+		if string(v) != vals[i] {
+			t.Errorf("for %v expected %s, got %s", i, vals[i], v)
+		}
+		k, v, deleted = cur.GetNext()
+		i++
+		if k == nil {
+			break
+		} else if string(k) == keys[15] && deleted == false {
+			t.Errorf("expected key deleted")
+		} else if string(k) != keys[15] && deleted == true {
+			t.Errorf("%s unexpected deleted", k)
+		} else if string(k) != keys[i] {
+			t.Errorf("for %v expected %s, got %s", i, keys[i], k)
+		} else if string(v) != vals[i] {
+			t.Errorf("for %v expected %s, got %s", i, vals[i], v)
+		}
+	}
+	if i != len(keys) {
+		t.Errorf("iterated till %v", i)
+	}
+}
+
+func testynext(t *testing.T, cur *Cursor, from int, keys, vals []string) {
+	i := from + 1
+	for {
+		k, v, _, deleted := cur.YNext()
+		if k == nil {
+			break
+		} else if string(k) == keys[15] && deleted == false {
+			t.Errorf("expected key deleted")
+		} else if string(k) != keys[15] && deleted == true {
+			t.Errorf("unexpected deleted")
+		} else if string(k) != keys[i] {
+			t.Errorf("for %v expected %s, got %s", i, keys[i], k)
+		} else if string(v) != vals[i] {
+			t.Errorf("for %v expected %s, got %s", i, vals[i], v)
+		}
+		i++
+	}
+	if i != len(keys) {
+		t.Errorf("iterated till %v", i)
+	}
 }

@@ -222,12 +222,17 @@ func (nd *Llrbnode) dotdump(buffer io.Writer) {
 		lines = append(lines, line)
 	}
 	buffer.Write([]byte(strings.Join(lines, "")))
-	if nd.left != nil {
-		nd.left.dotdump(buffer)
+	nd.left.dotdump(buffer)
+	nd.right.dotdump(buffer)
+}
+
+func (nd *Llrbnode) ptrdump(prefix string) {
+	if nd == nil {
+		return
 	}
-	if nd.right != nil {
-		nd.right.dotdump(buffer)
-	}
+	fmt.Printf("%s%d: %s\n", prefix, (uintptr)(unsafe.Pointer(nd)), nd.getkey())
+	nd.left.ptrdump(prefix + "  ")
+	nd.right.ptrdump(prefix + "  ")
 }
 
 //---- indexer api

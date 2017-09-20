@@ -1,7 +1,5 @@
 package llrb
 
-import "unsafe"
-
 // View transaction definition. Read only version of Txn.
 type View struct {
 	id       uint64
@@ -12,14 +10,6 @@ type View struct {
 
 func newview(id uint64, snapshot interface{}, cch chan *Cursor) *View {
 	view := &View{id: id, snapshot: snapshot, curchan: cch}
-	if view.id == 0 {
-		switch snap := view.snapshot.(type) {
-		case *LLRB:
-			view.id = (uint64)((uintptr)(unsafe.Pointer(snap.root)))
-		case *mvccsnapshot:
-			view.id = (uint64)((uintptr)(unsafe.Pointer(snap.root)))
-		}
-	}
 	return view
 }
 
@@ -73,6 +63,7 @@ func (view *View) getcursor() (cur *Cursor) {
 		cur = &Cursor{stack: make([]uintptr, 32)}
 	}
 	cur.stack = cur.stack[:0]
+	view.cursors = append(view.cursors, cur)
 	return
 }
 

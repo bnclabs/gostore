@@ -1,19 +1,9 @@
 package llrb
 
 import "bytes"
-import "unsafe"
 import "hash/crc32"
 
 import "github.com/prataprc/gostore/lib"
-
-type record struct {
-	cmd   byte
-	key   []byte
-	value []byte
-	seqno uint64
-	lsm   bool
-	next  *record
-}
 
 // Txn transaction definition. Transaction gives a gaurantee of isolation and
 // atomicity on the latest snapshot.
@@ -46,14 +36,6 @@ func newtxn(
 	}
 	if txn.recchan != nil && txn.writes == nil {
 		txn.writes = make(map[uint32]*record)
-	}
-	if txn.id == 0 {
-		switch snap := txn.snapshot.(type) {
-		case *LLRB:
-			txn.id = (uint64)((uintptr)(unsafe.Pointer(snap.root)))
-		case *mvccsnapshot:
-			txn.id = (uint64)((uintptr)(unsafe.Pointer(snap.root)))
-		}
 	}
 	return txn
 }
@@ -119,11 +101,6 @@ func (txn *Txn) Get(key, value []byte) (v []byte, deleted, ok bool) {
 // as a log entry and applied on the underlying structure during Commit.
 func (txn *Txn) Set(key, value, oldvalue []byte) []byte {
 	var seqno uint64
-	var deleted bool
-
-	if txn.recchan == nil {
-		panic("Set not allowed on read-only transaction")
-	}
 
 	node := txn.getrecord()
 	node.cmd, node.key, node.value = cmdSet, key, value
@@ -135,14 +112,13 @@ func (txn *Txn) Set(key, value, oldvalue []byte) []byte {
 	txn.writes[index] = newhead
 
 	if old != nil {
-		oldvalue = lib.Fixbuffer(oldvalue, int64(len(old.value)))
-		copy(oldvalue, old.value)
+		if oldvalue != nil {
+			oldvalue = lib.Fixbuffer(oldvalue, int64(len(old.value)))
+			copy(oldvalue, old.value)
+		}
 		node.seqno = old.seqno
 	} else {
-		oldvalue, seqno, deleted, _ = txn.getsnap(key, oldvalue)
-		if deleted {
-			oldvalue = lib.Fixbuffer(oldvalue, 0)
-		}
+		oldvalue, seqno, _, _ = txn.getsnap(key, oldvalue)
 		node.seqno = seqno
 	}
 	return oldvalue
@@ -151,12 +127,7 @@ func (txn *Txn) Set(key, value, oldvalue []byte) []byte {
 // Delete key from index. The Delete operation will be remembered as a log
 // entry and applied on the underlying structure during commit.
 func (txn *Txn) Delete(key, oldvalue []byte, lsm bool) []byte {
-	var deleted bool
 	var seqno uint64
-
-	if txn.recchan == nil {
-		panic("Delete not allowed on read-only transaction")
-	}
 
 	node := txn.getrecord()
 	node.cmd, node.key = cmdDelete, key
@@ -164,18 +135,17 @@ func (txn *Txn) Delete(key, oldvalue []byte, lsm bool) []byte {
 	node.value = lib.Fixbuffer(node.value, 0)
 
 	index := crc32.Checksum(key, txn.tblcrc32)
-	head, ok := txn.writes[index]
+	head, _ := txn.writes[index]
 	old, newhead := head.prepend(key, node)
 	txn.writes[index] = newhead
 	if old != nil {
-		oldvalue = lib.Fixbuffer(oldvalue, int64(len(old.value)))
-		copy(oldvalue, old.value)
+		if oldvalue != nil {
+			oldvalue = lib.Fixbuffer(oldvalue, int64(len(old.value)))
+			copy(oldvalue, old.value)
+		}
 		node.seqno = old.seqno
 	} else {
-		oldvalue, seqno, deleted, ok = txn.getsnap(key, oldvalue)
-		if deleted || ok == false {
-			oldvalue = lib.Fixbuffer(oldvalue, 0)
-		}
+		oldvalue, seqno, _, _ = txn.getsnap(key, oldvalue)
 		node.seqno = seqno
 	}
 	return oldvalue
@@ -186,7 +156,20 @@ func (txn *Txn) Delete(key, oldvalue []byte, lsm bool) []byte {
 func (txn *Txn) getsnap(key, value []byte) ([]byte, uint64, bool, bool) {
 	switch snap := txn.snapshot.(type) {
 	case *LLRB:
-		return snap.Get(key, value)
+		deleted, seqno := false, uint64(0)
+		nd, ok := snap.getkey(snap.getroot(), key)
+		if ok {
+			if value != nil {
+				val := nd.Value()
+				value = lib.Fixbuffer(value, int64(len(val)))
+				copy(value, val)
+			}
+			seqno, deleted = nd.getseqno(), nd.isdeleted()
+		} else if value != nil {
+			value = lib.Fixbuffer(value, 0)
+		}
+		return value, seqno, deleted, ok
+
 	case *mvccsnapshot:
 		return snap.get(key, value)
 	}
@@ -216,6 +199,7 @@ func (txn *Txn) getcursor() (cur *Cursor) {
 		cur = &Cursor{stack: make([]uintptr, 32)}
 	}
 	cur.stack = cur.stack[:0]
+	txn.cursors = append(txn.cursors, cur)
 	return
 }
 
@@ -226,16 +210,23 @@ func (txn *Txn) putcursor(cur *Cursor) {
 	}
 }
 
+type record struct {
+	cmd   byte
+	key   []byte
+	value []byte
+	seqno uint64
+	lsm   bool
+	next  *record
+}
+
 func (head *record) get(key []byte) (*record, *record) {
 	var parent, next *record
 	if head == nil {
 		return nil, nil
 	}
 	next = head
-	for bytes.Compare(next.key, key) != 0 {
-		if parent, next = next, next.next; next == nil {
-			return parent, nil
-		}
+	for next != nil && bytes.Compare(next.key, key) != 0 {
+		parent, next = next, next.next
 	}
 	return parent, next
 }
@@ -245,75 +236,11 @@ func (head *record) prepend(key []byte, node *record) (old, newhead *record) {
 		return nil, node
 	}
 
-	var parent *record
-	parent, old = head.get(key)
+	parent, old := head.get(key)
+	if parent == nil {
+		node.next = old
+		return old, node
+	}
 	parent.next, node.next = node, old
 	return old, head
-}
-
-//---- embed
-
-type txnsmeta struct {
-	records   chan *record
-	cursors   chan *Cursor
-	txncache  chan *Txn
-	viewcache chan *View
-}
-
-func (meta *txnsmeta) inittxns() {
-	maxtxns := 1000 // TODO: no magic number
-	meta.records = make(chan *record, maxtxns*5)
-	meta.cursors = make(chan *Cursor, maxtxns*2)
-	meta.txncache = make(chan *Txn, maxtxns)
-	meta.viewcache = make(chan *View, maxtxns)
-}
-
-func (meta *txnsmeta) gettxn(id uint64, db, snap interface{}) (txn *Txn) {
-	select {
-	case txn = <-meta.txncache:
-	default:
-		txn = newtxn(id, db, snap, meta.records, meta.cursors)
-	}
-	txn.id, txn.db, txn.snapshot = id, db, snap
-	return
-}
-
-func (meta *txnsmeta) puttxn(txn *Txn) {
-	for index, head := range txn.writes { // free all records in this txn.
-		for head != nil {
-			next := head.next
-			txn.putrecord(head)
-			head = next
-		}
-		delete(txn.writes, index)
-	}
-	for _, cur := range txn.cursors { // release cursors.
-		txn.putcursor(cur)
-	}
-	txn.cursors = txn.cursors[:0]
-	select {
-	case meta.txncache <- txn:
-	default: // Left for GC
-	}
-}
-
-func (meta *txnsmeta) getview(id uint64, db, snap interface{}) (view *View) {
-	select {
-	case view = <-meta.viewcache:
-	default:
-		view = newview(id, snap, meta.cursors)
-	}
-	view.id, view.snapshot = id, snap
-	return
-}
-
-func (meta *txnsmeta) putview(view *View) {
-	for _, cur := range view.cursors { // release cursors.
-		view.putcursor(cur)
-	}
-	view.cursors = view.cursors[:0]
-	select {
-	case meta.viewcache <- view:
-	default: // Left for GC
-	}
 }
