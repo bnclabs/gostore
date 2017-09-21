@@ -29,7 +29,8 @@ func (snap *mvccsnapshot) initsnapshot(mvcc *MVCC) *mvccsnapshot {
 	if cap(snap.reclaims) < len(mvcc.reclaims) {
 		snap.reclaims = make([]*Llrbnode, len(mvcc.reclaims))
 	}
-	copy(snap.reclaims, mvcc.reclaims)
+	n := copy(snap.reclaims, mvcc.reclaims)
+	snap.reclaims = snap.reclaims[:n]
 
 	if snap.logprefix == nil {
 		snap.logprefix = make([]byte, 64)
@@ -114,7 +115,6 @@ func (snap *mvccsnapshot) refer() int64 {
 
 func (snap *mvccsnapshot) release() int64 {
 	refcount := atomic.AddInt64(&snap.refcount, -1)
-	snap.mvcc.releasesnapshot(snap.next)
 	return refcount
 }
 

@@ -499,7 +499,7 @@ func (llrb *LLRB) commitrecord(rec *record) (err error) {
 	case cmdDelete:
 		llrb.dodelete(rec.key, nil, rec.lsm)
 	}
-	return nil
+	return
 }
 
 func (llrb *LLRB) aborttxn(txn *Txn) error {

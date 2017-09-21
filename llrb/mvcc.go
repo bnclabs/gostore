@@ -19,8 +19,8 @@ import humanize "github.com/dustin/go-humanize"
 
 // MVCC manages a single instance of LLRB tree in MVCC mode.
 type MVCC struct {
-	llrbstats            // 64-bit aligned snapshot statistics.
-	activetxns    uint64 // there can be more than one txns.
+	llrbstats           // 64-bit aligned snapshot statistics.
+	activetxns    int64 // there can be more than one txns.
 	h_upsertdepth *lib.HistogramInt64
 	// can be unaligned fields
 	name      string
@@ -29,7 +29,6 @@ type MVCC struct {
 	root      unsafe.Pointer // *Llrbnode
 	seqno     uint64
 	rw        sync.RWMutex
-	triggch   chan bool
 	finch     chan struct{}
 	txnsmeta
 
@@ -56,7 +55,6 @@ type MVCC struct {
 func NewMVCC(name string, setts s.Settings) *MVCC {
 	mvcc := &MVCC{
 		name:      name,
-		triggch:   make(chan bool, 1),
 		finch:     make(chan struct{}),
 		logprefix: fmt.Sprintf("MVCC [%s]", name),
 		snapcache: make(chan *mvccsnapshot, 32),
@@ -81,7 +79,7 @@ func NewMVCC(name string, setts s.Settings) *MVCC {
 	mvcc.h_versions = lib.NewhistorgramInt64(1, 30, 10)
 
 	mvcc.makesnapshot()
-	go housekeeper(mvcc, mvcc.snaptick, mvcc.triggch, mvcc.finch)
+	go housekeeper(mvcc, mvcc.snaptick, mvcc.finch)
 
 	log.Infof("%v started ...\n", mvcc.logprefix)
 	mvcc.logarenasettings()
@@ -478,7 +476,6 @@ func (mvcc *MVCC) destroy() bool {
 	mvcc.nodearena.Release()
 	mvcc.valarena.Release()
 	mvcc.setroot(nil)
-	close(mvcc.triggch)
 	mvcc.setts, mvcc.reclaim, mvcc.snapcache = nil, nil, nil
 	return true
 }
@@ -575,10 +572,18 @@ func (mvcc *MVCC) upsert(
 func (mvcc *MVCC) SetCAS(
 	key, value, oldvalue []byte, cas uint64) ([]byte, uint64, error) {
 
+	mvcc.rw.Lock()
+	oldvalue, cas, err := mvcc.setcas(key, value, oldvalue, cas)
+	mvcc.rw.Unlock()
+
+	return oldvalue, cas, err
+}
+
+func (mvcc *MVCC) setcas(
+	key, value, oldvalue []byte, cas uint64) ([]byte, uint64, error) {
+
 	var newnd, oldnd *Llrbnode
 	var err error
-
-	mvcc.rw.Lock()
 
 	mvcc.seqno++
 	reclaim := mvcc.reclaim
@@ -591,7 +596,6 @@ func (mvcc *MVCC) SetCAS(
 		if oldvalue != nil {
 			oldvalue = lib.Fixbuffer(oldvalue, 0)
 		}
-		mvcc.rw.Unlock()
 		return oldvalue, 0, err
 	}
 	root.setblack()
@@ -616,7 +620,6 @@ func (mvcc *MVCC) SetCAS(
 	mvcc.appendreclaim(reclaim)
 	mvcc.reclaim = reclaim[:0]
 
-	mvcc.rw.Unlock()
 	return oldvalue, seqno, nil
 }
 
@@ -687,9 +690,15 @@ func (mvcc *MVCC) upsertcas(
 // instead mark the node as deleted. Again, if lsm is true
 // but key is not found in index a new entry will be inserted.
 func (mvcc *MVCC) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
-	var root, newnd, oldnd, deleted *Llrbnode
-
 	mvcc.rw.Lock()
+	oldvalue, cas := mvcc.dodelete(key, oldvalue, lsm)
+	mvcc.rw.Unlock()
+
+	return oldvalue, cas
+}
+
+func (mvcc *MVCC) dodelete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
+	var root, newnd, oldnd, deleted *Llrbnode
 
 	mvcc.seqno++
 	reclaim := mvcc.reclaim
@@ -741,7 +750,6 @@ func (mvcc *MVCC) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 	mvcc.appendreclaim(reclaim)
 	mvcc.reclaim = reclaim[:0]
 
-	mvcc.rw.Unlock()
 	return oldvalue, seqno
 }
 
@@ -848,8 +856,8 @@ func (mvcc *MVCC) deletemin(
 // Concurrent transactions are allowed.
 func (mvcc *MVCC) BeginTxn(id uint64) *Txn {
 	snapshot := mvcc.latestsnapshot()
-	mvcc.activetxns++
-	mvcc.n_txns++
+	atomic.AddInt64(&mvcc.activetxns, 1)
+	atomic.AddInt64(&mvcc.n_txns, 1)
 	txn := mvcc.gettxn(id, mvcc /*db*/, snapshot /*snap*/)
 	return txn
 }
@@ -886,30 +894,36 @@ func (mvcc *MVCC) commit(txn *Txn) error {
 		}
 	}
 
+	snapshot := txn.snapshot.(*mvccsnapshot)
+	snapshot.release()
+
 	mvcc.puttxn(txn)
 	mvcc.n_commits++
-	mvcc.activetxns--
+	atomic.AddInt64(&mvcc.activetxns, -1)
 
 	mvcc.rw.Unlock()
 	return nil
 }
 
-func (mvcc *MVCC) commitrecord(rec *record) error {
+func (mvcc *MVCC) commitrecord(rec *record) (err error) {
 	switch rec.cmd {
 	case cmdSet:
-		mvcc.SetCAS(rec.key, rec.value, nil, rec.seqno)
+		_, _, err = mvcc.setcas(rec.key, rec.value, nil, rec.seqno)
 	case cmdDelete:
-		mvcc.Delete(rec.key, nil, rec.lsm)
+		mvcc.dodelete(rec.key, nil, rec.lsm)
 	}
-	return nil
+	return
 }
 
 func (mvcc *MVCC) aborttxn(txn *Txn) error {
+	snapshot := txn.snapshot.(*mvccsnapshot)
+	snapshot.release()
+
 	mvcc.rw.Lock()
 
 	mvcc.puttxn(txn)
 	mvcc.n_aborts++
-	mvcc.activetxns--
+	atomic.AddInt64(&mvcc.activetxns, -1)
 
 	mvcc.rw.Unlock()
 	return nil
@@ -919,19 +933,18 @@ func (mvcc *MVCC) aborttxn(txn *Txn) error {
 // to BeginTxn. All view transactions should be aborted.
 func (mvcc *MVCC) View(id uint64) *View {
 	snapshot := mvcc.latestsnapshot()
-	mvcc.activetxns++
-	mvcc.n_txns++
+	atomic.AddInt64(&mvcc.activetxns, 1)
+	atomic.AddInt64(&mvcc.n_txns, 1)
 	view := mvcc.getview(id, mvcc /*db*/, snapshot /*snap*/)
 	return view
 }
 
 func (mvcc *MVCC) abortview(view *View) {
-	mvcc.rw.Lock()
+	snapshot := view.snapshot.(*mvccsnapshot)
+	snapshot.release()
 
 	mvcc.putview(view)
-	mvcc.activetxns--
-
-	mvcc.rw.Unlock()
+	atomic.AddInt64(&mvcc.activetxns, -1)
 }
 
 //---- Exported Read methods
@@ -1096,10 +1109,13 @@ func (mvcc *MVCC) cloneifdirty(nd *Llrbnode) (*Llrbnode, bool) {
 //---- snapshot routines.
 
 func (mvcc *MVCC) makesnapshot() {
+	nextsnap := mvcc.getsnapshot()
+
 	mvcc.rw.Lock()
-	snapshot := mvcc.getsnapshot()
-	snapshot.initsnapshot(mvcc)
-	mvcc.purgesnapshot(snapshot.next)
+	nextsnap.initsnapshot(mvcc)
+	if mvcc.purgesnapshot(nextsnap.next) {
+		nextsnap.next = nil
+	}
 	mvcc.rw.Unlock()
 }
 
@@ -1113,32 +1129,28 @@ func (mvcc *MVCC) latestsnapshot() *mvccsnapshot {
 	return snapshot
 }
 
-func (mvcc *MVCC) releasesnapshot(snapshot *mvccsnapshot) {
-	mvcc.rw.Lock()
-	mvcc.purgesnapshot(snapshot)
-	mvcc.rw.Unlock()
-}
-
 func (mvcc *MVCC) purgesnapshot(snapshot *mvccsnapshot) bool {
 	if snapshot == nil {
 		return true
 	}
-	if snapshot.getref() > 0 {
-		return false
+	if mvcc.purgesnapshot(snapshot.next) {
+		snapshot.next = nil
+		if snapshot.getref() == 0 {
+			// all older snapshots are purged, and this snapshot is not refered
+			// by anyone.
+			mvcc.h_bulkfree.Add(int64(len(snapshot.reclaims)))
+			for _, nd := range snapshot.reclaims {
+				snapshot.mvcc.freenode(nd)
+			}
+			mvcc.n_activess--
+			mvcc.n_purgedss++
+			mvcc.putsnapshot(snapshot)
+			fmsg := "%s snapshot %s PURGED...\n"
+			log.Debugf(fmsg, mvcc.logprefix, snapshot.id())
+			return true
+		}
 	}
-	if mvcc.purgesnapshot(snapshot.next) == false {
-		return false
-	}
-	// all older snapshots are purged.
-	mvcc.h_bulkfree.Add(int64(len(snapshot.reclaims)))
-	for _, nd := range snapshot.reclaims {
-		snapshot.mvcc.freenode(nd)
-	}
-	mvcc.n_activess--
-	mvcc.n_purgedss++
-	mvcc.putsnapshot(snapshot)
-	log.Debugf("%s snapshot %s PURGED...\n", mvcc.logprefix, snapshot.id())
-	return true
+	return false
 }
 
 func (mvcc *MVCC) getsnapshot() (snapshot *mvccsnapshot) {

@@ -1,0 +1,34 @@
+digraph llrb {
+  node[shape=record];
+  key17 [label="{key17}"];
+  key17 -> key13 [color=black];
+  key17 -> key4 [color=black];
+  key13 [label="{key13}"];
+  key13 -> key11 [color=black];
+  key13 -> key15 [color=black];
+  key11 [label="{key11}"];
+  key11 -> key1 [color=black];
+  key11 -> key12 [color=black];
+  key1 [label="{key1}"];
+  key12 [label="{key12}"];
+  key15 [label="{key15}"];
+  key15 -> key14 [color=black];
+  key15 -> key16 [color=black];
+  key14 [label="{key14}"];
+  key16 [label="{key16}"];
+  key4 [label="{key4}"];
+  key4 -> key2 [color=black];
+  key4 -> key6 [color=black];
+  key2 [label="{key2}"];
+  key2 -> key18 [color=black];
+  key2 -> key3 [color=black];
+  key18 [label="{key18}"];
+  key3 [label="{key3}"];
+  key6 [label="{key6}"];
+  key6 -> key5 [color=black];
+  key6 -> key8 [color=black];
+  key5 [label="{key5}"];
+  key8 [label="{key8}"];
+  key8 -> key7 [color=red];
+  key7 [label="{key7}"];
+}
