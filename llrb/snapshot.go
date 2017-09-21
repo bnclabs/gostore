@@ -1,7 +1,6 @@
 package llrb
 
 import "io"
-import "fmt"
 import "unsafe"
 import "strings"
 import "strconv"
@@ -12,42 +11,33 @@ import "github.com/prataprc/gostore/lib"
 // mvccsnapshot refers to MVCC snapshot of LLRB tree. Snapshots
 // can be used for concurrent reads.
 type mvccsnapshot struct {
-	mvcc      *MVCC
-	root      *Llrbnode
-	next      *mvccsnapshot
-	reclaims  []*Llrbnode
-	refcount  int64
-	n_count   int64
-	logprefix []byte
+	id       []byte
+	mvcc     *MVCC
+	root     unsafe.Pointer // *Llrbnode
+	next     *mvccsnapshot
+	reclaims []*Llrbnode
+	reclaim  []*Llrbnode
+	refcount int64
+	n_count  int64
 }
 
-func (snap *mvccsnapshot) initsnapshot(mvcc *MVCC) *mvccsnapshot {
-	snap.mvcc, snap.root = mvcc, (*Llrbnode)(mvcc.root)
-	snap.next = (*mvccsnapshot)(mvcc.snapshot)
-	snap.refcount, snap.n_count = 0, mvcc.Count()
+// Should be under write-lock.
+func (snap *mvccsnapshot) initsnapshot(
+	mvcc *MVCC, head *mvccsnapshot) *mvccsnapshot {
 
-	if cap(snap.reclaims) < len(mvcc.reclaims) {
-		snap.reclaims = make([]*Llrbnode, len(mvcc.reclaims))
+	snap.mvcc, snap.root, snap.next = mvcc, nil, head
+	snap.refcount, snap.n_count = 0, 0
+	if head != nil {
+		snap.root = atomic.LoadPointer(&head.root)
+		snap.n_count = mvcc.Count()
 	}
-	n := copy(snap.reclaims, mvcc.reclaims)
-	snap.reclaims = snap.reclaims[:n]
-
-	if snap.logprefix == nil {
-		snap.logprefix = make([]byte, 64)
-	}
-	ptr := (uintptr)(unsafe.Pointer(snap.root))
-	snap.logprefix = strconv.AppendUint(snap.logprefix, (uint64)(ptr), 16)
-
-	mvcc.snapshot = unsafe.Pointer(snap)
+	snap.reclaims, snap.reclaim = snap.reclaims[:0], snap.reclaim[:0]
+	ptr := (uintptr)(snap.root)
+	snap.id = strconv.AppendUint(snap.id[:0], (uint64)(ptr), 16)
 	return snap
 }
 
 //---- Exported Control methods
-
-// ID return unique id for snapshot.
-func (snap *mvccsnapshot) id() string {
-	return fmt.Sprintf("%p", snap.root)
-}
 
 // Dotdump to convert whole tree into dot script that can be
 // visualized using graphviz.
@@ -58,13 +48,22 @@ func (snap *mvccsnapshot) dotdump(buffer io.Writer) {
 		"}",
 	}
 	buffer.Write([]byte(strings.Join(lines[:len(lines)-1], "\n")))
-	snap.root.dotdump(buffer)
+	root := snap.getroot()
+	root.dotdump(buffer)
 	buffer.Write([]byte(lines[len(lines)-1]))
 }
 
-// Count return the number of items indexed in snapshot.
+// return the number of items indexed in snapshot.
 func (snap *mvccsnapshot) count() int64 {
-	return snap.n_count
+	return atomic.LoadInt64(&snap.n_count)
+}
+
+func (snap *mvccsnapshot) getroot() *Llrbnode {
+	return (*Llrbnode)(atomic.LoadPointer(&snap.root))
+}
+
+func (snap *mvccsnapshot) setroot(root *Llrbnode) {
+	atomic.StorePointer(&snap.root, unsafe.Pointer(root))
 }
 
 //---- Exported Read methods
@@ -76,7 +75,7 @@ func (snap *mvccsnapshot) get(
 	key, value []byte) (v []byte, cas uint64, deleted bool, ok bool) {
 
 	deleted, seqno := false, uint64(0)
-	nd, ok := snap.getkey(snap.root, key)
+	nd, ok := snap.getkey(snap.getroot(), key)
 	if ok {
 		if value != nil {
 			val := nd.Value()

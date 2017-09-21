@@ -18,9 +18,9 @@ func (cur *Cursor) opencursor(txn *Txn, snapshot interface{}, key []byte) *Curso
 	var root *Llrbnode
 	switch snap := snapshot.(type) {
 	case *LLRB:
-		root = (*Llrbnode)(snap.root)
+		root = snap.getroot()
 	case *mvccsnapshot:
-		root = (*Llrbnode)(snap.root)
+		root = snap.getroot()
 	}
 	cur.stack = cur.first(root, key, cur.stack)
 	return cur
