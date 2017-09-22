@@ -159,14 +159,16 @@ func (mvcc *MVCC) upsertcounts(key, value []byte, oldnd *Llrbnode) {
 	}
 }
 
-func (mvcc *MVCC) delcounts(nd *Llrbnode) {
-	if nd != nil {
-		mvcc.keymemory -= int64(len(nd.getkey()))
-		if nv := nd.nodevalue(); nv != nil {
-			mvcc.valmemory -= int64(len(nv.value()))
+func (mvcc *MVCC) delcounts(nd *Llrbnode, lsm bool) {
+	if lsm == false {
+		if nd != nil {
+			mvcc.keymemory -= int64(len(nd.getkey()))
+			if nv := nd.nodevalue(); nv != nil {
+				mvcc.valmemory -= int64(len(nv.value()))
+			}
+			atomic.AddInt64(&mvcc.n_count, -1)
+			mvcc.n_deletes++
 		}
-		atomic.AddInt64(&mvcc.n_count, -1)
-		mvcc.n_deletes++
 	}
 }
 
@@ -294,29 +296,37 @@ func (mvcc *MVCC) validatestats(stats map[string]interface{}) {
 		fmsg := "validatestats(): n_count:%v != (n_inserts:%v - n_deletes:%v)"
 		panic(fmt.Errorf(fmsg, n_count, n_inserts, n_deletes))
 	}
-	// n_nodes should match n_inserts
-	n_clones := stats["n_clones"].(int64)
-	n_nodes, n_frees := stats["n_nodes"].(int64), stats["n_frees"].(int64)
+	// n_nodes should match n_inserts and n_count
+	n_nodes := stats["n_nodes"].(int64)
 	if n_inserts != n_nodes {
 		fmsg := "validatestats(): n_inserts:%v != n_nodes:%v"
 		panic(fmt.Errorf(fmsg, n_inserts, n_nodes))
-	}
-	if (n_nodes - n_count) == n_frees {
-	} else if n_clones+(n_nodes-n_count) == n_frees {
-	} else {
-		fmsg := "validatestats(): clones:%v+(nodes:%v-count:%v) != frees:%v"
-		panic(fmt.Errorf(fmsg, n_clones, n_nodes, n_count, n_frees))
+	} else if (n_nodes - n_deletes) != n_count {
+		fmsg := "validatestats(): ncount:%v-ndels:%v != n_nodes:%v"
+		panic(fmt.Errorf(fmsg, n_count, n_deletes, n_nodes))
 	}
 
-	// n_deletes + reclaim should match (n_frees - n_clones)
-	total_reclaim := mvcc.countreclaimnodes()
-	x := lib.AbsInt64(n_deletes - total_reclaim)
-	y := lib.AbsInt64(n_clones - n_frees)
-	if x != y {
-		fmsg := "abs(n_deletes:%v - reclaim:%v) != " +
-			"abs(n_clones:%v - n_frees:%v)"
-		panic(fmt.Errorf(fmsg, n_deletes, total_reclaim, n_clones, n_frees))
+	n_clones := stats["n_clones"].(int64)
+	n_reclaims := stats["n_reclaims"].(int64)
+	if n_reclaims != (n_clones + n_deletes) {
+		fmsg := "validatestats(): n_clones:%v+n_dels:%v != n_reclaims:%v"
+		panic(fmt.Errorf(fmsg, n_clones, n_deletes, n_reclaims))
 	}
+	//ok1 := (n_clones + n_deletes + n_updates) == n_frees
+	//ok2 := (n_clones + n_updates + n_deletes) == (n_frees + n_reclaims)
+	//if (ok1 == false) && (ok2 == false) {
+	//	fmsg := "validatestats(): clones:%v+dels:%v+updts:%v != frees:%v,%v"
+	//	panic(fmt.Errorf(
+	//		fmsg, n_clones, n_deletes, n_updates, n_frees, n_reclaims))
+	//}
+	//x := lib.AbsInt64(n_deletes - n_reclaims)
+	//y := lib.AbsInt64(n_clones - n_frees)
+	//if x != y {
+	//	fmsg := "validatestats(): abs(n_deletes:%v - n_reclaim:%v) != " +
+	//		"abs(n_clones:%v - n_frees:%v)"
+	//	panic(fmt.Errorf(fmsg, n_deletes, n_reclaims, n_clones, n_frees))
+	//}
+
 	// n_snapshots should match (n_activess + n_purgedss)
 	n_snapshots := stats["n_snapshots"].(int64)
 	n_purgedss := stats["n_purgedss"].(int64)
@@ -330,13 +340,13 @@ func (mvcc *MVCC) validatestats(stats map[string]interface{}) {
 	maxreclaim := 7 * math.Log2(float64(entries))  // 7x the height
 	meanreclaim := 3 * math.Log2(float64(entries)) // 3x the height
 	if max := float64(mvcc.h_reclaims.Max()); max > 0 {
-		if max > maxreclaim {
+		if entries > 1000 && max > maxreclaim {
 			fmsg := "validatestats(): max %v reclaim exceeds 7*log2(%v)"
 			panic(fmt.Errorf(fmsg, max, entries))
 		}
 	}
 	if mean := float64(mvcc.h_reclaims.Mean()); mean > 0 {
-		if mean > meanreclaim {
+		if entries > 1000 && mean > meanreclaim {
 			fmsg := "validatestats(): mean %v reclaim exceeds 3*log2(%v)"
 			panic(fmt.Errorf(fmsg, mean, entries))
 		}
@@ -474,9 +484,14 @@ func (mvcc *MVCC) destroy() bool {
 // its value will be over-written. Make sure key is not nil.
 // Return old value if oldvalue is not nil.
 func (mvcc *MVCC) Set(key, value, oldvalue []byte) (ov []byte, cas uint64) {
-	var newnd, oldnd *Llrbnode
-
 	mvcc.rw.Lock()
+	ov, cas = mvcc.set(key, value, oldvalue)
+	mvcc.rw.Unlock()
+	return
+}
+
+func (mvcc *MVCC) set(key, value, oldvalue []byte) (ov []byte, cas uint64) {
+	var newnd, oldnd *Llrbnode
 
 	mvcc.seqno++
 	reclaim := mvcc.snapshot.reclaim[:0]
@@ -502,10 +517,8 @@ func (mvcc *MVCC) Set(key, value, oldvalue []byte) (ov []byte, cas uint64) {
 		copy(oldvalue, val)
 	}
 
-	mvcc.freenode(oldnd)
 	mvcc.appendreclaim(reclaim)
 
-	mvcc.rw.Unlock()
 	return oldvalue, seqno
 }
 
@@ -560,12 +573,26 @@ func (mvcc *MVCC) SetCAS(
 	key, value, oldvalue []byte, cas uint64) ([]byte, uint64, error) {
 
 	mvcc.rw.Lock()
-	oldvalue, cas, err := mvcc.setcas(key, value, oldvalue, cas)
-	mvcc.rw.Unlock()
+	// check for cas match.
+	// if cas > 0, key should be found and its seqno should match cas.
+	// if cas == 0, key should be missing.
+	nd, ok := mvcc.getkey(mvcc.getroot(), key)
+	ok1 := ok && nd.getseqno() != cas
+	ok2 := ok == false && cas != 0
+	if ok1 || ok2 {
+		if oldvalue != nil {
+			oldvalue = lib.Fixbuffer(oldvalue, 0)
+		}
+		mvcc.rw.Unlock()
+		return oldvalue, 0, api.ErrorInvalidCAS
+	}
+	oldvalue, cas = mvcc.set(key, value, oldvalue)
 
-	return oldvalue, cas, err
+	mvcc.rw.Unlock()
+	return oldvalue, cas, nil
 }
 
+// TODO: setcas is not used.
 func (mvcc *MVCC) setcas(
 	key, value, oldvalue []byte, cas uint64) ([]byte, uint64, error) {
 
@@ -603,9 +630,7 @@ func (mvcc *MVCC) setcas(
 		copy(oldvalue, val)
 	}
 
-	mvcc.freenode(oldnd)
 	mvcc.appendreclaim(reclaim)
-
 	return oldvalue, seqno, nil
 }
 
@@ -723,16 +748,15 @@ func (mvcc *MVCC) dodelete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 			root.setblack()
 		}
 		mvcc.setroot(root)
-		mvcc.delcounts(deleted)
 
 		if deleted != nil && oldvalue != nil {
 			val := deleted.Value()
 			oldvalue = lib.Fixbuffer(oldvalue, int64(len(val)))
 			copy(oldvalue, val)
-			mvcc.freenode(deleted)
 		}
 	}
 
+	mvcc.delcounts(deleted, lsm)
 	mvcc.appendreclaim(reclaim)
 
 	return oldvalue, seqno
@@ -893,7 +917,7 @@ func (mvcc *MVCC) commit(txn *Txn) error {
 func (mvcc *MVCC) commitrecord(rec *record) (err error) {
 	switch rec.cmd {
 	case cmdSet:
-		_, _, err = mvcc.setcas(rec.key, rec.value, nil, rec.seqno)
+		mvcc.set(rec.key, rec.value, nil)
 	case cmdDelete:
 		mvcc.dodelete(rec.key, nil, rec.lsm)
 	}
