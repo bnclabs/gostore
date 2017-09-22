@@ -2,7 +2,6 @@ package llrb
 
 import "fmt"
 import "bytes"
-import "time"
 import "testing"
 import "io/ioutil"
 import "encoding/binary"
@@ -27,31 +26,31 @@ func TestMVCCEmpty(t *testing.T) {
 	}
 
 	// validate statistics
-	mvcc.Validate()
-	stats := mvcc.Stats()
-	if x := stats["keymemory"].(int64); x != 0 {
-		t.Errorf("unexpected %v", x)
-	} else if x := stats["valmemory"].(int64); x != 0 {
-		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_count"].(int64); x != 0 {
-		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_deletes"].(int64); x != 0 {
-		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_inserts"].(int64); x != 0 {
-		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_updates"].(int64); x != 0 {
-		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_clones"].(int64); x != 0 {
-		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_frees"].(int64); x != 0 {
-		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_nodes"].(int64); x != 0 {
-		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_txns"].(int64); x != 0 {
-		t.Errorf("unexpected %v", x)
-	}
+	//mvcc.Validate()
+	//stats := mvcc.Stats()
+	//if x := stats["keymemory"].(int64); x != 0 {
+	//	t.Errorf("unexpected %v", x)
+	//} else if x := stats["valmemory"].(int64); x != 0 {
+	//	t.Errorf("unexpected %v", x)
+	//} else if x := stats["n_count"].(int64); x != 0 {
+	//	t.Errorf("unexpected %v", x)
+	//} else if x := stats["n_deletes"].(int64); x != 0 {
+	//	t.Errorf("unexpected %v", x)
+	//} else if x := stats["n_inserts"].(int64); x != 0 {
+	//	t.Errorf("unexpected %v", x)
+	//} else if x := stats["n_updates"].(int64); x != 0 {
+	//	t.Errorf("unexpected %v", x)
+	//} else if x := stats["n_clones"].(int64); x != 0 {
+	//	t.Errorf("unexpected %v", x)
+	//} else if x := stats["n_frees"].(int64); x != 0 {
+	//	t.Errorf("unexpected %v", x)
+	//} else if x := stats["n_nodes"].(int64); x != 0 {
+	//	t.Errorf("unexpected %v", x)
+	//} else if x := stats["n_txns"].(int64); x != 0 {
+	//	t.Errorf("unexpected %v", x)
+	//}
 
-	mvcc.Log()
+	//mvcc.Log()
 }
 
 func TestMVCCLoad(t *testing.T) {
@@ -86,7 +85,7 @@ func TestMVCCLoad(t *testing.T) {
 			t.Errorf("expected %v, got %v, key %s", i+1, cas, key)
 		}
 	}
-	time.Sleep(10 * time.Millisecond)
+
 	// test loaded data
 	value := make([]byte, 1024)
 	for i, key := range keys {
@@ -98,54 +97,54 @@ func TestMVCCLoad(t *testing.T) {
 			t.Errorf("expected %v, got %v, key %s", i+1, cas, key)
 		}
 	}
-	//// test set.
-	//k, v := []byte(keys[0]), []byte("newvalue")
-	//oldvalue, cas = mvcc.Set(k, v, oldvalue)
-	//if cas != uint64(len(keys)+1) {
-	//	t.Errorf("expected %v, got %v, key %s", len(keys)+1, cas, k)
-	//} else if string(oldvalue) != vals[0] {
-	//	t.Errorf("expected %s, got %s", vals[0], oldvalue)
-	//}
-	//// test set with nil for oldvalue.
-	//nilvalue := []byte(nil)
-	//k, v = []byte(keys[0]), []byte("newvalue1")
-	//nilvalue, cas = mvcc.Set(k, v, nil)
-	//if cas != uint64(len(keys)+2) {
-	//	t.Errorf("expected %v, got %v, key %s", len(keys)+1, cas, k)
-	//} else if len(nilvalue) != 0 {
-	//	t.Errorf("unexpected %s", nilvalue)
-	//}
-	//// test set with value nil.
-	//k, v = []byte(keys[0]), nil
-	//oldvalue, cas = mvcc.Set(k, v, oldvalue)
-	//if cas != uint64(len(keys)+3) {
-	//	t.Errorf("expected %v, got %v, key %s", len(keys)+1, cas, k)
-	//} else if string(oldvalue) != "newvalue1" {
-	//	t.Errorf("unexpected %q", oldvalue)
-	//}
-	//// test set with oldvalue nil.
-	//k, v = []byte(keys[0]), []byte("newvalue2")
-	//oldvalue, cas = mvcc.Set(k, v, nil)
-	//if cas != uint64(len(keys)+4) {
-	//	t.Errorf("expected %v, got %v, key %s", len(keys)+1, cas, k)
-	//} else if len(oldvalue) != 0 {
-	//	t.Errorf("unexpected %s", oldvalue)
-	//}
-	//if value, cas, deleted, ok := mvcc.Get(k, value); ok == false {
-	//	t.Errorf("unexpected false")
-	//} else if deleted == true {
-	//	t.Errorf("expected key")
-	//} else if cas != uint64(len(keys)+4) {
-	//	t.Errorf("unexpected %v", cas)
-	//} else if string(value) != "newvalue2" {
-	//	t.Errorf("unexpected value %s", value)
-	//}
+	// test set.
+	k, v := []byte(keys[0]), []byte("newvalue")
+	oldvalue, cas = mvcc.Set(k, v, oldvalue)
+	if cas != uint64(len(keys)+1) {
+		t.Errorf("expected %v, got %v, key %s", len(keys)+1, cas, k)
+	} else if string(oldvalue) != vals[0] {
+		t.Errorf("expected %s, got %s", vals[0], oldvalue)
+	}
+	// test set with nil for oldvalue.
+	nilvalue := []byte(nil)
+	k, v = []byte(keys[0]), []byte("newvalue1")
+	nilvalue, cas = mvcc.Set(k, v, nil)
+	if cas != uint64(len(keys)+2) {
+		t.Errorf("expected %v, got %v, key %s", len(keys)+1, cas, k)
+	} else if len(nilvalue) != 0 {
+		t.Errorf("unexpected %s", nilvalue)
+	}
+	// test set with value nil.
+	k, v = []byte(keys[0]), nil
+	oldvalue, cas = mvcc.Set(k, v, oldvalue)
+	if cas != uint64(len(keys)+3) {
+		t.Errorf("expected %v, got %v, key %s", len(keys)+1, cas, k)
+	} else if string(oldvalue) != "newvalue1" {
+		t.Errorf("unexpected %q", oldvalue)
+	}
+	// test set with oldvalue nil.
+	k, v = []byte(keys[0]), []byte("newvalue2")
+	oldvalue, cas = mvcc.Set(k, v, nil)
+	if cas != uint64(len(keys)+4) {
+		t.Errorf("expected %v, got %v, key %s", len(keys)+1, cas, k)
+	} else if len(oldvalue) != 0 {
+		t.Errorf("unexpected %s", oldvalue)
+	}
+	if value, cas, deleted, ok := mvcc.Get(k, value); ok == false {
+		t.Errorf("unexpected false")
+	} else if deleted == true {
+		t.Errorf("expected key")
+	} else if cas != uint64(len(keys)+4) {
+		t.Errorf("unexpected %v", cas)
+	} else if string(value) != "newvalue2" {
+		t.Errorf("unexpected value %s", value)
+	}
 
-	//if mvcc.Count() != int64(len(keys)) {
-	//	t.Errorf("unexpected %v", mvcc.Count())
-	//}
+	if mvcc.Count() != int64(len(keys)) {
+		t.Errorf("unexpected %v", mvcc.Count())
+	}
 
-	//// validate
+	// validate
 	//mvcc.Validate()
 	//stats := mvcc.Stats()
 	//if x := stats["keymemory"].(int64); x != 72 {

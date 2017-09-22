@@ -910,7 +910,22 @@ func TestLLRBTxnCursor(t *testing.T) {
 			t.Errorf("unexpected %s", v)
 		}
 	}
-	cur := txn.OpenCursor([]byte(keys[0]))
+
+	// full table scan
+	cur := txn.OpenCursor(nil)
+	testgetnext(t, cur, 0, keys, vals)
+	if k, _, _ := cur.GetNext(); k != nil {
+		t.Errorf("unexpected %s", k)
+	}
+	cur = txn.OpenCursor(nil)
+	testynext(t, cur, 0, keys, vals)
+	if k, _ := cur.Key(); k != nil {
+		t.Errorf("unexpected %s", k)
+	} else if v := cur.Value(); v != nil {
+		t.Errorf("unexpected %s", v)
+	}
+
+	cur = txn.OpenCursor([]byte(keys[0]))
 	cur.Delcursor(true /*lsm*/)
 	cur.Delete([]byte(keys[1]), nil, true /*lsm*/)
 	value := []byte("newvalue")
@@ -979,8 +994,24 @@ func TestLLRBViewCursor(t *testing.T) {
 		view.Abort()
 	}
 
+	// full table scan
+	view := llrb.View(0)
+	cur := view.OpenCursor(nil)
+	testgetnext(t, cur, 0, keys, vals)
+	if k, _, _ := cur.GetNext(); k != nil {
+		t.Errorf("unexpected %s", k)
+	}
+	cur = view.OpenCursor(nil)
+	testynext(t, cur, 0, keys, vals)
+	if k, _ := cur.Key(); k != nil {
+		t.Errorf("unexpected %s", k)
+	} else if v := cur.Value(); v != nil {
+		t.Errorf("unexpected %s", v)
+	}
+	view.Abort()
+
 	txn := llrb.BeginTxn(0x12345)
-	cur := txn.OpenCursor([]byte(keys[0]))
+	cur = txn.OpenCursor([]byte(keys[0]))
 	cur.Delcursor(true /*lsm*/)
 	cur.Delete([]byte(keys[1]), nil, true /*lsm*/)
 	value := []byte("newvalue")
@@ -1132,6 +1163,46 @@ func BenchmarkLLRBView(b *testing.B) {
 		txn := llrb.View(0)
 		txn.Abort()
 	}
+}
+
+func BenchmarkLLRBOpenCur(b *testing.B) {
+	llrb := makeBenchLLRB(1000)
+	defer llrb.Destroy()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		txn := llrb.BeginTxn(0)
+		txn.OpenCursor([]byte("key500"))
+		txn.Commit()
+	}
+}
+
+func BenchmarkLLRBGetNext(b *testing.B) {
+	llrb := makeBenchLLRB(b.N)
+	defer llrb.Destroy()
+
+	txn := llrb.BeginTxn(0)
+	cur := txn.OpenCursor(nil)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		cur.GetNext()
+	}
+	txn.Commit()
+}
+
+func BenchmarkLLRBYNext(b *testing.B) {
+	llrb := makeBenchLLRB(b.N)
+	defer llrb.Destroy()
+
+	view := llrb.BeginTxn(0)
+	cur := view.OpenCursor(nil)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		cur.YNext()
+	}
+	view.Abort()
 }
 
 func makeBenchLLRB(n int) *LLRB {

@@ -106,7 +106,7 @@ func (cur *Cursor) first(
 
 	for nd := root; nd != nil; {
 		ptr := (uintptr)(unsafe.Pointer(nd))
-		if nd.ltkey(key, true) {
+		if nd != nil && nd.ltkey(key, true) {
 			stack = append(stack, ptr|0x3)
 			nd = nd.right
 			continue
