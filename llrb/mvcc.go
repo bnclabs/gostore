@@ -417,6 +417,7 @@ func (mvcc *MVCC) Clone(name string) *MVCC {
 	mvcc.rw.Lock()
 
 	newmvcc := NewMVCC(mvcc.name, mvcc.setts)
+	newmvcc.rw.Lock()
 	newmvcc.llrbstats = mvcc.llrbstats
 	newmvcc.h_upsertdepth = mvcc.h_upsertdepth.Clone()
 	newmvcc.h_bulkfree = mvcc.h_bulkfree.Clone()
@@ -426,6 +427,7 @@ func (mvcc *MVCC) Clone(name string) *MVCC {
 
 	newmvcc.setroot(newmvcc.clonetree(mvcc.getroot()))
 
+	newmvcc.rw.Unlock()
 	mvcc.rw.Unlock()
 	return newmvcc
 }
