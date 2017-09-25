@@ -11,7 +11,7 @@ type mblock struct {
 	rpos     int64
 	firstkey []byte
 
-	index zindex
+	index hindex
 
 	values  [][]byte
 	reduced []byte

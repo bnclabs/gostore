@@ -1,15 +1,15 @@
 package bubt
 
-type zindex []uint32
+type hindex []uint32
 
-func (zi zindex) footprint() int64 {
-	return int64(len(zi) * 4)
+func (hi hindex) footprint() int64 {
+	return int64(len(hi) * 4)
 }
 
-func (zi zindex) nextfootprint() int64 {
-	return int64((len(zi) + 1) * 4)
+func (hi hindex) nextfootprint() int64 {
+	return int64((len(hi) + 1) * 4)
 }
 
-func (zi zindex) length() int64 {
-	return int64(len(zi))
+func (hi hindex) length() int64 {
+	return int64(len(hi))
 }

@@ -10,7 +10,7 @@ const znentriesSz = 4
 
 // zblock represents the leaf node in bubt tree.
 //   n_entries uint32 - 4-byte count of number entries in this zblock.
-//   zindex []uint32 - 4 byte offset into zblock for each entry.
+//   hindex []uint32 - 4 byte offset into zblock for each entry.
 //   zentries - array of zentries.
 // note that instance of this structure is not an exact map to on
 // disk footprint of zblock.
@@ -20,7 +20,7 @@ type zblock struct {
 	rpos     int64
 	firstkey []byte
 
-	index zindex
+	index hindex
 
 	keys    [][]byte
 	values  [][]byte
