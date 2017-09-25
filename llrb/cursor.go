@@ -9,6 +9,7 @@ var _ = fmt.Sprintf("")
 // on Txn object to create a new cursor.
 type Cursor struct {
 	txn   *Txn
+	ynext bool
 	stack []uintptr
 }
 
@@ -22,7 +23,7 @@ func (cur *Cursor) opencursor(txn *Txn, snapshot interface{}, key []byte) *Curso
 	case *mvccsnapshot:
 		root = snap.getroot()
 	}
-	cur.stack = cur.first(root, key, cur.stack)
+	cur.stack, cur.ynext = cur.first(root, key, cur.stack), false
 	return cur
 }
 
@@ -89,6 +90,14 @@ func (cur *Cursor) Delcursor(lsm bool) {
 func (cur *Cursor) YNext() (key, value []byte, seqno uint64, deleted bool) {
 	if len(cur.stack) == 0 {
 		return nil, nil, 0, false
+	}
+	if cur.ynext == false {
+		cur.ynext = true
+		ptr := cur.stack[len(cur.stack)-1]
+		nd := (*Llrbnode)(unsafe.Pointer(ptr & (^uintptr(0x3))))
+		key, seqno, deleted = nd.getkey(), nd.getseqno(), nd.isdeleted()
+		value = nd.Value()
+		return
 	}
 	cur.stack = cur.next(cur.stack)
 	if len(cur.stack) == 0 {
