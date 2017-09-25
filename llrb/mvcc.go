@@ -451,7 +451,7 @@ func (mvcc *MVCC) Destroy() {
 	close(mvcc.finch) // close housekeeping routine
 	time.Sleep((mvcc.snaptick + 10))
 	for mvcc.destroy() == false {
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	log.Infof("%v destroyed\n", mvcc.logprefix)
 }

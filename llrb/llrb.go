@@ -811,7 +811,7 @@ func (llrb *LLRB) clonetree(nd *Llrbnode) *Llrbnode {
 // method call are allowed after Destroy.
 func (llrb *LLRB) Destroy() {
 	for llrb.dodestory() == false {
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	log.Infof("%v destroyed\n", llrb.logprefix)
 }
