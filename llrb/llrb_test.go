@@ -1044,6 +1044,52 @@ func TestLLRBViewCursor(t *testing.T) {
 	}
 }
 
+func TestLLRBScan(t *testing.T) {
+	setts := s.Settings{
+		"keycapacity": 100 * 1024 * 1024, "valcapacity": 100 * 1024 * 1024,
+	}
+	llrb := NewLLRB("scan", setts)
+	defer llrb.Destroy()
+
+	// load data
+	scanlimit = 2
+	n := 10000
+	for i := 0; i < n; i++ {
+		k := []byte(fmt.Sprintf("key%v", i))
+		v := []byte(fmt.Sprintf("val%v", i))
+		llrb.Set(k, v, nil)
+		llrb.Validate()
+	}
+
+	view := llrb.View(0)
+	defer view.Abort()
+	count, cur := 0, view.OpenCursor(nil)
+	scan := llrb.Scan()
+
+	refkey, refval, refseqno, refdeleted := cur.YNext()
+	key, val, seqno, deleted := scan()
+	for refkey != nil {
+		count++
+		//t.Logf("iter %q scan:%q", refkey, key)
+		if bytes.Compare(key, refkey) != 0 {
+			t.Errorf("expected %q, got %q", refkey, key)
+		} else if bytes.Compare(val, refval) != 0 {
+			t.Errorf("expected %s, got %s", refval, val)
+		} else if seqno != refseqno {
+			t.Errorf("expected %v, got %v", refseqno, seqno)
+		} else if deleted != refdeleted {
+			t.Errorf("expected %v, got %v", refdeleted, deleted)
+		}
+		refkey, refval, refseqno, refdeleted = cur.YNext()
+		key, val, seqno, deleted = scan()
+	}
+	if key != nil {
+		t.Errorf("expected nil, %s", key)
+	} else if count != n {
+		t.Errorf("expected %v, got %v", n, count)
+	}
+}
+
 func BenchmarkLLRBCount(b *testing.B) {
 	llrb := makeBenchLLRB(1000)
 	defer llrb.Destroy()
@@ -1205,6 +1251,18 @@ func BenchmarkLLRBYNext(b *testing.B) {
 	view.Abort()
 }
 
+func BenchmarkLLRBScan(b *testing.B) {
+	llrb := makeBenchLLRB(b.N)
+	defer llrb.Destroy()
+
+	scan := llrb.Scan()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		scan()
+	}
+}
+
 func makeBenchLLRB(n int) *LLRB {
 	var scratch [8]byte
 
@@ -1278,7 +1336,7 @@ func testgetnext(t *testing.T, cur *Cursor, from int, keys, vals []string) {
 }
 
 func testynext(t *testing.T, cur *Cursor, from int, keys, vals []string) {
-	i := from + 1
+	i := from
 	for {
 		k, v, _, deleted := cur.YNext()
 		if k == nil {
@@ -1308,3 +1366,7 @@ func init() {
 	}
 	log.SetLogger(nil, setts)
 }
+
+//buf := bytes.NewBuffer(nil)
+//llrb.Dotdump(buf)
+//ioutil.WriteFile("out.dot", buf.Bytes(), 0664)
