@@ -985,6 +985,60 @@ func (mvcc *MVCC) getkey(nd *Llrbnode, k []byte) (*Llrbnode, bool) {
 	return nil, false
 }
 
+func (mvcc *MVCC) Scan() func() (key, value []byte, seqno uint64, deleted bool) {
+	currkey := make([]byte, 1024)
+	sb := makescanbuf()
+
+	leseqno := mvcc.startscan(nil, sb, 0)
+	return func() ([]byte, []byte, uint64, bool) {
+		key, value, seqno, deleted := sb.pop()
+		if key == nil {
+			mvcc.startscan(currkey, sb, leseqno)
+			key, value, seqno, deleted = sb.pop()
+		}
+		if cap(currkey) < len(key) {
+			currkey = make([]byte, len(key))
+		}
+		currkey = currkey[:len(key)]
+		copy(currkey, key)
+		return key, value, seqno, deleted
+	}
+}
+
+func (mvcc *MVCC) startscan(key []byte, sb *scanbuf, leseqno uint64) uint64 {
+	mvcc.rw.RLock()
+	if key == nil {
+		leseqno = mvcc.seqno
+	}
+	sb.startwrite()
+	mvcc.scan(mvcc.getroot(), key, sb, leseqno)
+	sb.startread()
+	mvcc.rw.RUnlock()
+	return leseqno
+}
+
+func (mvcc *MVCC) scan(
+	nd *Llrbnode, key []byte, sb *scanbuf, leseqno uint64) bool {
+
+	if nd == nil {
+		return true
+	}
+	if key != nil && nd.lekey(key, false) {
+		return mvcc.scan(nd.right, key, sb, leseqno)
+	}
+	if !mvcc.scan(nd.left, key, sb, leseqno) {
+		return false
+	}
+	seqno := nd.getseqno()
+	if seqno <= leseqno {
+		n := sb.append(nd.getkey(), nd.Value(), seqno, nd.isdeleted())
+		if n >= scanlimit {
+			return false
+		}
+	}
+	return mvcc.scan(nd.right, key, sb, leseqno)
+}
+
 // llrb rotation routines for 2-3 algorithm
 
 func (mvcc *MVCC) walkdownrot23(nd *Llrbnode) *Llrbnode {
