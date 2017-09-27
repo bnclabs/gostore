@@ -4,18 +4,11 @@ import s "github.com/prataprc/gosettings"
 
 // Defaultsettings for bubt instance.
 //
-// "level" (int64, default: 1),
-//		Disk level, if applicable, can be used for implementing
-//		multi level log-structured-merge index.
-//
 // "zblocksize" (int64, default: 4096)
 //		Disk block size for leaf nodes (z-nodes).
 //
 // "mblocksize" (int64, default: 4096),
 //		Disk block size for intermediate nodes (m-nodes).
-//
-// "mreduce" (bool, default: false),
-//		Reduce entries at block level.
 //
 // "datafile" (bool, default: false),
 //      If true, store values in a separate datafile. This
@@ -42,14 +35,7 @@ func Defaultsettings() s.Settings {
 	// setts2json()
 	// json2setts()
 	return s.Settings{
-		"level":              1,
-		"zblocksize":         4096,
-		"mblocksize":         4096,
-		"mreduce":            false,
-		"datafile":           false,
-		"metadata.vbuuid":    true,
-		"metadata.bornseqno": true,
-		"metadata.deadseqno": true,
-		"iterpool.size":      100,
+		"zblocksize": 4096,
+		"mblocksize": 4096,
 	}
 }

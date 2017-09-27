@@ -1,18 +1,45 @@
 package bubt
 
-import "path/filepath"
+import "os"
+import "fmt"
 
-func makespace(block []byte, off, ln int) []byte {
-	for i, j := off+ln-1, ln-1; j >= 0; i, j = i-1, j-1 {
-		block[i] = block[j]
+import "golang.org/x/exp/mmap"
+
+func createfile(name string) *os.File {
+	os.Remove(name)
+	fd, err := os.OpenFile(name, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		panic(fmt.Errorf("create append file: %v", err))
 	}
-	for i := off + ln; i < len(block); i++ {
-		block[i] = 0
-	}
-	return block
+	return fd
 }
 
-func mkfilenames(path string) (string, string) {
-	index, data := filepath.Join(path, "index"), filepath.Join(path, "data")
-	return index, data
+func openfile(filename string, mmap bool) (r io.ReaderAt) {
+	if mmap {
+		r, err := mmap.Open(filename)
+		if err != nil {
+			panic(fmt.Errorf("mmap.Open(%q): %v", mfile, err))
+		}
+		return r
+	}
+	r, err := os.OpenFile(mfile, os.O_RDONLY, 0666)
+	if err != nil {
+		panic(fmt.Errorf("OpenFile(%q): %v", mfile, err))
+	}
+	return r
+}
+
+func filesize(r io.ReaderAt) int64 {
+	switch x := r.(type) {
+	case *mmap.ReaderAt:
+		return int64(x.Len())
+
+	case *os.File:
+		fi, err := x.Stat()
+		if err == nil {
+			return int64(fi.Size())
+		}
+		panic(fmt.Errorf(err))
+	}
+	panic("unreachable code")
 }

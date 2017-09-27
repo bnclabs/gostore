@@ -55,9 +55,9 @@ Header
 Marker block
 ------------
 
-A marker-block of size `MarkerBlocksize` is populate with `MarkerByte`
-and flushed before the header fields. Only when marker-block is
-identified with its full size followed by 40 bytes of header, the index
+A marker-block of size `mblocksize` or `zblocksize` is populate with
+`MarkerByte` and flushed before the header fields. Only when marker-block
+is identified with its full size followed by 40 bytes of header, the index
 file is considered well-formed.
 
 Metadata, Settings and Statistics

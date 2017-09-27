@@ -15,652 +15,228 @@ import s "github.com/prataprc/gosettings"
 // Snapshot manages sorted key,value entries in persisted, immutable btree
 // built bottoms up and not updated there after.
 type Snapshot struct {
-	rootblock  int64
-	rootreduce int64
-	metadata   []byte
-	seqno      uint64
+	name     string
+	root     int64 // fpos into m-index
+	metadata []byte
+	mfile    string
+	zfile    []string
+	readm    io.ReaderAt   // block reader for m-index
+	readzs   []io.ReaderAt // block reader for zero or more z-index.
 
-	// statisitcs, need to be 8 byte aligned.
-	n_snapshots int64
-	n_count     int64
-	n_lookups   int64
-	n_ranges    int64
+	zblocksize int64
+	mblocksize int64
+	logprefix  string
 
-	path      string
-	indexfile string
-	datafile  string
-	indexfd   *os.File
-	datafd    *os.File
-	logprefix string
-
-	// reader data
-	builderstats map[string]interface{}
-	iterpool     chan *iterator
-	activeiter   int64
-
-	// settings, this must be consistent with Bubt{}.
-	name         string
-	level        byte
-	zblocksize   int64
-	mblocksize   int64
-	mreduce      bool
-	hasdatafile  bool
-	iterpoolsize int64
-	hasvbuuid    bool
-	hasbornseqno bool
-	hasdeadseqno bool
+	viewcache   chan *View
+	cursorcache chan *Cursor
 }
 
-// OpenBubtstore index, since the index is immutable it is returned
-// as a snapshot which implements IndexMeta, Index, IndexReader and
-// IndexWriter interfaces. If this index is going to be shared
-// between multiple go-routines make sure to call RSnapshot() for
-// reference counting. Before this index can be destoryed, all its
-// snapshots released and iterators closed.
-func OpenBubtstore(name, path string) (ss *Snapshot, err error) {
+func OpenSnapshot(name, paths []string, mmap bool) (snap *Snapshot) {
+	snap = &Snapshot{
+		name:        name,
+		viewcache:   make(chan *View, 100),   // TODO: no magic.
+		cursorcache: make(chan *Cursor, 100), // TODO: no magic.
+		logprefix:   fmt.Sprintf("[BUBT-%s]", name),
+	}
+
 	defer func() {
-		if err != nil {
-			ss.destroy()
-			ss = nil
+		if r := recover(); r != nil {
+			log.Errorf("%v: %v", snap.logprefix, r)
 		}
+		snap = nil
 	}()
 
-	ss = getstore(name)
-	if ss != nil {
-		return ss, nil
-	}
-
-	indexfile, datafile := mkfilenames(path)
-	ss = &Snapshot{
-		name:      name,
-		path:      path,
-		indexfile: indexfile,
-		datafile:  datafile,
-	}
-	ss.logprefix = fmt.Sprintf("BUBT [%s]", name)
-
-	// open indexfile
-	if _, err = os.Stat(ss.indexfile); os.IsNotExist(err) {
-		log.Errorf("%v file %q not present\n", ss.logprefix, ss.indexfile)
-		return nil, err
-	}
-	ss.indexfd, err = os.OpenFile(ss.indexfile, os.O_RDONLY, 0666)
-	if err != nil {
-		fmsg := "%v indexfile %q (os.O_RDONLY, 0666): %v\n"
-		log.Errorf(fmsg, ss.logprefix, ss.datafile, err)
-		return nil, err
-	}
-
-	var fi os.FileInfo
-	if fi, err = ss.indexfd.Stat(); err != nil {
-		fmsg := "%v unable to stat %q: %v\n"
-		log.Errorf(fmsg, ss.logprefix, ss.indexfile, err)
-		return nil, err
-	}
-
-	eof := fi.Size()
-
-	var header [5]int64
-	if header, err = ss.readheader(eof); err != nil {
-		return nil, err
-	}
-	statslen, settslen, mdlen := header[0], header[1], header[2]
-	ss.rootblock, ss.rootreduce = header[3], header[4]
-	markerat := eof - int64(len(header)*8) - MarkerBlocksize
-	if err = ss.validateMarker(markerat, MarkerBlocksize); err != nil {
-		return nil, err
-	}
-	mdat := markerat - mdlen
-	if err = ss.loadMetadata(mdat, mdlen); err != nil {
-		return nil, err
-	}
-	settsat := mdat - settslen
-	if err = ss.loadSettings(settsat, settslen); err != nil {
-		return nil, err
-	}
-	statsat := settsat - statslen
-	if err = ss.loadStats(statsat, statslen); err != nil {
-		return nil, err
-	}
-
-	// open datafile, if present
-	if ss.datafile != "" {
-		if _, err = os.Stat(ss.datafile); os.IsNotExist(err) {
-			log.Errorf("%v file %q not present\n", ss.logprefix, ss.datafile)
-			return nil, err
-		}
-		ss.datafd, err = os.OpenFile(ss.datafile, os.O_RDONLY, 0666)
-		if err != nil {
-			fmsg := "%v datafile %q (os.O_RDONLY, 0666): %v\n"
-			log.Errorf(fmsg, ss.logprefix, ss.datafile, err)
-			return nil, err
-		}
-	}
-
-	ss.iterpool = make(chan *iterator, ss.iterpoolsize)
-
-	log.Infof("%v opening snapshot ...\n", ss.logprefix)
-
-	setstore(name, ss)
-	return ss, nil
+	snap.loadreaders(paths, mmap)
+	snap.readheader()
+	return snap
 }
 
-func (ss *Snapshot) readsettings(setts s.Settings) {
-	ss.zblocksize = setts.Int64("zblocksize")
-	ss.mblocksize = setts.Int64("mblocksize")
-	ss.mreduce = setts.Bool("mreduce")
-	ss.iterpoolsize = setts.Int64("iterpool.size")
-	ss.level = byte(setts.Int64("level"))
-	ss.hasdatafile = setts.Bool("datafile")
-	if ss.hasdatafile == false {
-		ss.datafile = ""
-	}
-	ss.hasvbuuid = setts.Bool("metadata.vbuuid")
-	ss.hasbornseqno = setts.Bool("metadata.bornseqno")
-	ss.hasdeadseqno = setts.Bool("metadata.deadseqno")
-}
-
-func (ss *Snapshot) readheader(eof int64) (fields [5]int64, err error) {
-	var header [40]byte
-	var statslen, settslen, mdlen, rootblock, rootreduce int64
-	var n int
-
-	headerat := eof - int64(len(header))
-	n, err = ss.indexfd.ReadAt(header[:], headerat)
-	if err != nil {
-		fmsg := "%v reading %q header: %v\n"
-		log.Errorf(fmsg, ss.logprefix, ss.indexfile, err)
-		return
-
-	} else if n != len(header) {
-		err = fmt.Errorf("partial header read: %v != %v", n, len(header))
-		log.Errorf("%v %v\n", ss.logprefix, err)
-		return
-	}
-	statslen, n = int64(binary.BigEndian.Uint64(header[:])), 8
-	settslen, n = int64(binary.BigEndian.Uint64(header[n:])), n+8
-	mdlen, n = int64(binary.BigEndian.Uint64(header[n:])), n+8
-	rootblock, n = int64(binary.BigEndian.Uint64(header[n:])), n+8
-	rootreduce, n = int64(binary.BigEndian.Uint64(header[n:])), n+8
-	fields = [5]int64{statslen, settslen, mdlen, rootblock, rootreduce}
-	return fields, nil
-}
-
-func (ss *Snapshot) loadMetadata(mdat int64, mdlen int64) error {
-	ss.metadata = make([]byte, mdlen)
-	n, err := ss.indexfd.ReadAt(ss.metadata, mdat)
-	if err != nil {
-		log.Errorf("%v settings ReadAt: %v\n", ss.logprefix, err)
-		return err
-	} else if int64(n) != mdlen {
-		err := fmt.Errorf("partial read: %v != %v", n, mdlen)
-		log.Errorf("%v %v\n", ss.logprefix, err)
-		return err
-	}
-	return nil
-}
-
-func (ss *Snapshot) loadSettings(statsat int64, statslen int64) error {
-	block := make([]byte, statslen)
-	n, err := ss.indexfd.ReadAt(block, statsat)
-	if err != nil {
-		log.Errorf("%v settings ReadAt: %v\n", ss.logprefix, err)
-		return err
-	} else if int64(n) != statslen {
-		err := fmt.Errorf("partial read: %v != %v", n, statslen)
-		log.Errorf("%v %v\n", ss.logprefix, err)
-		return err
-	}
-	var setts s.Settings
-	if err := json.Unmarshal(block, &setts); err != nil {
-		err := fmt.Errorf("setts.Unmarhsal(): %v", err)
-		log.Errorf("%v %v\n", ss.logprefix, err)
-		return err
-	}
-	ss.readsettings(setts)
-	return nil
-}
-
-func (ss *Snapshot) loadStats(statsat int64, statslen int64) error {
-	block := make([]byte, statslen)
-	n, err := ss.indexfd.ReadAt(block, statsat)
-	if err != nil {
-		log.Errorf("%v settings ReadAt: %v\n", ss.logprefix, err)
-		return err
-	} else if int64(n) != statslen {
-		err := fmt.Errorf("partial read: %v != %v", n, statslen)
-		log.Errorf("%v %v\n", ss.logprefix, err)
-		return err
-	}
-	if err := json.Unmarshal(block, &ss.builderstats); err != nil {
-		err := fmt.Errorf("json.Unmarshal: %v", err)
-		log.Errorf("%v %v\n", ss.logprefix, err)
-		return err
-	}
-	ss.n_count = int64(ss.builderstats["n_count"].(float64))
-	return nil
-}
-
-//---- exported methods
-
-// Return snapshot name
-func (ss *Snapshot) Name() string {
-	return ss.name
-}
-
-// Indexfile return the indexfile backing this snapshot.
-func (ss *Snapshot) Indexfile() string {
-	return ss.indexfile
-}
-
-// Datafile return the datafile backing this snapshot.
-func (ss *Snapshot) Datafile() string {
-	return ss.datafile
-}
-
-// Dumpkeys in index
-func (ss *Snapshot) Dumpkeys() {
-	ss.dumpkeys(ss.rootblock, "")
-}
-
-//---- api.IndexMeta interface.
-
-// ID implement api.IndexMeta interface.
-func (ss *Snapshot) ID() string {
-	return ss.name
-}
-
-// Count implement api.IndexMeta interface.
-func (ss *Snapshot) Count() int64 {
-	return ss.n_count
-}
-
-// Isactive implement api.IndexMeta interface.
-func (ss *Snapshot) Isactive() bool {
-	return atomic.LoadInt64(&ss.n_snapshots) > 0
-}
-
-// Metadata implement api.IndexMeta interface. Opaque binary blob
-// persisted by builder as per application's call.
-func (ss *Snapshot) Metadata() []byte {
-	return ss.metadata
-}
-
-// Stats implement api.IndexMeta interface.
-func (ss *Snapshot) Stats() (map[string]interface{}, error) {
-	panic("TBD")
-}
-
-// Fullstats implement api.IndexMeta interface.
-func (ss *Snapshot) Fullstats() (map[string]interface{}, error) {
-	panic("TBD")
-}
-
-// Validate implement api.IndexMeta interface.
-func (ss *Snapshot) Validate() {
-	if atomic.LoadInt64(&ss.n_snapshots) == 0 {
-		panic("TBD")
-	}
-	panic("all snapshots released")
-}
-
-// Log implement api.IndexMeta interface.
-func (ss *Snapshot) Log(involved string, humanize bool) {
-	if atomic.LoadInt64(&ss.n_snapshots) == 0 {
-		panic("TBD")
-	}
-	panic("all snapshots released")
-}
-
-//---- api.Index interface
-
-// RSnapshot implement api.Index interface.
-func (ss *Snapshot) RSnapshot(snapch chan api.IndexSnapshot, next bool) error {
-	ss.Refer()
-	snapch <- ss
-	return nil
-}
-
-// Clone api.Index interface is not supported
-func (ss *Snapshot) Clone(name string) (api.Index, error) {
-	panic("not supported")
-}
-
-// Destroy implement Index{} interface.
-func (ss *Snapshot) Destroy() error {
-	if ss == nil {
-		return nil
-	}
-	return ss.destroy()
-}
-
-//---- api.IndexSnapshot interface.
-
-// Refer implement api.IndexSnapshot{} interface.
-func (ss *Snapshot) Refer() {
-	atomic.AddInt64(&ss.n_snapshots, 1)
-}
-
-// Release implement api.IndexSnapshot{} interface.
-func (ss *Snapshot) Release() {
-	atomic.AddInt64(&ss.n_snapshots, -1)
-}
-
-//---- api.IndexReader interface.
-
-// Has implement api.IndexReader interface.
-func (ss *Snapshot) Has(key []byte) bool {
-	return ss.Get(key, nil)
-}
-
-// Get implement api.IndexReader interface.
-func (ss *Snapshot) Get(key []byte, callb api.NodeCallb) bool {
-	if ss.n_count == 0 {
-		if callb != nil {
-			callb(ss, 0, nil, nil, api.ErrorKeyMissing)
-		}
-		return false
-	}
-
-	rc := false
-	ss.rangeforward(
-		key, key, ss.rootblock, [2]int{0, 0},
-		func(_ api.Index, _ int64, _, nd api.Node, err error) bool {
-			if err == nil && nd != nil {
-				rc = true
-			}
-			if callb != nil {
-				if err != nil {
-					callb(ss, 0, nil, nil, err)
-				} else if nd == nil {
-					callb(ss, 0, nil, nil, api.ErrorKeyMissing)
-				} else {
-					callb(ss, 0, nd, nd, nil)
+func (snap *Snapshot) loadreaders(paths []string, mmap bool) error {
+	zfiles = []string{}
+	for _, path := range paths {
+		if fis, err := ioutil.ReadDir(path); err == nil {
+			for _, fi := range fis {
+				if !fi.IsDir() || filepath.Base(fi.Name()) != name {
+					continue
+				}
+				if strings.Contains(fi.Name(), "bubt-mindex.data") {
+					snap.mfile = fi.Name()
+				} else if strings.Contains(fi.Name(), "bubt-zindex") {
+					zfiles = append(zfiles, fi.Name())
 				}
 			}
-			return false
-		})
-	atomic.AddInt64(&ss.n_lookups, 1)
-	return rc
-}
-
-// Range implement api.IndexReader interface.
-func (ss *Snapshot) Range(
-	lkey, hkey []byte, incl string, reverse bool, callb api.NodeCallb) {
-
-	if ss.rootblock < 0 {
-		return
-	}
-	lkey, hkey = ss.fixrangeargs(lkey, hkey)
-	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
-		if incl == "none" {
-			return
-		} else if incl == "low" || incl == "high" {
-			incl = "both"
-		}
-	}
-
-	var cmp [2]int
-
-	if reverse {
-		switch incl {
-		case "low":
-			cmp = [2]int{0, -1}
-		case "high":
-			cmp = [2]int{1, 0}
-		case "both":
-			cmp = [2]int{0, 0}
-		case "none":
-			cmp = [2]int{1, -1}
-		}
-		ss.rangebackward(lkey, hkey, ss.rootblock, cmp, callb)
-
-	} else {
-		switch incl {
-		case "low":
-			cmp = [2]int{0, -1}
-		case "high":
-			cmp = [2]int{1, 0}
-		case "both":
-			cmp = [2]int{0, 0}
-		case "none":
-			cmp = [2]int{1, -1}
-		}
-		ss.rangeforward(lkey, hkey, ss.rootblock, cmp, callb)
-	}
-	atomic.AddInt64(&ss.n_lookups, 1)
-	return
-}
-
-// Iterate implement api.IndexReader interface.
-func (ss *Snapshot) Iterate(
-	lkey, hkey []byte, incl string, r bool) api.IndexIterator {
-
-	lkey, hkey = ss.fixrangeargs(lkey, hkey)
-	if lkey != nil && hkey != nil && bytes.Compare(lkey, hkey) == 0 {
-		if incl == "none" {
-			return nil
-		} else if incl == "low" || incl == "high" {
-			incl = "both"
-		}
-	}
-
-	var iter *iterator
-	select {
-	case iter = <-ss.iterpool:
-	default:
-		iter = &iterator{}
-	}
-
-	// NOTE: always re-initialize, because we are getting it back from pool.
-	iter.tree, iter.snapshot = ss, ss
-	iter.nodes, iter.index, iter.limit = iter.nodes[:0], 0, 5
-	iter.continuate = false
-	iter.incl, iter.reverse = incl, r
-	iter.startkey = lib.Fixbuffer(iter.startkey, int64(len(lkey)))
-	copy(iter.startkey, lkey)
-	iter.endkey = lib.Fixbuffer(iter.endkey, int64(len(hkey)))
-	copy(iter.endkey, hkey)
-	iter.closed, iter.activeiter = false, &ss.activeiter
-
-	if iter.nodes == nil {
-		iter.nodes = make([]api.Node, 0)
-	}
-
-	iter.rangefill()
-	if r {
-		switch iter.incl {
-		case "none":
-			iter.incl = "high"
-		case "low":
-			iter.incl = "both"
-		}
-	} else {
-		switch iter.incl {
-		case "none":
-			iter.incl = "low"
-		case "high":
-			iter.incl = "both"
-		}
-	}
-
-	atomic.AddInt64(&ss.n_ranges, 1)
-	atomic.AddInt64(&ss.activeiter, 1)
-	return iter
-}
-
-//---- api.IndexWriter interface{}
-
-// Upsert api.IndexWriter{} method, will panic if called.
-func (ss *Snapshot) Upsert(key, value []byte, callb api.NodeCallb) error {
-	panic("IndexWriter.Upsert() not implemented")
-}
-
-// Upsert api.IndexWriter{} method, will panic if called.
-func (ss *Snapshot) UpsertCas(key, value []byte, cas uint64, callb api.NodeCallb) error {
-	panic("IndexWriter.UpsertCas() not implemented")
-}
-
-// Delete api.IndexWriter{} method, will panic if called.
-func (ss *Snapshot) Delete(key []byte, callb api.NodeCallb) error {
-	panic("IndexWriter.Delete() not implemented")
-}
-
-// Mutations api.IndexWriter{} method, will panic if called.
-func (ss *Snapshot) Mutations(_ []*api.MutationCmd, callb api.NodeCallb) error {
-	panic("IndexWriter.Mutations() not implemented")
-}
-
-//---- local methods
-
-func (ss *Snapshot) destroy() error {
-	if atomic.LoadInt64(&ss.n_snapshots) > 0 {
-		return api.ErrorActiveSnapshots
-	} else if atomic.LoadInt64(&ss.activeiter) > 0 {
-		return api.ErrorActiveIterators
-	}
-
-	defer delstore(ss.name)
-
-	if ss.indexfd != nil {
-		if err := ss.indexfd.Close(); err != nil {
-			fmsg := "%v closing indexfile %q: %v\n"
-			log.Errorf(fmsg, ss.logprefix, ss.indexfile, err)
-			return err
-		}
-	}
-	if err := os.Remove(ss.indexfile); err != nil {
-		fmsg := "%v while removing indexfile %q: %v\n"
-		log.Errorf(fmsg, ss.logprefix, ss.indexfile, err)
-		return err
-	} else {
-		log.Infof("%v removing indexfile %q\n", ss.logprefix, ss.indexfile)
-	}
-
-	if ss.datafd != nil {
-		if err := ss.datafd.Close(); err != nil {
-			fmsg := "%v closing datafile %q: %v\n"
-			log.Errorf(fmsg, ss.logprefix, ss.datafile, err)
-			return err
-		}
-	}
-	if ss.datafile != "" {
-		if err := os.Remove(ss.datafile); err != nil {
-			fmsg := "%v while removing datafile %q: %v\n"
-			log.Errorf(fmsg, ss.logprefix, ss.datafile, err)
-			return err
 		} else {
-			log.Infof("%v removing datafile %q\n", ss.logprefix, ss.datafile)
+			panic(fmt.Errorf("ReadDir(%q) : %v", path, err))
 		}
 	}
 
-	if err := os.Remove(ss.path); err != nil {
-		fmsg := "%v while removing path %q: %v\n"
-		log.Errorf(fmsg, ss.logprefix, ss.path, err)
-		return err
-	} else {
-		log.Infof("%v removing path %q\n", ss.logprefix, ss.path)
+	if mfile == "" {
+		panic(fmt.Errorf("index file not found"))
 	}
-	return nil
-}
+	snap.readm = openfile(snap.mfile, true)
 
-func (ss Snapshot) ismvpos(vpos int64) (int64, bool) {
-	if (vpos & 0x1) == 1 {
-		return int64(uint64(vpos) & 0xFFFFFFFFFFFFFFF8), true
-	}
-	return int64(uint64(vpos) & 0xFFFFFFFFFFFFFFF8), false
-}
-
-func (ss *Snapshot) rangeforward(
-	lkey, hkey []byte, fpos int64, cmp [2]int, callb api.NodeCallb) bool {
-
-	switch ndblk := ss.readat(fpos).(type) {
-	case mnode:
-		rc := ndblk.rangeforward(ss, lkey, hkey, cmp, callb)
-		return rc
-
-	case znode:
-		rc := ndblk.rangeforward(ss, lkey, hkey, fpos, cmp, callb)
-		return rc
-	}
-	return true
-}
-
-func (ss *Snapshot) rangebackward(
-	lkey, hkey []byte, fpos int64, cmp [2]int, callb api.NodeCallb) bool {
-
-	switch ndblk := ss.readat(fpos).(type) {
-	case mnode:
-		rc := ndblk.rangebackward(ss, lkey, hkey, cmp, callb)
-		return rc
-
-	case znode:
-		rc := ndblk.rangebackward(ss, lkey, hkey, fpos, cmp, callb)
-		return rc
-	}
-	return true
-}
-
-func (ss *Snapshot) readat(fpos int64) (nd interface{}) {
-	var data []byte
-	vpos, mok := ss.ismvpos(fpos)
-	if mok {
-		data = make([]byte, ss.mblocksize)
-		nd = mnode(data)
-	} else {
-		data = make([]byte, ss.zblocksize)
-		nd = znode(data)
-	}
-	if n, err := ss.indexfd.ReadAt(data, vpos); err != nil {
-		panic(fmt.Errorf("ReadAt %q: %v", ss.indexfile, err))
-	} else if n != len(data) {
-		panic(fmt.Errorf("ReadAt %q : partial read", ss.indexfile))
-	}
-	return
-}
-
-func (ss *Snapshot) dumpkeys(fpos int64, prefix string) {
-	switch ndblk := ss.readat(fpos).(type) {
-	case mnode:
-		ndblk.dumpkeys(ss, prefix)
-
-	case znode:
-		ndblk.dumpkeys(ss, prefix)
+	snap.readzs = make([]io.ReaderAt, len(zfiles))
+	snap.zfiles = make([]string, len(zfiles))
+	for _, zfile := range zfiles {
+		x := strings.TrimLeft(filepath.Base(zfile), "zindex")
+		x = strings.TrimRight(x, "data")
+		shard, _ := AtoI(x[1 : len(x)-1])
+		snap.readzs[shard] = openfile(fi.Name(), zmap)
+		snap.zfiles[shard] = zfile
 	}
 }
 
-func (ss *Snapshot) fixrangeargs(lk, hk []byte) ([]byte, []byte) {
-	l, h := lk, hk
-	if len(lk) == 0 {
-		l = nil
+func (snap *Snapshot) readheader(r io.ReaderAt) *Snapshot {
+	// validate marker block
+	fpos := filesize(r) - MarkerBlocksize
+	buffer := snap.readat(lib.Fixbuffer(nil, MarkerBlocksize), r, fpos)
+	for _, c := range buffer {
+		if c != MarkerByte {
+			panic("invalid marker block")
+		}
 	}
-	if len(hk) == 0 {
-		h = nil
+
+	// read metadata blocks
+	var scratch [8]byte
+	fpos := filesize(r) - MarkerBlocksize - 8
+	buffer := snap.readat(scratch[:], r, fpos)
+	mdlen := binary.BigEndian.Uint64(buffer)
+	fpos -= mdlen - 8
+	snap.metadata = snap.readat(lib.Fixbuffer(nil, ln), r, fpos)
+
+	// read settings
+	var setts s.Settings
+	fpos -= MarkerBlocksize
+	data := snap.readat(lib.Fixbuffer(nil, MarkerBlocksize), r, fpos)
+	json.Unmarshal(data, &setts)
+	if snap.name != setts.String("name") {
+		panic("impossible situation")
 	}
-	return l, h
+	snap.zblocksize = setts.Int64("zblocksize")
+	snap.mblocksize = setts.Int64("mblocksize")
+	snap.n_count = setts.Int64("n_count")
+
+	// root block
+	snap.root = fpos - snap.mblocksize
+	return snap
 }
 
-func (ss *Snapshot) validateMarker(markerat int64, markerlen int64) error {
-	block := make([]byte, markerlen)
-	n, err := ss.indexfd.ReadAt(block, markerat)
-	if err != nil {
-		fmsg := "%v reading %q marker-block: %v\n"
-		log.Errorf(fmsg, ss.logprefix, ss.indexfile, err)
-		return err
+func (snap *Snapshot) readat(buffer []byte, r io.ReaderAt, fpos int64) []byte {
+	if n, err := r.ReadAt(buffer, fpos); err != nil {
+		panic(err)
+	} else if n != len(buffer) {
+		panic("readat(%v) %v != %v", fpos, n, len(buffer))
+	}
+	return buffer
+}
 
-	} else if int64(n) != markerlen {
-		err = fmt.Errorf("partial read: %v != %v\n", n, markerlen)
-		log.Errorf("%v %v\n", ss.logprefix, err)
-		return err
+func (snap *Snapshot) ID() string {
+	return snap.name
+}
 
-	} else {
-		for _, byt := range block {
-			if byt != MarkerByte {
-				err = fmt.Errorf("invalid marker")
-				log.Errorf("%v %v\n", ss.logprefix, err)
-				return err
+func (snap *Snapshot) Count() int64 {
+	return snap.n_count
+}
+
+func (snap *Snapshot) Dotdump(buffer io.Writer) {
+	snap.dumpkeys(snap.rootblock, "")
+}
+
+func (snap *Snapshot) Destroy() {
+	for snap.dodestroy() == false {
+		time.Sleep(100 * time.Second)
+	}
+}
+
+func (snap *Snapshot) dodestroy() bool {
+	// TODO: there should be a global lock to synchronise this call.
+	switch x := snap.readm.(type) {
+	case *mmap.ReaderAt:
+		if err := x.Close(); err != nil {
+			log.Errorf("%v closing %q: %v", snap.logprefix, snap.mfile, err)
+		}
+	case *os.File:
+		if err := x.Close(); err != nil {
+			log.Errorf("%v closing %q: %v\n", snap.logprefix, snap.mfile, err)
+		}
+	}
+	if err := os.Remove(snap.mfile); err != nil {
+		log.Errorf("%v remove %q: %v", snap.logprefix, snap.mfile, err)
+	}
+
+	for i, zfile := range snap.zfiles {
+		switch x := snap.readzs[i].(type) {
+		case *mmap.ReaderAt:
+			if err := x.Close(); err != nil {
+				log.Errorf("%v closing %q: %v", snap.logprefix, zfile, err)
+			}
+		case *os.File:
+			if err := x.Close(); err != nil {
+				log.Errorf("%v closing %q: %v\n", snap.logprefix, zfile, err)
 			}
 		}
+		if err := os.Remove(zfile); err != nil {
+			log.Errorf("%v remove %q: %v", snap.logprefix, zfile, err)
+		}
 	}
+
+	return true
+}
+
+func (snap *Snapshot) Get(
+	key, value []byte) (v []byte, cas uint64, deleted, ok bool) {
+
+	m := msnap(snap.readat(nil, snap.readm, snap.root))
+	index := m.getindex([]uint32{})
+	level, fpos := m.getkey(0, hindex(index), key)
+	for level == 0 {
+		m = msnap(snap.readat([]byte(m), snap.readm, fpos))
+		index = m.getindex(index[:0])
+		level, fpos = m.getkey(0, hindex(index), key)
+	}
+
+	z := zsnap(snap.readat(nil, snap.readzs[level-1], fpos))
+	index = z.getindex(index[:0])
+	_, v, cas, deleted, ok = z.getkey(0, hindex(index), key)
+	if value != nil {
+		value = lib.Fixbuffer(value, len(v))
+		copy(value, v)
+	}
+
+	return value, cas, deleted, ok
+}
+
+func (snap *Snapshot) View(id uint64) *View {
+	return snap.getview(id)
+}
+
+func (snap *Snapshot) abortview(view *View) error {
+	snap.putview(view)
 	return nil
+}
+
+func (snap *Snapshot) Scan() api.Iterator {
+}
+
+func (snap *Snapshot) getview(id uint64) (view *View) {
+	select {
+	case view = <-snap.viewcache:
+	default:
+		view = newview(id, snap, snap.cursors)
+	}
+	if view.id, view.snapshot = id, snap; view.id == 0 {
+		view.id = uint64(snap.root)
+	}
+	return
+}
+
+func (snap *Snapshot) putview(view *View) {
+	for _, cur := range view.cursors {
+		view.putcursor(cur)
+	}
+	view.cursors = view.cursors[:0]
+	select {
+	case snap.viewcache <- view:
+	default: // Left for GC
+	}
 }

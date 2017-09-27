@@ -3,105 +3,57 @@ package bubt
 import "encoding/binary"
 
 const (
-	zeoffHdrStart       = 0
-	zeoffHdrEnd         = zeoffHdrStart + 8
-	zeoffVbuuidStart    = zeoffHdrEnd
-	zeoffVbuuidEnd      = zeoffVbuuidStart + 8
-	zeoffBornseqnoStart = zeoffVbuuidEnd
-	zeoffBornseqnoEnd   = zeoffBornseqnoStart + 8
-	zeoffDeadseqnoStart = zeoffBornseqnoEnd
-	zeoffDeadseqnoEnd   = zeoffDeadseqnoStart + 8
-	zeoffKlenStart      = zeoffDeadseqnoEnd
-	zeoffKlenEnd        = zeoffKlenStart + 2
-	zeoffVlenStart      = zeoffKlenEnd
-	zeoffVlenEnd        = zeoffVlenStart + 8
+	zflagDeleted byte = 0x10
 )
 
-const zentryLen = zeoffVlenEnd
-
 // zentry represents the binary layout of each entry in the leaf(z) block.
-// hdr:
-//     flags[32:16] vbno[16:0]
-// vbuuid    uint64
-// bornseqno uint64
-// deadseqno uint64
-// klen      uint16
-// vlen      uint64 fpos-valuefile, if value is in seperate file
+// hdr1: flags[64:60] seqno[60:0]
+// hdr2: 8 bytes // key-len
+// hdr3: 8 bytes // value-len
 type zentry []byte // key, and optionally value shall follow.
 
-//---- get methods
+const zentrysize = 24
 
-func (ze zentry) getheader() uint64 {
-	return binary.BigEndian.Uint64(ze[zeoffHdrStart:zeoffHdrEnd])
-}
-
-func (ze zentry) getflags() zentryFlags {
-	hdr := ze.getheader()
-	return zentryFlags((hdr & 0xffff0000) >> 16)
-}
-
-func (ze zentry) getvbno() uint16 {
-	hdr := ze.getheader()
-	return uint16(hdr & 0xffff)
-}
-
-func (ze zentry) getvbuuid() uint64 {
-	return binary.BigEndian.Uint64(ze[zeoffVbuuidStart:zeoffVbuuidEnd])
-}
-
-func (ze zentry) getbornseqno() uint64 {
-	return binary.BigEndian.Uint64(ze[zeoffBornseqnoStart:zeoffBornseqnoEnd])
-}
-
-func (ze zentry) getdeadseqno() uint64 {
-	return binary.BigEndian.Uint64(ze[zeoffDeadseqnoStart:zeoffDeadseqnoEnd])
-}
-
-func (ze zentry) keylen() uint16 {
-	return binary.BigEndian.Uint16(ze[zeoffKlenStart:zeoffKlenEnd])
-}
-
-func (ze zentry) valuenum() uint64 {
-	return binary.BigEndian.Uint64(ze[zeoffVlenStart:zeoffVlenEnd])
-}
-
-//---- set methods
-
-func (ze zentry) setheader(hdr uint64) zentry {
-	binary.BigEndian.PutUint64(ze[zeoffHdrStart:zeoffHdrEnd], hdr)
+func (ze zentry) setdeleted() ze {
+	ze[7] = ze[7] | zflagDeleted
 	return ze
 }
 
-func (ze zentry) setvbno(vbno uint16) zentry {
-	return ze.setheader((ze.getheader() & 0xffffffffffff0000) | uint64(vbno))
-}
-
-func (ze zentry) setflags(flags zentryFlags) zentry {
-	hdr := (ze.getheader() & 0xffffffff0000ffff) | (uint64(flags) << 16)
-	return ze.setheader(hdr)
-}
-
-func (ze zentry) setvbuuid(vbuuid uint64) zentry {
-	binary.BigEndian.PutUint64(ze[zeoffVbuuidStart:zeoffVbuuidEnd], vbuuid)
+func (ze zentry) cleardeleted() ze {
+	ze[7] = ze[7] & (^zflagDeleted)
 	return ze
 }
 
-func (ze zentry) setbornseqno(seqno uint64) zentry {
-	binary.BigEndian.PutUint64(ze[zeoffBornseqnoStart:zeoffBornseqnoEnd], seqno)
+func (ze zentry) isdeleted() bool {
+	return (ze[7] & zflagDeleted) != 0
+}
+
+func (ze zentry) setseqno(seqno uint64) zentry {
+	hdr1 = binary.BigEndian.Uint64(ze[:8])
+	hdr1 = (hdr1 & 0xF000000000000000) | seqno
+	binary.BigEndian.PutUint64(ze[:8], hdr1)
 	return ze
 }
 
-func (ze zentry) setdeadseqno(seqno uint64) zentry {
-	binary.BigEndian.PutUint64(ze[zeoffDeadseqnoStart:zeoffDeadseqnoEnd], seqno)
+func (ze zentry) seqno() uint64 {
+	hdr1 = binary.BigEndian.Uint64(ze[:8])
+	return hdr1 & 0x0FFFFFFFFFFFFFFF
+}
+
+func (ze zentry) setkeylen(keylen uint64) zentry {
+	binary.BigEndian.PutUint64(ze[8:16], keylen)
 	return ze
 }
 
-func (ze zentry) setkeylen(klen uint16) zentry {
-	binary.BigEndian.PutUint16(ze[zeoffKlenStart:zeoffKlenEnd], klen)
+func (ze zentry) keylen() uint64 {
+	return binary.BigEndian.Uint64(ze[8:16])
+}
+
+func (ze zentry) setvaluelen(keylen uint64) zentry {
+	binary.BigEndian.PutUint64(ze[16:24], keylen)
 	return ze
 }
 
-func (ze zentry) setvaluenum(valnum uint64) zentry {
-	binary.BigEndian.PutUint64(ze[zeoffVlenStart:zeoffVlenEnd], valnum)
-	return ze
+func (ze zentry) valuelen() uint64 {
+	return binary.BigEndian.Uint64(ze[16:24])
 }
