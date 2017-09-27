@@ -12,8 +12,6 @@ import "github.com/prataprc/gostore/lib"
 import "github.com/prataprc/golog"
 import s "github.com/prataprc/gosettings"
 
-// TODO: Stats for count, depth, n_mblocks, n_zblocks, historgrams.
-
 // Bubt manages sorted {key,value} entries in persisted, immutable btree
 // built bottoms up and not updated there after.
 type Bubt struct {
@@ -25,13 +23,6 @@ type Bubt struct {
 	mblocksize int64
 	zblocksize int64
 	logprefix  string
-}
-
-// block level api common to both z-node and m-node.
-type blocker interface {
-	// start key is the first key in the block, fpos is
-	// file-position in index file where key is present.
-	startkey() (key []byte)
 }
 
 // NewBubt create a Bubt instance to build a new bottoms-up btree.
@@ -51,7 +42,7 @@ func NewBubt(name, paths []string, setts s.Settings) *Bubt {
 	tree.mflusher = tree.startflusher(0, int(tree.mblocksize), mpath, mfile)
 	tree.zflushers = make([]*bubtflusher, 0)
 	for idx, zpath := range zpaths {
-		fname := fmt.Sprintf("bubt-zindex-%s.data", idx)
+		fname := fmt.Sprintf("bubt-zindex-%s.data", idx+1)
 		zfile := filepath.Join(zpath, name, fname)
 		zflusher := tree.startflusher(idx+1, int(tree.zblocksize), zpath, zfile)
 		tree.zflushers = append(tree.zflushers, zflusher)
@@ -59,25 +50,23 @@ func NewBubt(name, paths []string, setts s.Settings) *Bubt {
 	return tree
 }
 
-func (tree *Bubt) readsettings(setts s.Settings) {
+func (tree *Bubt) readsettings(setts s.Settings) *Bubt {
 	tree.zblocksize = setts.Int64("zblocksize")
 	tree.mblocksize = setts.Int64("mblocksize")
+	return tree
 }
 
 // Build starts building the tree from iterator, iterator is expected to be a
 // full-table scan over another data-store.
 func (tree *Bubt) Build(iter api.Iterator, metadata []byte) {
-	log.Infof("%v build started ...\n", tree.logprefix)
+	log.Infof("%v starting bottoms up build ...\n", tree.logprefix)
 
 	n_count := int64(0)
 
-	rotateidx := 0
+	shardidx := 0
 	pickzflusher := func() *bubtflusher {
-		if len(tree.zflushers) == 0 {
-			return mflusher
-		}
-		zflusher := tree.zflushers[rotateidx]
-		rotateidx = (rotateidx + 1) % len(tree.zflushers)
+		zflusher := tree.zflushers[shardidx]
+		shardidx = (shardidx + 1) % len(tree.zflushers)
 		return zflusher
 	}
 
@@ -87,21 +76,20 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) {
 			if err := flusher.writedata(z.block); err != nil {
 				panic(fmt.Errorf("flushing zblock data: %v", err))
 			}
-			return fpos
+			return (flusher.idx << 56) | fpos
 		}
-		return -1
-
+		return -1 // no entries in the block
 	}
 
 	flushmblock := func(m *mblock) int64 {
 		if m != nil && m.finalize() {
-			fpos := atomic.LoadInt64(&tree.mflusher.fpos)
+			vpos := atomic.LoadInt64(&tree.mflusher.fpos)
 			if err := tree.mflusher.writedata(m.block); err != nil {
 				panic(fmt.Errorf("flushing mblock data: %v", err))
 			}
-			return fpos
+			return vpos
 		}
-		return -1
+		return -1 // no entries in the block
 	}
 
 	z := newz(tree.zblocksize)
@@ -110,7 +98,9 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) {
 	buildz := func() {
 		if key == nil {
 			return
-		} else if ok := z.insert(key, value, seqno, deleted); ok == false {
+		}
+		z.reset()
+		if ok := z.insert(key, value, seqno, deleted); ok == false {
 			panic("first insert to zblock, check whether key > zblocksize")
 		}
 		for ok {
@@ -125,6 +115,8 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) {
 	// 1   - points to zblock's first shard.
 	// 255 - points to zblock's 255th shard.
 	buildm := func(level int) (m *mblock) {
+		var vpos int64
+
 		if key == nil { // no more entries
 			return nil
 
@@ -134,11 +126,10 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) {
 			for ok {
 				buildz()
 				flusher := pickzflusher()
-				x, vpos := flusher.index, flushzblock(flusher)
-				if vpos < 0 {
+				if vpos = flushzblock(flusher); vpos == -1 {
 					return nil
 				}
-				ok = m.insert(z.firstkey, int64(uint64(vpos)|(x<<56)))
+				ok = m.insert(z.firstkey, vpos)
 			}
 			return m
 		}
@@ -147,14 +138,11 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) {
 			return m1
 		}
 		m = newm(tree.mblocksize)
-		vpos := flushmblock(m1)
-		m.insert(m1.firstkey, int64(vpos))
-		vpos = flushmblock(m2)
-		ok := m.insert(m2.firstkey, int64(vpos)) // ok should be true
+		m.insert(m1.firstkey, flushmblock(m1))
+		ok := m.insert(m2.firstkey, flushmblock(m2)) // ok is true
 		for ok {
 			m2 = buildm(level - 1)
-			vpos = flushmblock(m2)
-			ok = m.insert(m2.firstkey, int64(vpos))
+			ok = m.insert(m2.firstkey, flushmblock(m2))
 		}
 		return m
 	}
@@ -191,22 +179,17 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) {
 	}
 	log.Infof("%v builder wrote metadata %s bytes", tree.logprefix, len(block))
 
-	log.Infof("%v ... build completed\n", tree.logprefix)
+	log.Infof("%v ... bottoms up build completed\n", tree.logprefix)
 }
 
 func (tree *Bubt) Close() {
-	if tree.mflusher != nil {
-		tree.mflusher.close()
-	}
+	tree.mflusher.close()
 	for _, zflusher := range tree.zflushers {
 		tree.zflusher.close()
 	}
 }
 
-func (tree *Bubt) pickmpath(paths []string) (string, []string) {
-	if len(paths) == 0 {
-		return paths[0], nil
-	}
+func (tree *Bubt) pickmzpath(paths []string) (string, []string) {
 	// TODO: Intelligently pick mpath.
 	return paths[0], paths
 }

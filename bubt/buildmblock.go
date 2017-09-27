@@ -8,7 +8,7 @@ import "github.com/prataprc/gostore/lib"
 type mblock struct {
 	blocksize int64
 	firstkey  []byte
-	index     hindex
+	index     blkindex
 	buffer    []byte
 	entries   []byte // points into buffer
 	block     []byte // points into buffer
@@ -18,7 +18,7 @@ type mblock struct {
 // shape of block is:
 //
 // n_entries uint32   - 4-byte count of number entries in this mblock.
-// hindex    []uint32 - 4 byte offset into mblock for each entry.
+// blkindex  []uint32 - 4 byte offset into mblock for each entry.
 // mentries           - array of mentries.
 func newm(blocksize int64) (m *mblock) {
 	m = &mblock{

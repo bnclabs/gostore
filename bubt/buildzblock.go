@@ -9,7 +9,7 @@ import "github.com/prataprc/gostore/lib"
 type zblock struct {
 	blocksize int64
 	firstkey  []byte
-	index     hindex
+	index     blkindex
 	buffer    []byte
 	entries   []byte // points into buffer
 	block     []byte // points into buffer
@@ -19,13 +19,13 @@ type zblock struct {
 // file, shape of block is:
 //
 // n_entries uint32   - 4-byte count of number entries in this zblock.
-// hindex    []uint32 - 4 byte offset into zblock for each entry.
+// blkindex  []uint32 - 4 byte offset into zblock for each entry.
 // zentries           - array of zentries.
 func newz(blocksize int64) (z *zblock) {
 	z = &zblock{
 		blocksize: blocksize,
 		firstkey:  make([]byte, 0, 256),
-		index:     make(hindex, 0, 64),
+		index:     make(blkindex, 0, 64),
 		buffer:    make([]byte, blocksize*2),
 	}
 	z.entries = z.buffer[blocksize:blocksize]

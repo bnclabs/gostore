@@ -7,8 +7,8 @@ import "github.com/prataprc/gostore/api"
 
 type msnap []byte
 
-func (m msnap) getkey(
-	adjust int, index hindex, key []byte) (level byte, fpos int) {
+func (m msnap) findkey(
+	adjust int, index blkindex, key []byte) (level byte, fpos int) {
 
 	switch len(index) {
 	case 1:
@@ -27,9 +27,9 @@ func (m msnap) getkey(
 		half := len(index) / 2
 		cmp, vpos := m.compareat(adjust+half, key)
 		if cmp < 0 {
-			return m.getkey(adjust, index[:half], key)
+			return m.findkey(adjust, index[:half], key)
 		}
-		return m.getkey(adjust+half, index[half:], key)
+		return m.findkey(adjust+half, index[half:], key)
 	}
 	panic("unreachable code")
 }
@@ -44,7 +44,7 @@ func (m msnap) compareat(i int, key []byte) (int, int) {
 
 }
 
-func (m msnap) getindex(index []uint32) []uint32 {
+func (m msnap) getindex(index blkindex) blkindex {
 	nums, n := binary.BigEndian.Uint32(m[:4]), 4
 	for i := 0; i < nums; i++ {
 		index = append(index, binary.BigEndian.Uint32(m[n:n+4]))

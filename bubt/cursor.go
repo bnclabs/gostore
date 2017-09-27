@@ -18,16 +18,16 @@ type Cursor struct {
 func (cur *Cursor) opencursor(snapshot *Snapshot, key []byte) *Cursor {
 	m := msnap(snap.readat(nil, snap.readm, snap.root))
 	index := m.getindex([]uint32{})
-	level, fpos := m.getkey(0, hindex(index), key)
+	level, fpos := m.getkey(0, blkindex(index), key)
 	for level == 0 {
 		m = msnap(snap.readat([]byte(m), snap.readm, fpos))
 		index = m.getindex(index[:0])
-		level, fpos = m.getkey(0, hindex(index), key)
+		level, fpos = m.getkey(0, blkindex(index), key)
 	}
 
 	z := zsnap(snap.readat(nil, snap.readzs[level-1], fpos))
 	index = z.getindex(index[:0])
-	idx, _, _, _, _ = z.getkey(0, hindex(index), key)
+	idx, _, _, _, _ = z.getkey(0, blkindex(index), key)
 	return cur
 }
 

@@ -29,6 +29,15 @@ func openfile(filename string, mmap bool) (r io.ReaderAt) {
 	return r
 }
 
+func closereadat(rd io.ReaderAt) {
+	switch r := rd.(type) {
+	case *os.File:
+		r.Close()
+	case *mmap.ReaderAt:
+		r.Close()
+	}
+}
+
 func filesize(r io.ReaderAt) int64 {
 	switch x := r.(type) {
 	case *mmap.ReaderAt:

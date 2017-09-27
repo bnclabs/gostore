@@ -45,29 +45,22 @@ func (flusher *bubtflusher) writedata(data []byte) error {
 }
 
 func (flusher *bubtflusher) close() {
-	log.Infof("%v closing %q flusher ...\n", flusher.f.logprefix, indexname)
 	close(flusher.ch)
 	<-flusher.quitch
 }
 
 func (flusher *bubtflusher) run() {
-	logprefix := flusher.f.logprefix
-	log.Infof("%v starting %q flusher for %v ...\n", logprefix, name, fd.Name())
-
 	defer func() {
-		log.Infof("%v exiting %q flusher for %v\n", logprefix, name, fd.Name())
 		fd.Sync()
 		close(flusher.quitch)
 	}()
 
 	write := func(data []byte) bool {
 		if n, err := fd.Write(data); err != nil {
-			fmsg := "%v %q write %v: %v\n"
-			log.Errorf(fmsg, logprefix, name, fd.Name(), err)
+			log.Fatalf("flusher(%q): %v", flusher.file, err)
 			return false
 		} else if n != len(data) {
-			fmsg := "%v partial %q write %v: %v<%v\n"
-			log.Errorf(fmsg, logprefix, name, fd.Name(), n, len(data))
+			log.Errorf("flusher(%q) partial write %v<%v", file, n, len(data))
 			return false
 		}
 		return true
@@ -75,8 +68,6 @@ func (flusher *bubtflusher) run() {
 
 	// read byte blocks.
 	for block := range ch {
-		fmsg := "%v %q flusher writing block of len %v\n"
-		log.Debugf(fmsg, logprefix, name, len(block))
 		if rc := write(block); rc == false {
 			return
 		}
@@ -87,7 +78,5 @@ func (flusher *bubtflusher) run() {
 	for i := 0; i < len(markerblock); i++ {
 		markerblock[i] = MarkerByte
 	}
-	fmsg := "%v %q flusher writing marker block for %v\n"
-	log.Infof(fmsg, logprefix, name, fd.Name())
 	write(markerblock)
 }
