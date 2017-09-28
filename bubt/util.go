@@ -1,6 +1,7 @@
 package bubt
 
 import "os"
+import "io"
 import "fmt"
 
 import "golang.org/x/exp/mmap"
@@ -14,28 +15,29 @@ func createfile(name string) *os.File {
 	return fd
 }
 
-func openfile(filename string, mmap bool) (r io.ReaderAt) {
-	if mmap {
+func openfile(filename string, ismmap bool) (r io.ReaderAt) {
+	if ismmap {
 		r, err := mmap.Open(filename)
 		if err != nil {
-			panic(fmt.Errorf("mmap.Open(%q): %v", mfile, err))
+			panic(fmt.Errorf("mmap.Open(%q): %v", filename, err))
 		}
 		return r
 	}
-	r, err := os.OpenFile(mfile, os.O_RDONLY, 0666)
+	r, err := os.OpenFile(filename, os.O_RDONLY, 0666)
 	if err != nil {
-		panic(fmt.Errorf("OpenFile(%q): %v", mfile, err))
+		panic(fmt.Errorf("OpenFile(%q): %v", filename, err))
 	}
 	return r
 }
 
-func closereadat(rd io.ReaderAt) {
+func closereadat(rd io.ReaderAt) error {
 	switch r := rd.(type) {
 	case *os.File:
-		r.Close()
+		return r.Close()
 	case *mmap.ReaderAt:
-		r.Close()
+		return r.Close()
 	}
+	return nil
 }
 
 func filesize(r io.ReaderAt) int64 {
@@ -48,7 +50,7 @@ func filesize(r io.ReaderAt) int64 {
 		if err == nil {
 			return int64(fi.Size())
 		}
-		panic(fmt.Errorf(err))
+		panic(err)
 	}
 	panic("unreachable code")
 }

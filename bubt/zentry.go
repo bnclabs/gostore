@@ -14,12 +14,12 @@ type zentry []byte // key, and optionally value shall follow.
 
 const zentrysize = 24
 
-func (ze zentry) setdeleted() ze {
+func (ze zentry) setdeleted() zentry {
 	ze[7] = ze[7] | zflagDeleted
 	return ze
 }
 
-func (ze zentry) cleardeleted() ze {
+func (ze zentry) cleardeleted() zentry {
 	ze[7] = ze[7] & (^zflagDeleted)
 	return ze
 }
@@ -29,14 +29,14 @@ func (ze zentry) isdeleted() bool {
 }
 
 func (ze zentry) setseqno(seqno uint64) zentry {
-	hdr1 = binary.BigEndian.Uint64(ze[:8])
+	hdr1 := binary.BigEndian.Uint64(ze[:8])
 	hdr1 = (hdr1 & 0xF000000000000000) | seqno
 	binary.BigEndian.PutUint64(ze[:8], hdr1)
 	return ze
 }
 
 func (ze zentry) seqno() uint64 {
-	hdr1 = binary.BigEndian.Uint64(ze[:8])
+	hdr1 := binary.BigEndian.Uint64(ze[:8])
 	return hdr1 & 0x0FFFFFFFFFFFFFFF
 }
 

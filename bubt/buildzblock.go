@@ -1,9 +1,7 @@
 package bubt
 
-import "fmt"
 import "encoding/binary"
 
-import "github.com/prataprc/gostore/api"
 import "github.com/prataprc/gostore/lib"
 
 type zblock struct {
@@ -35,10 +33,10 @@ func newz(blocksize int64) (z *zblock) {
 func (z *zblock) reset() *zblock {
 	z.firstkey = z.firstkey[:0]
 	z.index = z.index[:0]
-	z.buffer = z.buffer[:blocksize*2]
+	z.buffer = z.buffer[:z.blocksize*2]
 	z.entries = z.entries[:0]
 	z.block = nil
-	return zblock
+	return z
 }
 
 func (z *zblock) insert(key, value []byte, seqno uint64, deleted bool) bool {
@@ -73,7 +71,7 @@ func (z *zblock) finalize() bool {
 		return false
 	}
 	indexlen := z.index.footprint()
-	block := z.buffer[z.blocksize-indexlen : indexlen-len(z.buffer)]
+	block := z.buffer[z.blocksize-indexlen : indexlen-int64(len(z.buffer))]
 	// 4-byte length of index array.
 	binary.BigEndian.PutUint32(block, uint32(z.index.length()))
 	// each index entry is 4 byte, index point into z-block for zentry.
@@ -93,8 +91,8 @@ func (z *zblock) finalize() bool {
 //---- local methods
 
 func (z *zblock) isoverflow(key, value []byte) bool {
-	entrysz := len(key) + len(value) + zentrysize
-	total := len(entries) + entrysz + z.index.nextfootprint()
+	entrysz := int64(len(key) + len(value) + zentrysize)
+	total := int64(len(z.entries)) + entrysz + z.index.nextfootprint()
 	if total > z.blocksize {
 		return true
 	}

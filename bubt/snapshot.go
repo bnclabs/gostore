@@ -1,9 +1,12 @@
 package bubt
 
 import "os"
+import "io"
 import "fmt"
-import "bytes"
-import "sync/atomic"
+import "strings"
+import "strconv"
+import "io/ioutil"
+import "path/filepath"
 import "encoding/json"
 import "encoding/binary"
 
@@ -20,30 +23,33 @@ type Snapshot struct {
 	root     int64 // fpos into m-index
 	metadata []byte
 	mfile    string
-	zfile    []string
+	zfiles   []string
 	readm    io.ReaderAt   // block reader for m-index
 	readzs   []io.ReaderAt // block reader for zero or more z-index.
 	rw       *flock.RWMutex
 
+	n_count    int64
 	zblocksize int64
 	mblocksize int64
 	logprefix  string
 
-	view   View
-	cursor Cursor
-	index  blkindex
-	zblock []byte
-	mblock []byte
+	viewcache chan *View
+	curcache  chan *Cursor
+	index     blkindex
+	zblock    []byte
+	mblock    []byte
 }
 
 // OpenSnapshot from paths. Returned Snapshot is not safe across
 // goroutines. Each routines shall OpenSnapshot to get a snapshot handle.
-func OpenSnapshot(name, paths []string, mmap bool) (snap *Snapshot) {
+func OpenSnapshot(name string, paths []string, mmap bool) (snap *Snapshot) {
 	var err error
 
 	snap = &Snapshot{
 		name:      name,
-		index:     make(blkindex, 0, 256),
+		viewcache: make(chan *View, 100),   // TODO: no magic number
+		curcache:  make(chan *Cursor, 100), // TODO: no magic number
+		index:     make(blkindex, 0, 256),  // TODO: no magic number
 		logprefix: fmt.Sprintf("[BUBT-%s]", name),
 	}
 
@@ -56,7 +62,7 @@ func OpenSnapshot(name, paths []string, mmap bool) (snap *Snapshot) {
 	}()
 
 	snap.loadreaders(paths, mmap)
-	snap.readheader()
+	snap.readheader(snap.readm)
 	snap.rw, err = flock.New(snap.lockfile(filepath.Dir(snap.mfile)))
 	if err != nil {
 		panic(err)
@@ -65,34 +71,36 @@ func OpenSnapshot(name, paths []string, mmap bool) (snap *Snapshot) {
 	return snap
 }
 
-func (snap *Snapshot) loadreaders(paths []string, mmap bool) error {
-	npaths = []string{}
+func (snap *Snapshot) loadreaders(paths []string, mmap bool) {
+	npaths := []string{}
 	for _, path := range paths {
 		if fis, err := ioutil.ReadDir(path); err == nil {
 			for _, fi := range fis {
-				if !fi.IsDir() || filepath.Base(fi.Name()) != name {
+				if !fi.IsDir() || filepath.Base(fi.Name()) != snap.name {
 					continue
 				}
-				npaths = append(npaths, filepath.Join(path, name))
+				npaths = append(npaths, filepath.Join(path, snap.name))
 			}
 		} else {
 			panic(fmt.Errorf("ReadDir(%q) : %v", path, err))
 		}
 	}
-	zfiles = []string{}
+	zfiles := []string{}
 	for _, path := range npaths {
 		if fis, err := ioutil.ReadDir(path); err == nil {
-			if strings.Contains(fi.Name(), "bubt-mindex.data") {
-				snap.mfile = filepath.Join(path, fi.Name())
-			} else if strings.Contains(fi.Name(), "bubt-zindex") {
-				zfiles = append(zfiles, filepath.Join(path, fi.Name()))
+			for _, fi := range fis {
+				if strings.Contains(fi.Name(), "bubt-mindex.data") {
+					snap.mfile = filepath.Join(path, fi.Name())
+				} else if strings.Contains(fi.Name(), "bubt-zindex") {
+					zfiles = append(zfiles, filepath.Join(path, fi.Name()))
+				}
 			}
 		} else {
 			panic(fmt.Errorf("ReadDir(%q) : %v", path, err))
 		}
 	}
 
-	if mfile == "" {
+	if snap.mfile == "" {
 		panic(fmt.Errorf("index file not found"))
 	}
 	snap.readm = openfile(snap.mfile, true)
@@ -102,8 +110,8 @@ func (snap *Snapshot) loadreaders(paths []string, mmap bool) error {
 	for _, zfile := range zfiles {
 		x := strings.TrimLeft(filepath.Base(zfile), "zindex")
 		x = strings.TrimRight(x, "data")
-		shard, _ := AtoI(x[1 : len(x)-1])
-		snap.readzs[shard-1] = openfile(fi.Name(), zmap)
+		shard, _ := strconv.Atoi(x[1 : len(x)-1])
+		snap.readzs[shard-1] = openfile(zfile, mmap)
 		snap.zfiles[shard-1] = zfile
 	}
 }
@@ -111,7 +119,13 @@ func (snap *Snapshot) loadreaders(paths []string, mmap bool) error {
 func (snap *Snapshot) readheader(r io.ReaderAt) *Snapshot {
 	// validate marker block
 	fpos := filesize(r) - MarkerBlocksize
-	buffer := snap.readat(lib.Fixbuffer(nil, MarkerBlocksize), r, fpos)
+	buffer := lib.Fixbuffer(nil, MarkerBlocksize)
+	n, err := r.ReadAt(buffer, fpos)
+	if err != nil {
+		panic(err)
+	} else if n < len(buffer) {
+		panic(fmt.Errorf("markblock read only %v(%v)", n, len(buffer)))
+	}
 	for _, c := range buffer {
 		if c != MarkerByte {
 			panic("invalid marker block")
@@ -120,17 +134,34 @@ func (snap *Snapshot) readheader(r io.ReaderAt) *Snapshot {
 
 	// read metadata blocks
 	var scratch [8]byte
-	fpos := filesize(r) - MarkerBlocksize - 8
-	buffer := snap.readat(scratch[:], r, fpos)
-	mdlen := binary.BigEndian.Uint64(buffer)
-	fpos -= mdlen - 8
-	snap.metadata = snap.readat(lib.Fixbuffer(nil, ln), r, fpos)
+	fpos = filesize(r) - MarkerBlocksize - 8
+	n, err = r.ReadAt(scratch[:], fpos)
+	if err != nil {
+		panic(err)
+	} else if n < len(scratch) {
+		panic(fmt.Errorf("read only %v(%v)", n, len(scratch)))
+	}
+	mdlen := binary.BigEndian.Uint64(scratch[:])
+	fpos -= int64(mdlen) - 8
+	buffer = lib.Fixbuffer(buffer, int64(mdlen))
+	n, err = r.ReadAt(buffer, fpos)
+	if err != nil {
+		panic(err)
+	} else if n < len(buffer) {
+		panic(fmt.Errorf("metadata read only %v(%v)", n, len(buffer)))
+	}
 
 	// read settings
 	var setts s.Settings
 	fpos -= MarkerBlocksize
-	data := snap.readat(lib.Fixbuffer(nil, MarkerBlocksize), r, fpos)
-	json.Unmarshal(data, &setts)
+	buffer = lib.Fixbuffer(buffer, MarkerBlocksize)
+	n, err = r.ReadAt(buffer, fpos)
+	if err != nil {
+		panic(err)
+	} else if n < len(buffer) {
+		panic(fmt.Errorf("settings read only %v(%v)", n, len(buffer)))
+	}
+	json.Unmarshal(buffer, &setts)
 	if snap.name != setts.String("name") {
 		panic("impossible situation")
 	}
@@ -143,15 +174,6 @@ func (snap *Snapshot) readheader(r io.ReaderAt) *Snapshot {
 	return snap
 }
 
-func (snap *Snapshot) readat(buffer []byte, r io.ReaderAt, fpos int64) []byte {
-	if n, err := r.ReadAt(buffer, fpos); err != nil {
-		panic(err)
-	} else if n != len(buffer) {
-		panic("readat(%v) %v != %v", fpos, n, len(buffer))
-	}
-	return buffer
-}
-
 func (snap *Snapshot) ID() string {
 	return snap.name
 }
@@ -161,10 +183,10 @@ func (snap *Snapshot) Count() int64 {
 }
 
 func (snap *Snapshot) Close() {
-	if err := closereadat(readm); err != nil {
+	if err := closereadat(snap.readm); err != nil {
 		log.Errorf("%v close %q: %v", snap.logprefix, snap.mfile, err)
 	}
-	for i, rd := range readzs {
+	for i, rd := range snap.readzs {
 		err := closereadat(rd)
 		if err != nil {
 			log.Errorf("%v close %q: %v", snap.logprefix, snap.zfiles[i], err)
@@ -194,37 +216,84 @@ func (snap *Snapshot) Destroy() {
 func (snap *Snapshot) Get(
 	key, value []byte) (v []byte, cas uint64, deleted, ok bool) {
 
-	snap.mblock = lib.Fixbuffer(snap.mblock, snap.zblocksize)
-	m := msnap(snap.readat(snap.mblock, snap.readm, snap.root))
-	snap.index = m.getindex(snap.index[:0])
-	level, fpos := m.findkey(0, snap.index, key)
-	for level == 0 {
-		m = msnap(snap.readat(snap.mblock, snap.readm, fpos))
-		snap.index = m.getindex(snap.index[:0])
-		level, fpos = m.findkey(0, snap.index, key)
-	}
-
-	readz := snap.readzs[level-1]
-	z := zsnap(snap.readat(snap.zblock, readz, fpos))
-	snap.index = z.getindex(index[:0])
-	_, v, cas, deleted, ok = z.findkey(0, snap.index, key)
+	shardidx, fpos := snap.findinmblock(key)
+	_, v, cas, deleted, ok = snap.findinzblock(shardidx, fpos, key)
 	if value != nil {
-		value = lib.Fixbuffer(value, len(v))
+		value = lib.Fixbuffer(value, int64(len(v)))
 		copy(value, v)
 	}
-
 	return value, cas, deleted, ok
 }
 
-func (snap *Snapshot) View(id uint64) *View {
-	return &view
+func (snap *Snapshot) findinmblock(key []byte) (shardidx byte, fpos int64) {
+	snap.mblock = lib.Fixbuffer(snap.mblock, snap.mblocksize)
+	n, err := snap.readm.ReadAt(snap.mblock, snap.root)
+	if err != nil {
+		panic(err)
+	} else if n < len(snap.mblock) {
+		panic(fmt.Errorf("mblock read only %v(%v)", n, (snap.mblock)))
+	}
+	m := msnap(snap.mblock)
+	snap.index = m.getindex(snap.index[:0])
+	shardidx, fpos = m.findkey(0, snap.index, key)
+	for shardidx == 0 {
+		n, err = snap.readm.ReadAt(snap.mblock, fpos)
+		if err != nil {
+			panic(err)
+		} else if n < len(snap.mblock) {
+			panic(fmt.Errorf("mblock read only %v(%v)", n, len(snap.mblock)))
+		}
+		m = msnap(snap.mblock)
+		snap.index = m.getindex(snap.index[:0])
+		shardidx, fpos = m.findkey(0, snap.index, key)
+	}
+	return shardidx - 1, fpos
+}
+
+func (snap *Snapshot) findinzblock(
+	shardidx byte, fpos int64,
+	key []byte) (index int, value []byte, cas uint64, deleted, ok bool) {
+
+	snap.zblock = lib.Fixbuffer(snap.zblock, snap.zblocksize)
+	readz := snap.readzs[shardidx]
+	n, err := readz.ReadAt(snap.zblock, fpos)
+	if err != nil {
+		panic(err)
+	} else if n < len(snap.zblock) {
+		panic(fmt.Errorf("zblock read only %v(%v)", n, snap.zblock))
+	}
+	z := zsnap(snap.zblock)
+	snap.index = z.getindex(snap.index[:0])
+	index, value, cas, deleted, ok = z.findkey(0, snap.index, key)
+	return
+}
+
+func (snap *Snapshot) View(id uint64) (view *View) {
+	select {
+	case view = <-snap.viewcache:
+	default:
+		view = &View{}
+	}
+	if view.cursors == nil {
+		view.cursors = make([]*Cursor, 8)
+	}
+	view.id, view.snap, view.cursors = id, snap, view.cursors[:0]
+	return view
 }
 
 func (snap *Snapshot) abortview(view *View) error {
+	select {
+	case snap.viewcache <- view:
+	default: // Leave it for GC.
+	}
 	return nil
 }
 
 func (snap *Snapshot) Scan() api.Iterator {
+	view := &View{}
+	view.id, view.snap, view.cursors = 1, snap, view.cursors[:0]
+	cur := view.OpenCursor(nil)
+	return cur.YNext
 }
 
 func (snap *Snapshot) lockfile(path string) string {

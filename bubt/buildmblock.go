@@ -1,7 +1,6 @@
 package bubt
 
 import "encoding/binary"
-import "fmt"
 
 import "github.com/prataprc/gostore/lib"
 
@@ -54,7 +53,7 @@ func (m *mblock) finalize() bool {
 		return false
 	}
 	indexlen := m.index.footprint()
-	block := m.buffer[m.blocksize-indexlen : indexlen-len(m.buffer)]
+	block := m.buffer[m.blocksize-indexlen : indexlen-int64(len(m.buffer))]
 	// 4-byte length of index array.
 	binary.BigEndian.PutUint32(block, uint32(m.index.length()))
 	// each index entry is 4 byte, index point into m-block for zentry.
@@ -74,8 +73,8 @@ func (m *mblock) finalize() bool {
 //---- local methods
 
 func (m *mblock) isoverflow(key []byte) bool {
-	entrysz := len(key) + mentrysize
-	total := len(m.entries) + entrysz + z.index.nextfootprint()
+	entrysz := int64(len(key) + mentrysize)
+	total := int64(len(m.entries)) + entrysz + m.index.nextfootprint()
 	if total > m.blocksize {
 		return true
 	}
