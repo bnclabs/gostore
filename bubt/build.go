@@ -10,6 +10,12 @@ import "github.com/prataprc/gostore/api"
 import "github.com/prataprc/golog"
 import s "github.com/prataprc/gosettings"
 
+// MarkerBlocksize to close snapshot file.
+const MarkerBlocksize = 4096
+
+// MarkerByte to populate Markerblock.
+const MarkerByte = 0xAB
+
 // Bubt manages sorted {key,value} entries in persisted, immutable btree
 // built bottoms up and not updated there after.
 type Bubt struct {
@@ -24,8 +30,8 @@ type Bubt struct {
 }
 
 // NewBubt create a Bubt instance to build a new bottoms-up btree.
-func NewBubt(name string, paths []string, setts s.Settings) *Bubt {
-	tree := (&Bubt{name: name}).readsettings(setts)
+func NewBubt(name string, paths []string, msize, zsize int) *Bubt {
+	tree := &Bubt{name: name, mblocksize: msize, zblocksize: zsize}
 	mpath, zpaths := tree.pickmzpath(paths)
 	tree.logprefix = fmt.Sprintf("[BUBT-%s]", name)
 
@@ -45,12 +51,6 @@ func NewBubt(name string, paths []string, setts s.Settings) *Bubt {
 		zflusher := startflusher(idx+1, int(tree.zblocksize), zfile)
 		tree.zflushers = append(tree.zflushers, zflusher)
 	}
-	return tree
-}
-
-func (tree *Bubt) readsettings(setts s.Settings) *Bubt {
-	tree.zblocksize = setts.Int64("zblocksize")
-	tree.mblocksize = setts.Int64("mblocksize")
 	return tree
 }
 
