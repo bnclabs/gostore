@@ -18,8 +18,8 @@ func (me mentry) keylen() uint64 {
 	return binary.BigEndian.Uint64(me[0:8])
 }
 
-func (me mentry) setvpos(keylen uint64) mentry {
-	binary.BigEndian.PutUint64(me[8:16], keylen)
+func (me mentry) setvpos(vpos uint64) mentry {
+	binary.BigEndian.PutUint64(me[8:16], vpos)
 	return me
 }
 

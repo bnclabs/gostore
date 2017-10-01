@@ -11,21 +11,13 @@ func (m msnap) findkey(
 	switch len(index) {
 	case 1:
 		_, vpos := m.compareat(adjust+0, key)
-		return byte(vpos >> 56), vpos & 0x0FFFFFFFFFFFFFFF
-
-	case 2:
-		cmp, vpos := m.compareat(adjust+1, key)
-		if cmp < 0 {
-			_, vpos = m.compareat(adjust+0, key)
-			return byte(vpos >> 56), vpos & 0x0FFFFFFFFFFFFFFF
-		}
-		return byte(vpos >> 56), vpos & 0x0FFFFFFFFFFFFFFF
+		return byte(vpos >> 56), int64(vpos & 0x00FFFFFFFFFFFFFF)
 
 	default:
 		half := len(index) / 2
 		cmp, vpos := m.compareat(adjust+half, key)
 		if cmp == 0 {
-			return byte(vpos >> 56), vpos & 0x0FFFFFFFFFFFFFFF
+			return byte(vpos >> 56), int64(vpos & 0x00FFFFFFFFFFFFFF)
 		} else if cmp < 0 {
 			return m.findkey(adjust, index[:half], key)
 		}
@@ -34,14 +26,14 @@ func (m msnap) findkey(
 	panic("unreachable code")
 }
 
-func (m msnap) compareat(i int, key []byte) (int, int64) {
+func (m msnap) compareat(i int, key []byte) (int, uint64) {
 	offset := 4 + (i * 4)
 	x := binary.BigEndian.Uint32(m[offset : offset+4])
 	me := mentry(m[x : x+mentrysize])
 	ln, vpos := uint32(me.keylen()), me.vpos()
 	x += mentrysize
-	return bytes.Compare(key, m[x:x+ln]), int64(vpos)
-
+	cmp := bytes.Compare(key, m[x:x+ln])
+	return cmp, uint64(vpos)
 }
 
 func (m msnap) getindex(index blkindex) blkindex {

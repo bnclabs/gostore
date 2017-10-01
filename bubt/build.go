@@ -30,7 +30,7 @@ type Bubt struct {
 }
 
 // NewBubt create a Bubt instance to build a new bottoms-up btree.
-func NewBubt(name string, paths []string, msize, zsize int) *Bubt {
+func NewBubt(name string, paths []string, msize, zsize int64) *Bubt {
 	tree := &Bubt{name: name, mblocksize: msize, zblocksize: zsize}
 	mpath, zpaths := tree.pickmzpath(paths)
 	tree.logprefix = fmt.Sprintf("[BUBT-%s]", name)

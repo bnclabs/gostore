@@ -24,7 +24,7 @@ func newm(blocksize int64) (m *mblock) {
 		blocksize: blocksize,
 		firstkey:  make([]byte, 0, 256),
 		index:     make([]uint32, 0, 64),
-		buffer:    make([]byte, 0, blocksize),
+		buffer:    make([]byte, 2*blocksize),
 	}
 	m.entries = m.buffer[blocksize:blocksize]
 	return m
@@ -53,18 +53,19 @@ func (m *mblock) finalize() bool {
 		return false
 	}
 	indexlen := m.index.footprint()
-	block := m.buffer[m.blocksize-indexlen : indexlen-int64(len(m.buffer))]
+	block := m.buffer[m.blocksize-indexlen : int64(len(m.buffer))-indexlen]
 	// 4-byte length of index array.
 	binary.BigEndian.PutUint32(block, uint32(m.index.length()))
 	// each index entry is 4 byte, index point into m-block for zentry.
 	n := 4
 	for _, entryoff := range m.index {
-		binary.BigEndian.PutUint32(block[4:], uint32(indexlen)+entryoff)
+		binary.BigEndian.PutUint32(block[n:], uint32(indexlen)+entryoff)
 		n += 4
 	}
 	// ZERO padding
+	n += len(m.entries)
 	for i := range block[n:] {
-		block[i] = 0
+		block[n+i] = 0
 	}
 	m.block = block
 	return true
@@ -76,9 +77,9 @@ func (m *mblock) isoverflow(key []byte) bool {
 	entrysz := int64(len(key) + mentrysize)
 	total := int64(len(m.entries)) + entrysz + m.index.nextfootprint()
 	if total > m.blocksize {
-		return true
+		return false
 	}
-	return false
+	return true
 }
 
 func (m *mblock) setfirstkey(key []byte) {

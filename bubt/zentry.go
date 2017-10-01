@@ -3,7 +3,7 @@ package bubt
 import "encoding/binary"
 
 const (
-	zflagDeleted byte = 0x10
+	zflagDeleted byte = 0x1
 )
 
 // zentry represents the binary layout of each entry in the leaf(z) block.
@@ -15,17 +15,19 @@ type zentry []byte // key, and optionally value shall follow.
 const zentrysize = 24
 
 func (ze zentry) setdeleted() zentry {
-	ze[7] = ze[7] | zflagDeleted
+	hdr1 := binary.BigEndian.Uint64(ze[:8])
+	binary.BigEndian.PutUint64(ze[:8], hdr1|(uint64(zflagDeleted)<<60))
 	return ze
 }
 
 func (ze zentry) cleardeleted() zentry {
-	ze[7] = ze[7] & (^zflagDeleted)
+	hdr1 := binary.BigEndian.Uint64(ze[:8])
+	binary.BigEndian.PutUint64(ze[:8], hdr1&(^(uint64(zflagDeleted) << 60)))
 	return ze
 }
 
 func (ze zentry) isdeleted() bool {
-	return (ze[7] & zflagDeleted) != 0
+	return ((binary.BigEndian.Uint64(ze[:8]) >> 60) & uint64(zflagDeleted)) != 0
 }
 
 func (ze zentry) setseqno(seqno uint64) zentry {

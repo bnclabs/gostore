@@ -50,7 +50,7 @@ func (z *zblock) insert(key, value []byte, seqno uint64, deleted bool) bool {
 
 	var scratch [24]byte
 	ze := zentry(scratch[:])
-	ze = ze.setseqno(seqno)
+	ze = ze.setseqno(seqno).cleardeleted()
 	ze = ze.setkeylen(uint64(len(key))).setvaluelen(uint64(len(value)))
 	if deleted {
 		ze.setdeleted()
@@ -71,18 +71,19 @@ func (z *zblock) finalize() bool {
 		return false
 	}
 	indexlen := z.index.footprint()
-	block := z.buffer[z.blocksize-indexlen : indexlen-int64(len(z.buffer))]
+	block := z.buffer[z.blocksize-indexlen : int64(len(z.buffer))-indexlen]
 	// 4-byte length of index array.
 	binary.BigEndian.PutUint32(block, uint32(z.index.length()))
 	// each index entry is 4 byte, index point into z-block for zentry.
 	n := 4
 	for _, entryoff := range z.index {
-		binary.BigEndian.PutUint32(block[4:], uint32(indexlen)+entryoff)
+		binary.BigEndian.PutUint32(block[n:], uint32(indexlen)+entryoff)
 		n += 4
 	}
 	// ZERO padding
+	n += len(z.entries)
 	for i := range block[n:] {
-		block[i] = 0
+		block[n+i] = 0
 	}
 	z.block = block
 	return true

@@ -28,23 +28,23 @@ func (z zsnap) findkey(
 		if cmp == 0 {
 			return adjust + half, value, seqno, deleted, true
 		} else if cmp < 0 {
-			return z.findkey(adjust+half, index[:half], key)
+			return z.findkey(adjust, index[:half], key)
 		}
 		return z.findkey(adjust+half, index[half:], key)
 	}
 	panic("unreachable code")
 }
 
-func (z zsnap) compareat(index int, key []byte) (int, []byte, uint64, bool) {
-	x := 4 + (index * 4)
-	x = int(binary.BigEndian.Uint32(z[x : x+4]))
+func (z zsnap) compareat(i int, key []byte) (int, []byte, uint64, bool) {
+	offset := 4 + (i * 4)
+	x := int(binary.BigEndian.Uint32(z[offset : offset+4]))
 	ze := zentry(z[x : x+zentrysize])
 	ln := int(ze.keylen())
 	x += zentrysize
-	cmp := bytes.Compare(key, ze[x:x+ln])
+	cmp := bytes.Compare(key, z[x:x+ln])
 	if cmp == 0 {
-		x, valueln := x+ln, int(ze.valuelen())
-		return 0, ze[x : x+valueln], ze.seqno(), ze.isdeleted()
+		x, ln = x+ln, int(ze.valuelen())
+		return 0, z[x : x+ln], ze.seqno(), ze.isdeleted()
 	}
 	return cmp, nil, 0, false
 }
@@ -62,7 +62,7 @@ func (z zsnap) entryat(
 	index int) (key, value []byte, seqno uint64, deleted bool) {
 
 	x := int((index * 4) + 4)
-	x = int(binary.BigEndian.Uint32(z[x:4]))
+	x = int(binary.BigEndian.Uint32(z[x : x+4]))
 	ze := zentry(z[x : x+zentrysize])
 	seqno, deleted = ze.seqno(), ze.isdeleted()
 	keylen, valuelen := int(ze.keylen()), int(ze.valuelen())
