@@ -568,7 +568,7 @@ func (llrb *LLRB) getkey(nd *Llrbnode, k []byte) (*Llrbnode, bool) {
 	return nil, false
 }
 
-func (llrb *LLRB) Scan() func() (key, value []byte, seqno uint64, deleted bool) {
+func (llrb *LLRB) Scan() api.Iterator {
 	currkey := make([]byte, 1024)
 	sb := makescanbuf()
 

@@ -985,7 +985,7 @@ func (mvcc *MVCC) getkey(nd *Llrbnode, k []byte) (*Llrbnode, bool) {
 	return nil, false
 }
 
-func (mvcc *MVCC) Scan() func() (key, value []byte, seqno uint64, deleted bool) {
+func (mvcc *MVCC) Scan() api.Iterator {
 	currkey := make([]byte, 1024)
 	sb := makescanbuf()
 
