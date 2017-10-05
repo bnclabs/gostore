@@ -1027,7 +1027,10 @@ func TestMVCCScan(t *testing.T) {
 	scan := llrb.Scan()
 
 	refkey, refval, refseqno, refdeleted := cur.YNext()
-	key, val, seqno, deleted := scan()
+	key, val, seqno, deleted, err := scan()
+	if err != nil {
+		t.Fatal(err)
+	}
 	for refkey != nil {
 		count++
 		//t.Logf("iter %q scan:%q", refkey, key)
@@ -1041,7 +1044,10 @@ func TestMVCCScan(t *testing.T) {
 			t.Errorf("expected %v, got %v", refdeleted, deleted)
 		}
 		refkey, refval, refseqno, refdeleted = cur.YNext()
-		key, val, seqno, deleted = scan()
+		key, val, seqno, deleted, err = scan()
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	if key != nil {
 		t.Errorf("expected nil, %s", key)

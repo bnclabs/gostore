@@ -1,6 +1,8 @@
 package api
 
-type Iterator func() (key, value []byte, seqno uint64, deleted bool)
+type Getter func() (key, value []byte, deleted bool, err error)
+
+type Iterator func() (key, value []byte, seqno uint64, deleted bool, err error)
 
 const (
 	// UpsertCmd to insert or update a key,value pair in index.

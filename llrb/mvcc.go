@@ -990,7 +990,7 @@ func (mvcc *MVCC) Scan() api.Iterator {
 	sb := makescanbuf()
 
 	leseqno := mvcc.startscan(nil, sb, 0)
-	return func() ([]byte, []byte, uint64, bool) {
+	return func() ([]byte, []byte, uint64, bool, error) {
 		key, value, seqno, deleted := sb.pop()
 		if key == nil {
 			mvcc.startscan(currkey, sb, leseqno)
@@ -1001,7 +1001,7 @@ func (mvcc *MVCC) Scan() api.Iterator {
 		}
 		currkey = currkey[:len(key)]
 		copy(currkey, key)
-		return key, value, seqno, deleted
+		return key, value, seqno, deleted, nil
 	}
 }
 
