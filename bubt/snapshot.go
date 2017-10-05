@@ -63,9 +63,9 @@ func OpenSnapshot(
 	snap.rw.RLock()
 
 	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("%s", err)
-		}
+		//if r := recover(); r != nil {
+		//	err = fmt.Errorf("%s", r)
+		//}
 		if err != nil {
 			snap.Close()
 		}
@@ -165,20 +165,23 @@ func (snap *Snapshot) readheader(r io.ReaderAt) (*Snapshot, error) {
 		return snap, fmt.Errorf("bubt.snap.nometadata")
 	}
 
-	buffer = lib.Fixbuffer(buffer, int64(mdlen))
-	n, err = r.ReadAt(buffer, fpos)
+	snap.metadata = lib.Fixbuffer(nil, int64(mdlen))
+	n, err = r.ReadAt(snap.metadata, fpos)
 	if err != nil {
 		return snap, err
-	} else if n < len(buffer) {
+	} else if n < len(snap.metadata) {
 		return snap, fmt.Errorf("bubt.snap.partialmetadata")
 	}
+	ln := binary.BigEndian.Uint64(snap.metadata)
+	snap.metadata = snap.metadata[8 : 8+ln]
 
 	// read settings
 	if fpos -= MarkerBlocksize; fpos < 0 {
 		return snap, fmt.Errorf("bubt.snap.nosettings")
 	}
 
-	var setts s.Settings
+	setts := s.Settings{}
+
 	buffer = lib.Fixbuffer(buffer, MarkerBlocksize)
 	n, err = r.ReadAt(buffer, fpos)
 	if err != nil {
@@ -186,7 +189,8 @@ func (snap *Snapshot) readheader(r io.ReaderAt) (*Snapshot, error) {
 	} else if n < len(buffer) {
 		return snap, fmt.Errorf("bubt.snap.partialsettings")
 	}
-	json.Unmarshal(buffer, &setts)
+	ln = binary.BigEndian.Uint64(buffer)
+	json.Unmarshal(buffer[8:8+ln], &setts)
 	if snap.name != setts.String("name") {
 		return snap, fmt.Errorf("bubt.snap.invalidsettings")
 	}
@@ -226,14 +230,22 @@ func (snap *Snapshot) Destroy() {
 	if snap == nil {
 		return
 	}
+	dirs := map[string]bool{}
 	if snap.rw != nil {
 		snap.rw.Lock()
 		if err := os.Remove(snap.mfile); err != nil {
 			log.Errorf("%v remove %q: %v", snap.logprefix, snap.mfile, err)
 		}
+		dirs[filepath.Dir(snap.mfile)] = true
 		for _, zfile := range snap.zfiles {
 			if err := os.Remove(zfile); err != nil {
 				log.Errorf("%v remove %q: %v", snap.logprefix, zfile, err)
+			}
+			dirs[filepath.Dir(zfile)] = true
+		}
+		for dir := range dirs {
+			if err := os.Remove(dir); err != nil {
+				log.Errorf("%v remove %q: %v", snap.logprefix, dir, err)
 			}
 		}
 		snap.rw.Unlock()
@@ -241,7 +253,6 @@ func (snap *Snapshot) Destroy() {
 	if err := os.Remove(snap.lockfile); err != nil {
 		log.Errorf("%v remove %q: %v", snap.logprefix, snap.lockfile, err)
 	}
-
 }
 
 func (snap *Snapshot) Get(

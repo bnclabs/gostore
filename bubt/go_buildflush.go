@@ -7,25 +7,23 @@ import "path/filepath"
 import "github.com/prataprc/golog"
 
 type bubtflusher struct {
-	idx       int64
-	fpos      int64
-	blocksize int64
-	file      string
-	fd        *os.File
-	ch        chan []byte
-	quitch    chan struct{}
-	blocks    chan []byte
+	idx    int64
+	fpos   int64
+	file   string
+	fd     *os.File
+	ch     chan []byte
+	quitch chan struct{}
+	blocks chan []byte
 }
 
-func startflusher(idx, blocksize int, file string) (*bubtflusher, error) {
+func startflusher(idx int, file string) (*bubtflusher, error) {
 	flusher := &bubtflusher{
-		idx:       int64(idx),
-		fpos:      0,
-		blocksize: int64(blocksize),
-		file:      file,
-		ch:        make(chan []byte, 100),
-		quitch:    make(chan struct{}),
-		blocks:    make(chan []byte, 100),
+		idx:    int64(idx),
+		fpos:   0,
+		file:   file,
+		ch:     make(chan []byte, 100),
+		quitch: make(chan struct{}),
+		blocks: make(chan []byte, 100),
 	}
 	path := filepath.Dir(file)
 	if err := os.MkdirAll(path, 0770); err != nil {
@@ -38,17 +36,14 @@ func startflusher(idx, blocksize int, file string) (*bubtflusher, error) {
 }
 
 func (flusher *bubtflusher) writedata(data []byte) error {
-	if int64(len(data)) != flusher.blocksize {
-		panic(fmt.Errorf("impossible situation, flushing %v", len(data)))
-	}
-	block := flusher.getblock()
+	block := flusher.getblock(len(data))
 	copy(block, data)
 	select {
 	case flusher.ch <- block:
 	case <-flusher.quitch:
 		return fmt.Errorf("flusher-%v.closed", flusher.idx)
 	}
-	flusher.fpos += flusher.blocksize
+	flusher.fpos += int64(len(data))
 	return nil
 }
 
@@ -69,7 +64,7 @@ func (flusher *bubtflusher) run() {
 			log.Fatalf("flusher(%q): %v", flusher.file, err)
 		} else if n != len(block) {
 			fmsg := "flusher(%q) partial write %v<%v"
-			log.Errorf(fmsg, flusher.file, n, len(block))
+			log.Fatalf(fmsg, flusher.file, n, len(block))
 		} else {
 			rc = true
 		}
@@ -92,12 +87,16 @@ func (flusher *bubtflusher) run() {
 	write(markerblock)
 }
 
-func (flusher *bubtflusher) getblock() (block []byte) {
+func (flusher *bubtflusher) getblock(size int) (block []byte) {
 	select {
 	case block = <-flusher.blocks:
 	default:
-		block = make([]byte, flusher.blocksize)
+		block = make([]byte, size)
 	}
+	if cap(block) < size {
+		block = make([]byte, size)
+	}
+	block = block[:size]
 	return
 }
 

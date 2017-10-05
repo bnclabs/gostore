@@ -1,5 +1,6 @@
 package bubt
 
+import "io"
 import "fmt"
 import "encoding/json"
 import "sync/atomic"
@@ -45,7 +46,7 @@ func NewBubt(name string, paths []string, msize, zsize int64) (*Bubt, error) {
 	}()
 
 	mfile := filepath.Join(mpath, name, "bubt-mindex.data")
-	tree.mflusher, err = startflusher(0, int(tree.mblocksize), mfile)
+	tree.mflusher, err = startflusher(0, mfile)
 	if err != nil {
 		panic(err)
 	}
@@ -53,7 +54,7 @@ func NewBubt(name string, paths []string, msize, zsize int64) (*Bubt, error) {
 	for idx, zpath := range zpaths {
 		fname := fmt.Sprintf("bubt-zindex-%d.data", idx+1)
 		zfile := filepath.Join(zpath, name, fname)
-		zflusher, err := startflusher(idx+1, int(tree.zblocksize), zfile)
+		zflusher, err := startflusher(idx+1, zfile)
 		if err != nil {
 			panic(err)
 		}
@@ -68,9 +69,9 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) {
 	log.Infof("%v starting bottoms up build ...\n", tree.logprefix)
 
 	defer func() {
-		if r := recover(); r != nil {
-			log.Fatalf("%v failed: %v", tree.logprefix, r)
-		}
+		//if r := recover(); r != nil {
+		//	log.Fatalf("%v failed: %v", tree.logprefix, r)
+		//}
 	}()
 
 	n_count := int64(0)
@@ -89,7 +90,9 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) {
 			if err := flusher.writedata(z.block); err != nil {
 				panic(err)
 			}
-			return int64(flusher.idx<<56) | fpos
+			vpos := int64(flusher.idx<<56) | fpos
+			//fmt.Printf("flushzblock %s %x\n", z.firstkey, vpos)
+			return vpos
 		}
 		return -1 // no entries in the block
 	}
@@ -105,71 +108,106 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) {
 		return -1 // no entries in the block
 	}
 
-	key, value, seqno, deleted, err := iter()
-	if err != nil {
-		panic(err)
-	}
+	var key, value []byte
+	var seqno uint64
+	var deleted bool
+	var err error
 
 	buildz := func() {
+		z.reset()
+
 		if key == nil {
 			return
 		}
-		z.reset()
 		ok := z.insert(key, value, seqno, deleted)
 		if ok == false {
 			panic("first insert to zblock, check whether key > zblocksize")
 		}
 		for ok {
 			n_count++
-			if key, value, seqno, deleted, err = iter(); err != nil {
+			key, value, seqno, deleted, err = iter()
+			if err != nil && err.Error() != io.EOF.Error() {
 				panic(err)
 			}
 			ok = z.insert(key, value, seqno, deleted)
 		}
 	}
 
-	var buildm func(level int) *mblock
+	var buildm func(m *mblock, level int) (*mblock, *mblock)
 
 	// vpos 8 bit MSB meaning.
 	// 0   - points to mblock fpos.
 	// 1   - points to zblock's first shard.
 	// 255 - points to zblock's 255th shard.
-	buildm = func(level int) (m *mblock) {
+	buildm = func(m *mblock, level int) (m1, m2 *mblock) {
 		var vpos int64
+		m1 = m
 
-		if key == nil { // no more entries
-			return nil
+		if m1 == nil {
+			return nil, nil
+
+		} else if key == nil { // no more entries
+			return m1, nil
 
 		} else if level == 0 { // build leaf node.
-			m = newm(tree.mblocksize)
 			ok := true
 			for ok {
 				buildz()
 				flusher := pickzflusher()
 				if vpos = flushzblock(flusher); vpos == -1 {
-					return nil
+					return m1, nil
 				}
-				ok = m.insert(z.firstkey, vpos)
+				ok = m1.insert(z.firstkey, vpos)
 			}
-			return m
+			m2 = newm(tree.mblocksize)
+			m2.insert(z.firstkey, vpos)
+			//fmt.Printf("buildm next %s\n", m2.firstkey)
+			return m1, m2
 		}
-		m1, m2 := buildm(level-1), buildm(level-1)
-		if m2 == nil {
-			return m1
+
+		m1, m2 = buildm(m1, level-1)
+		if m2 == nil { // done
+			return m1, nil
 		}
+		// m1 can't be nil !!
+		var mm *mblock
+
 		m = newm(tree.mblocksize)
-		m.insert(m1.firstkey, flushmblock(m1))
-		ok := m.insert(m2.firstkey, flushmblock(m2)) // ok is true
+		vpos = flushmblock(m1)
+		ok := m.insert(m1.firstkey, vpos) // ok is true
 		for ok {
-			m2 = buildm(level - 1)
-			ok = m.insert(m2.firstkey, flushmblock(m2))
+			if m1, m2 = buildm(m2, level-1); m1 != nil {
+				vpos = flushmblock(m1)
+				ok = m.insert(m1.firstkey, vpos)
+			} else {
+				break
+			}
 		}
-		return m
+		if ok == false {
+			mm = newm(tree.mblocksize)
+			mm.insert(m1.firstkey, vpos)
+			if m2 != nil {
+				mm.insert(m2.firstkey, flushmblock(m2))
+			}
+		}
+		return m, mm
 	}
 
-	m := buildm(20 /*levels can't go more than 20*/)
-	root := flushmblock(m)
-	log.Infof("%v root is at %v", tree.logprefix, root)
+	if iter != nil {
+		key, value, seqno, deleted, err = iter()
+		if err != nil && err.Error() != io.EOF.Error() {
+			panic(err)
+
+		} else if key != nil {
+			m := newm(tree.mblocksize)
+			m, _ = buildm(m, 20 /*levels can't go more than 20*/)
+			root := flushmblock(m)
+			log.Infof("%v root is at %v", tree.logprefix, root)
+
+		} else {
+			log.Infof("%v empty iteration", tree.logprefix)
+		}
+	}
 
 	// flush 1 m-block of settings
 	block := make([]byte, tree.mblocksize)
@@ -180,20 +218,22 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) {
 		"n_count":    n_count,
 	}
 	data, _ := json.Marshal(setts)
-	if x, y := len(data), len(block); x > y {
+	if x, y := len(data)+8, len(block); x > y {
 		panic(fmt.Errorf("settings(%v) > mblocksize(%v)", x, y))
 	}
-	copy(block, data)
+	binary.BigEndian.PutUint64(block, uint64(len(data)))
+	copy(block[8:], data)
 	if err := tree.mflusher.writedata(block); err != nil {
 		panic(err)
 	}
 	log.Infof("%v builder wrote settings %v bytes", tree.logprefix, len(block))
 
 	// flush 1 or more m-blocks of metadata
-	ln := (((int64(len(metadata)+7) / tree.mblocksize) + 1) * tree.mblocksize)
+	ln := (((int64(len(metadata)+15) / tree.mblocksize) + 1) * tree.mblocksize)
 	block = make([]byte, ln)
-	copy(block, metadata)
-	binary.BigEndian.PutUint64(block[ln-8:ln], uint64(ln))
+	binary.BigEndian.PutUint64(block, uint64(len(metadata)))
+	copy(block[8:], metadata)
+	binary.BigEndian.PutUint64(block[ln-8:], uint64(ln))
 	if err := tree.mflusher.writedata(block); err != nil {
 		panic(err)
 	}

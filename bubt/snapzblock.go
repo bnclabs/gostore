@@ -1,7 +1,10 @@
 package bubt
 
+import "fmt"
 import "bytes"
 import "encoding/binary"
+
+var _ = fmt.Sprintf("dummy")
 
 //---- znode for reading entries.
 
@@ -13,19 +16,26 @@ func (z zsnap) findkey(
 
 	var cmp int
 	switch len(index) {
+	case 0:
+		panic("impossible situation")
+
 	case 1:
 		cmp, value, seqno, deleted = z.compareat(adjust+0, key)
 		if cmp == 0 {
+			//fmt.Println("zfindkey", 0)
 			return adjust, value, seqno, deleted, true
 		} else if cmp < 0 {
+			//fmt.Println("zfindkey", -1)
 			return adjust, nil, 0, false, false
 		}
-		return adjust + 1, nil, 0, false, false
+		//fmt.Println("zfindkey", 1)
+		return -1, nil, 0, false, false
 
 	default:
 		half := len(index) / 2
 		cmp, value, seqno, deleted = z.compareat(adjust+half, key)
 		if cmp == 0 {
+			//fmt.Println("zfindkey", "default")
 			return adjust + half, value, seqno, deleted, true
 		} else if cmp < 0 {
 			return z.findkey(adjust, index[:half], key)
@@ -42,6 +52,7 @@ func (z zsnap) compareat(i int, key []byte) (int, []byte, uint64, bool) {
 	ln := int(ze.keylen())
 	x += zentrysize
 	cmp := bytes.Compare(key, z[x:x+ln])
+	//fmt.Printf("zcompareat %v %v %s %s\n", cmp, i, key, z[x:x+ln])
 	if cmp == 0 {
 		x, ln = x+ln, int(ze.valuelen())
 		return 0, z[x : x+ln], ze.seqno(), ze.isdeleted()
@@ -77,7 +88,7 @@ func (z zsnap) getnext(
 	index int) (key, value []byte, seqno uint64, deleted bool) {
 
 	idxlen := int(binary.BigEndian.Uint32(z[:4]))
-	if (index + 1) >= idxlen {
+	if index < 0 || (index+1) >= idxlen {
 		return nil, nil, 0, false
 	}
 	return z.entryat(index + 1)

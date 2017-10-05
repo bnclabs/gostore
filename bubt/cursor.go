@@ -55,28 +55,34 @@ func (cur *Cursor) opencursor(snap *Snapshot, key []byte) (*Cursor, error) {
 func (cur *Cursor) Key() (key []byte, deleted bool) {
 	if cur.finished {
 		return nil, false
+	} else if cur.index < 0 {
+		key, _, _, deleted, _ = cur.getnext()
+	} else {
+		key, _, _, deleted = zsnap(cur.zblock).entryat(cur.index)
 	}
-	key, _, _, deleted = zsnap(cur.zblock).entryat(cur.index)
 	return
 }
 
 func (cur *Cursor) Value() (value []byte) {
 	if cur.finished {
 		return nil
+	} else if cur.index < 0 {
+		_, value, _, _, _ = cur.getnext()
 	}
 	_, value, _, _ = zsnap(cur.zblock).entryat(cur.index)
 	return
 }
 
 func (cur *Cursor) GetNext() (key, value []byte, deleted bool, err error) {
-	if cur.finished {
-		return nil, nil, false, io.EOF
-	}
 	key, value, _, deleted, err = cur.getnext()
 	return
 }
 
 func (cur *Cursor) getnext() ([]byte, []byte, uint64, bool, error) {
+	if cur.finished {
+		return nil, nil, 0, false, io.EOF
+	}
+
 	key, value, seqno, deleted := zsnap(cur.zblock).getnext(cur.index)
 	if key != nil {
 		cur.index++
@@ -84,24 +90,17 @@ func (cur *Cursor) getnext() ([]byte, []byte, uint64, bool, error) {
 	}
 	cur.fposs[cur.shardidx] += cur.snap.zblocksize
 
-	for i := 0; i < len(cur.fposs)-1; i++ {
-		cur.shardidx = (cur.shardidx + 1) % byte(len(cur.fposs))
-		fpos, readz := cur.fposs[cur.shardidx], cur.snap.readzs[cur.shardidx]
-		n, err := readz.ReadAt(cur.zblock, fpos)
-		if err == io.EOF {
-			continue
-		} else if err != nil {
-			return nil, nil, 0, false, err
-		} else if n < len(cur.zblock) {
-			err := fmt.Errorf("bubt.snap.zblock.partialread")
-			return nil, nil, 0, false, err
-		}
+	cur.shardidx = (cur.shardidx + 1) % byte(len(cur.fposs))
+	fpos, readz := cur.fposs[cur.shardidx], cur.snap.readzs[cur.shardidx]
+	n, err := readz.ReadAt(cur.zblock, fpos)
+	if err == nil && n == len(cur.zblock) {
 		cur.index = 0
 		key, value, seqno, deleted = zsnap(cur.zblock).getnext(cur.index)
 		if key != nil {
 			cur.index++
 			return key, value, seqno, deleted, nil
 		}
+		panic("impossible situation")
 	}
 	cur.finished = true
 	return nil, nil, 0, false, io.EOF
@@ -109,9 +108,7 @@ func (cur *Cursor) getnext() ([]byte, []byte, uint64, bool, error) {
 
 // YNext can be used for lambda-sort or lambda-get.
 func (cur *Cursor) YNext() (key, value []byte, seqno uint64, deleted bool, err error) {
-	if cur.finished {
-		return nil, nil, 0, false, io.EOF
-	} else if cur.ynext == false {
+	if cur.ynext == false {
 		cur.ynext = true
 		key, value, seqno, deleted = zsnap(cur.zblock).entryat(cur.index)
 		return
