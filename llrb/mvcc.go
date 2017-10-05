@@ -1001,6 +1001,9 @@ func (mvcc *MVCC) Scan() api.Iterator {
 		}
 		currkey = currkey[:len(key)]
 		copy(currkey, key)
+		if key == nil {
+			return key, value, seqno, deleted, io.EOF
+		}
 		return key, value, seqno, deleted, nil
 	}
 }

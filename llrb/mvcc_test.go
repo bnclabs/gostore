@@ -1,5 +1,6 @@
 package llrb
 
+import "io"
 import "fmt"
 import "bytes"
 import "testing"
@@ -890,7 +891,7 @@ func TestMVCCTxnCursor(t *testing.T) {
 	for i, key := range keys {
 		cur := txn.OpenCursor([]byte(key))
 		testgetnext(t, cur, i, keys, vals)
-		if k, _, _ := cur.GetNext(); k != nil {
+		if k, _, _, _ := cur.GetNext(); k != nil {
 			t.Errorf("unexpected %s", k)
 		}
 		cur = txn.OpenCursor([]byte(key))
@@ -1026,7 +1027,7 @@ func TestMVCCScan(t *testing.T) {
 	count, cur := 0, view.OpenCursor(nil)
 	scan := llrb.Scan()
 
-	refkey, refval, refseqno, refdeleted := cur.YNext()
+	refkey, refval, refseqno, refdeleted, _ := cur.YNext()
 	key, val, seqno, deleted, err := scan()
 	if err != nil {
 		t.Fatal(err)
@@ -1043,9 +1044,9 @@ func TestMVCCScan(t *testing.T) {
 		} else if deleted != refdeleted {
 			t.Errorf("expected %v, got %v", refdeleted, deleted)
 		}
-		refkey, refval, refseqno, refdeleted = cur.YNext()
+		refkey, refval, refseqno, refdeleted, _ = cur.YNext()
 		key, val, seqno, deleted, err = scan()
-		if err != nil {
+		if err != nil && err != io.EOF {
 			t.Fatal(err)
 		}
 	}

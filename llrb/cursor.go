@@ -1,5 +1,6 @@
 package llrb
 
+import "io"
 import "fmt"
 import "unsafe"
 
@@ -54,14 +55,14 @@ func (cur *Cursor) Value() []byte {
 // GetNext move cursor to next entry in snapshot and return its key and
 // value. Returned byte slices will be a reference to index entry, hence
 // must not be used after transaction is committed or aborted.
-func (cur *Cursor) GetNext() (key, value []byte, deleted bool) {
+func (cur *Cursor) GetNext() (key, value []byte, deleted bool, err error) {
 	//fmt.Println(cur.stack)
 	if len(cur.stack) == 0 {
-		return nil, nil, false
+		return nil, nil, false, io.EOF
 	}
 	cur.stack = cur.next(cur.stack)
 	if len(cur.stack) == 0 {
-		return nil, nil, false
+		return nil, nil, false, io.EOF
 	}
 	key, deleted = cur.Key()
 	value = cur.Value()
@@ -87,9 +88,9 @@ func (cur *Cursor) Delcursor(lsm bool) {
 }
 
 // YNext can be used for lambda-sort or lambda-get.
-func (cur *Cursor) YNext() (key, value []byte, seqno uint64, deleted bool) {
+func (cur *Cursor) YNext() (key, value []byte, seqno uint64, deleted bool, err error) {
 	if len(cur.stack) == 0 {
-		return nil, nil, 0, false
+		return nil, nil, 0, false, io.EOF
 	}
 	if cur.ynext == false {
 		cur.ynext = true
@@ -101,7 +102,7 @@ func (cur *Cursor) YNext() (key, value []byte, seqno uint64, deleted bool) {
 	}
 	cur.stack = cur.next(cur.stack)
 	if len(cur.stack) == 0 {
-		return nil, nil, 0, false
+		return nil, nil, 0, false, io.EOF
 	}
 	ptr := cur.stack[len(cur.stack)-1]
 	nd := (*Llrbnode)(unsafe.Pointer(ptr & (^uintptr(0x3))))

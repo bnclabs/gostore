@@ -1,5 +1,6 @@
 package llrb
 
+import "io"
 import "fmt"
 import "bytes"
 import "testing"
@@ -899,7 +900,7 @@ func TestLLRBTxnCursor(t *testing.T) {
 	for i, key := range keys {
 		cur := txn.OpenCursor([]byte(key))
 		testgetnext(t, cur, i, keys, vals)
-		if k, _, _ := cur.GetNext(); k != nil {
+		if k, _, _, _ := cur.GetNext(); k != nil {
 			t.Errorf("unexpected %s", k)
 		}
 		cur = txn.OpenCursor([]byte(key))
@@ -914,7 +915,7 @@ func TestLLRBTxnCursor(t *testing.T) {
 	// full table scan
 	cur := txn.OpenCursor(nil)
 	testgetnext(t, cur, 0, keys, vals)
-	if k, _, _ := cur.GetNext(); k != nil {
+	if k, _, _, _ := cur.GetNext(); k != nil {
 		t.Errorf("unexpected %s", k)
 	}
 	cur = txn.OpenCursor(nil)
@@ -998,7 +999,7 @@ func TestLLRBViewCursor(t *testing.T) {
 	view := llrb.View(0)
 	cur := view.OpenCursor(nil)
 	testgetnext(t, cur, 0, keys, vals)
-	if k, _, _ := cur.GetNext(); k != nil {
+	if k, _, _, _ := cur.GetNext(); k != nil {
 		t.Errorf("unexpected %s", k)
 	}
 	cur = view.OpenCursor(nil)
@@ -1066,7 +1067,7 @@ func TestLLRBScan(t *testing.T) {
 	count, cur := 0, view.OpenCursor(nil)
 	scan := llrb.Scan()
 
-	refkey, refval, refseqno, refdeleted := cur.YNext()
+	refkey, refval, refseqno, refdeleted, _ := cur.YNext()
 	key, val, seqno, deleted, err := scan()
 	if err != nil {
 		t.Fatal(err)
@@ -1083,9 +1084,9 @@ func TestLLRBScan(t *testing.T) {
 		} else if deleted != refdeleted {
 			t.Errorf("expected %v, got %v", refdeleted, deleted)
 		}
-		refkey, refval, refseqno, refdeleted = cur.YNext()
+		refkey, refval, refseqno, refdeleted, _ = cur.YNext()
 		key, val, seqno, deleted, err = scan()
-		if err != nil {
+		if err != nil && err != io.EOF {
 			t.Fatal(err)
 		}
 	}
@@ -1322,7 +1323,7 @@ func testgetnext(t *testing.T, cur *Cursor, from int, keys, vals []string) {
 		if string(v) != vals[i] {
 			t.Errorf("for %v expected %s, got %s", i, vals[i], v)
 		}
-		k, v, deleted = cur.GetNext()
+		k, v, deleted, _ = cur.GetNext()
 		i++
 		if k == nil {
 			break
@@ -1344,7 +1345,7 @@ func testgetnext(t *testing.T, cur *Cursor, from int, keys, vals []string) {
 func testynext(t *testing.T, cur *Cursor, from int, keys, vals []string) {
 	i := from
 	for {
-		k, v, _, deleted := cur.YNext()
+		k, v, _, deleted, _ := cur.YNext()
 		if k == nil {
 			break
 		} else if string(k) == keys[15] && deleted == false {
