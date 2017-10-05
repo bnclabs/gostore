@@ -31,11 +31,13 @@ func openfile(filename string, ismmap bool) (r io.ReaderAt) {
 }
 
 func closereadat(rd io.ReaderAt) error {
-	switch r := rd.(type) {
-	case *os.File:
-		return r.Close()
-	case *mmap.ReaderAt:
-		return r.Close()
+	if rd != nil {
+		switch r := rd.(type) {
+		case *os.File:
+			return r.Close()
+		case *mmap.ReaderAt:
+			return r.Close()
+		}
 	}
 	return nil
 }

@@ -15,9 +15,12 @@ func (view *View) ID() uint64 {
 }
 
 // OpenCursor open an active cursor inside the index.
-func (view *View) OpenCursor(key []byte) *Cursor {
-	cur := view.getcursor().opencursor(nil, key)
-	return cur
+func (view *View) OpenCursor(key []byte) (*Cursor, error) {
+	cur, err := view.getcursor().opencursor(nil, key)
+	if err != nil {
+		return nil, err
+	}
+	return cur, nil
 }
 
 // Abort view, must be called once done with the view.

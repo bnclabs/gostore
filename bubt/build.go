@@ -30,10 +30,12 @@ type Bubt struct {
 }
 
 // NewBubt create a Bubt instance to build a new bottoms-up btree.
-func NewBubt(name string, paths []string, msize, zsize int64) *Bubt {
+func NewBubt(name string, paths []string, msize, zsize int64) (*Bubt, error) {
+	var err error
+
 	tree := &Bubt{name: name, mblocksize: msize, zblocksize: zsize}
 	mpath, zpaths := tree.pickmzpath(paths)
-	tree.logprefix = fmt.Sprintf("[BUBT-%s]", name)
+	tree.logprefix = fmt.Sprintf("BUBT [%s]", name)
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -43,21 +45,33 @@ func NewBubt(name string, paths []string, msize, zsize int64) *Bubt {
 	}()
 
 	mfile := filepath.Join(mpath, name, "bubt-mindex.data")
-	tree.mflusher = startflusher(0, int(tree.mblocksize), mfile)
+	tree.mflusher, err = startflusher(0, int(tree.mblocksize), mfile)
+	if err != nil {
+		panic(err)
+	}
 	tree.zflushers = make([]*bubtflusher, 0)
 	for idx, zpath := range zpaths {
-		fname := fmt.Sprintf("bubt-zindex-%s.data", idx+1)
+		fname := fmt.Sprintf("bubt-zindex-%d.data", idx+1)
 		zfile := filepath.Join(zpath, name, fname)
-		zflusher := startflusher(idx+1, int(tree.zblocksize), zfile)
+		zflusher, err := startflusher(idx+1, int(tree.zblocksize), zfile)
+		if err != nil {
+			panic(err)
+		}
 		tree.zflushers = append(tree.zflushers, zflusher)
 	}
-	return tree
+	return tree, nil
 }
 
-// Build starts building the tree from iterator, iterator is expected to be a
-// full-table scan over another data-store.
+// Build starts building the tree from iterator, iterator is expected
+// to be a full-table scan over another data-store.
 func (tree *Bubt) Build(iter api.Iterator, metadata []byte) {
 	log.Infof("%v starting bottoms up build ...\n", tree.logprefix)
+
+	defer func() {
+		if r := recover(); r != nil {
+			log.Fatalf("%v failed: %v", tree.logprefix, r)
+		}
+	}()
 
 	n_count := int64(0)
 	z := newz(tree.zblocksize)
@@ -73,7 +87,7 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) {
 		if z.finalize() {
 			fpos := atomic.LoadInt64(&flusher.fpos)
 			if err := flusher.writedata(z.block); err != nil {
-				panic(fmt.Errorf("flushing zblock data: %v", err))
+				panic(err)
 			}
 			return int64(flusher.idx<<56) | fpos
 		}
@@ -84,14 +98,17 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) {
 		if m != nil && m.finalize() {
 			vpos := atomic.LoadInt64(&tree.mflusher.fpos)
 			if err := tree.mflusher.writedata(m.block); err != nil {
-				panic(fmt.Errorf("flushing mblock data: %v", err))
+				panic(err)
 			}
 			return vpos
 		}
 		return -1 // no entries in the block
 	}
 
-	key, value, seqno, deleted := iter()
+	key, value, seqno, deleted, err := iter()
+	if err != nil {
+		panic(err)
+	}
 
 	buildz := func() {
 		if key == nil {
@@ -104,7 +121,9 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) {
 		}
 		for ok {
 			n_count++
-			key, value, seqno, deleted = iter()
+			if key, value, seqno, deleted, err = iter(); err != nil {
+				panic(err)
+			}
 			ok = z.insert(key, value, seqno, deleted)
 		}
 	}
@@ -161,14 +180,14 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) {
 		"n_count":    n_count,
 	}
 	data, _ := json.Marshal(setts)
-	if x, y := len(data), len(block); x < y {
+	if x, y := len(data), len(block); x > y {
 		panic(fmt.Errorf("settings(%v) > mblocksize(%v)", x, y))
 	}
 	copy(block, data)
 	if err := tree.mflusher.writedata(block); err != nil {
-		panic(fmt.Errorf("writing settings: %v", err))
+		panic(err)
 	}
-	log.Infof("%v builder wrote settings %s bytes", tree.logprefix, len(block))
+	log.Infof("%v builder wrote settings %v bytes", tree.logprefix, len(block))
 
 	// flush 1 or more m-blocks of metadata
 	ln := (((int64(len(metadata)+7) / tree.mblocksize) + 1) * tree.mblocksize)
@@ -176,9 +195,9 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) {
 	copy(block, metadata)
 	binary.BigEndian.PutUint64(block[ln-8:ln], uint64(ln))
 	if err := tree.mflusher.writedata(block); err != nil {
-		panic(fmt.Errorf("writing metadata: %v", err))
+		panic(err)
 	}
-	log.Infof("%v builder wrote metadata %s bytes", tree.logprefix, len(block))
+	log.Infof("%v builder wrote metadata %v bytes", tree.logprefix, len(block))
 
 	log.Infof("%v ... bottoms up build completed\n", tree.logprefix)
 }

@@ -20,7 +20,7 @@ type Cursor struct {
 	finished bool
 }
 
-func (cur *Cursor) opencursor(snap *Snapshot, key []byte) *Cursor {
+func (cur *Cursor) opencursor(snap *Snapshot, key []byte) (*Cursor, error) {
 	if key == nil { // from beginning
 		cur.shardidx, cur.index = 0, 0
 		for i := 0; i < len(snap.readzs); i++ {
@@ -32,11 +32,11 @@ func (cur *Cursor) opencursor(snap *Snapshot, key []byte) *Cursor {
 		if err == io.EOF {
 			cur.finished = true
 		} else if err != nil {
-			panic(err)
+			return nil, err
 		} else if n < len(cur.zblock) {
-			panic(fmt.Errorf("zblock read only %v(%v)", n, cur.zblock))
+			return nil, fmt.Errorf("bubt.snap.zblock.partialread")
 		}
-		return cur
+		return cur, nil
 	}
 
 	shardidx, fpos := snap.findinmblock(key)
@@ -49,7 +49,7 @@ func (cur *Cursor) opencursor(snap *Snapshot, key []byte) *Cursor {
 	for i := cur.shardidx + 1; i < byte(len(snap.readzs)); i++ {
 		cur.fposs[i] = fpos - snap.zblocksize
 	}
-	return cur
+	return cur, nil
 }
 
 func (cur *Cursor) Key() (key []byte, deleted bool) {
@@ -68,19 +68,19 @@ func (cur *Cursor) Value() (value []byte) {
 	return
 }
 
-func (cur *Cursor) GetNext() (key, value []byte, deleted bool) {
+func (cur *Cursor) GetNext() (key, value []byte, deleted bool, err error) {
 	if cur.finished {
-		return nil, nil, false
+		return nil, nil, false, io.EOF
 	}
-	key, value, _, deleted = cur.getnext()
+	key, value, _, deleted, err = cur.getnext()
 	return
 }
 
-func (cur *Cursor) getnext() (key, value []byte, seqno uint64, deleted bool) {
-	key, value, seqno, deleted = zsnap(cur.zblock).getnext(cur.index)
+func (cur *Cursor) getnext() ([]byte, []byte, uint64, bool, error) {
+	key, value, seqno, deleted := zsnap(cur.zblock).getnext(cur.index)
 	if key != nil {
 		cur.index++
-		return
+		return key, value, seqno, deleted, nil
 	}
 	cur.fposs[cur.shardidx] += cur.snap.zblocksize
 
@@ -91,25 +91,26 @@ func (cur *Cursor) getnext() (key, value []byte, seqno uint64, deleted bool) {
 		if err == io.EOF {
 			continue
 		} else if err != nil {
-			panic(err)
+			return nil, nil, 0, false, err
 		} else if n < len(cur.zblock) {
-			panic(fmt.Errorf("zblock read only %v(%v)", n, cur.zblock))
+			err := fmt.Errorf("bubt.snap.zblock.partialread")
+			return nil, nil, 0, false, err
 		}
 		cur.index = 0
 		key, value, seqno, deleted = zsnap(cur.zblock).getnext(cur.index)
 		if key != nil {
 			cur.index++
-			return
+			return key, value, seqno, deleted, nil
 		}
 	}
 	cur.finished = true
-	return nil, nil, 0, false
+	return nil, nil, 0, false, io.EOF
 }
 
 // YNext can be used for lambda-sort or lambda-get.
-func (cur *Cursor) YNext() (key, value []byte, seqno uint64, deleted bool) {
+func (cur *Cursor) YNext() (key, value []byte, seqno uint64, deleted bool, err error) {
 	if cur.finished {
-		return nil, nil, 0, false
+		return nil, nil, 0, false, io.EOF
 	} else if cur.ynext == false {
 		cur.ynext = true
 		key, value, seqno, deleted = zsnap(cur.zblock).entryat(cur.index)
