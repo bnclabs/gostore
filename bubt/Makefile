@@ -13,4 +13,4 @@ coverage:
 	rm -rf coverage.out
 
 clean:
-	rm -rf coverage.out
+	rm -rf coverage.out bubt.lock
