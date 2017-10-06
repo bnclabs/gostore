@@ -6,7 +6,7 @@ import "testing"
 func TestZGetNext(t *testing.T) {
 	z, keys := makezsnap(t)
 	for i := range keys {
-		for j := i; j < len(keys); j++ {
+		for j := i + 1; j < len(keys); j++ {
 			key, value, seqno, deleted := z.getnext(j - 1)
 			if string(key) != string(keys[j]) {
 				t.Errorf("expected %q, got %q", keys[j], key)
@@ -46,11 +46,11 @@ func BenchmarkZGetNext(b *testing.B) {
 	z, _ := makezsnap(b)
 
 	b.ResetTimer()
-	index := -1
+	index := 0
 	for i := 0; i < b.N; i++ {
 		if key, _, _, _ := z.getnext(index); key == nil {
-			index = -1
-			if key, _, _, _ = z.getnext(-1); key == nil {
+			index = 0
+			if key, _, _, _ = z.getnext(index); key != nil {
 				panic("unexpected")
 			}
 		}

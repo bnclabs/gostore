@@ -29,6 +29,7 @@ type Snapshot struct {
 	readm    io.ReaderAt   // block reader for m-index
 	readzs   []io.ReaderAt // block reader for zero or more z-index.
 	rw       *flock.RWMutex
+	zsizes   []int64
 
 	n_count    int64
 	zblocksize int64
@@ -63,9 +64,9 @@ func OpenSnapshot(
 	snap.rw.RLock()
 
 	defer func() {
-		//if r := recover(); r != nil {
-		//	err = fmt.Errorf("%s", r)
-		//}
+		if r := recover(); r != nil {
+			err = fmt.Errorf("%s", r)
+		}
 		if err != nil {
 			snap.Close()
 		}
@@ -76,6 +77,11 @@ func OpenSnapshot(
 	}
 	if _, err = snap.readheader(snap.readm); err != nil {
 		return
+	}
+	// initialize the current capacity of zblock-files.
+	snap.zsizes = make([]int64, len(snap.readzs))
+	for i := range snap.zfiles {
+		snap.zsizes[i] = filesize(snap.readzs[i])
 	}
 	return
 }
@@ -333,7 +339,7 @@ func (snap *Snapshot) abortview(view *View) error {
 
 func (snap *Snapshot) Scan() api.Iterator {
 	view := &View{}
-	view.id, view.snap, view.cursors = 1, snap, view.cursors[:0]
+	view.id, view.snap, view.cursors = 0xC0FFEE, snap, view.cursors[:0]
 	cur, err := view.OpenCursor(nil)
 	if err != nil || cur == nil {
 		return nil

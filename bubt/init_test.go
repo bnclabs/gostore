@@ -10,7 +10,7 @@ var _ = fmt.Sprintf("dummy")
 
 func init() {
 	setts := map[string]interface{}{
-		"log.level": "info",
+		"log.level": "warn",
 		"log.file":  "",
 	}
 	log.SetLogger(nil, setts)

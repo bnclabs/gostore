@@ -1,6 +1,7 @@
 package bubt
 
 import "os"
+import "io"
 import "fmt"
 import "bytes"
 import "time"
@@ -95,7 +96,7 @@ func TestBuildMetadata(t *testing.T) {
 
 func TestSnapshotGet(t *testing.T) {
 	paths := makepaths()
-	mi := makeLLRB(10000000)
+	mi, _ := makeLLRB(10000000)
 	defer mi.Destroy()
 
 	rand.Seed(time.Now().UnixNano())
@@ -114,7 +115,7 @@ func TestSnapshotGet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	//defer snap.Destroy()
+	defer snap.Destroy()
 	defer snap.Close()
 
 	//value, seqno, deleted, ok := snap.Get([]byte("key9998"), []byte{})
@@ -122,6 +123,8 @@ func TestSnapshotGet(t *testing.T) {
 
 	if snap.Count() != mi.Count() {
 		t.Errorf("expected %v, got %v", mi.Count(), snap.Count())
+	} else if snap.ID() != name {
+		t.Errorf("expected %v, got %v", name, snap.ID())
 	}
 	miter := mi.Scan()
 	for key, value, seqno, deleted, err := miter(); err == nil; {
@@ -140,26 +143,229 @@ func TestSnapshotGet(t *testing.T) {
 }
 
 func TestSnapshotScan(t *testing.T) {
+	paths := makepaths()
+	mi, _ := makeLLRB(10000000)
+	defer mi.Destroy()
+
+	rand.Seed(time.Now().UnixNano())
+	name, msize := "testbuild", int64(4096)
+	zsize := []int64{msize, msize * 2}[rand.Intn(100000)%2]
+	mmap := []bool{false, true}[rand.Intn(10000)%2]
+	t.Logf("zsize: %v, mmap: %v", zsize, mmap)
+	bubt, err := NewBubt(name, paths, msize, zsize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bubt.Build(mi.Scan(), []byte("this is metadata"))
+	bubt.Close()
+
+	snap, err := OpenSnapshot(name, paths, mmap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer snap.Destroy()
+	defer snap.Close()
+
+	if snap.Count() != mi.Count() {
+		t.Errorf("expected %v, got %v", mi.Count(), snap.Count())
+	}
+	miter, diter := mi.Scan(), snap.Scan()
+	for key, value, seqno, deleted, err := miter(); err == nil; {
+		k, v, s, d, err1 := diter()
+		if err1 != nil {
+			t.Errorf("unexpected %v", err1)
+		} else if bytes.Compare(k, key) != 0 {
+			t.Errorf("expected %q, got %q", key, k)
+		} else if bytes.Compare(v, value) != 0 {
+			t.Errorf("%s expected %q, got %q", key, value, v)
+		} else if d != deleted {
+			t.Errorf("%s expected %v, got %v", key, deleted, d)
+		} else if s != seqno {
+			t.Errorf("%s expected %v, got %v", key, seqno, s)
+		}
+		key, value, seqno, deleted, err = miter()
+	}
+	k, _, _, _, err := diter()
+	if k != nil {
+		t.Errorf("unexpected %q", k)
+	} else if err != io.EOF {
+		t.Errorf("unexpected %v", err)
+	}
 }
 
-func TestView1(t *testing.T) {
+func TestView(t *testing.T) {
+	paths := makepaths()
+	mi, _ := makeLLRB(1000000)
+	defer mi.Destroy()
+
+	rand.Seed(time.Now().UnixNano())
+	name, msize := "testbuild", int64(4096)
+	zsize := []int64{msize, msize * 2}[rand.Intn(100000)%2]
+	mmap := []bool{false, true}[rand.Intn(10000)%2]
+	t.Logf("zsize: %v, mmap: %v", zsize, mmap)
+	bubt, err := NewBubt(name, paths, msize, zsize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bubt.Build(mi.Scan(), []byte("this is metadata"))
+	bubt.Close()
+
+	snap, err := OpenSnapshot(name, paths, mmap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer snap.Destroy()
+	defer snap.Close()
+
+	id := uint64(0x12345699)
+	view := snap.View(id)
+	if view.ID() != id {
+		t.Errorf("expected %v, got %v", id, view.ID())
+	}
+	miter := mi.Scan()
+	for key, value, _, deleted, err := miter(); err == nil; {
+		v, d, ok := view.Get(key, []byte{})
+		if d != deleted {
+			t.Errorf("%s expected %v, got %v", key, deleted, d)
+		} else if deleted == false && ok == false {
+			t.Errorf("%s unexpected false", key)
+		} else if bytes.Compare(v, value) != 0 {
+			t.Errorf("%s expected %q, got %q", key, value, v)
+		}
+		key, value, _, deleted, err = miter()
+	}
 }
 
-func TestView2(t *testing.T) {
+func TestCursorGetNext(t *testing.T) {
+	paths := makepaths()
+	mi, _ := makeLLRB(10000)
+	defer mi.Destroy()
+
+	rand.Seed(time.Now().UnixNano())
+	name, msize := "testbuild", int64(4096)
+	zsize := []int64{msize, msize * 2}[rand.Intn(100000)%2]
+	mmap := []bool{false, true}[rand.Intn(10000)%2]
+	t.Logf("zsize: %v, mmap: %v", zsize, mmap)
+	bubt, err := NewBubt(name, paths, msize, zsize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bubt.Build(mi.Scan(), []byte("this is metadata"))
+	bubt.Close()
+
+	snap, err := OpenSnapshot(name, paths, mmap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer snap.Destroy()
+	defer snap.Close()
+
+	id := uint64(0x12345699)
+	miter := mi.Scan()
+	for key, _, _, _, err := miter(); err == nil; {
+		dview, mview := snap.View(id), mi.View(id)
+		mcur := mview.OpenCursor(key)
+		dcur, err1 := dview.OpenCursor(key)
+		if err1 != nil {
+			t.Error(err1)
+		}
+		for {
+			k1, d1 := mcur.Key()
+			v1 := mcur.Value()
+			k2, d2 := dcur.Key()
+			v2 := dcur.Value()
+			if bytes.Compare(k1, k2) != 0 {
+				t.Errorf("expected %q, got %q", k1, k2)
+			} else if bytes.Compare(v1, v2) != 0 {
+				t.Errorf("%s expected %q, got %q", key, v1, v2)
+			} else if d1 != d2 {
+				t.Errorf("%s expected %v, got %v", key, d1, d2)
+			}
+			k3, v3, d3, err3 := mcur.GetNext()
+			k4, v4, d4, err4 := dcur.GetNext()
+			if err3 != err4 {
+				t.Errorf("%s expected %v, got %v", key, err3, err4)
+			} else if bytes.Compare(k3, k4) != 0 {
+				t.Errorf("expected %q, got %q", k3, k4)
+			} else if bytes.Compare(v3, v4) != 0 {
+				t.Errorf("%s expected %q, got %q", key, v3, v4)
+			} else if d3 != d4 {
+				t.Errorf("%s expected %v, got %v", key, d3, d4)
+			}
+			if err3 != nil {
+				break
+			}
+		}
+		mview.Abort()
+		dview.Abort()
+		key, _, _, _, err = miter()
+	}
 }
 
-func TestCursor1(t *testing.T) {
+func TestCursorYNext(t *testing.T) {
+	paths := makepaths()
+	mi, _ := makeLLRB(10000)
+	defer mi.Destroy()
+
+	rand.Seed(time.Now().UnixNano())
+	name, msize := "testbuild", int64(4096)
+	zsize := []int64{msize, msize * 2}[rand.Intn(100000)%2]
+	mmap := []bool{false, true}[rand.Intn(10000)%2]
+	t.Logf("zsize: %v, mmap: %v", zsize, mmap)
+	bubt, err := NewBubt(name, paths, msize, zsize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bubt.Build(mi.Scan(), []byte("this is metadata"))
+	bubt.Close()
+
+	snap, err := OpenSnapshot(name, paths, mmap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer snap.Destroy()
+	defer snap.Close()
+
+	id := uint64(0x12345699)
+	miter := mi.Scan()
+	for key, _, _, _, err := miter(); err == nil; {
+		dview, mview := snap.View(id), mi.View(id)
+		mcur := mview.OpenCursor(key)
+		dcur, err1 := dview.OpenCursor(key)
+		if err1 != nil {
+			t.Error(err1)
+		}
+		for {
+			k1, v1, s1, d1, err3 := mcur.YNext()
+			k2, v2, s2, d2, err4 := dcur.YNext()
+			if err3 != err4 {
+				t.Errorf("%s expected %v, got %v", key, err3, err4)
+			} else if bytes.Compare(k1, k2) != 0 {
+				t.Errorf("expected %q, got %q", k1, k2)
+			} else if bytes.Compare(v1, v2) != 0 {
+				t.Errorf("%s expected %q, got %q", key, v1, v2)
+			} else if s1 != s2 {
+				t.Errorf("%s expected %v, got %v", key, s1, s2)
+			} else if d1 != d2 {
+				t.Errorf("%s expected %v, got %v", key, d1, d2)
+			}
+			if err3 != nil {
+				break
+			}
+		}
+		mview.Abort()
+		dview.Abort()
+		key, _, _, _, err = miter()
+	}
 }
 
-func TestCursor2(t *testing.T) {
-}
-
-func makeLLRB(n int) *llrb.LLRB {
+func makeLLRB(n int) (*llrb.LLRB, [][]byte) {
 	setts := s.Settings{
 		"keycapacity": 1024 * 1024 * 1024, "valcapacity": 1024 * 1024 * 1024,
 	}
 	mi := llrb.NewLLRB("buildllrb", setts)
 	k, v := []byte("key000000000000"), []byte("val00000000000000")
+	keys := [][]byte{}
 	for i := 0; i < n; i++ {
 		x := fmt.Sprintf("%d", i)
 		key, val := append(k[:3], x...), append(v[:3], x...)
@@ -167,8 +373,9 @@ func makeLLRB(n int) *llrb.LLRB {
 		if i%10 == 0 {
 			mi.Delete(key, nil, true /*lsm*/)
 		}
+		keys = append(keys, key)
 	}
-	return mi
+	return mi, keys
 }
 
 func makepaths() []string {

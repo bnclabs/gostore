@@ -16,7 +16,7 @@ func (view *View) ID() uint64 {
 
 // OpenCursor open an active cursor inside the index.
 func (view *View) OpenCursor(key []byte) (*Cursor, error) {
-	cur, err := view.getcursor().opencursor(nil, key)
+	cur, err := view.getcursor().opencursor(view.snap, key)
 	if err != nil {
 		return nil, err
 	}
@@ -25,6 +25,9 @@ func (view *View) OpenCursor(key []byte) (*Cursor, error) {
 
 // Abort view, must be called once done with the view.
 func (view *View) Abort() {
+	for _, cur := range view.cursors {
+		view.putcursor(cur)
+	}
 	view.snap.abortview(view)
 }
 

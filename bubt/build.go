@@ -69,9 +69,9 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) {
 	log.Infof("%v starting bottoms up build ...\n", tree.logprefix)
 
 	defer func() {
-		//if r := recover(); r != nil {
-		//	log.Fatalf("%v failed: %v", tree.logprefix, r)
-		//}
+		if r := recover(); r != nil {
+			log.Fatalf("%v failed: %v", tree.logprefix, r)
+		}
 	}()
 
 	n_count := int64(0)
