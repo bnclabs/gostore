@@ -5,19 +5,27 @@
 //
 // Interface specification to access gostore datastructures.
 //
-// dict:
+// bubt:
 //
-// Implement a simple in-memory hash map based on golang map. Primary used
-// as reference for testing.
+// A version of Bayer-Tree for sorting and retrieving {key,value} entries.
+// Index built bottoms up, hence Bottoms Up BTree, and kept immutable for
+// rest of its lifetime.
+//
+// flock:
+//
+// File locking library for linux, mac and windows. Similar to sync.RWMutex
+// and works across processes.
+//
+// lib:
+//
+// Convinience functions that can be used by other packages. Package shall
+// not import packages other than golang's standard packages.
 //
 // llrb:
 //
-// Implement a version of Left Leaning Red Black tree for sorting and
-// retrieving {key,value}.
-//
-// bubt:
-//
-// Implement a version of Bayer-Tree for sorting and retrieving {key,value}.
+// A version of Left Leaning Red Black tree for sorting and retrieving
+// {key,value} entries. Index resides entirely in memory with optional
+// Multi Version Concurrency Control.
 //
 // lsm:
 //
