@@ -573,7 +573,7 @@ func (llrb *LLRB) Scan() api.Iterator {
 	sb := makescanbuf()
 
 	leseqno := llrb.startscan(nil, sb, 0)
-	return func() ([]byte, []byte, uint64, bool, error) {
+	return func(fin bool) ([]byte, []byte, uint64, bool, error) {
 		key, value, seqno, deleted := sb.pop()
 		if key == nil {
 			llrb.startscan(currkey, sb, leseqno)

@@ -1067,8 +1067,8 @@ func TestLLRBScan(t *testing.T) {
 	count, cur := 0, view.OpenCursor(nil)
 	scan := llrb.Scan()
 
-	refkey, refval, refseqno, refdeleted, _ := cur.YNext()
-	key, val, seqno, deleted, err := scan()
+	refkey, refval, refseqno, refdeleted, _ := cur.YNext(false /*fin*/)
+	key, val, seqno, deleted, err := scan(false /*close*/)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1084,8 +1084,8 @@ func TestLLRBScan(t *testing.T) {
 		} else if deleted != refdeleted {
 			t.Errorf("expected %v, got %v", refdeleted, deleted)
 		}
-		refkey, refval, refseqno, refdeleted, _ = cur.YNext()
-		key, val, seqno, deleted, err = scan()
+		refkey, refval, refseqno, refdeleted, _ = cur.YNext(false /*fin*/)
+		key, val, seqno, deleted, err = scan(false /*close*/)
 		if err != nil && err != io.EOF {
 			t.Fatal(err)
 		}
@@ -1253,7 +1253,7 @@ func BenchmarkLLRBYNext(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		cur.YNext()
+		cur.YNext(false /*fin*/)
 	}
 	view.Abort()
 }
@@ -1266,7 +1266,7 @@ func BenchmarkLLRBScan(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		scan()
+		scan(false /*close*/)
 	}
 }
 
@@ -1345,7 +1345,7 @@ func testgetnext(t *testing.T, cur *Cursor, from int, keys, vals []string) {
 func testynext(t *testing.T, cur *Cursor, from int, keys, vals []string) {
 	i := from
 	for {
-		k, v, _, deleted, _ := cur.YNext()
+		k, v, _, deleted, _ := cur.YNext(false /*fin*/)
 		if k == nil {
 			break
 		} else if string(k) == keys[15] && deleted == false {

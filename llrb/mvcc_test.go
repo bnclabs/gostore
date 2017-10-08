@@ -1027,8 +1027,8 @@ func TestMVCCScan(t *testing.T) {
 	count, cur := 0, view.OpenCursor(nil)
 	scan := llrb.Scan()
 
-	refkey, refval, refseqno, refdeleted, _ := cur.YNext()
-	key, val, seqno, deleted, err := scan()
+	refkey, refval, refseqno, refdeleted, _ := cur.YNext(false /*fin*/)
+	key, val, seqno, deleted, err := scan(false /*close*/)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1044,8 +1044,8 @@ func TestMVCCScan(t *testing.T) {
 		} else if deleted != refdeleted {
 			t.Errorf("expected %v, got %v", refdeleted, deleted)
 		}
-		refkey, refval, refseqno, refdeleted, _ = cur.YNext()
-		key, val, seqno, deleted, err = scan()
+		refkey, refval, refseqno, refdeleted, _ = cur.YNext(false /*fin*/)
+		key, val, seqno, deleted, err = scan(false /*close*/)
 		if err != nil && err != io.EOF {
 			t.Fatal(err)
 		}
@@ -1213,7 +1213,7 @@ func BenchmarkMVCCYNext(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		cur.YNext()
+		cur.YNext(false /*fin*/)
 	}
 	view.Abort()
 }
@@ -1226,7 +1226,7 @@ func BenchmarkMVCCScan(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		scan()
+		scan(false /*close*/)
 	}
 }
 

@@ -169,7 +169,6 @@ func (nd *Llrbnode) cleardeleted() *Llrbnode {
 	return nd.setseqflags(seqflags & (^ndDeleted))
 }
 
-// Value implement NodeGetter method.
 func (nd *Llrbnode) Value() []byte {
 	if nv := nd.nodevalue(); nv != nil {
 		return nv.value()

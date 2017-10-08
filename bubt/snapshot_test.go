@@ -32,7 +32,7 @@ func BenchmarkSnapScan(b *testing.B) {
 	iter := snap.Scan()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		iter()
+		iter(false /*fin*/)
 	}
 }
 
@@ -126,7 +126,7 @@ func BenchmarkCursorYNext(b *testing.B) {
 	cur, _ := view.OpenCursor(nil)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		cur.YNext()
+		cur.YNext(false /*fin*/)
 	}
 	view.Abort()
 }

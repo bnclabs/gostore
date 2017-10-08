@@ -100,7 +100,7 @@ func (cur *Cursor) getnext() ([]byte, []byte, uint64, bool, error) {
 }
 
 // YNext can be used for lambda-sort or lambda-get.
-func (cur *Cursor) YNext() (key,
+func (cur *Cursor) YNext(fin bool) (key,
 	value []byte, seqno uint64, deleted bool, err error) {
 
 	if cur.ynext == false {

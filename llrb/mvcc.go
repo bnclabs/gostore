@@ -990,7 +990,7 @@ func (mvcc *MVCC) Scan() api.Iterator {
 	sb := makescanbuf()
 
 	leseqno := mvcc.startscan(nil, sb, 0)
-	return func() ([]byte, []byte, uint64, bool, error) {
+	return func(fin bool) ([]byte, []byte, uint64, bool, error) {
 		key, value, seqno, deleted := sb.pop()
 		if key == nil {
 			mvcc.startscan(currkey, sb, leseqno)

@@ -125,7 +125,7 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) {
 		}
 		for ok {
 			n_count++
-			key, value, seqno, deleted, err = iter()
+			key, value, seqno, deleted, err = iter(false /*close*/)
 			if err != nil && err.Error() != io.EOF.Error() {
 				panic(err)
 			}
@@ -194,7 +194,7 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) {
 	}
 
 	if iter != nil {
-		key, value, seqno, deleted, err = iter()
+		key, value, seqno, deleted, err = iter(false /*close*/)
 		if err != nil && err.Error() != io.EOF.Error() {
 			panic(err)
 

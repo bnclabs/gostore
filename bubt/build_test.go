@@ -127,7 +127,7 @@ func TestSnapshotGet(t *testing.T) {
 		t.Errorf("expected %v, got %v", name, snap.ID())
 	}
 	miter := mi.Scan()
-	for key, value, seqno, deleted, err := miter(); err == nil; {
+	for key, value, seqno, deleted, err := miter(false /*fin*/); err == nil; {
 		v, s, d, ok := snap.Get(key, []byte{})
 		if d != deleted {
 			t.Errorf("%s expected %v, got %v", key, deleted, d)
@@ -138,7 +138,7 @@ func TestSnapshotGet(t *testing.T) {
 		} else if bytes.Compare(v, value) != 0 {
 			t.Errorf("%s expected %q, got %q", key, value, v)
 		}
-		key, value, seqno, deleted, err = miter()
+		key, value, seqno, deleted, err = miter(false /*fin*/)
 	}
 }
 
@@ -170,8 +170,8 @@ func TestSnapshotScan(t *testing.T) {
 		t.Errorf("expected %v, got %v", mi.Count(), snap.Count())
 	}
 	miter, diter := mi.Scan(), snap.Scan()
-	for key, value, seqno, deleted, err := miter(); err == nil; {
-		k, v, s, d, err1 := diter()
+	for key, value, seqno, deleted, err := miter(false /*fin*/); err == nil; {
+		k, v, s, d, err1 := diter(false /*fin*/)
 		if err1 != nil {
 			t.Errorf("unexpected %v", err1)
 		} else if bytes.Compare(k, key) != 0 {
@@ -183,9 +183,9 @@ func TestSnapshotScan(t *testing.T) {
 		} else if s != seqno {
 			t.Errorf("%s expected %v, got %v", key, seqno, s)
 		}
-		key, value, seqno, deleted, err = miter()
+		key, value, seqno, deleted, err = miter(false /*fin*/)
 	}
-	k, _, _, _, err := diter()
+	k, _, _, _, err := diter(false /*fin*/)
 	if k != nil {
 		t.Errorf("unexpected %q", k)
 	} else if err != io.EOF {
@@ -223,7 +223,7 @@ func TestView(t *testing.T) {
 		t.Errorf("expected %v, got %v", id, view.ID())
 	}
 	miter := mi.Scan()
-	for key, value, _, deleted, err := miter(); err == nil; {
+	for key, value, _, deleted, err := miter(false /*fin*/); err == nil; {
 		v, d, ok := view.Get(key, []byte{})
 		if d != deleted {
 			t.Errorf("%s expected %v, got %v", key, deleted, d)
@@ -232,7 +232,7 @@ func TestView(t *testing.T) {
 		} else if bytes.Compare(v, value) != 0 {
 			t.Errorf("%s expected %q, got %q", key, value, v)
 		}
-		key, value, _, deleted, err = miter()
+		key, value, _, deleted, err = miter(false /*fin*/)
 	}
 }
 
@@ -262,7 +262,7 @@ func TestCursorGetNext(t *testing.T) {
 
 	id := uint64(0x12345699)
 	miter := mi.Scan()
-	for key, _, _, _, err := miter(); err == nil; {
+	for key, _, _, _, err := miter(false /*fin*/); err == nil; {
 		dview, mview := snap.View(id), mi.View(id)
 		mcur := mview.OpenCursor(key)
 		dcur, err1 := dview.OpenCursor(key)
@@ -298,7 +298,7 @@ func TestCursorGetNext(t *testing.T) {
 		}
 		mview.Abort()
 		dview.Abort()
-		key, _, _, _, err = miter()
+		key, _, _, _, err = miter(false /*fin*/)
 	}
 }
 
@@ -328,7 +328,7 @@ func TestCursorYNext(t *testing.T) {
 
 	id := uint64(0x12345699)
 	miter := mi.Scan()
-	for key, _, _, _, err := miter(); err == nil; {
+	for key, _, _, _, err := miter(false /*fin*/); err == nil; {
 		dview, mview := snap.View(id), mi.View(id)
 		mcur := mview.OpenCursor(key)
 		dcur, err1 := dview.OpenCursor(key)
@@ -336,8 +336,8 @@ func TestCursorYNext(t *testing.T) {
 			t.Error(err1)
 		}
 		for {
-			k1, v1, s1, d1, err3 := mcur.YNext()
-			k2, v2, s2, d2, err4 := dcur.YNext()
+			k1, v1, s1, d1, err3 := mcur.YNext(false /*fin*/)
+			k2, v2, s2, d2, err4 := dcur.YNext(false /*fin*/)
 			if err3 != err4 {
 				t.Errorf("%s expected %v, got %v", key, err3, err4)
 			} else if bytes.Compare(k1, k2) != 0 {
@@ -355,7 +355,7 @@ func TestCursorYNext(t *testing.T) {
 		}
 		mview.Abort()
 		dview.Abort()
-		key, _, _, _, err = miter()
+		key, _, _, _, err = miter(false /*fin*/)
 	}
 }
 
