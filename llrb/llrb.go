@@ -149,17 +149,20 @@ func (llrb *LLRB) delcounts(nd *Llrbnode) {
 
 //---- Exported Write methods
 
+// Setseqno can be called immediately after creating the LLRB instance.
+// All futher mutating APIs will start counting seqno from this value.
 func (llrb *LLRB) Setseqno(seqno uint64) {
 	llrb.seqno = seqno
 }
 
+// Getseqno return current seqno on this tree.
 func (llrb *LLRB) Getseqno() uint64 {
 	return llrb.seqno
 }
 
 // Set a key, value pair in the index, if key is already present,
 // its value will be over-written. Make sure key is not nil.
-// Return old value if oldvalue is not nil.
+// Return old value if oldvalue points to valid buffer.
 func (llrb *LLRB) Set(key, value, oldvalue []byte) (ov []byte, cas uint64) {
 	llrb.rw.Lock()
 	llrb.seqno++
@@ -233,7 +236,7 @@ func (llrb *LLRB) upsert(
 // SetCAS a key, value pair in the index, if CAS is ZERO then key
 // should not be present in the index, otherwise existing CAS should
 // match the supplied CAS. Value will be over-written. Make sure
-// key is not nil. Return old value if oldvalue is not nil.
+// key is not nil. Return old value if oldvalue points to valid buffer.
 func (llrb *LLRB) SetCAS(
 	key, value, oldvalue []byte, cas uint64) ([]byte, uint64, error) {
 
@@ -518,7 +521,7 @@ func (llrb *LLRB) aborttxn(txn *Txn) error {
 	return nil
 }
 
-// View start a read only transactions. Structure will be read-locked,
+// View start a read only transaction. Structure will be read-locked,
 // no other write operations can be performed, until transaction is
 // committed or aborted. Concurrent reads are still allowed.
 func (llrb *LLRB) View(id uint64) *View {
@@ -538,9 +541,9 @@ func (llrb *LLRB) abortview(view *View) error {
 
 //---- Exported Read methods
 
-// Get value for key, if value argument is not nil it will be used to copy the
-// entry's value. Also returns entry's cas, whether entry is marked as deleted
-// by LSM. If ok is false, then key is not found.
+// Get value for key, if value argument points to valid buffer it will,
+// be used to copy the entry's value. Also returns entry's cas, whether
+// entry is marked as deleted by LSM. If ok is false, then key is not found.
 func (llrb *LLRB) Get(
 	key, value []byte) (v []byte, cas uint64, deleted, ok bool) {
 
@@ -576,6 +579,7 @@ func (llrb *LLRB) getkey(nd *Llrbnode, k []byte) (*Llrbnode, bool) {
 	return nil, false
 }
 
+// Scan return a full table iterator.
 func (llrb *LLRB) Scan() api.Iterator {
 	currkey := make([]byte, 1024)
 	sb := makescanbuf()

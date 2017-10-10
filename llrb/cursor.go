@@ -87,7 +87,7 @@ func (cur *Cursor) Delcursor(lsm bool) {
 	cur.txn.Delete(key, nil, lsm)
 }
 
-// YNext can be used for lambda-sort or lambda-get.
+// YNext can be used for lsm-sort.
 func (cur *Cursor) YNext(
 	fin bool) (key, value []byte, seqno uint64, deleted bool, err error) {
 

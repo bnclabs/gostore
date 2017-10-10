@@ -482,17 +482,20 @@ func (mvcc *MVCC) destroy() bool {
 
 //---- Exported Write methods
 
+// Setseqno can be called immediately after creating the MVCC instance.
+// All futher mutating APIs will start counting seqno from this value.
 func (mvcc *MVCC) Setseqno(seqno uint64) {
 	mvcc.seqno = seqno
 }
 
+// Getseqno return current seqno on this tree.
 func (mvcc *MVCC) Getseqno() uint64 {
 	return mvcc.seqno
 }
 
 // Set a key, value pair in the index, if key is already present,
 // its value will be over-written. Make sure key is not nil.
-// Return old value if oldvalue is not nil.
+// Return old value if oldvalue points to a valid buffer.
 func (mvcc *MVCC) Set(key, value, oldvalue []byte) (ov []byte, cas uint64) {
 	mvcc.rw.Lock()
 	ov, cas = mvcc.set(key, value, oldvalue)
@@ -578,7 +581,7 @@ func (mvcc *MVCC) upsert(
 // SetCAS a key, value pair in the index, if CAS is ZERO then key
 // should not be present in the index, otherwise existing CAS should
 // match the supplied CAS. Value will be over-written. Make sure
-// key is not nil. Return old value if oldvalue is not nil.
+// key is not nil. Return old value if oldvalue points to valid buffer.
 func (mvcc *MVCC) SetCAS(
 	key, value, oldvalue []byte, cas uint64) ([]byte, uint64, error) {
 
@@ -872,7 +875,7 @@ func (mvcc *MVCC) deletemin(
 // be committed or aborted. Every transaction holds on to a MVCC snapshot.
 // If transactions are not released for long time accumulating too many
 // background mutations, it will increase the memory pressure on the system.
-// Concurrent transactions are allowed.
+// Concurrent transactions are allowed, and serialized internally.
 func (mvcc *MVCC) BeginTxn(id uint64) *Txn {
 	snapshot := mvcc.latestsnapshot()
 	atomic.AddInt64(&mvcc.activetxns, 1)
@@ -968,9 +971,9 @@ func (mvcc *MVCC) abortview(view *View) {
 
 //---- Exported Read methods
 
-// Get value for key, if value argument is not nil it will be used to copy the
-// entry's value. Also returns entry's cas, whether entry is marked as deleted
-// by LSM. If ok is false, then key is not found.
+// Get value for key, if value argument points to valid buffer, it will
+// be used to copy the entry's value. Also returns entry's cas, whether
+// entry is marked as deleted by LSM. If ok is false, then key is not found.
 func (mvcc *MVCC) Get(
 	key, value []byte) (v []byte, cas uint64, deleted, ok bool) {
 
