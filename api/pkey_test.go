@@ -3,14 +3,14 @@ package api
 import "testing"
 import "reflect"
 
-func TestPKSize(t *testing.T) {
-	param0 := Keymask(0)
+func Testpksize(t *testing.T) {
+	param0 := keymask(0)
 	param1 := param0.enableTxn()
 	param2 := param1.enableValue()
 	param3 := param2.enableBornseqno()
 	param4 := param3.enableDeadseqno()
 	param5 := param4.enableUuid()
-	masks := []Keymask{param0, param1, param2, param3, param4, param5}
+	masks := []keymask{param0, param1, param2, param3, param4, param5}
 	refs := []int{
 		32, 40, 48, 56, 64, 72,
 		32, 40, 48, 56, 64, 72,
@@ -25,7 +25,7 @@ func TestPKSize(t *testing.T) {
 	for i, j := 0, 0; i < 8; i++ {
 		key := make([]byte, 8+i)
 		for k, mask := range masks {
-			if x := PKSize(key, mask); refs[j] != x {
+			if x := pksize(key, mask); refs[j] != x {
 				t.Log(i, k)
 				t.Errorf("expected %v, got %v", refs[j], x)
 			}
@@ -34,7 +34,7 @@ func TestPKSize(t *testing.T) {
 	}
 }
 
-func TestParametriseKey(t *testing.T) {
+func TestparametriseKey(t *testing.T) {
 	txn, bornseqno := uint64(0x1234567890abcdef), uint64(0x1243567890abcdef)
 	deadseqno := uint64(0x1234657890abcdef)
 	uuid, value := uint64(0x1234568790abcdef), uint64(0x1234567809abcdef)
@@ -45,18 +45,18 @@ func TestParametriseKey(t *testing.T) {
 		KeyParamDeadseqno | KeyParamUuid
 	key, vbno := []byte("aaaaaaaaaaaaaaaaaaaaaaaa"), uint16(0x0101)
 	key = append(key, 0, 1, 'a')
-	values = AddKeyparameter(KeyParamTxn, txn, values)
-	values = AddKeyparameter(KeyParamUuid, uuid, values)
-	values = AddKeyparameter(KeyParamBornseqno, bornseqno, values)
-	values = AddKeyparameter(KeyParamDeadseqno, deadseqno, values)
-	values = AddKeyparameter(KeyParamValue, value, values)
-	out := make([]byte, PKSize(key, mask))
-	pk := ParametriseKey(key, mask, vbno, values, out)
+	values = addKeyparameter(KeyParamTxn, txn, values)
+	values = addKeyparameter(KeyParamUuid, uuid, values)
+	values = addKeyparameter(KeyParamBornseqno, bornseqno, values)
+	values = addKeyparameter(KeyParamDeadseqno, deadseqno, values)
+	values = addKeyparameter(KeyParamValue, value, values)
+	out := make([]byte, pksize(key, mask))
+	pk := parametriseKey(key, mask, vbno, values, out)
 
 	var params [32]uint64
 	outkey := make([]byte, len(key))
 	validate := func() {
-		outkey, params, outvb, ok := pk.Parameters(outkey, params)
+		outkey, params, outvb, ok := pk.parameters(outkey, params)
 		if ok == false {
 			t.Errorf("unexpected false")
 		} else if reflect.DeepEqual(key, outkey) == false {
@@ -98,8 +98,8 @@ func TestBytestuff(t *testing.T) {
 	}
 }
 
-func TestKeyhdr(t *testing.T) {
-	hdr := Keyhdr(0).setmask(0x80000001).setvbno(0x8001).setflags(0x8001)
+func Testkeyhdr(t *testing.T) {
+	hdr := keyhdr(0).setmask(0x80000001).setvbno(0x8001).setflags(0x8001)
 	if hdr.getmask() != 0x80000001 {
 		t.Errorf("expected %v, got %v", 0x80000001, hdr.getmask())
 	} else if hdr.getvbno() != 0x8001 {
@@ -123,8 +123,8 @@ func TestLookupones(t *testing.T) {
 	}
 }
 
-func TestKeymask(t *testing.T) {
-	km := Keymask(0)
+func Testkeymask(t *testing.T) {
+	km := keymask(0)
 	if km.isTxn() == true {
 		t.Errorf("unexpected true")
 	} else if km.isValue() == true {
@@ -148,8 +148,8 @@ func TestKeymask(t *testing.T) {
 	}
 }
 
-func TestKeyflags(t *testing.T) {
-	f := Keyflags(0)
+func Testkeyflags(t *testing.T) {
+	f := keyflags(0)
 	f = f.Setblack().Setdirty().Setdeleted()
 	if f.Isblack() == false {
 		t.Errorf("unexpected false")
@@ -170,12 +170,12 @@ func TestKeyflags(t *testing.T) {
 	}
 }
 
-func BenchmarkPKSize(b *testing.B) {
+func Benchmarkpksize(b *testing.B) {
 	params := KeyParamTxn | KeyParamValue | KeyParamBornseqno |
 		KeyParamDeadseqno | KeyParamUuid
 	key := make([]byte, 64)
 	for i := 0; i < b.N; i++ {
-		PKSize(key, params)
+		pksize(key, params)
 	}
 }
 
@@ -187,15 +187,15 @@ func BenchmarkAddkeyparameter(b *testing.B) {
 	var values [32]uint64
 
 	for i := 0; i < b.N; i++ {
-		values = AddKeyparameter(KeyParamTxn, txn, values)
-		values = AddKeyparameter(KeyParamUuid, uuid, values)
-		values = AddKeyparameter(KeyParamBornseqno, bornseqno, values)
-		values = AddKeyparameter(KeyParamDeadseqno, deadseqno, values)
-		values = AddKeyparameter(KeyParamValue, value, values)
+		values = addKeyparameter(KeyParamTxn, txn, values)
+		values = addKeyparameter(KeyParamUuid, uuid, values)
+		values = addKeyparameter(KeyParamBornseqno, bornseqno, values)
+		values = addKeyparameter(KeyParamDeadseqno, deadseqno, values)
+		values = addKeyparameter(KeyParamValue, value, values)
 	}
 }
 
-func BenchmarkParametriseKey(b *testing.B) {
+func BenchmarkparametriseKey(b *testing.B) {
 	txn, bornseqno := uint64(0x1234567890abcdef), uint64(0x1243567890abcdef)
 	deadseqno := uint64(0x1234657890abcdef)
 	uuid, value := uint64(0x1234568790abcdef), uint64(0x1234567809abcdef)
@@ -206,19 +206,19 @@ func BenchmarkParametriseKey(b *testing.B) {
 		KeyParamDeadseqno | KeyParamUuid
 	key, vbno := []byte("aaaaaaaaaaaaaaaaaaaaaaaa"), uint16(0x0101)
 	key = append(key, 0, 1, 'a')
-	values = AddKeyparameter(KeyParamTxn, txn, values)
-	values = AddKeyparameter(KeyParamUuid, uuid, values)
-	values = AddKeyparameter(KeyParamBornseqno, bornseqno, values)
-	values = AddKeyparameter(KeyParamDeadseqno, deadseqno, values)
-	values = AddKeyparameter(KeyParamValue, value, values)
-	out := make([]byte, PKSize(key, mask))
+	values = addKeyparameter(KeyParamTxn, txn, values)
+	values = addKeyparameter(KeyParamUuid, uuid, values)
+	values = addKeyparameter(KeyParamBornseqno, bornseqno, values)
+	values = addKeyparameter(KeyParamDeadseqno, deadseqno, values)
+	values = addKeyparameter(KeyParamValue, value, values)
+	out := make([]byte, pksize(key, mask))
 
 	for i := 0; i < b.N; i++ {
-		ParametriseKey(key, mask, vbno, values, out)
+		parametriseKey(key, mask, vbno, values, out)
 	}
 }
 
-func BenchmarkParameters(b *testing.B) {
+func Benchmarkparameters(b *testing.B) {
 	txn, bornseqno := uint64(0x1234567890abcdef), uint64(0x1243567890abcdef)
 	deadseqno := uint64(0x1234657890abcdef)
 	uuid, value := uint64(0x1234568790abcdef), uint64(0x1234567809abcdef)
@@ -229,25 +229,25 @@ func BenchmarkParameters(b *testing.B) {
 		KeyParamDeadseqno | KeyParamUuid
 	key, vbno := []byte("aaaaaaaaaaaaaaaaaaaaaaaa"), uint16(0x0101)
 	key = append(key, 0, 1, 'a')
-	values = AddKeyparameter(KeyParamTxn, txn, values)
-	values = AddKeyparameter(KeyParamUuid, uuid, values)
-	values = AddKeyparameter(KeyParamBornseqno, bornseqno, values)
-	values = AddKeyparameter(KeyParamDeadseqno, deadseqno, values)
-	values = AddKeyparameter(KeyParamValue, value, values)
-	out := make([]byte, PKSize(key, mask))
-	pk := ParametriseKey(key, mask, vbno, values, out)
+	values = addKeyparameter(KeyParamTxn, txn, values)
+	values = addKeyparameter(KeyParamUuid, uuid, values)
+	values = addKeyparameter(KeyParamBornseqno, bornseqno, values)
+	values = addKeyparameter(KeyParamDeadseqno, deadseqno, values)
+	values = addKeyparameter(KeyParamValue, value, values)
+	out := make([]byte, pksize(key, mask))
+	pk := parametriseKey(key, mask, vbno, values, out)
 
 	var params [32]uint64
 	outkey := make([]byte, len(key))
 
 	for i := 0; i < b.N; i++ {
-		pk.Parameters(outkey, params)
+		pk.parameters(outkey, params)
 	}
 }
 
 func BenchmarkBytestuff(b *testing.B) {
 	in := make([]byte, 64)
-	out := make([]byte, PKSize(in, 0))
+	out := make([]byte, pksize(in, 0))
 	for i := 0; i < b.N; i++ {
 		keystuff(in, out)
 	}
@@ -255,7 +255,7 @@ func BenchmarkBytestuff(b *testing.B) {
 
 func BenchmarkByteunstuff(b *testing.B) {
 	in := make([]byte, 64)
-	out := make([]byte, PKSize(in, 0))
+	out := make([]byte, pksize(in, 0))
 	out = keystuff(in, out)
 	in, out = out, in
 	for i := 0; i < b.N; i++ {

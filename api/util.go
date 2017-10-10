@@ -4,7 +4,7 @@ import "bytes"
 import "reflect"
 import "unsafe"
 
-// Binarycmp is same as bytes.Compare expect for partial matches. For EG:
+// Binarycmp is same as bytes.Compare except for partial matches. For EG:
 // bytes.Compare([]byte("aaa"), []byte("aa")) shall return 1, whereas
 // Binarycmp will return 0. Note that partial comparison is applicable only
 // for limit. That is, Binarycmp([]byte("aa"), []byte("aaa")) will return -1,

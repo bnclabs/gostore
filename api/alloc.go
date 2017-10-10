@@ -2,8 +2,7 @@ package api
 
 import "unsafe"
 
-// Mallocer interface for custom memory management. Typical library
-// implementing this interface will
+// Mallocer interface for custom memory management.
 type Mallocer interface {
 	// Slabs allocatable slab of sizes.
 	Slabs() (sizes []int64)
