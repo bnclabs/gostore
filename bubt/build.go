@@ -17,8 +17,8 @@ const MarkerBlocksize = 4096
 // MarkerByte to populate Markerblock.
 const MarkerByte = 0xAB
 
-// Bubt manages sorted {key,value} entries in persisted, immutable btree
-// built bottoms up and not updated there after.
+// Bubt instance can be used to persist sorted {key,value} entries in
+// immutable btree, built bottoms up and not updated there after.
 type Bubt struct {
 	name      string
 	mflusher  *bubtflusher
@@ -242,6 +242,8 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) {
 	log.Infof("%v ... bottoms up build completed\n", tree.logprefix)
 }
 
+// Close instance after building the btree. This will mark disk files as
+// immutable for rest of its life-time. Use OpenSnapshot for reading.
 func (tree *Bubt) Close() {
 	tree.mflusher.close()
 	for _, zflusher := range tree.zflushers {

@@ -17,8 +17,9 @@ import "github.com/prataprc/gostore/flock"
 import "github.com/prataprc/golog"
 import s "github.com/prataprc/gosettings"
 
-// Snapshot manages sorted key,value entries in persisted, immutable btree
-// built bottoms up and not updated there after.
+// Snapshot to read index entries persisted using Bubt builder. Since
+// no writes are allowed on the btree, any number of snapshots can be
+// opened for reading.
 type Snapshot struct {
 	name     string
 	root     int64 // fpos into m-index
@@ -44,7 +45,7 @@ type Snapshot struct {
 }
 
 // OpenSnapshot from paths. Returned Snapshot is not safe across
-// goroutines. Each routines shall OpenSnapshot to get a snapshot handle.
+// goroutines. Each routine shall OpenSnapshot to get a snapshot handle.
 func OpenSnapshot(
 	name string, paths []string, mmap bool) (snap *Snapshot, err error) {
 
@@ -211,14 +212,19 @@ func (snap *Snapshot) readheader(r io.ReaderAt) (*Snapshot, error) {
 	return snap, nil
 }
 
+// ID of snapshot, same as name argument passed to OpenSnapshot.
 func (snap *Snapshot) ID() string {
 	return snap.name
 }
 
+// Count number of indexed entries.
 func (snap *Snapshot) Count() int64 {
 	return snap.n_count
 }
 
+// Close snapshot, will release all in-memory resources but will keep
+// the disk files. All Opened-Snapshots must be closed before it can
+// be destoryed.
 func (snap *Snapshot) Close() {
 	if err := closereadat(snap.readm); err != nil {
 		log.Errorf("%v close %q: %v", snap.logprefix, snap.mfile, err)
@@ -234,6 +240,8 @@ func (snap *Snapshot) Close() {
 	}
 }
 
+// Destroy snapshot will remove disk footprint of the btree. Can be called
+// only after Close is called on all OpenSnapshots.
 func (snap *Snapshot) Destroy() {
 	if snap == nil {
 		return
@@ -263,6 +271,9 @@ func (snap *Snapshot) Destroy() {
 	}
 }
 
+// Get value for key, if value argument is not nil it will be used to
+// copy the entry's value. Also returns entry's cas, whether entry is
+// marked as deleted by LSM. If ok is false, then key is not found.
 func (snap *Snapshot) Get(
 	key, value []byte) (v []byte, cas uint64, deleted, ok bool) {
 
@@ -318,6 +329,8 @@ func (snap *Snapshot) findinzblock(
 	return
 }
 
+// View start a read only transaction. Any number of views can be created
+// on this snapshot provided they are not concurrently accessed.
 func (snap *Snapshot) View(id uint64) (view *View) {
 	select {
 	case view = <-snap.viewcache:
@@ -339,6 +352,7 @@ func (snap *Snapshot) abortview(view *View) error {
 	return nil
 }
 
+// Scan return a full table iterator.
 func (snap *Snapshot) Scan() api.Iterator {
 	view := &View{}
 	view.id, view.snap, view.cursors = 0xC0FFEE, snap, view.cursors[:0]

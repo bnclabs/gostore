@@ -49,6 +49,7 @@ func (cur *Cursor) opencursor(snap *Snapshot, key []byte) (*Cursor, error) {
 	return cur, nil
 }
 
+// Key return key at cursor.
 func (cur *Cursor) Key() (key []byte, deleted bool) {
 	if cur.finished {
 		return nil, false
@@ -60,6 +61,7 @@ func (cur *Cursor) Key() (key []byte, deleted bool) {
 	return
 }
 
+// Value return value at cursor.
 func (cur *Cursor) Value() (value []byte) {
 	if cur.finished {
 		return nil
@@ -71,6 +73,8 @@ func (cur *Cursor) Value() (value []byte) {
 	return
 }
 
+// GetNext move cursor to next entry and return its key, value, whether
+// it is deleted, err will be io.EOF or any other disk error.
 func (cur *Cursor) GetNext() (key, value []byte, deleted bool, err error) {
 	key, value, _, deleted, err = cur.getnext()
 	return
@@ -99,7 +103,8 @@ func (cur *Cursor) getnext() ([]byte, []byte, uint64, bool, error) {
 	return nil, nil, 0, false, io.EOF
 }
 
-// YNext can be used for lambda-sort or lambda-get.
+// YNext can be used for lsm-sort. Similar to GetNext, but includes the
+// seqno at which the entry was created/updated/deleted.
 func (cur *Cursor) YNext(fin bool) (key,
 	value []byte, seqno uint64, deleted bool, err error) {
 

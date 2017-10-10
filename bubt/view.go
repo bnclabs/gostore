@@ -1,6 +1,6 @@
 package bubt
 
-// View transaction definition. Read only version of Txn.
+// View read only transaction instance.
 type View struct {
 	id      uint64
 	snap    *Snapshot
@@ -9,12 +9,12 @@ type View struct {
 
 //---- Exported Control methods
 
-// ID return transaction id.
+// ID return view-transaction id.
 func (view *View) ID() uint64 {
 	return view.id
 }
 
-// OpenCursor open an active cursor inside the index.
+// OpenCursor open an active cursor, point at key, inside the index.
 func (view *View) OpenCursor(key []byte) (*Cursor, error) {
 	cur, err := view.getcursor().opencursor(view.snap, key)
 	if err != nil {
@@ -33,7 +33,9 @@ func (view *View) Abort() {
 
 //---- Exported Read methods
 
-// Get value for key from snap.
+// Get value for key, if value argument is not nil it will be used to copy the
+// entry's value. Also return whether entry is marked as deleted by LSM.
+// If ok is false, then key is not found.
 func (view *View) Get(key, value []byte) (v []byte, deleted, ok bool) {
 	v, _, deleted, ok = view.snap.Get(key, value)
 	return v, deleted, ok
