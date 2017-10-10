@@ -1,18 +1,13 @@
 package lsm
 
-import "io"
-import "os"
-import "fmt"
 import "bytes"
 import "testing"
-import "path/filepath"
 
 import "github.com/prataprc/gostore/llrb"
 import "github.com/prataprc/gostore/bubt"
 import s "github.com/prataprc/gosettings"
 
-func TestYGet(t *testing.T) {
-	//SetYGetpool(10)
+func TestYSort(t *testing.T) {
 	setts := s.Settings{
 		"keycapacity": 1024 * 1024 * 1024,
 		"valcapacity": 1024 * 1024 * 1024,
@@ -22,7 +17,7 @@ func TestYGet(t *testing.T) {
 	llrb1, keys := makeLLRB("llrb1", 100000, nil, ref, -1, -1)
 	llrb2, keys := makeLLRB("llrb2", 0, keys, ref, 4, 8)
 	llrb3, keys := makeLLRB("llrb3", 0, keys, ref, 4, 8)
-	llrb4, _ := makeLLRB("llrbr", 0, keys, ref, 4, 8)
+	llrb4, _ := makeLLRB("llrb4", 0, keys, ref, 4, 8)
 	defer llrb1.Destroy()
 	defer llrb2.Destroy()
 	defer llrb3.Destroy()
@@ -66,24 +61,33 @@ func TestYGet(t *testing.T) {
 	defer bubt2.Close()
 	defer bubt1.Close()
 
-	refiter, v := ref.Scan(), make([]byte, 16)
-	for key, value, seqno, deleted, err := refiter(false); err != io.EOF; {
-		getter := YGet(bubt1.Get, YGet(bubt2.Get, YGet(llrb3.Get, llrb4.Get)))
-		v, cas, d, ok := getter(key, v)
-		if ok == false {
-			t.Errorf("expected key")
+	refiter := ref.Scan()
+	miter := YSort("mm", llrb3.Scan(), llrb4.Scan())
+	iter := YSort("dd", bubt1.Scan(), YSort("dm", bubt2.Scan(), miter))
+	key, value, seqno, deleted, err := refiter(false)
+	for err == nil {
+		k, v, s, d, e := iter(false)
+		//fmt.Printf("iter %q %q %v %v %v\n", k, v, s, d, e)
+		if bytes.Compare(key, k) != 0 {
+			t.Errorf("expected %q, got %q", key, k)
+		} else if err != e {
+			t.Errorf("%q expected %v, got %v", key, err, e)
 		} else if d != deleted {
-			t.Errorf("expected %v, got %v", deleted, d)
-		} else if cas != seqno {
-			t.Errorf("expected %v, got %v", seqno, cas)
+			t.Errorf("%q expected %v, got %v", key, deleted, d)
+		} else if s != seqno {
+			t.Errorf("%q expected %v, got %v", key, seqno, s)
 		} else if deleted == false && bytes.Compare(value, v) != 0 {
-			t.Errorf("expected %q, got %q", value, v)
+			t.Errorf("%q expected %q, got %q", key, value, v)
 		}
 		key, value, seqno, deleted, err = refiter(false)
 	}
+	_, _, _, _, e := iter(false)
+	if e != err {
+		t.Errorf("unexpected %v", e)
+	}
 }
 
-func BenchmarkYGet(b *testing.B) {
+func BenchmarkYSort(b *testing.B) {
 	setts := s.Settings{
 		"keycapacity": 1024 * 1024 * 1024,
 		"valcapacity": 1024 * 1024 * 1024,
@@ -133,61 +137,11 @@ func BenchmarkYGet(b *testing.B) {
 	defer bubt1.Close()
 
 	b.ResetTimer()
+	miter := YSort("mm", llrb3.Scan(), llrb4.Scan())
+	iter := YSort("dd", bubt1.Scan(), YSort("dm", bubt2.Scan(), miter))
 	for i := 0; i < b.N; i++ {
-		getter := YGet(bubt1.Get, YGet(bubt2.Get, YGet(llrb3.Get, llrb4.Get)))
-		getter(nkeys[i], nil)
-	}
-}
-
-func makeLLRB(
-	name string, n int, keys [][]byte,
-	ref *llrb.LLRB, mod1, mod2 int) (*llrb.LLRB, [][]byte) {
-
-	setts := s.Settings{
-		"keycapacity": 1024 * 1024 * 1024,
-		"valcapacity": 1024 * 1024 * 1024,
-	}
-	mi := llrb.NewLLRB(name, setts)
-	mi.Setseqno(ref.Getseqno())
-
-	if len(keys) > 0 {
-		newkeys := [][]byte{}
-		for i, key := range keys {
-			x := fmt.Sprintf("%d", i)
-			val := append([]byte(name), x...)
-			if i%mod2 == 0 {
-				mi.Delete(key, nil, true /*lsm*/)
-				ref.Delete(key, nil, true /*lsm*/)
-				newkeys = append(newkeys, key)
-			} else if i%mod1 == 0 {
-				mi.Set(key, val, nil)
-				ref.Set(key, val, nil)
-				newkeys = append(newkeys, key)
-			}
+		if _, _, _, _, err := iter(false); err != nil {
+			b.Fatal(err)
 		}
-		return mi, newkeys
 	}
-
-	keys = [][]byte{}
-	for i := 0; i < n; i++ {
-		k, v := []byte("key000000000000"), []byte("val00000000000000")
-		x := fmt.Sprintf("%d", i)
-		key, val := append(k[:3], x...), append(v[:3], x...)
-		mi.Set(key, val, nil)
-		ref.Set(key, val, nil)
-		if i%10 == 0 {
-			mi.Delete(key, nil, true /*lsm*/)
-			ref.Delete(key, nil, true /*lsm*/)
-		}
-		keys = append(keys, key)
-	}
-	return mi, keys
-}
-
-func makepaths() []string {
-	path, paths := os.TempDir(), []string{}
-	for _, base := range []string{"1", "2", "3"} {
-		paths = append(paths, filepath.Join(path, base))
-	}
-	return paths
 }
