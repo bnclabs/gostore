@@ -1,4 +1,4 @@
-SUBDIRS := api lib malloc lsm dict bubt llrb
+SUBDIRS := api bubt flock lib llrb lsm malloc
 
 build:
 	@for dir in $(SUBDIRS); do \
