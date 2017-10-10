@@ -168,52 +168,52 @@ const (
 
 // enableTxn parameter for key.
 func (km keymask) enableTxn() keymask {
-	return km | KeyParamTxn
+	return km | keyParamTxn
 }
 
 // isTxn check Txn parameter for key.
 func (km keymask) isTxn() bool {
-	return (km & KeyParamTxn) == KeyParamTxn
+	return (km & keyParamTxn) == keyParamTxn
 }
 
 // enableValue parameter for key.
 func (km keymask) enableValue() keymask {
-	return km | KeyParamValue
+	return km | keyParamValue
 }
 
 // isValue check value parameter for key.
 func (km keymask) isValue() bool {
-	return (km & KeyParamValue) == KeyParamValue
+	return (km & keyParamValue) == keyParamValue
 }
 
 // enableBornseqno parameter for key.
 func (km keymask) enableBornseqno() keymask {
-	return km | KeyParamBornseqno
+	return km | keyParamBornseqno
 }
 
 // isBornseqno check bornseqno parameter for key.
 func (km keymask) isBornseqno() bool {
-	return (km & KeyParamBornseqno) == KeyParamBornseqno
+	return (km & keyParamBornseqno) == keyParamBornseqno
 }
 
 // enableDeadseqno parameter for key.
 func (km keymask) enableDeadseqno() keymask {
-	return km | KeyParamDeadseqno
+	return km | keyParamDeadseqno
 }
 
 // isDeadseqno check deadseqno parameter for key.
 func (km keymask) isDeadseqno() bool {
-	return (km & KeyParamDeadseqno) == KeyParamDeadseqno
+	return (km & keyParamDeadseqno) == keyParamDeadseqno
 }
 
 // enableUuid parameter for key.
 func (km keymask) enableUuid() keymask {
-	return km | KeyParamUuid
+	return km | keyParamUuid
 }
 
 // isUuid check uuid parameter for key.
 func (km keymask) isUuid() bool {
-	return (km & KeyParamUuid) == KeyParamUuid
+	return (km & keyParamUuid) == keyParamUuid
 }
 
 var lookupones = [256]byte{
@@ -257,22 +257,22 @@ const (
 
 // Setblack flag for llrb node.
 func (f keyflags) Setblack() keyflags {
-	return f | KeyBlack
+	return f | keyBlack
 }
 
 // Setred flag for llrb node.
 func (f keyflags) Setred() keyflags {
-	return f & (^(KeyBlack)) // clear the bit
+	return f & (^(keyBlack)) // clear the bit
 }
 
 // Togglelink toggle red/black flag to black/red flag in llrb node.
 func (f keyflags) Togglelink() keyflags {
-	return f ^ KeyBlack
+	return f ^ keyBlack
 }
 
 // Isblack for llrb node.
 func (f keyflags) Isblack() bool {
-	return (f & KeyBlack) == KeyBlack
+	return (f & keyBlack) == keyBlack
 }
 
 // Isred for llrb node.
@@ -282,33 +282,33 @@ func (f keyflags) Isred() bool {
 
 // Setdirty set index node dirty.
 func (f keyflags) Setdirty() keyflags {
-	return f | KeyDirty
+	return f | keyDirty
 }
 
 // Cleardirty clear index node from dirty.
 func (f keyflags) Cleardirty() keyflags {
-	return f & (^(KeyDirty))
+	return f & (^(keyDirty))
 }
 
 // Isdirty check index node is dirty.
 func (f keyflags) Isdirty() bool {
-	return (f & KeyDirty) == KeyDirty
+	return (f & keyDirty) == keyDirty
 }
 
 // Setdeleted mark index node as deleted. After marking it as deleted
 // there is no going back.
 func (f keyflags) Setdeleted() keyflags {
-	return f | KeyDeleted
+	return f | keyDeleted
 }
 
 // Cleardeleted clear index node from deleted.
 func (f keyflags) Cleardeleted() keyflags {
-	return f & (^(KeyDeleted))
+	return f & (^(keyDeleted))
 }
 
 // Isdeleted check whether index node is marked deleted.
 func (f keyflags) Isdeleted() bool {
-	return (f & KeyDeleted) == KeyDeleted
+	return (f & keyDeleted) == keyDeleted
 }
 
 //---- local methods.

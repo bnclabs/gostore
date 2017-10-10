@@ -41,15 +41,15 @@ func TestparametriseKey(t *testing.T) {
 
 	var values [32]uint64
 
-	mask := KeyParamTxn | KeyParamValue | KeyParamBornseqno |
-		KeyParamDeadseqno | KeyParamUuid
+	mask := keyParamTxn | keyParamValue | keyParamBornseqno |
+		keyParamDeadseqno | keyParamUuid
 	key, vbno := []byte("aaaaaaaaaaaaaaaaaaaaaaaa"), uint16(0x0101)
 	key = append(key, 0, 1, 'a')
-	values = addKeyparameter(KeyParamTxn, txn, values)
-	values = addKeyparameter(KeyParamUuid, uuid, values)
-	values = addKeyparameter(KeyParamBornseqno, bornseqno, values)
-	values = addKeyparameter(KeyParamDeadseqno, deadseqno, values)
-	values = addKeyparameter(KeyParamValue, value, values)
+	values = addKeyparameter(keyParamTxn, txn, values)
+	values = addKeyparameter(keyParamUuid, uuid, values)
+	values = addKeyparameter(keyParamBornseqno, bornseqno, values)
+	values = addKeyparameter(keyParamDeadseqno, deadseqno, values)
+	values = addKeyparameter(keyParamValue, value, values)
 	out := make([]byte, pksize(key, mask))
 	pk := parametriseKey(key, mask, vbno, values, out)
 
@@ -171,8 +171,8 @@ func Testkeyflags(t *testing.T) {
 }
 
 func Benchmarkpksize(b *testing.B) {
-	params := KeyParamTxn | KeyParamValue | KeyParamBornseqno |
-		KeyParamDeadseqno | KeyParamUuid
+	params := keyParamTxn | keyParamValue | keyParamBornseqno |
+		keyParamDeadseqno | keyParamUuid
 	key := make([]byte, 64)
 	for i := 0; i < b.N; i++ {
 		pksize(key, params)
@@ -187,11 +187,11 @@ func BenchmarkAddkeyparameter(b *testing.B) {
 	var values [32]uint64
 
 	for i := 0; i < b.N; i++ {
-		values = addKeyparameter(KeyParamTxn, txn, values)
-		values = addKeyparameter(KeyParamUuid, uuid, values)
-		values = addKeyparameter(KeyParamBornseqno, bornseqno, values)
-		values = addKeyparameter(KeyParamDeadseqno, deadseqno, values)
-		values = addKeyparameter(KeyParamValue, value, values)
+		values = addKeyparameter(keyParamTxn, txn, values)
+		values = addKeyparameter(keyParamUuid, uuid, values)
+		values = addKeyparameter(keyParamBornseqno, bornseqno, values)
+		values = addKeyparameter(keyParamDeadseqno, deadseqno, values)
+		values = addKeyparameter(keyParamValue, value, values)
 	}
 }
 
@@ -202,15 +202,15 @@ func BenchmarkparametriseKey(b *testing.B) {
 
 	var values [32]uint64
 
-	mask := KeyParamTxn | KeyParamValue | KeyParamBornseqno |
-		KeyParamDeadseqno | KeyParamUuid
+	mask := keyParamTxn | keyParamValue | keyParamBornseqno |
+		keyParamDeadseqno | keyParamUuid
 	key, vbno := []byte("aaaaaaaaaaaaaaaaaaaaaaaa"), uint16(0x0101)
 	key = append(key, 0, 1, 'a')
-	values = addKeyparameter(KeyParamTxn, txn, values)
-	values = addKeyparameter(KeyParamUuid, uuid, values)
-	values = addKeyparameter(KeyParamBornseqno, bornseqno, values)
-	values = addKeyparameter(KeyParamDeadseqno, deadseqno, values)
-	values = addKeyparameter(KeyParamValue, value, values)
+	values = addKeyparameter(keyParamTxn, txn, values)
+	values = addKeyparameter(keyParamUuid, uuid, values)
+	values = addKeyparameter(keyParamBornseqno, bornseqno, values)
+	values = addKeyparameter(keyParamDeadseqno, deadseqno, values)
+	values = addKeyparameter(keyParamValue, value, values)
 	out := make([]byte, pksize(key, mask))
 
 	for i := 0; i < b.N; i++ {
@@ -225,15 +225,15 @@ func Benchmarkparameters(b *testing.B) {
 
 	var values [32]uint64
 
-	mask := KeyParamTxn | KeyParamValue | KeyParamBornseqno |
-		KeyParamDeadseqno | KeyParamUuid
+	mask := keyParamTxn | keyParamValue | keyParamBornseqno |
+		keyParamDeadseqno | keyParamUuid
 	key, vbno := []byte("aaaaaaaaaaaaaaaaaaaaaaaa"), uint16(0x0101)
 	key = append(key, 0, 1, 'a')
-	values = addKeyparameter(KeyParamTxn, txn, values)
-	values = addKeyparameter(KeyParamUuid, uuid, values)
-	values = addKeyparameter(KeyParamBornseqno, bornseqno, values)
-	values = addKeyparameter(KeyParamDeadseqno, deadseqno, values)
-	values = addKeyparameter(KeyParamValue, value, values)
+	values = addKeyparameter(keyParamTxn, txn, values)
+	values = addKeyparameter(keyParamUuid, uuid, values)
+	values = addKeyparameter(keyParamBornseqno, bornseqno, values)
+	values = addKeyparameter(keyParamDeadseqno, deadseqno, values)
+	values = addKeyparameter(keyParamValue, value, values)
 	out := make([]byte, pksize(key, mask))
 	pk := parametriseKey(key, mask, vbno, values, out)
 
