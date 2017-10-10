@@ -4,21 +4,13 @@ Left Leaning Red Black tree (LLRB)
 LLRB can manage an in-memory instance of sorted index using
 left-leaning-red-black tree. LLRB is self balancing tree that supports
 all basic write operations, like create, update, delete. Additionally
-this implementation supports multi-version-concurrency control on
-the LLRB tree, for applications that are read intensive.
+there is an MVCC (Multi-Version-Concurrency-Control) implementation
+of LLRB.
 
 * **Entry** also called as **llrb-node** has a key, value pair.
 * **Key** are binary string that can handle comparision operation.
 * **Value** can be a blob of binary, text or JSON. LLRB don't interpret
   the shape of Value.
-* **Metadata** other than key and value each entry can have zero or
-  more optional metadata fields. Like:
-  * **Vbno** for pointing the vbucket shard in which this key/value
-    originaly belong.
-  * **Vbuuid** unique uuid for handing failures and rollbacks.
-  * **Access-time** for managing cache eviction and memory recylcing.
-  * **Bornseqno** for implementing log-structured-merge.
-  * **Deadseqno** for implementing log-structured-merge.
 
 Background routines
 -------------------
@@ -28,28 +20,21 @@ index-read and index-write operations using lock. Based on the
 operations an LLRB instance will incur memory cost. Apart from
 that it is straight forward and should not throw any surprises.
 
-With MVCC enabled, all index-write operations are serialsed but
-there can be any number of concurrent readers. Note that, with
-MVCC, read can be issued only on index-snapshots, any reads
-on the index itself are simply not allowed.
+When using MVCC, all index-write operations are serialsed but
+there can be any number of concurrent readers on a MVCC snapthos.
+When reads are called on the MVCC instance it will block all other
+write operations. But readin on MVCC snapshot will not block write
+operations.
 
-With MVCC enabled, LLRB will spawn two background routines:
-* Writer routine to serialize all write operations.
-* Snapshot ticker, that will keep generating snapshots. It ensures
-  that there is alteast only snapshot to read at any given time.
+For each MVCC instance there will be single go-routine spawned to
+generate periodic snapshots.
 
 Snapshots
 ---------
 
-Snapshots matter only when MVCC is enabled. Enabling or disabling
-MVCC is based on the ratio between write operations and read operations.
-For write intensive applications, it is recommended to disable MVCC.
-While Read intensive applications might want to enable MVCC and use
-concurrent readers.
-
-When MVCC is enabled, eead operations are allowed only on the snapshots.
-It important to Release the snapshot withing few milliseconds, especially
-when there are thousands of concurrent writes happening.
+Snapshots matter only with MVCC. For write intensive applications, it
+is recommended to use LLRB. While Read intensive applications might want
+to use MVCC and use concurrent readers on MVCC Snapshots.
 
 Memory fragmentation
 --------------------
@@ -79,35 +64,30 @@ limitations and recommentations that applications can use:
 * Allocate a new LLRB and start populating it with current set of
   entries.
 * This means, holding an iterator for a long time.
-* With MVCC disabled, Iterations will lock the entire tree, until it
-  completes.
-* With MVCC enabled, Iterations won't lock the writer and won't
-  interfer with other concurrent readers. But if there are hundreds
-  and thousands of mutations happening in the background, while the
-  iterator is holding the snapshot, it can lead to huge memory
-  pressure.
-* If applications maintain a seqno for all mutations and LLRB is
-  enabled with `bornseqno` and `deadseqno`, then it is possible
+* With MVCC, Iterations won't lock the writer and won't interfer with other
+  concurrent readers. But if there are hundreds and thousands of mutations
+  happening in the background, while the iterator is holding the snapshot,
+  it can lead to huge memory pressure.
+* If applications maintain a seqno for all mutations, then it is possible
   to build a piece-wise Iterator() that can be released for every
   few milliseconds. Refer #35.
 
 Log-Structured-Merge (LSM)
 --------------------------
 
-Log-Structured-Merge (LSM) is available off-the-shelf with LLRB store.
-Just enable `lsm` via settings while creating the LLRB tree. Enabling
-LSM will have the following effects:
+Log-Structured-Merge (LSM) is supported at api level. Specifically with
+Delete API.
 
-* Delete will simply be marked as deleted, its deadseqno will be
-  updated to currseqno.
+* Delete will simply be marked as deleted and seqno is updated to current
+  seqno.
 * For Delete operation, if entry is missing in the index. An entry
-  will be inserted and then marked as deleted with its deadseqno
-  updated to currseqno.
-* When a key marked as deleted is Upserted again, its deadseqno will
-  be set to ZERO, and deleted flag is cleared.
-* In case of UpsertCAS, CAS should match before entry is cleared from
-  delete log.
-* All of the above bahaviour are equally applicable with MVCC enabled.
+  will be inserted and then marked as deleted with its seqno updated to
+  current-seqno.
+* When a key is marked as deleted and Upserted again, the delete operation
+  will get de-duped.
+
+Package lsm/ provides a set of API that can do merge-get and merge-sort on
+LSM enabled data-structures.
 
 Compare-And-Set (CAS)
 ---------------------
@@ -117,7 +97,7 @@ index entry does not change between a previous read/write operation and
 next write operation. CAS operation has the following effects:
 
 * If CAS is > ZERO, Get key from the index, and check whether its
-  `bornseqno` matches with the supplied CAS value.
+  `seqno` matches with the supplied CAS value.
 * If CAS is ZERO, then it is equivalent to CREATE operation, and expects
   that the key is not already present in the index.
 
@@ -131,11 +111,4 @@ Panic and Recovery
 Panics are to expected when APIs are misused. Programmers might choose
 to ignore the errors, but not panics. For example:
 
-- When trying to upsert a nil key.
-- When Log() is called on snapshots.
-- When a snapshot is released more than it is refered.
-- When a snapshot is released when there is un-closed iteration on the
-  snapshot.
 - Validate() will panic if there is a fatal error.
-- When trying to iterate on index/snapshot after it is closed.
-- When RSnapshot() is requested with mvcc disabled.
