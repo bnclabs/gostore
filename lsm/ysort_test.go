@@ -62,8 +62,8 @@ func TestYSort(t *testing.T) {
 	defer bubt1.Close()
 
 	refiter := ref.Scan()
-	miter := YSort("mm", llrb3.Scan(), llrb4.Scan())
-	iter := YSort("dd", bubt1.Scan(), YSort("dm", bubt2.Scan(), miter))
+	miter := YSort(llrb3.Scan(), llrb4.Scan())
+	iter := YSort(bubt1.Scan(), YSort(bubt2.Scan(), miter))
 	key, value, seqno, deleted, err := refiter(false)
 	for err == nil {
 		k, v, s, d, e := iter(false)
@@ -137,8 +137,8 @@ func BenchmarkYSort(b *testing.B) {
 	defer bubt1.Close()
 
 	b.ResetTimer()
-	miter := YSort("mm", llrb3.Scan(), llrb4.Scan())
-	iter := YSort("dd", bubt1.Scan(), YSort("dm", bubt2.Scan(), miter))
+	miter := YSort(llrb3.Scan(), llrb4.Scan())
+	iter := YSort(bubt1.Scan(), YSort(bubt2.Scan(), miter))
 	for i := 0; i < b.N; i++ {
 		if _, _, _, _, err := iter(false); err != nil {
 			b.Fatal(err)
