@@ -55,13 +55,6 @@ func OpenSnapshot(
 		index:     make(blkindex, 0, 256),  // TODO: no magic number
 		logprefix: fmt.Sprintf("BUBT [%s]", name),
 	}
-	snap.lockfile = filepath.Join(filepath.Dir(snap.mfile), "bubt.lock")
-	if snap.rw, err = flock.New(snap.lockfile); err != nil {
-		snap.rw = nil
-		snap.Close()
-		return nil, err
-	}
-	snap.rw.RLock()
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -78,6 +71,15 @@ func OpenSnapshot(
 	if _, err = snap.readheader(snap.readm); err != nil {
 		return
 	}
+
+	snap.lockfile = filepath.Join(filepath.Dir(snap.mfile), "bubt.lock")
+	if snap.rw, err = flock.New(snap.lockfile); err != nil {
+		snap.rw = nil
+		snap.Close()
+		return nil, err
+	}
+	snap.rw.RLock()
+
 	// initialize the current capacity of zblock-files.
 	snap.zsizes = make([]int64, len(snap.readzs))
 	for i := range snap.zfiles {
@@ -240,24 +242,24 @@ func (snap *Snapshot) Destroy() {
 	if snap.rw != nil {
 		snap.rw.Lock()
 		if err := os.Remove(snap.mfile); err != nil {
-			log.Errorf("%v remove %q: %v", snap.logprefix, snap.mfile, err)
+			log.Errorf("%v %v", snap.logprefix, err)
 		}
 		dirs[filepath.Dir(snap.mfile)] = true
 		for _, zfile := range snap.zfiles {
 			if err := os.Remove(zfile); err != nil {
-				log.Errorf("%v remove %q: %v", snap.logprefix, zfile, err)
+				log.Errorf("%v %v", snap.logprefix, err)
 			}
 			dirs[filepath.Dir(zfile)] = true
-		}
-		for dir := range dirs {
-			if err := os.Remove(dir); err != nil {
-				log.Errorf("%v remove %q: %v", snap.logprefix, dir, err)
-			}
 		}
 		snap.rw.Unlock()
 	}
 	if err := os.Remove(snap.lockfile); err != nil {
-		log.Errorf("%v remove %q: %v", snap.logprefix, snap.lockfile, err)
+		log.Errorf("%v %v", snap.logprefix, err)
+	}
+	for dir := range dirs {
+		if err := os.Remove(dir); err != nil {
+			log.Errorf("%v %v", snap.logprefix, err)
+		}
 	}
 }
 
