@@ -10,10 +10,10 @@ Bottoms up construction
 =======================
 
 * Building a bottoms-up tree starts with an iterator object that supply
-  a stream of key,value entries.
+  a stream of key,value entries, and associated fields.
 * Incoming key,value entries are populated in a leaf node, called `z-node`.
-* Values can be appended to a separate file, based on configuration.
-* Once the z-node is fully utilized a new entry, called `m-entry` is
+* z-nodes can be stored in a separate file.
+* Once z-node is fully utilized a new entry, called `m-entry` is
   composed with:
   * Key element which is the `z-node` first entry's key element.
   * Value element which is the file position of the `z-node`.
@@ -31,59 +31,37 @@ Bottoms up construction
 * Size of m-node is same across the tree and configurable with each
   build.
 * Finally the root node is flushed.
-* After the root node, build statistics is flushed.
-* After build statistics, tree settings is flushed.
-* After tree settings, index metadata is flushed.
-* After metadata, marker-block is flushed.
-* And finally bubt-header is flushed.
+* After the root node, a single block (blocksize same as m-node) of tree
+  settings is flushed.
+* After tree settings, one of more blocks of index metadata (blocksize same
+  as m-node) is flushed.
+* After metadata, a single block, (blocksize is MarkerBlocksize) of
+  marker-block is flushed.
 
-Both for each entry keys and values are stored in the index file.
-Optionally if datafile is enabled, values shall be appended to the
-datafile and leaf-nodes in index file will holds value's file-position
-as reference.
+** TODO: block diagram of disk format**
 
-Header
-------
-
-* 8-byte length of build statistics field.
-* 8-byte length of settings field.
-* 8-byte length of metadata filed.
-* 8-byte file-position for rooblock in the index file.
-* 8-byte file-position for root-reduce either in index file or in
-  value file.
-
-Marker block
-------------
-
-A marker-block of size `mblocksize` or `zblocksize` is populate with
-`MarkerByte` and flushed before the header fields. Only when marker-block
-is identified with its full size followed by 40 bytes of header, the index
-file is considered well-formed.
-
-Metadata, Settings and Statistics
----------------------------------
+Metadata, Settings
+------------------
 
 * Applications can attach an opaque blob of **metadata** with every bubt
   index. This can be supplied as argument to the Build() API. It is upto
   the application to interpret this metadata.
 * Similarly settings argument supplied as argument to the Build() API
-  is persisted as **settings** field after the root block. To know the shape
-  and field of settings refer to Defaultsettings(). The same settings
-  will be used to initialize a snapshot from bubt index file.
-* Bubt builder does few statistics accounting while building the tree,
-  which is persisted as statistics after the root blockk.
+  is persisted as **settings** field after the root block.
+
+** TODO: shape of settings map**
 
 Background routines
 -------------------
 
 While building the btree, separate go-routines are spawned to flush data
-into file. If values are configured to be stored in separate data-file there
-will 2 go-routines, lese there will be just 1 go-routine flushing into
-index file.
+into file. There will be one go-routine for each index file.
 
-A fully formed bubt instance can be opened and any number of snapshots can
-be created on that. None of the snapshots spawn go-routines. Only when all
-snapshots are released, index file can be closed.
+A fully formed bubt instance can be opened using `OpenSnapshot` for read
+only access. Any number of snapshots can opened by a single instance from
+`OpenSnapshot` cannot be shared across go-routines. None of the snapshots
+spawn go-routines. Only when all snapshots are released, index file can
+be closed.
 
 Panic and Recovery
 ------------------
@@ -91,9 +69,6 @@ Panic and Recovery
 Panics are to expected when APIs are misused. Programmers might choose
 to ignore the errors, but not panics. For example:
 
-- When settings exceed allowed range of values.
-- When trying to iterate on snapshot after it is closed.
-- Using api.NodeSetter methods.
-- Using api.IndexWriter methods.
-- When Clone() is called on the snapshot.
-- Disk error.
+- For disk errors while building the tree or reading from snapshots.
+- Panics that happend during Build() or OpenSnapshot() call will recover
+  otherwise they will have be caught by the caller.
