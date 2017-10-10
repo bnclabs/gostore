@@ -29,9 +29,7 @@
 //
 // lsm:
 //
-// Implement Log-structured-merge between two indexes. Accounts for deleted
-// entries, bornseqno of a new entry, deadseqno of deleted entries.
-// Deduplicate older mutations for the same entry.
+// Implement Log-structured-merge between two indexes.
 //
 // malloc:
 //
