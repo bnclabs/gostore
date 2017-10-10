@@ -20,7 +20,7 @@ func New(filename string) (*RWMutex, error) {
 	return &RWMutex{fd: fd}, nil
 }
 
-// Lock locks m. If the lock is already in use, the calling goroutine
+// Lock locks rw. If the lock is already in use, the calling goroutine
 // blocks until the mutex is available.
 func (rw *RWMutex) Lock() {
 	rw.mu.Lock()
@@ -29,7 +29,7 @@ func (rw *RWMutex) Lock() {
 	}
 }
 
-// Unlock unlocks m. It is a run-time error if m is not locked on entry to
+// Unlock unlocks rw. It is a run-time error if rw is not locked on entry to
 // Unlock.
 func (rw *RWMutex) Unlock() {
 	if err := syscall.Flock(rw.fd, syscall.LOCK_UN); err != nil {
