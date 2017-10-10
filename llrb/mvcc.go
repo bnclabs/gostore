@@ -482,6 +482,14 @@ func (mvcc *MVCC) destroy() bool {
 
 //---- Exported Write methods
 
+func (mvcc *MVCC) Setseqno(seqno uint64) {
+	mvcc.seqno = seqno
+}
+
+func (mvcc *MVCC) Getseqno() uint64 {
+	return mvcc.seqno
+}
+
 // Set a key, value pair in the index, if key is already present,
 // its value will be over-written. Make sure key is not nil.
 // Return old value if oldvalue is not nil.

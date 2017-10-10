@@ -149,6 +149,14 @@ func (llrb *LLRB) delcounts(nd *Llrbnode) {
 
 //---- Exported Write methods
 
+func (llrb *LLRB) Setseqno(seqno uint64) {
+	llrb.seqno = seqno
+}
+
+func (llrb *LLRB) Getseqno() uint64 {
+	return llrb.seqno
+}
+
 // Set a key, value pair in the index, if key is already present,
 // its value will be over-written. Make sure key is not nil.
 // Return old value if oldvalue is not nil.
