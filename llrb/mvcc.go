@@ -19,8 +19,7 @@ import humanize "github.com/dustin/go-humanize"
 
 // MVCC manages a single instance of LLRB tree in MVCC mode.
 type MVCC struct {
-	llrbstats           // 64-bit aligned snapshot statistics.
-	activetxns    int64 // there can be more than one txns.
+	llrbstats     // 64-bit aligned snapshot statistics.
 	h_upsertdepth *lib.HistogramInt64
 	// can be unaligned fields
 	name      string
@@ -196,6 +195,34 @@ func (mvcc *MVCC) logarenasettings() {
 	log.Infof(fmsg, mvcc.logprefix, vblocks, cp)
 }
 
+func (mvcc *MVCC) lock() bool {
+	select {
+	case <-mvcc.finch:
+		return false
+	default:
+	}
+	mvcc.rw.Lock()
+	return true
+}
+
+func (mvcc *MVCC) unlock() {
+	mvcc.rw.Unlock()
+}
+
+func (mvcc *MVCC) rlock() bool {
+	select {
+	case <-mvcc.finch:
+		return false
+	default:
+	}
+	mvcc.rw.RLock()
+	return true
+}
+
+func (mvcc *MVCC) runlock() {
+	mvcc.rw.RUnlock()
+}
+
 //---- Exported Control methods
 
 // ID is same as the name supplied while creating the MVCC instance.
@@ -218,16 +245,20 @@ func (mvcc *MVCC) Dotdump(buffer io.Writer) {
 		"}",
 	}
 	buffer.Write([]byte(strings.Join(lines[:len(lines)-1], "\n")))
-	mvcc.rw.RLock()
+	if !mvcc.rlock() {
+		return
+	}
 	mvcc.getroot().dotdump(buffer)
 	buffer.Write([]byte(lines[len(lines)-1]))
-	mvcc.rw.RUnlock()
+	mvcc.runlock()
 }
 
 // Stats return a map of data-structure statistics and operational
 // statistics.
 func (mvcc *MVCC) Stats() map[string]interface{} {
-	mvcc.rw.RLock()
+	if !mvcc.rlock() {
+		return nil
+	}
 
 	m := make(map[string]interface{})
 	m["n_count"] = atomic.LoadInt64(&mvcc.n_count)
@@ -268,7 +299,7 @@ func (mvcc *MVCC) Stats() map[string]interface{} {
 	m["h_reclaims"] = mvcc.h_reclaims.Fullstats()
 	m["h_versions"] = mvcc.h_versions.Fullstats()
 
-	mvcc.rw.RUnlock()
+	mvcc.runlock()
 	return m
 }
 
@@ -277,8 +308,10 @@ func (mvcc *MVCC) Stats() map[string]interface{} {
 func (mvcc *MVCC) Validate() {
 	stats := mvcc.Stats()
 
-	mvcc.rw.RLock()
-	defer mvcc.rw.RUnlock()
+	if !mvcc.rlock() {
+		return
+	}
+	defer mvcc.runlock()
 
 	n := stats["n_count"].(int64)
 	kmem, vmem := stats["keymemory"].(int64), stats["valmemory"].(int64)
@@ -363,7 +396,9 @@ func (mvcc *MVCC) countreclaimnodes() (total int64) {
 
 // Log vital information.
 func (mvcc *MVCC) Log() {
-	mvcc.rw.RLock()
+	if !mvcc.rlock() {
+		return
+	}
 
 	stats := mvcc.Stats()
 
@@ -408,16 +443,18 @@ func (mvcc *MVCC) Log() {
 	sizes, zs = mvcc.valarena.Utilization()
 	log.Infof("%v val %v", mvcc.logprefix, loguz(sizes, zs, "node"))
 
-	mvcc.rw.RUnlock()
+	mvcc.runlock()
 }
 
 // Clone mvcc instance and return the clone. Clone walks the entire
 // tree and concurrent reads and writes will block until call returns.
 func (mvcc *MVCC) Clone(name string) *MVCC {
-	mvcc.rw.Lock()
+	if !mvcc.lock() {
+		return nil
+	}
 
 	newmvcc := NewMVCC(mvcc.name, mvcc.setts)
-	newmvcc.rw.Lock()
+	newmvcc.lock()
 	newmvcc.llrbstats = mvcc.llrbstats
 	newmvcc.h_upsertdepth = mvcc.h_upsertdepth.Clone()
 	newmvcc.h_bulkfree = mvcc.h_bulkfree.Clone()
@@ -427,8 +464,8 @@ func (mvcc *MVCC) Clone(name string) *MVCC {
 
 	newmvcc.setroot(newmvcc.clonetree(mvcc.getroot()))
 
-	newmvcc.rw.Unlock()
-	mvcc.rw.Unlock()
+	newmvcc.unlock()
+	mvcc.unlock()
 	return newmvcc
 }
 
@@ -457,16 +494,16 @@ func (mvcc *MVCC) Destroy() {
 }
 
 func (mvcc *MVCC) destroy() bool {
-	mvcc.rw.Lock()
-	defer mvcc.rw.Unlock()
+	if !mvcc.lock() {
+		return true
+	}
+	defer mvcc.unlock()
 
 	snapshot := (*mvccsnapshot)(mvcc.snapshot)
 	if snapshot != nil {
 		if snapshot.getref() > 0 {
-			fmt.Println(snapshot.getref())
 			return false
 		} else if mvcc.purgesnapshot(snapshot) == false {
-			fmt.Println("no peruged")
 			return false
 		}
 	}
@@ -497,9 +534,11 @@ func (mvcc *MVCC) Getseqno() uint64 {
 // its value will be over-written. Make sure key is not nil.
 // Return old value if oldvalue points to a valid buffer.
 func (mvcc *MVCC) Set(key, value, oldvalue []byte) (ov []byte, cas uint64) {
-	mvcc.rw.Lock()
+	if !mvcc.lock() {
+		return
+	}
 	ov, cas = mvcc.set(key, value, oldvalue)
-	mvcc.rw.Unlock()
+	mvcc.unlock()
 	return
 }
 
@@ -585,7 +624,9 @@ func (mvcc *MVCC) upsert(
 func (mvcc *MVCC) SetCAS(
 	key, value, oldvalue []byte, cas uint64) ([]byte, uint64, error) {
 
-	mvcc.rw.Lock()
+	if !mvcc.lock() {
+		return nil, 0, fmt.Errorf("closed")
+	}
 	// check for cas match.
 	// if cas > 0, key should be found and its seqno should match cas.
 	// if cas == 0, key should be missing.
@@ -596,12 +637,12 @@ func (mvcc *MVCC) SetCAS(
 		if oldvalue != nil {
 			oldvalue = lib.Fixbuffer(oldvalue, 0)
 		}
-		mvcc.rw.Unlock()
+		mvcc.unlock()
 		return oldvalue, 0, api.ErrorInvalidCAS
 	}
 	oldvalue, cas = mvcc.set(key, value, oldvalue)
 
-	mvcc.rw.Unlock()
+	mvcc.unlock()
 	return oldvalue, cas, nil
 }
 
@@ -714,9 +755,11 @@ func (mvcc *MVCC) upsertcas(
 // instead mark the node as deleted. Again, if lsm is true
 // but key is not found in index a new entry will be inserted.
 func (mvcc *MVCC) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
-	mvcc.rw.Lock()
+	if !mvcc.lock() {
+		return nil, 0
+	}
 	oldvalue, cas := mvcc.dodelete(key, oldvalue, lsm)
-	mvcc.rw.Unlock()
+	mvcc.unlock()
 
 	return oldvalue, cas
 }
@@ -877,15 +920,18 @@ func (mvcc *MVCC) deletemin(
 // background mutations, it will increase the memory pressure on the system.
 // Concurrent transactions are allowed, and serialized internally.
 func (mvcc *MVCC) BeginTxn(id uint64) *Txn {
-	snapshot := mvcc.latestsnapshot()
-	atomic.AddInt64(&mvcc.activetxns, 1)
-	atomic.AddInt64(&mvcc.n_txns, 1)
-	txn := mvcc.gettxn(id, mvcc /*db*/, snapshot /*snap*/)
-	return txn
+	if snapshot := mvcc.latestsnapshot(); snapshot != nil {
+		atomic.AddInt64(&mvcc.n_txns, 1)
+		txn := mvcc.gettxn(id, mvcc /*db*/, snapshot /*snap*/)
+		return txn
+	}
+	return nil
 }
 
 func (mvcc *MVCC) commit(txn *Txn) error {
-	mvcc.rw.Lock() // no further mutations allowed until we are done.
+	if !mvcc.lock() { // no further mutations allowed until we are done.
+		return fmt.Errorf("close")
+	}
 
 	// Check whether writes operations match the key's CAS.
 	for _, head := range txn.writes {
@@ -897,7 +943,7 @@ func (mvcc *MVCC) commit(txn *Txn) error {
 					seqno = nd.getseqno()
 				}
 				if seqno != head.seqno {
-					mvcc.rw.Unlock()
+					mvcc.unlock()
 					return api.ErrorRollback // rollback
 				}
 			}
@@ -921,9 +967,8 @@ func (mvcc *MVCC) commit(txn *Txn) error {
 
 	mvcc.puttxn(txn)
 	mvcc.n_commits++
-	atomic.AddInt64(&mvcc.activetxns, -1)
 
-	mvcc.rw.Unlock()
+	mvcc.unlock()
 	return nil
 }
 
@@ -941,24 +986,26 @@ func (mvcc *MVCC) aborttxn(txn *Txn) error {
 	snapshot := txn.snapshot.(*mvccsnapshot)
 	snapshot.release()
 
-	mvcc.rw.Lock()
+	if !mvcc.lock() {
+		return fmt.Errorf("closed")
+	}
 
 	mvcc.puttxn(txn)
 	mvcc.n_aborts++
-	atomic.AddInt64(&mvcc.activetxns, -1)
 
-	mvcc.rw.Unlock()
+	mvcc.unlock()
 	return nil
 }
 
 // View starts a read-only transaction. Other than that it is similar
 // to BeginTxn. All view transactions should be aborted.
 func (mvcc *MVCC) View(id uint64) *View {
-	snapshot := mvcc.latestsnapshot()
-	atomic.AddInt64(&mvcc.activetxns, 1)
-	atomic.AddInt64(&mvcc.n_txns, 1)
-	view := mvcc.getview(id, mvcc /*db*/, snapshot /*snap*/)
-	return view
+	if snapshot := mvcc.latestsnapshot(); snapshot != nil {
+		atomic.AddInt64(&mvcc.n_txns, 1)
+		view := mvcc.getview(id, mvcc /*db*/, snapshot /*snap*/)
+		return view
+	}
+	return nil
 }
 
 func (mvcc *MVCC) abortview(view *View) {
@@ -966,7 +1013,6 @@ func (mvcc *MVCC) abortview(view *View) {
 	snapshot.release()
 
 	mvcc.putview(view)
-	atomic.AddInt64(&mvcc.activetxns, -1)
 }
 
 //---- Exported Read methods
@@ -977,9 +1023,10 @@ func (mvcc *MVCC) abortview(view *View) {
 func (mvcc *MVCC) Get(
 	key, value []byte) (v []byte, cas uint64, deleted, ok bool) {
 
-	snapshot := mvcc.latestsnapshot()
-	v, cas, deleted, ok = snapshot.get(key, value)
-	snapshot.release()
+	if snapshot := mvcc.latestsnapshot(); snapshot != nil {
+		v, cas, deleted, ok = snapshot.get(key, value)
+		snapshot.release()
+	}
 	return
 }
 
@@ -1020,14 +1067,16 @@ func (mvcc *MVCC) Scan() api.Iterator {
 }
 
 func (mvcc *MVCC) startscan(key []byte, sb *scanbuf, leseqno uint64) uint64 {
-	mvcc.rw.RLock()
+	if !mvcc.rlock() {
+		return 0
+	}
 	if key == nil {
 		leseqno = mvcc.seqno
 	}
 	sb.startwrite()
 	mvcc.scan(mvcc.getroot(), key, sb, leseqno)
 	sb.startread()
-	mvcc.rw.RUnlock()
+	mvcc.runlock()
 	return leseqno
 }
 
@@ -1190,23 +1239,27 @@ func (mvcc *MVCC) cloneifdirty(nd *Llrbnode) (*Llrbnode, bool) {
 func (mvcc *MVCC) makesnapshot() {
 	nextsnap := mvcc.getsnapshot()
 
-	mvcc.rw.Lock()
+	if !mvcc.lock() {
+		return
+	}
 	mvcc.snapshot = nextsnap.initsnapshot(mvcc, mvcc.snapshot)
 	if mvcc.purgesnapshot(mvcc.snapshot.next) {
 		mvcc.snapshot.next = nil
 	}
 	mvcc.n_activess++
 	mvcc.n_snapshots++
-	mvcc.rw.Unlock()
+	mvcc.unlock()
 }
 
 func (mvcc *MVCC) latestsnapshot() *mvccsnapshot {
-	mvcc.rw.RLock()
+	if !mvcc.rlock() {
+		return nil
+	}
 	snapshot := (*mvccsnapshot)(mvcc.snapshot)
 	if snapshot != nil {
 		snapshot.refer()
 	}
-	mvcc.rw.RUnlock()
+	mvcc.runlock()
 	return snapshot
 }
 

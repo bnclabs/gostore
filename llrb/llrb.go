@@ -19,8 +19,8 @@ import humanize "github.com/dustin/go-humanize"
 // LLRB to manage a single instance of in-memory sorted index using
 // left-leaning-red-black tree.
 type LLRB struct { // tree container
-	llrbstats            // 64-bit aligned snapshot statistics.
-	activetxns    uint64 // there can be more than on ro-txns
+	llrbstats           // 64-bit aligned snapshot statistics.
+	activetxns    int64 // there can be more than on ro-txns
 	h_upsertdepth *lib.HistogramInt64
 	// can be unaligned fields
 	name      string
@@ -29,6 +29,7 @@ type LLRB struct { // tree container
 	root      unsafe.Pointer // *Llrbnode
 	seqno     uint64
 	rw        sync.RWMutex
+	finch     chan struct{}
 	txnsmeta
 
 	// settings
@@ -41,7 +42,7 @@ type LLRB struct { // tree container
 
 // NewLLRB a new instance of in-memory sorted index.
 func NewLLRB(name string, setts s.Settings) *LLRB {
-	llrb := &LLRB{name: name}
+	llrb := &LLRB{name: name, finch: make(chan struct{})}
 	llrb.logprefix = fmt.Sprintf("LLRB [%s]", name)
 	llrb.inittxns()
 
@@ -147,6 +148,34 @@ func (llrb *LLRB) delcounts(nd *Llrbnode) {
 	}
 }
 
+func (llrb *LLRB) lock() bool {
+	select {
+	case <-llrb.finch:
+		return false
+	default:
+	}
+	llrb.rw.Lock()
+	return true
+}
+
+func (llrb *LLRB) unlock() {
+	llrb.rw.Unlock()
+}
+
+func (llrb *LLRB) rlock() bool {
+	select {
+	case <-llrb.finch:
+		return false
+	default:
+	}
+	llrb.rw.RLock()
+	return true
+}
+
+func (llrb *LLRB) runlock() {
+	llrb.rw.RUnlock()
+}
+
 //---- Exported Write methods
 
 // Setseqno can be called immediately after creating the LLRB instance.
@@ -164,7 +193,10 @@ func (llrb *LLRB) Getseqno() uint64 {
 // its value will be over-written. Make sure key is not nil.
 // Return old value if oldvalue points to valid buffer.
 func (llrb *LLRB) Set(key, value, oldvalue []byte) (ov []byte, cas uint64) {
-	llrb.rw.Lock()
+	if !llrb.lock() {
+		return
+	}
+
 	llrb.seqno++
 
 	root, newnd, oldnd := llrb.upsert(llrb.getroot(), 1 /*depth*/, key, value)
@@ -188,7 +220,7 @@ func (llrb *LLRB) Set(key, value, oldvalue []byte) (ov []byte, cas uint64) {
 
 	llrb.freenode(oldnd)
 
-	llrb.rw.Unlock()
+	llrb.unlock()
 	return oldvalue, seqno
 }
 
@@ -240,9 +272,11 @@ func (llrb *LLRB) upsert(
 func (llrb *LLRB) SetCAS(
 	key, value, oldvalue []byte, cas uint64) ([]byte, uint64, error) {
 
-	llrb.rw.Lock()
+	if !llrb.lock() {
+		return nil, 0, fmt.Errorf("closed")
+	}
 	oldvalue, cas, err := llrb.setcas(key, value, oldvalue, cas)
-	llrb.rw.Unlock()
+	llrb.unlock()
 
 	return oldvalue, cas, err
 }
@@ -348,9 +382,11 @@ func (llrb *LLRB) upsertcas(
 // instead mark the node as deleted. Again, if lsm is true
 // but key is not found in index a new entry will inserted.
 func (llrb *LLRB) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
-	llrb.rw.Lock()
+	if !llrb.lock() {
+		return nil, 0
+	}
 	oldvalue, cas := llrb.dodelete(key, oldvalue, lsm)
-	llrb.rw.Unlock()
+	llrb.unlock()
 
 	return oldvalue, cas
 }
@@ -477,9 +513,11 @@ func (llrb *LLRB) deletemin(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 // be commited or aborted. Structure will be locked, no other read or write
 // operation can be performed, until transaction is committed or aborted.
 func (llrb *LLRB) BeginTxn(id uint64) *Txn {
-	llrb.rw.Lock()
-	llrb.activetxns++
-	llrb.n_txns++
+	if !llrb.lock() {
+		return nil
+	}
+	atomic.AddInt64(&llrb.activetxns, 1)
+	atomic.AddInt64(&llrb.n_txns, 1)
 	txn := llrb.gettxn(id, llrb /*db*/, llrb /*snap*/)
 	return txn
 }
@@ -498,8 +536,8 @@ func (llrb *LLRB) commit(txn *Txn) error {
 
 	llrb.puttxn(txn)
 	llrb.n_commits++
-	llrb.activetxns--
-	llrb.rw.Unlock()
+	atomic.AddInt64(&llrb.activetxns, -1)
+	llrb.unlock()
 	return nil
 }
 
@@ -516,8 +554,8 @@ func (llrb *LLRB) commitrecord(rec *record) (err error) {
 func (llrb *LLRB) aborttxn(txn *Txn) error {
 	llrb.puttxn(txn)
 	llrb.n_aborts++
-	llrb.activetxns--
-	llrb.rw.Unlock()
+	atomic.AddInt64(&llrb.activetxns, -1)
+	llrb.unlock()
 	return nil
 }
 
@@ -525,17 +563,19 @@ func (llrb *LLRB) aborttxn(txn *Txn) error {
 // no other write operations can be performed, until transaction is
 // committed or aborted. Concurrent reads are still allowed.
 func (llrb *LLRB) View(id uint64) *View {
-	llrb.rw.RLock()
-	llrb.activetxns++
-	llrb.n_txns++
+	if !llrb.rlock() {
+		return nil
+	}
+	atomic.AddInt64(&llrb.activetxns, 1)
+	atomic.AddInt64(&llrb.n_txns, 1)
 	view := llrb.getview(id, llrb /*db*/, llrb /*snap*/)
 	return view
 }
 
 func (llrb *LLRB) abortview(view *View) error {
 	llrb.putview(view)
-	llrb.activetxns--
-	llrb.rw.RUnlock()
+	atomic.AddInt64(&llrb.activetxns, -1)
+	llrb.runlock()
 	return nil
 }
 
@@ -547,7 +587,16 @@ func (llrb *LLRB) abortview(view *View) error {
 func (llrb *LLRB) Get(
 	key, value []byte) (v []byte, cas uint64, deleted, ok bool) {
 
-	llrb.rw.RLock()
+	if !llrb.rlock() {
+		return
+	}
+	value, cas, deleted, ok = llrb.get(key, value)
+	llrb.runlock()
+	return value, cas, deleted, ok
+}
+
+func (llrb *LLRB) get(
+	key, value []byte) (v []byte, cas uint64, deleted, ok bool) {
 
 	deleted, seqno := false, uint64(0)
 	nd, ok := llrb.getkey(llrb.getroot(), key)
@@ -561,8 +610,6 @@ func (llrb *LLRB) Get(
 	} else if value != nil {
 		value = lib.Fixbuffer(value, 0)
 	}
-
-	llrb.rw.RUnlock()
 	return value, seqno, deleted, ok
 }
 
@@ -576,6 +623,7 @@ func (llrb *LLRB) getkey(nd *Llrbnode, k []byte) (*Llrbnode, bool) {
 			return nd, true
 		}
 	}
+	//fmt.Printf("get %q %v\n", k, false)
 	return nil, false
 }
 
@@ -604,14 +652,16 @@ func (llrb *LLRB) Scan() api.Iterator {
 }
 
 func (llrb *LLRB) startscan(key []byte, sb *scanbuf, leseqno uint64) uint64 {
-	llrb.rw.RLock()
+	if !llrb.rlock() {
+		return leseqno
+	}
 	if key == nil {
 		leseqno = llrb.seqno
 	}
 	sb.startwrite()
 	llrb.scan(llrb.getroot(), key, sb, leseqno)
 	sb.startread()
-	llrb.rw.RUnlock()
+	llrb.runlock()
 	return leseqno
 }
 
@@ -659,16 +709,20 @@ func (llrb *LLRB) Dotdump(buffer io.Writer) {
 		"}",
 	}
 	buffer.Write([]byte(strings.Join(lines[:len(lines)-1], "\n")))
-	llrb.rw.RLock()
+	if !llrb.rlock() {
+		return
+	}
 	llrb.getroot().dotdump(buffer)
 	buffer.Write([]byte(lines[len(lines)-1]))
-	llrb.rw.RUnlock()
+	llrb.runlock()
 }
 
 // Stats return a map of data-structure statistics and operational
 // statistics.
 func (llrb *LLRB) Stats() map[string]interface{} {
-	llrb.rw.RLock()
+	if !llrb.rlock() {
+		return nil
+	}
 
 	m := make(map[string]interface{})
 	m["n_count"] = atomic.LoadInt64(&llrb.n_count)
@@ -701,7 +755,7 @@ func (llrb *LLRB) Stats() map[string]interface{} {
 
 	m["h_upsertdepth"] = llrb.h_upsertdepth.Fullstats()
 
-	llrb.rw.RUnlock()
+	llrb.runlock()
 	return m
 }
 
@@ -710,8 +764,10 @@ func (llrb *LLRB) Stats() map[string]interface{} {
 func (llrb *LLRB) Validate() {
 	stats := llrb.Stats()
 
-	llrb.rw.RLock()
-	defer llrb.rw.RUnlock()
+	if !llrb.rlock() {
+		return
+	}
+	defer llrb.runlock()
 
 	n := stats["n_count"].(int64)
 	kmem, vmem := stats["keymemory"].(int64), stats["valmemory"].(int64)
@@ -746,7 +802,9 @@ func (llrb *LLRB) validatestats(stats map[string]interface{}) {
 
 // Log vital information.
 func (llrb *LLRB) Log() {
-	llrb.rw.RLock()
+	if !llrb.rlock() {
+		return
+	}
 
 	stats := llrb.Stats()
 
@@ -791,12 +849,14 @@ func (llrb *LLRB) Log() {
 	sizes, zs = llrb.valarena.Utilization()
 	log.Infof("%v val %v", llrb.logprefix, loguz(sizes, zs, "node"))
 
-	llrb.rw.RUnlock()
+	llrb.runlock()
 }
 
 // Clone llrb instance and return the clone.
 func (llrb *LLRB) Clone(name string) *LLRB {
-	llrb.rw.Lock()
+	if !llrb.lock() {
+		return nil
+	}
 
 	newllrb := NewLLRB(llrb.name, llrb.setts)
 	newllrb.llrbstats = llrb.llrbstats
@@ -805,7 +865,7 @@ func (llrb *LLRB) Clone(name string) *LLRB {
 
 	newllrb.setroot(newllrb.clonetree(llrb.getroot()))
 
-	llrb.rw.Unlock()
+	llrb.unlock()
 	return newllrb
 }
 
@@ -825,6 +885,7 @@ func (llrb *LLRB) clonetree(nd *Llrbnode) *Llrbnode {
 // Destroy releases all resources held by the tree. No other
 // method call are allowed after Destroy.
 func (llrb *LLRB) Destroy() {
+	close(llrb.finch)
 	for llrb.dodestory() == false {
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -832,10 +893,12 @@ func (llrb *LLRB) Destroy() {
 }
 
 func (llrb *LLRB) dodestory() bool {
-	llrb.rw.Lock()
-	defer llrb.rw.Unlock()
+	if !llrb.lock() {
+		return true
+	}
+	defer llrb.unlock()
 
-	if llrb.activetxns > 0 {
+	if atomic.LoadInt64(&llrb.activetxns) > 0 {
 		return false
 	}
 	llrb.nodearena.Release()

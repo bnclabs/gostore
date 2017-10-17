@@ -493,7 +493,7 @@ func TestMVCCSetCAS(t *testing.T) {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_txns"].(int64); x != 0 {
 		t.Errorf("unexpected %v", x)
-	} else if u := nodeutz(stats); u < 80 {
+	} else if u := nodeutz(stats); u < 40 {
 		t.Errorf("unexpected %v", u)
 	} else if u := valueutz(stats); u < 80 {
 		t.Errorf("unexpected %v", u)

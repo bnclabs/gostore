@@ -49,7 +49,7 @@ func (view *View) Get(key, value []byte) (v []byte, deleted, ok bool) {
 func (view *View) getsnap(key, value []byte) ([]byte, uint64, bool, bool) {
 	switch snap := view.snapshot.(type) {
 	case *LLRB:
-		return snap.Get(key, value)
+		return snap.get(key, value)
 	case *mvccsnapshot:
 		return snap.get(key, value)
 	}
