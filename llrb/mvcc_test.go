@@ -266,9 +266,9 @@ func TestMVCCLoadLarge(t *testing.T) {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_txns"].(int64); x != 0 {
 		t.Errorf("unexpected %v", x)
-	} else if u := nodeutz(stats); u < 70 {
+	} else if u := nodeutz(stats); u < 50 {
 		t.Errorf("unexpected %v", u)
-	} else if u := valueutz(stats); u < 70 {
+	} else if u := valueutz(stats); u < 50 {
 		t.Errorf("unexpected %v", u)
 	}
 }
@@ -365,7 +365,7 @@ func TestMVCCSetCAS(t *testing.T) {
 	}
 
 	testwithkey := func(k []byte, v []byte, byt byte, xcas uint64) {
-		var ncas uint64
+		var ncas, dcas uint64
 
 		refv := make([]byte, 1024)
 		refv = refv[:copy(refv, v)]
@@ -395,7 +395,7 @@ func TestMVCCSetCAS(t *testing.T) {
 		} else if ncas != cas+1 {
 			t.Errorf("expected %v, got %v", cas+1, ncas)
 		}
-		cas, rvm = ncas, rvm-len(oldvalue)
+		cas, dcas, rvm = 0, ncas, rvm-len(oldvalue)
 		mvcc.Validate()
 		// set with mismatch cas for deleted key.
 		oldvalue, xcas, err = mvcc.SetCAS(k, v, oldvalue, 1000000000000)
@@ -416,10 +416,10 @@ func TestMVCCSetCAS(t *testing.T) {
 		oldvalue, ncas, err = mvcc.SetCAS(k, nil, oldvalue, cas)
 		if err != nil {
 			t.Error(err)
-		} else if ncas != cas+1 {
+		} else if ncas != dcas+1 {
 			t.Errorf("unexpected %v", ncas)
 		} else if string(oldvalue) != string(refv) {
-			t.Errorf("unexpected %s %q", oldvalue, refv)
+			t.Fatalf("unexpected %s %q", oldvalue, refv)
 		}
 		cas = ncas
 		mvcc.Validate()
@@ -495,7 +495,7 @@ func TestMVCCSetCAS(t *testing.T) {
 		t.Errorf("unexpected %v", x)
 	} else if u := nodeutz(stats); u < 40 {
 		t.Errorf("unexpected %v", u)
-	} else if u := valueutz(stats); u < 80 {
+	} else if u := valueutz(stats); u < 50 {
 		t.Errorf("unexpected %v", u)
 	}
 }
@@ -588,7 +588,7 @@ func TestMVCCDelete(t *testing.T) {
 	mvcc.Validate()
 	// mutation: set-cas on deleted key
 	k, v = []byte("key100"), []byte("value100")
-	oldvalue, cas, err = mvcc.SetCAS(k, v, oldvalue, uint64(n+4))
+	oldvalue, cas, err = mvcc.SetCAS(k, v, oldvalue, 0)
 	if err != nil {
 		t.Error(err)
 	} else if cas != uint64(n+5) {

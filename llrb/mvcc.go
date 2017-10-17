@@ -660,7 +660,7 @@ func (mvcc *MVCC) SetCAS(
 			oldvalue = lib.Fixbuffer(oldvalue, 0)
 		}
 		mvcc.unlock()
-		//fmt.Printf("SetCAS %q %v %v Invalid cas 0\n", key, nd.getseqno(), cas)
+		//fmt.Printf("SetCAS %q %v %v InvaldCAS 0\n", key, nd.getseqno(), cas)
 		return oldvalue, 0, api.ErrorInvalidCAS
 	}
 	oldvalue, cas = mvcc.set(key, value, oldvalue)
