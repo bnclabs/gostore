@@ -40,13 +40,13 @@ func (view *View) Abort() {
 
 // Get value for key from snapshot.
 func (view *View) Get(key, value []byte) (v []byte, deleted, ok bool) {
-	v, _, deleted, ok = view.getsnap(key, value)
+	v, _, deleted, ok = view.getonsnap(key, value)
 	return
 }
 
 //---- local methods
 
-func (view *View) getsnap(key, value []byte) ([]byte, uint64, bool, bool) {
+func (view *View) getonsnap(key, value []byte) ([]byte, uint64, bool, bool) {
 	switch snap := view.snapshot.(type) {
 	case *LLRB:
 		return snap.get(key, value)

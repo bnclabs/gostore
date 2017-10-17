@@ -8,6 +8,7 @@ import "bytes"
 import "unsafe"
 import "strings"
 import "math"
+import "runtime"
 import "sync/atomic"
 
 import "github.com/prataprc/gostore/lib"
@@ -31,7 +32,7 @@ type MVCC struct {
 	txnsmeta
 
 	// mvcc fields
-	snapshot   *mvccsnapshot
+	snapshot   unsafe.Pointer // *mvccpointer
 	h_bulkfree *lib.HistogramInt64
 	h_reclaims *lib.HistogramInt64
 	h_versions *lib.HistogramInt64
@@ -92,11 +93,20 @@ func (mvcc *MVCC) readsettings(setts s.Settings) *MVCC {
 }
 
 func (mvcc *MVCC) getroot() *Llrbnode {
-	return mvcc.snapshot.getroot()
+	return mvcc.currsnapshot().getroot()
 }
 
+// should be called with the write-lock.
 func (mvcc *MVCC) setroot(root *Llrbnode) {
-	mvcc.snapshot.setroot(root)
+	mvcc.currsnapshot().setroot(root)
+}
+
+func (mvcc *MVCC) currsnapshot() *mvccsnapshot {
+	return (*mvccsnapshot)(atomic.LoadPointer(&mvcc.snapshot))
+}
+
+func (mvcc *MVCC) setheadsnapshot(snapshot *mvccsnapshot) {
+	atomic.StorePointer(&mvcc.snapshot, unsafe.Pointer(snapshot))
 }
 
 func (mvcc *MVCC) newnode(k, v []byte) *Llrbnode {
@@ -175,12 +185,13 @@ func (mvcc *MVCC) appendreclaim(reclaim []*Llrbnode) {
 	if ln := int64(len(reclaim)); ln > 0 {
 		mvcc.h_reclaims.Add(ln)
 		mvcc.n_reclaims += ln
-		mvcc.snapshot.reclaims = append(mvcc.snapshot.reclaims, reclaim...)
+		snapshot := mvcc.currsnapshot()
+		snapshot.reclaims = append(snapshot.reclaims, reclaim...)
 	}
 }
 
 func (mvcc *MVCC) logarenasettings() {
-	stats := mvcc.Stats()
+	stats := mvcc.stats()
 
 	// key arena
 	kblocks := len(stats["node.blocks"].([]int64))
@@ -259,7 +270,12 @@ func (mvcc *MVCC) Stats() map[string]interface{} {
 	if !mvcc.rlock() {
 		return nil
 	}
+	stats := mvcc.stats()
+	mvcc.runlock()
+	return stats
+}
 
+func (mvcc *MVCC) stats() map[string]interface{} {
 	m := make(map[string]interface{})
 	m["n_count"] = atomic.LoadInt64(&mvcc.n_count)
 	m["n_inserts"] = mvcc.n_inserts
@@ -298,20 +314,18 @@ func (mvcc *MVCC) Stats() map[string]interface{} {
 	m["h_bulkfree"] = mvcc.h_bulkfree.Fullstats()
 	m["h_reclaims"] = mvcc.h_reclaims.Fullstats()
 	m["h_versions"] = mvcc.h_versions.Fullstats()
-
-	mvcc.runlock()
 	return m
 }
 
 // Validate data structure. This is a costly operation, walks
 // through the entire tree and holds a read lock while doing so.
 func (mvcc *MVCC) Validate() {
-	stats := mvcc.Stats()
-
 	if !mvcc.rlock() {
 		return
 	}
 	defer mvcc.runlock()
+
+	stats := mvcc.stats()
 
 	n := stats["n_count"].(int64)
 	kmem, vmem := stats["keymemory"].(int64), stats["valmemory"].(int64)
@@ -388,7 +402,7 @@ func (mvcc *MVCC) validatestats(stats map[string]interface{}) {
 
 // return the sum of all nodes that needs to be reclaimed from snapshots.
 func (mvcc *MVCC) countreclaimnodes() (total int64) {
-	for snap := mvcc.snapshot; snap != nil; snap = snap.next {
+	for snap := mvcc.currsnapshot(); snap != nil; snap = snap.next {
 		total += int64(len(snap.reclaims))
 	}
 	return total
@@ -399,8 +413,9 @@ func (mvcc *MVCC) Log() {
 	if !mvcc.rlock() {
 		return
 	}
+	defer mvcc.runlock()
 
-	stats := mvcc.Stats()
+	stats := mvcc.stats()
 
 	summary := func(args ...string) string {
 		ss := []interface{}{}
@@ -443,7 +458,14 @@ func (mvcc *MVCC) Log() {
 	sizes, zs = mvcc.valarena.Utilization()
 	log.Infof("%v val %v", mvcc.logprefix, loguz(sizes, zs, "node"))
 
-	mvcc.runlock()
+	// log snapshots
+	snapshot, items := mvcc.currsnapshot(), []string{}
+	for snapshot != nil {
+		item := fmt.Sprintf("%s(%v)", snapshot.id, snapshot.refcount)
+		items = append(items, item)
+		snapshot = snapshot.next
+	}
+	log.Infof("%v snapshots %v", mvcc.logprefix, strings.Join(items, " -> "))
 }
 
 // Clone mvcc instance and return the clone. Clone walks the entire
@@ -499,7 +521,7 @@ func (mvcc *MVCC) destroy() bool {
 	}
 	defer mvcc.unlock()
 
-	snapshot := (*mvccsnapshot)(mvcc.snapshot)
+	snapshot := mvcc.currsnapshot()
 	if snapshot != nil {
 		if snapshot.getref() > 0 {
 			return false
@@ -510,7 +532,7 @@ func (mvcc *MVCC) destroy() bool {
 	if snapshot.next != nil || snapshot.getref() > 0 {
 		panic("impossible situation")
 	}
-	mvcc.snapshot = nil
+	mvcc.setheadsnapshot(nil)
 	mvcc.nodearena.Release()
 	mvcc.valarena.Release()
 	mvcc.setts, mvcc.snapcache = nil, nil
@@ -546,7 +568,7 @@ func (mvcc *MVCC) set(key, value, oldvalue []byte) (ov []byte, cas uint64) {
 	var newnd, oldnd *Llrbnode
 
 	mvcc.seqno++
-	reclaim := mvcc.snapshot.reclaim[:0]
+	reclaim := mvcc.currsnapshot().reclaim[:0]
 	mvcc.h_versions.Add(mvcc.n_activess)
 
 	root := mvcc.getroot()
@@ -631,13 +653,14 @@ func (mvcc *MVCC) SetCAS(
 	// if cas > 0, key should be found and its seqno should match cas.
 	// if cas == 0, key should be missing.
 	nd, ok := mvcc.getkey(mvcc.getroot(), key)
-	ok1 := ok && nd.getseqno() != cas
-	ok2 := ok == false && cas != 0
+	ok1 := (ok && nd.isdeleted() == false) && nd.getseqno() != cas
+	ok2 := (ok == false || nd.isdeleted()) && cas != 0
 	if ok1 || ok2 {
 		if oldvalue != nil {
 			oldvalue = lib.Fixbuffer(oldvalue, 0)
 		}
 		mvcc.unlock()
+		//fmt.Printf("SetCAS %q %v %v Invalid cas 0\n", key, nd.getseqno(), cas)
 		return oldvalue, 0, api.ErrorInvalidCAS
 	}
 	oldvalue, cas = mvcc.set(key, value, oldvalue)
@@ -654,7 +677,7 @@ func (mvcc *MVCC) setcas(
 	var err error
 
 	mvcc.seqno++
-	reclaim := mvcc.snapshot.reclaim[:0]
+	reclaim := mvcc.currsnapshot().reclaim[:0]
 	mvcc.h_versions.Add(mvcc.n_activess)
 
 	root, depth := mvcc.getroot(), int64(1)
@@ -698,6 +721,7 @@ func (mvcc *MVCC) upsertcas(
 	var err error
 
 	if nd == nil && cas > 0 { // Expected an update
+		//fmt.Printf("SetCAS %q Invalid cas 1\n", key)
 		return nil, nil, nil, reclaim, api.ErrorInvalidCAS
 
 	} else if nd == nil { // Expected a create
@@ -723,10 +747,12 @@ func (mvcc *MVCC) upsertcas(
 	} else /*equal*/ {
 		if ndmvcc.isdeleted() && (cas != 0 && cas != ndmvcc.getseqno()) {
 			newnd = ndmvcc
+			//fmt.Printf("SetCAS %q Invalid cas 2\n", key)
 			err = api.ErrorInvalidCAS
 
 		} else if ndmvcc.isdeleted() == false && cas != ndmvcc.getseqno() {
 			newnd = ndmvcc
+			//fmt.Printf("SetCAS %q Invalid cas 3\n", key)
 			err = api.ErrorInvalidCAS
 
 		} else {
@@ -768,7 +794,7 @@ func (mvcc *MVCC) dodelete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 	var root, newnd, oldnd, deleted *Llrbnode
 
 	mvcc.seqno++
-	reclaim := mvcc.snapshot.reclaim[:0]
+	reclaim := mvcc.currsnapshot().reclaim[:0]
 	mvcc.h_versions.Add(mvcc.n_activess)
 
 	if oldvalue != nil {
@@ -777,8 +803,8 @@ func (mvcc *MVCC) dodelete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 	seqno := mvcc.seqno
 	if lsm {
 		if nd, ok := mvcc.getkey(mvcc.getroot(), key); ok {
-			nd.setdeleted()
-			nd.setseqno(seqno)
+			// we don't do mvcc here.
+			nd.setseqnodeleted(seqno) // set deleted and seqno atomically.
 			if oldvalue != nil {
 				val := nd.Value()
 				oldvalue = lib.Fixbuffer(oldvalue, int64(len(val)))
@@ -930,6 +956,7 @@ func (mvcc *MVCC) BeginTxn(id uint64) *Txn {
 
 func (mvcc *MVCC) commit(txn *Txn) error {
 	if !mvcc.lock() { // no further mutations allowed until we are done.
+		txn.snapshot.(*mvccsnapshot).release()
 		return fmt.Errorf("close")
 	}
 
@@ -943,6 +970,7 @@ func (mvcc *MVCC) commit(txn *Txn) error {
 					seqno = nd.getseqno()
 				}
 				if seqno != head.seqno {
+					txn.snapshot.(*mvccsnapshot).release()
 					mvcc.unlock()
 					return api.ErrorRollback // rollback
 				}
@@ -1066,6 +1094,7 @@ func (mvcc *MVCC) Scan() api.Iterator {
 	}
 }
 
+// TODO: can we instead to the snapshot and avoid rlock ?
 func (mvcc *MVCC) startscan(key []byte, sb *scanbuf, leseqno uint64) uint64 {
 	if !mvcc.rlock() {
 		return 0
@@ -1242,25 +1271,30 @@ func (mvcc *MVCC) makesnapshot() {
 	if !mvcc.lock() {
 		return
 	}
-	mvcc.snapshot = nextsnap.initsnapshot(mvcc, mvcc.snapshot)
-	if mvcc.purgesnapshot(mvcc.snapshot.next) {
-		mvcc.snapshot.next = nil
+	mvcc.setheadsnapshot(nextsnap.initsnapshot(mvcc, mvcc.currsnapshot()))
+	if mvcc.purgesnapshot(mvcc.currsnapshot().next) {
+		mvcc.currsnapshot().next = nil
 	}
 	mvcc.n_activess++
 	mvcc.n_snapshots++
 	mvcc.unlock()
 }
 
+// latestsnapshot, very rarely, many not be the latest snapshot.
 func (mvcc *MVCC) latestsnapshot() *mvccsnapshot {
-	if !mvcc.rlock() {
-		return nil
-	}
-	snapshot := (*mvccsnapshot)(mvcc.snapshot)
-	if snapshot != nil {
+	for {
+		snapshot := mvcc.currsnapshot()
+		if snapshot == nil { // no snapshot available.
+			return nil
+		}
 		snapshot.refer()
+		if snapshot.istrypurge() == false {
+			return snapshot
+		}
+		snapshot.release()
+		runtime.Gosched() // let purgesnapshot pass over this snapshot
 	}
-	mvcc.runlock()
-	return snapshot
+	panic("unreachable code")
 }
 
 func (mvcc *MVCC) purgesnapshot(snapshot *mvccsnapshot) bool {
@@ -1269,6 +1303,7 @@ func (mvcc *MVCC) purgesnapshot(snapshot *mvccsnapshot) bool {
 	}
 	if mvcc.purgesnapshot(snapshot.next) {
 		snapshot.next = nil
+		snapshot.trypurge()
 		if snapshot.getref() == 0 {
 			// all older snapshots are purged, and this snapshot is not refered
 			// by anyone.
@@ -1282,6 +1317,7 @@ func (mvcc *MVCC) purgesnapshot(snapshot *mvccsnapshot) bool {
 			log.Debugf("%s snapshot %s PURGED...", mvcc.logprefix, snapshot.id)
 			return true
 		}
+		snapshot.clearpurge()
 	}
 	return false
 }
@@ -1306,6 +1342,7 @@ func (mvcc *MVCC) getsnapshot() (snapshot *mvccsnapshot) {
 
 func (mvcc *MVCC) putsnapshot(snapshot *mvccsnapshot) {
 	snapshot.mvcc, snapshot.root, snapshot.next = nil, nil, nil
+	atomic.StoreInt64(&snapshot.purgetry, 0)
 	select {
 	case mvcc.snapcache <- snapshot:
 	default: // Leave it for GC.

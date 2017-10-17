@@ -723,7 +723,12 @@ func (llrb *LLRB) Stats() map[string]interface{} {
 	if !llrb.rlock() {
 		return nil
 	}
+	stats := llrb.stats()
+	llrb.runlock()
+	return stats
+}
 
+func (llrb *LLRB) stats() map[string]interface{} {
 	m := make(map[string]interface{})
 	m["n_count"] = atomic.LoadInt64(&llrb.n_count)
 	m["n_inserts"] = llrb.n_inserts
@@ -754,20 +759,18 @@ func (llrb *LLRB) Stats() map[string]interface{} {
 	m["value.blocks"] = llrb.valarena.Slabs()
 
 	m["h_upsertdepth"] = llrb.h_upsertdepth.Fullstats()
-
-	llrb.runlock()
 	return m
 }
 
 // Validate data structure. This is a costly operation, walks
 // through the entire tree and holds a read lock while doing so.
 func (llrb *LLRB) Validate() {
-	stats := llrb.Stats()
-
 	if !llrb.rlock() {
 		return
 	}
 	defer llrb.runlock()
+
+	stats := llrb.Stats()
 
 	n := stats["n_count"].(int64)
 	kmem, vmem := stats["keymemory"].(int64), stats["valmemory"].(int64)
@@ -1001,7 +1004,7 @@ func (llrb *LLRB) fixup(nd *Llrbnode) *Llrbnode {
 }
 
 func (llrb *LLRB) logarenasettings() {
-	stats := llrb.Stats()
+	stats := llrb.stats()
 
 	// key arena
 	kblocks := len(stats["node.blocks"].([]int64))

@@ -11,14 +11,17 @@ import "github.com/prataprc/gostore/lib"
 // mvccsnapshot refers to MVCC snapshot of LLRB tree. Snapshots
 // can be used for concurrent reads.
 type mvccsnapshot struct {
+	// must be 9-byte aligned.
+	refcount int64
+	purgetry int64
+	n_count  int64
+
 	id       []byte
 	mvcc     *MVCC
 	root     unsafe.Pointer // *Llrbnode
 	next     *mvccsnapshot
 	reclaims []*Llrbnode
 	reclaim  []*Llrbnode
-	refcount int64
-	n_count  int64
 }
 
 // Should be under write-lock.
@@ -119,4 +122,19 @@ func (snap *mvccsnapshot) release() int64 {
 
 func (snap *mvccsnapshot) abortview(view *View) {
 	snap.mvcc.abortview(view)
+}
+
+func (snap *mvccsnapshot) trypurge() {
+	atomic.StoreInt64(&snap.purgetry, 1)
+}
+
+func (snap *mvccsnapshot) clearpurge() {
+	atomic.StoreInt64(&snap.purgetry, 0)
+}
+
+func (snap *mvccsnapshot) istrypurge() bool {
+	if atomic.LoadInt64(&snap.purgetry) > 0 {
+		return true
+	}
+	return false
 }

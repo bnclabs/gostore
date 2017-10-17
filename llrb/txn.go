@@ -85,7 +85,7 @@ func (txn *Txn) Get(key, value []byte) (v []byte, deleted, ok bool) {
 	head, _ := txn.writes[index]
 	_, next := head.get(key)
 	if next == nil {
-		v, _, deleted, ok = txn.getsnap(key, value)
+		v, _, deleted, ok = txn.getonsnap(key, value)
 		return
 	} else if next.cmd == cmdDelete {
 		return lib.Fixbuffer(v, 0), true, true
@@ -118,7 +118,7 @@ func (txn *Txn) Set(key, value, oldvalue []byte) []byte {
 		}
 		node.seqno = old.seqno
 	} else {
-		oldvalue, seqno, _, _ = txn.getsnap(key, oldvalue)
+		oldvalue, seqno, _, _ = txn.getonsnap(key, oldvalue)
 		node.seqno = seqno
 	}
 	return oldvalue
@@ -145,7 +145,7 @@ func (txn *Txn) Delete(key, oldvalue []byte, lsm bool) []byte {
 		}
 		node.seqno = old.seqno
 	} else {
-		oldvalue, seqno, _, _ = txn.getsnap(key, oldvalue)
+		oldvalue, seqno, _, _ = txn.getonsnap(key, oldvalue)
 		node.seqno = seqno
 	}
 	return oldvalue
@@ -153,7 +153,7 @@ func (txn *Txn) Delete(key, oldvalue []byte, lsm bool) []byte {
 
 //---- local methods
 
-func (txn *Txn) getsnap(key, value []byte) ([]byte, uint64, bool, bool) {
+func (txn *Txn) getonsnap(key, value []byte) ([]byte, uint64, bool, bool) {
 	switch snap := txn.snapshot.(type) {
 	case *LLRB:
 		deleted, seqno := false, uint64(0)
