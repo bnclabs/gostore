@@ -11,7 +11,7 @@ import "github.com/cloudfoundry/gosigar"
 // "valcapacity" (int64)
 //		Memory capacity required for values. Default will be ramsize.
 //
-// "snapshottick" (int64, default: 1)
+// "snapshottick" (int64, default: 4)
 //      Used only in MVCC, time period in millisecond, for generating
 //      read-snapshots.
 //
@@ -23,7 +23,7 @@ func Defaultsettings() s.Settings {
 	setts := s.Settings{
 		"keycapacity":  ramsize,
 		"valcapacity":  ramsize,
-		"snapshottick": 1,
+		"snapshottick": 4,
 		"allocator":    "flist",
 	}
 	return setts
