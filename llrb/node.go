@@ -169,6 +169,13 @@ func (nd *Llrbnode) cleardeleted() *Llrbnode {
 	return nd.setseqflags(seqflags & (^ndDeleted))
 }
 
+func (nd *Llrbnode) setseqnodeleted(seqno uint64) *Llrbnode {
+	seqflags := nd.getseqflags()
+	seqflags = (seqflags & 0xf) | (seqno << 4)
+	seqflags = seqflags | ndDeleted
+	return nd.setseqflags(seqflags)
+}
+
 // Value return the value byte-slice for this entry.
 func (nd *Llrbnode) Value() []byte {
 	if nv := nd.nodevalue(); nv != nil {
