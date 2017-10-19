@@ -210,7 +210,7 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) {
 	}
 
 	// flush 1 m-block of settings
-	block := make([]byte, tree.mblocksize)
+	block := make([]byte, MarkerBlocksize)
 	setts := s.Settings{
 		"name":       tree.name,
 		"zblocksize": tree.zblocksize,
