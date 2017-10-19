@@ -402,8 +402,9 @@ func (mvcc *MVCC) validatestats(stats map[string]interface{}) {
 
 // return the sum of all nodes that needs to be reclaimed from snapshots.
 func (mvcc *MVCC) countreclaimnodes() (total int64) {
-	for snap := mvcc.currsnapshot(); snap != nil; snap = snap.next {
+	for snap := mvcc.currsnapshot(); snap != nil; {
 		total += int64(len(snap.reclaims))
+		snap = (*mvccsnapshot)(atomic.LoadPointer(&snap.next))
 	}
 	return total
 }
@@ -463,7 +464,7 @@ func (mvcc *MVCC) Log() {
 	for snapshot != nil {
 		item := fmt.Sprintf("%s(%v)", snapshot.id, snapshot.refcount)
 		items = append(items, item)
-		snapshot = snapshot.next
+		snapshot = (*mvccsnapshot)(atomic.LoadPointer(&snapshot.next))
 	}
 	log.Infof("%v snapshots %v", mvcc.logprefix, strings.Join(items, " -> "))
 }
@@ -529,7 +530,8 @@ func (mvcc *MVCC) destroy() bool {
 			return false
 		}
 	}
-	if snapshot.next != nil || snapshot.getref() > 0 {
+	next := (*mvccsnapshot)(atomic.LoadPointer(&snapshot.next))
+	if next != nil || snapshot.getref() > 0 {
 		panic("impossible situation")
 	}
 	mvcc.setheadsnapshot(nil)
@@ -946,7 +948,7 @@ func (mvcc *MVCC) deletemin(
 // background mutations, it will increase the memory pressure on the system.
 // Concurrent transactions are allowed, and serialized internally.
 func (mvcc *MVCC) BeginTxn(id uint64) *Txn {
-	if snapshot := mvcc.latestsnapshot(); snapshot != nil {
+	if snapshot := mvcc.readsnapshot(); snapshot != nil {
 		atomic.AddInt64(&mvcc.n_txns, 1)
 		txn := mvcc.gettxn(id, mvcc /*db*/, snapshot /*snap*/)
 		return txn
@@ -1028,7 +1030,7 @@ func (mvcc *MVCC) aborttxn(txn *Txn) error {
 // View starts a read-only transaction. Other than that it is similar
 // to BeginTxn. All view transactions should be aborted.
 func (mvcc *MVCC) View(id uint64) *View {
-	if snapshot := mvcc.latestsnapshot(); snapshot != nil {
+	if snapshot := mvcc.readsnapshot(); snapshot != nil {
 		atomic.AddInt64(&mvcc.n_txns, 1)
 		view := mvcc.getview(id, mvcc /*db*/, snapshot /*snap*/)
 		return view
@@ -1051,7 +1053,7 @@ func (mvcc *MVCC) abortview(view *View) {
 func (mvcc *MVCC) Get(
 	key, value []byte) (v []byte, cas uint64, deleted, ok bool) {
 
-	if snapshot := mvcc.latestsnapshot(); snapshot != nil {
+	if snapshot := mvcc.writesnapshot(); snapshot != nil {
 		v, cas, deleted, ok = snapshot.get(key, value)
 		snapshot.release()
 	}
@@ -1272,26 +1274,51 @@ func (mvcc *MVCC) makesnapshot() {
 		return
 	}
 	mvcc.setheadsnapshot(nextsnap.initsnapshot(mvcc, mvcc.currsnapshot()))
-	if mvcc.purgesnapshot(mvcc.currsnapshot().next) {
-		mvcc.currsnapshot().next = nil
+	wsnap := mvcc.currsnapshot()
+	rsnap := (*mvccsnapshot)(atomic.LoadPointer(&wsnap.next))
+	if rsnap != nil {
+		next := (*mvccsnapshot)(atomic.LoadPointer(&rsnap.next))
+		if mvcc.purgesnapshot(next) {
+			atomic.StorePointer(&rsnap.next, nil)
+		}
 	}
 	mvcc.n_activess++
 	mvcc.n_snapshots++
 	mvcc.unlock()
 }
 
-// latestsnapshot, very rarely, many not be the latest snapshot.
-func (mvcc *MVCC) latestsnapshot() *mvccsnapshot {
+func (mvcc *MVCC) readsnapshot() *mvccsnapshot {
 	for {
-		snapshot := mvcc.currsnapshot()
-		if snapshot == nil { // no snapshot available.
+		wsnap := mvcc.currsnapshot()
+		if wsnap == nil { // no snapshot available.
 			return nil
 		}
-		snapshot.refer()
-		if snapshot.istrypurge() == false {
-			return snapshot
+		rsnap := (*mvccsnapshot)(atomic.LoadPointer(&wsnap.next))
+		if rsnap == nil {
+			time.Sleep(mvcc.snaptick)
+			continue
 		}
-		snapshot.release()
+		rsnap.refer()
+		if rsnap.istrypurge() == false {
+			return rsnap
+		}
+		rsnap.release()
+		runtime.Gosched() // let purgesnapshot pass over this snapshot
+	}
+	panic("unreachable code")
+}
+
+func (mvcc *MVCC) writesnapshot() *mvccsnapshot {
+	for {
+		wsnap := mvcc.currsnapshot()
+		if wsnap == nil { // no snapshot available.
+			return nil
+		}
+		wsnap.refer()
+		if wsnap.istrypurge() == false {
+			return wsnap
+		}
+		wsnap.release()
 		runtime.Gosched() // let purgesnapshot pass over this snapshot
 	}
 	panic("unreachable code")
@@ -1301,8 +1328,9 @@ func (mvcc *MVCC) purgesnapshot(snapshot *mvccsnapshot) bool {
 	if snapshot == nil {
 		return true
 	}
-	if mvcc.purgesnapshot(snapshot.next) {
-		snapshot.next = nil
+	next := (*mvccsnapshot)(atomic.LoadPointer(&snapshot.next))
+	if mvcc.purgesnapshot(next) {
+		atomic.StorePointer(&snapshot.next, nil)
 		snapshot.trypurge()
 		if snapshot.getref() == 0 {
 			// all older snapshots are purged, and this snapshot is not refered

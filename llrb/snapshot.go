@@ -19,7 +19,7 @@ type mvccsnapshot struct {
 	id       []byte
 	mvcc     *MVCC
 	root     unsafe.Pointer // *Llrbnode
-	next     *mvccsnapshot
+	next     unsafe.Pointer // *mvccsnapshot
 	reclaims []*Llrbnode
 	reclaim  []*Llrbnode
 }
@@ -28,7 +28,8 @@ type mvccsnapshot struct {
 func (snap *mvccsnapshot) initsnapshot(
 	mvcc *MVCC, head *mvccsnapshot) *mvccsnapshot {
 
-	snap.mvcc, snap.root, snap.next = mvcc, nil, head
+	snap.mvcc, snap.root = mvcc, nil
+	atomic.StorePointer(&snap.next, unsafe.Pointer(head))
 	snap.refcount, snap.n_count = 0, 0
 	if head != nil {
 		snap.root = atomic.LoadPointer(&head.root)
