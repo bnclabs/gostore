@@ -770,7 +770,7 @@ func (llrb *LLRB) Validate() {
 	}
 	defer llrb.runlock()
 
-	stats := llrb.Stats()
+	stats := llrb.stats()
 
 	n := stats["n_count"].(int64)
 	kmem, vmem := stats["keymemory"].(int64), stats["valmemory"].(int64)
@@ -789,18 +789,18 @@ func (llrb *LLRB) validatestats(stats map[string]interface{}) {
 		panic(fmt.Errorf(fmsg, n_count, n_inserts, n_deletes))
 	}
 	// n_nodes should match n_inserts
-	n_clones := stats["n_clones"].(int64)
-	n_nodes, n_frees := stats["n_nodes"].(int64), stats["n_frees"].(int64)
+	n_nodes := stats["n_nodes"].(int64)
 	if n_inserts != n_nodes {
 		fmsg := "validatestats(): n_inserts:%v != n_nodes:%v"
 		panic(fmt.Errorf(fmsg, n_inserts, n_nodes))
 	}
-	if (n_nodes - n_count) == n_frees {
-	} else if n_clones+(n_nodes-n_count) == n_frees {
-	} else {
-		fmsg := "validatestats(): clones:%v+(nodes:%v-count:%v) != frees:%v"
-		panic(fmt.Errorf(fmsg, n_clones, n_nodes, n_count, n_frees))
-	}
+	//n_clones, n_frees := stats["n_clones"].(int64), stats["n_frees"].(int64)
+	//if (n_nodes - n_count) == n_frees {
+	//} else if n_clones+(n_nodes-n_count) == n_frees {
+	//} else {
+	//	fmsg := "validatestats(): clones:%v+(nodes:%v-count:%v) != frees:%v"
+	//	panic(fmt.Errorf(fmsg, n_clones, n_nodes, n_count, n_frees))
+	//}
 }
 
 // Log vital information.
@@ -809,7 +809,7 @@ func (llrb *LLRB) Log() {
 		return
 	}
 
-	stats := llrb.Stats()
+	stats := llrb.stats()
 
 	summary := func(args ...string) string {
 		ss := []interface{}{}
