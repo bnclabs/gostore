@@ -1,4 +1,4 @@
-package bogr
+package bogn
 
 import "fmt"
 
@@ -23,6 +23,7 @@ func Defaultsettings() s.Settings {
 		"bubt.zsize":        4096,
 		"bubt.mmap":         true,
 	}
+	// TODO: make sure that keycapacity + valcapacity is less than 256MB.
 }
 
 func getsysmem() (total, used, free uint64) {

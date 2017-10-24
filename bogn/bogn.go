@@ -1,17 +1,16 @@
-package bogr
+package bogn
 
 import "sync"
+import "time"
 
 import s "github.com/prataprc/gosettings"
 import "github.com/prataprc/gostore/api"
-import "github.com/prataprc/gostore/llrb"
-import "github.com/prataprc/gostore/mvcc"
 
 type Bogn struct {
-	name string
-
-	rw       sync.RWMutex
-	snapshot unsafe.Pointer // *bogrsnapshot
+	name     string
+	snapshot unsafe.Pointer // *snapshot
+	purgech  chan api.Index
+	finch    chan struct{}
 
 	memstore    string
 	dgm         bool
@@ -24,50 +23,78 @@ type Bogn struct {
 }
 
 func NewBogn(name string, setts s.Settings) *Bogn {
-	bogr := (&Bogn{name: name}).readsettings(setts)
-	bogr.logprefix = fmt.Sprintf("BOGR [%v]", name)
-	return bogr
+	bogn := (&Bogn{name: name}).readsettings(setts)
+	bogn.purgech = make(chan api.Index, 32)
+	bogn.finch = make(chan struct{})
+	bogn.logprefix = fmt.Sprintf("BOGN [%v]", name)
+
+	go purger(bogn, bogn.purgech)
+	go compactor(bogn, bogn.compacttick)
+
+	return bogn
 }
 
-func (bogr *Bogn) readsettings(setts s.Settings) *Bogn {
-	bogr.memstore = setts.Bool("memstore")
-	bogr.dgm = setts.Bool("dgm")
-	bogr.workingset = setts.Bool("workingset")
-	bogr.ratio = setts.Float64("ratio")
-	bogr.flushperiod = time.Duration(setts.Int64("flushperiod")) * time.Second
-	bogr.compacttick = time.Duration(setts.Int64("compacttick")) * time.Second
-	bogr.compacttick = time.Duration(setts.Int64("compacttick")) * time.Second
-	bogr.setts = setts
-	return bogr
+func (bogn *Bogn) readsettings(setts s.Settings) *Bogn {
+	bogn.memstore = setts.Bool("memstore")
+	bogn.dgm = setts.Bool("dgm")
+	bogn.workingset = setts.Bool("workingset")
+	bogn.ratio = setts.Float64("ratio")
+	bogn.flushperiod = time.Duration(setts.Int64("flushperiod")) * time.Second
+	bogn.compacttick = time.Duration(setts.Int64("compacttick")) * time.Second
+	bogn.setts = setts
+	return bogn
 }
 
-func (bogr *Bogn) currsnapshot() *bogrsnapshot {
-	return (*bogrsnapshot)(atomic.LoadPointer(&bogr.snapshot))
+func (bogn *Bogn) currsnapshot() *snapshot {
+	return (*snapshot)(atomic.LoadPointer(&bogn.snapshot))
 }
 
-func (bogr *Bogn) setheadsnapshot(snapshot *bogrsnapshot) {
-	atomic.StorePointer(&bogr.snapshot, unsafe.Pointer(snapshot))
+func (bogn *Bogn) setheadsnapshot(snapshot *snapshot) {
+	atomic.StorePointer(&bogn.snapshot, unsafe.Pointer(snapshot))
 }
 
-func (bogr *Bogn) newmemstore(memstore string) (*llrb.LLRB, error) {
-	name := fmt.Sprintf("%v-mw", bogr.name)
+func (bogn *Bogn) newmemstore(
+	memstore, level string, old api.Index) (api.Index, error) {
+
+	name := fmt.Sprintf("%v-%v", bogn.name, level)
 
 	switch memstore {
 	case "llrb":
-		llrbsetts := bogr.setts.Section("llrb.").Trim("llrb.")
+		llrbsetts := bogn.setts.Section("llrb.").Trim("llrb.")
 		index := llrb.NewLLRB(name, llrbsetts)
+		if old != nil {
+			index.Setseqno(old.(*llrb.LLRB).Getseqno())
+		} else {
+			index.Setseqno(0)
+		}
 		return index, nil
 
 	case "mvcc":
-		llrbsetts := bogr.setts.Section("llrb.").Trim("llrb.")
+		llrbsetts := bogn.setts.Section("llrb.").Trim("llrb.")
 		index := llrb.NewMVCC(name, llrbsetts)
+		if old != nil {
+			index.Setseqno(old.(*llrb.LLRB).Getseqno())
+		} else {
+			index.Setseqno(0)
+		}
 		return index, nil
 	}
 	return fmt.Errorf("invalid memstore %q", memstore)
 }
 
-func (bogr *Bogn) mwmetadata() []byte {
-	seqno := bogr.mw.Getseqno()
+func (bogn *Bogn) newdiskstore(level int) (*bubt.Bubt, error) {
+	name := fmt.Spritnf("%v-level-%v", bogn.name, level)
+
+	bubtsetts := bogn.setts.Section("bubt.").Trim("bubt.")
+	bubtsetts := bogn.setts.Section("bubt.").Trim("bubt.")
+	paths := bubtsetts.Strings("diskpaths")
+	msize := bubtsetts.Int64("msize")
+	zsize := bubtsetts.Int64("zsize")
+	return bubt.NewBubt(name, paths, msize, zsize)
+}
+
+func (bogn *Bogn) mwmetadata() []byte {
+	seqno := bogn.currsnapshot().getseqno()
 	metadata := map[string]interface{}{
 		"seqno": seqno,
 	}
@@ -78,63 +105,82 @@ func (bogr *Bogn) mwmetadata() []byte {
 	return data
 }
 
+func (bogn *Bogn) isclosed() bool {
+	select {
+	case <-bogn.finch:
+		return true
+	default:
+	}
+	return false
+}
+
 //---- Exported Control methods
 
-func (bogr *Bogn) ID() string {
-	return bogr.name
+func (bogn *Bogn) ID() string {
+	return bogn.name
 }
 
-func (bogr *Bogn) BeginTxn(id uint64) *Txn {
+func (bogn *Bogn) BeginTxn(id uint64) *Txn {
 	return nil
 }
 
-func (bogr *Bogn) View(id uint64) *View {
+func (bogn *Bogn) View(id uint64) *View {
 }
 
-func (bogr *Bogn) Clone(id uint64) *Bogn {
+func (bogn *Bogn) Clone(id uint64) *Bogn {
 	return nil
 }
 
-func (bogr *Bogn) Stats() map[string]interface{} {
+func (bogn *Bogn) Stats() map[string]interface{} {
 	return nil
 }
 
-func (bogr *Bogn) Log() {
+func (bogn *Bogn) Log() {
 	return
 }
 
-func (bogr *Bogn) Destroy() {
+func (bogn *Bogn) Destroy() {
+	for len(bogn.purgech) > 0 {
+		time.Sleep(100 * time.Millisecond)
+	}
 	return
 }
 
 //---- Exported read methods
 
-func (bogr *Bogn) Get(
+func (bogn *Bogn) Get(
 	key, value []byte) (v []byte, cas uint64, deleted, ok bool) {
 
-	snapshot := bogr.currsnapshot()
-	return snapshot.yget(key, value)
+	return bogn.currsnapshot().yget(key, value)
 }
 
-func (bogr *Bogn) Scan() api.Iterator {
-	snapshot := bogr.currsnapshot()
-	return snaps.reduceyscan()
+func (bogn *Bogn) Scan() api.Iterator {
+	return bogn.currsnapshot().iterator()
 }
 
 //---- Exported write methods
 
-func (bogr *Bogn) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
-	return bogr.currsnapshot().mw.Delete(key, oldvalue, lsm)
+func (bogn *Bogn) Set(key, value, oldvalue []byte) (ov []byte, cas uint64) {
+	bogn.rw.Lock()
+	ov, cas = bogn.currsnapshot().set(key, value, oldvalue)
+	bogn.rw.Unlock()
+	return ov, cas
 }
 
-func (bogr *Bogn) Set(key, value, oldvalue []byte) (ov []byte, cas uint64) {
-	return bogr.currsnapshot().mw.Set(key, value, oldvalue)
-}
-
-func (bogr *Bogn) SetCAS(
+func (bogn *Bogn) SetCAS(
 	key, value, oldvalue []byte, cas uint64) ([]byte, uint64, error) {
 
-	return bogr.currsnapshot().mw.SetCAS(key, value, oldvalue, cas)
+	bogn.rw.Lock()
+	ov, cas, err := bogn.currsnapshot().setCAS(key, value, oldvalue, cas)
+	bogn.rw.Unlock()
+	return ov, cas, err
+}
+
+func (bogn *Bogn) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
+	bogn.rw.Lock()
+	ov, cas := bogn.currsnapshot().delete(key, oldvalue, lsm)
+	bogn.rw.Unlock()
+	return ov, cas
 }
 
 //---- local methods
