@@ -1,5 +1,7 @@
 package llrb
 
+import "github.com/prataprc/gostore/api"
+
 // View transaction definition. Read only version of Txn.
 type View struct {
 	id       uint64
@@ -21,7 +23,7 @@ func (view *View) ID() uint64 {
 }
 
 // OpenCursor open an active cursor inside the index.
-func (view *View) OpenCursor(key []byte) *Cursor {
+func (view *View) OpenCursor(key []byte) api.Cursor {
 	cur := view.getcursor().opencursor(nil, view.snapshot, key)
 	return cur
 }
@@ -34,6 +36,21 @@ func (view *View) Abort() {
 	case *mvccsnapshot:
 		snap.abortview(view)
 	}
+}
+
+// Set is not allowed
+func (view *View) Set(key, value, oldvalue []byte) []byte {
+	panic("Set not allowed on view")
+}
+
+// Delete is not allowed.
+func (view *View) Delete(key, oldvalue []byte, lsm bool) []byte {
+	panic("Set not allowed on view")
+}
+
+// Commit not allowed.
+func (view *View) Commit() error {
+	panic("Set not allowed on view")
 }
 
 //---- Exported Read methods

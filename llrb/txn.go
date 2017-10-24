@@ -4,6 +4,7 @@ import "bytes"
 import "hash/crc32"
 
 import "github.com/prataprc/gostore/lib"
+import "github.com/prataprc/gostore/api"
 
 // Txn transaction definition. Transaction gives a gaurantee of isolation and
 // atomicity on the latest snapshot.
@@ -72,7 +73,7 @@ func (txn *Txn) Abort() {
 }
 
 // OpenCursor open an active cursor inside the index.
-func (txn *Txn) OpenCursor(key []byte) *Cursor {
+func (txn *Txn) OpenCursor(key []byte) api.Cursor {
 	cur := txn.getcursor().opencursor(txn, txn.snapshot, key)
 	return cur
 }

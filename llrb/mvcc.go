@@ -191,6 +191,11 @@ func (mvcc *MVCC) appendreclaim(reclaim []*Llrbnode) {
 }
 
 func (mvcc *MVCC) logarenasettings() {
+	if !mvcc.rlock() {
+		return
+	}
+	defer mvcc.runlock()
+
 	stats := mvcc.stats()
 
 	// key arena
@@ -778,10 +783,10 @@ func (mvcc *MVCC) upsertcas(
 	return ndmvcc, newnd, oldnd, reclaim, err
 }
 
-// Delete key from index. Key should not be nil, if key is found
+// Delete key from index. Key should not be nil, if key found
 // return its value. If lsm is true, then don't delete the node
 // instead mark the node as deleted. Again, if lsm is true
-// but key is not found in index a new entry will be inserted.
+// but key is not found in index, a new entry will be inserted.
 func (mvcc *MVCC) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 	if !mvcc.lock() {
 		return nil, 0
@@ -947,7 +952,7 @@ func (mvcc *MVCC) deletemin(
 // If transactions are not released for long time accumulating too many
 // background mutations, it will increase the memory pressure on the system.
 // Concurrent transactions are allowed, and serialized internally.
-func (mvcc *MVCC) BeginTxn(id uint64) *Txn {
+func (mvcc *MVCC) BeginTxn(id uint64) api.Transactor {
 	if snapshot := mvcc.readsnapshot(); snapshot != nil {
 		atomic.AddInt64(&mvcc.n_txns, 1)
 		txn := mvcc.gettxn(id, mvcc /*db*/, snapshot /*snap*/)
@@ -1029,7 +1034,7 @@ func (mvcc *MVCC) aborttxn(txn *Txn) error {
 
 // View starts a read-only transaction. Other than that it is similar
 // to BeginTxn. All view transactions should be aborted.
-func (mvcc *MVCC) View(id uint64) *View {
+func (mvcc *MVCC) View(id uint64) api.Transactor {
 	if snapshot := mvcc.readsnapshot(); snapshot != nil {
 		atomic.AddInt64(&mvcc.n_txns, 1)
 		view := mvcc.getview(id, mvcc /*db*/, snapshot /*snap*/)
@@ -1369,7 +1374,8 @@ func (mvcc *MVCC) getsnapshot() (snapshot *mvccsnapshot) {
 }
 
 func (mvcc *MVCC) putsnapshot(snapshot *mvccsnapshot) {
-	snapshot.mvcc, snapshot.root, snapshot.next = nil, nil, nil
+	snapshot.mvcc, snapshot.root = nil, nil
+	atomic.StorePointer(&snapshot.next, nil)
 	atomic.StoreInt64(&snapshot.purgetry, 0)
 	select {
 	case mvcc.snapcache <- snapshot:

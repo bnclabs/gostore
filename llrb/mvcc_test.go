@@ -2,6 +2,7 @@ package llrb
 
 import "io"
 import "fmt"
+import "time"
 import "bytes"
 import "testing"
 import "io/ioutil"
@@ -495,7 +496,7 @@ func TestMVCCSetCAS(t *testing.T) {
 		t.Errorf("unexpected %v", x)
 	} else if u := nodeutz(stats); u < 40 {
 		t.Errorf("unexpected %v", u)
-	} else if u := valueutz(stats); u < 50 {
+	} else if u := valueutz(stats); u < 40 {
 		t.Errorf("unexpected %v", u)
 	}
 }
@@ -728,6 +729,8 @@ func TestMVCCTxn(t *testing.T) {
 	}
 	mvcc := NewMVCC("txn", setts)
 	defer mvcc.Destroy()
+	snaptick := time.Duration(Defaultsettings().Int64("snapshottick") * 2)
+	snaptick = snaptick * time.Millisecond
 
 	// First transaction
 	txn := mvcc.BeginTxn(0x1234)
@@ -755,7 +758,9 @@ func TestMVCCTxn(t *testing.T) {
 	} else if string(oldvalue) != "value1" {
 		t.Errorf("unexpected %s", oldvalue)
 	}
-	txn.Commit()
+	if err := txn.Commit(); err != nil {
+		t.Fatal(err)
+	}
 	// verify first transaction
 	key, value = []byte("buckeroo"), []byte{}
 	value, _, deleted, ok = mvcc.Get(key, value)
@@ -766,6 +771,8 @@ func TestMVCCTxn(t *testing.T) {
 	} else if string(value) != "value2" {
 		t.Errorf("unexpected %s", value)
 	}
+
+	time.Sleep(snaptick)
 
 	// Second transaction
 	txn = mvcc.BeginTxn(0x12345)
@@ -795,7 +802,9 @@ func TestMVCCTxn(t *testing.T) {
 	} else if len(value) > 0 {
 		t.Errorf("unexpected %s", value)
 	}
-	txn.Commit()
+	if err := txn.Commit(); err != nil {
+		t.Fatal(err)
+	}
 	// verify second transaction
 	key, value = []byte("plumless"), []byte{}
 	value, _, deleted, ok = mvcc.Get(key, value)
@@ -806,6 +815,8 @@ func TestMVCCTxn(t *testing.T) {
 	} else if string(value) != "value1" {
 		t.Errorf("unexpected %s", value)
 	}
+
+	time.Sleep(snaptick)
 
 	// third transaction abort
 	txn = mvcc.BeginTxn(0)
@@ -907,7 +918,9 @@ func TestMVCCTxnCursor(t *testing.T) {
 	cur.Delete([]byte(keys[1]), nil, true /*lsm*/)
 	value := []byte("newvalue")
 	cur.Set([]byte(keys[2]), value, nil)
-	txn.Commit()
+	if err := txn.Commit(); err != nil {
+		t.Fatal(err)
+	}
 
 	value, _, deleted, ok := mvcc.Get([]byte(keys[0]), []byte{})
 	if deleted == false {
@@ -977,7 +990,9 @@ func TestMVCCViewCursor(t *testing.T) {
 	cur.Delete([]byte(keys[1]), nil, true /*lsm*/)
 	value := []byte("newvalue")
 	cur.Set([]byte(keys[2]), value, nil)
-	txn.Commit()
+	if err := txn.Commit(); err != nil {
+		t.Fatal(err)
+	}
 
 	value, _, deleted, ok := mvcc.Get([]byte(keys[0]), []byte{})
 	if deleted == false {
@@ -1011,6 +1026,8 @@ func TestMVCCScan(t *testing.T) {
 	}
 	llrb := NewMVCC("scan", setts)
 	defer llrb.Destroy()
+	snaptick := time.Duration(Defaultsettings().Int64("snapshottick") * 2)
+	snaptick = snaptick * time.Millisecond
 
 	// load data
 	scanlimit = 2
@@ -1021,6 +1038,8 @@ func TestMVCCScan(t *testing.T) {
 		llrb.Set(k, v, nil)
 		llrb.Validate()
 	}
+
+	time.Sleep(snaptick)
 
 	view := llrb.View(0)
 	defer view.Abort()

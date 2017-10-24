@@ -377,10 +377,10 @@ func (llrb *LLRB) upsertcas(
 	return nd, newnd, oldnd, err
 }
 
-// Delete key from index. Key should not be nil, if is key found
+// Delete key from index. Key should not be nil, if key found
 // return its value. If lsm is true, then don't delete the node
 // instead mark the node as deleted. Again, if lsm is true
-// but key is not found in index a new entry will inserted.
+// but key is not found in index, a new entry will inserted.
 func (llrb *LLRB) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 	if !llrb.lock() {
 		return nil, 0
@@ -512,7 +512,7 @@ func (llrb *LLRB) deletemin(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 // BeginTxn starts a read-write transaction. All transactions should either
 // be commited or aborted. Structure will be locked, no other read or write
 // operation can be performed, until transaction is committed or aborted.
-func (llrb *LLRB) BeginTxn(id uint64) *Txn {
+func (llrb *LLRB) BeginTxn(id uint64) api.Transactor {
 	if !llrb.lock() {
 		return nil
 	}
@@ -562,7 +562,7 @@ func (llrb *LLRB) aborttxn(txn *Txn) error {
 // View start a read only transaction. Structure will be read-locked,
 // no other write operations can be performed, until transaction is
 // committed or aborted. Concurrent reads are still allowed.
-func (llrb *LLRB) View(id uint64) *View {
+func (llrb *LLRB) View(id uint64) api.Transactor {
 	if !llrb.rlock() {
 		return nil
 	}

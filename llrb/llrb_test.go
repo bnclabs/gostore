@@ -9,10 +9,8 @@ import "encoding/json"
 import "encoding/binary"
 
 import "github.com/prataprc/gostore/lib"
-
 import "github.com/prataprc/gostore/api"
 import s "github.com/prataprc/gosettings"
-import "github.com/prataprc/golog"
 
 func TestLLRBEmpty(t *testing.T) {
 	setts := s.Settings{
@@ -1308,7 +1306,7 @@ func printstats(stats map[string]interface{}) {
 	fmt.Printf("%s\n", data)
 }
 
-func testgetnext(t *testing.T, cur *Cursor, from int, keys, vals []string) {
+func testgetnext(t *testing.T, cur api.Cursor, from int, keys, vals []string) {
 	i := from
 	for {
 		k, deleted := cur.Key()
@@ -1342,7 +1340,7 @@ func testgetnext(t *testing.T, cur *Cursor, from int, keys, vals []string) {
 	}
 }
 
-func testynext(t *testing.T, cur *Cursor, from int, keys, vals []string) {
+func testynext(t *testing.T, cur api.Cursor, from int, keys, vals []string) {
 	i := from
 	for {
 		k, v, _, deleted, _ := cur.YNext(false /*fin*/)
@@ -1362,16 +1360,6 @@ func testynext(t *testing.T, cur *Cursor, from int, keys, vals []string) {
 	if i != len(keys) {
 		t.Errorf("iterated till %v", i)
 	}
-}
-
-func init() {
-	setts := map[string]interface{}{
-		"log.level":      "ignore",
-		"log.colorfatal": "red",
-		"log.colorerror": "hired",
-		"log.colorwarn":  "yellow",
-	}
-	log.SetLogger(nil, setts)
 }
 
 //buf := bytes.NewBuffer(nil)
