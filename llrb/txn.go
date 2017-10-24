@@ -73,9 +73,9 @@ func (txn *Txn) Abort() {
 }
 
 // OpenCursor open an active cursor inside the index.
-func (txn *Txn) OpenCursor(key []byte) api.Cursor {
+func (txn *Txn) OpenCursor(key []byte) (api.Cursor, error) {
 	cur := txn.getcursor().opencursor(txn, txn.snapshot, key)
-	return cur
+	return cur, nil
 }
 
 //---- Exported Read methods

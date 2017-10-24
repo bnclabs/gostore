@@ -15,7 +15,7 @@ type Cursor struct {
 }
 
 func (cur *Cursor) opencursor(txn *Txn, snapshot interface{}, key []byte) *Cursor {
-	cur.txn = txn
+	cur.txn = txn // will be nil if opened on a view.
 
 	var root *Llrbnode
 	switch snap := snapshot.(type) {
@@ -72,17 +72,26 @@ func (cur *Cursor) GetNext() (key, value []byte, deleted bool, err error) {
 // Set is an alias to txn.Set call. The current position of the cursor
 // does not affect the set operation.
 func (cur *Cursor) Set(key, value, oldvalue []byte) []byte {
+	if cur.txn == nil {
+		panic("Set not allowed on view-cursor")
+	}
 	return cur.txn.Set(key, value, oldvalue)
 }
 
 // Delete is an alias to txn.Delete call. The current position of the
 // cursor does not affect the delete operation.
 func (cur *Cursor) Delete(key, oldvalue []byte, lsm bool) []byte {
+	if cur.txn == nil {
+		panic("Delete not allowed on view-cursor")
+	}
 	return cur.txn.Delete(key, oldvalue, lsm)
 }
 
 // Delcursor deletes the entry at the cursor.
 func (cur *Cursor) Delcursor(lsm bool) {
+	if cur.txn == nil {
+		panic("Delcursor not allowed on view-cursor")
+	}
 	key, _ := cur.Key()
 	cur.txn.Delete(key, nil, lsm)
 }

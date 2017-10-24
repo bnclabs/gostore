@@ -896,12 +896,12 @@ func TestLLRBTxnCursor(t *testing.T) {
 
 	txn := llrb.BeginTxn(0x1234)
 	for i, key := range keys {
-		cur := txn.OpenCursor([]byte(key))
+		cur, _ := txn.OpenCursor([]byte(key))
 		testgetnext(t, cur, i, keys, vals)
 		if k, _, _, _ := cur.GetNext(); k != nil {
 			t.Errorf("unexpected %s", k)
 		}
-		cur = txn.OpenCursor([]byte(key))
+		cur, _ = txn.OpenCursor([]byte(key))
 		testynext(t, cur, i, keys, vals)
 		if k, _ := cur.Key(); k != nil {
 			t.Errorf("unexpected %s", k)
@@ -911,12 +911,12 @@ func TestLLRBTxnCursor(t *testing.T) {
 	}
 
 	// full table scan
-	cur := txn.OpenCursor(nil)
+	cur, _ := txn.OpenCursor(nil)
 	testgetnext(t, cur, 0, keys, vals)
 	if k, _, _, _ := cur.GetNext(); k != nil {
 		t.Errorf("unexpected %s", k)
 	}
-	cur = txn.OpenCursor(nil)
+	cur, _ = txn.OpenCursor(nil)
 	testynext(t, cur, 0, keys, vals)
 	if k, _ := cur.Key(); k != nil {
 		t.Errorf("unexpected %s", k)
@@ -924,7 +924,7 @@ func TestLLRBTxnCursor(t *testing.T) {
 		t.Errorf("unexpected %s", v)
 	}
 
-	cur = txn.OpenCursor([]byte(keys[0]))
+	cur, _ = txn.OpenCursor([]byte(keys[0]))
 	cur.Delcursor(true /*lsm*/)
 	cur.Delete([]byte(keys[1]), nil, true /*lsm*/)
 	value := []byte("newvalue")
@@ -984,23 +984,23 @@ func TestLLRBViewCursor(t *testing.T) {
 
 	for i, key := range keys {
 		view := llrb.View(0x1234 + uint64(i))
-		cur := view.OpenCursor([]byte(key))
+		cur, _ := view.OpenCursor([]byte(key))
 		testgetnext(t, cur, i, keys, vals)
 		view.Abort()
 		view = llrb.View(0)
-		cur = view.OpenCursor([]byte(key))
+		cur, _ = view.OpenCursor([]byte(key))
 		testynext(t, cur, i, keys, vals)
 		view.Abort()
 	}
 
 	// full table scan
 	view := llrb.View(0)
-	cur := view.OpenCursor(nil)
+	cur, _ := view.OpenCursor(nil)
 	testgetnext(t, cur, 0, keys, vals)
 	if k, _, _, _ := cur.GetNext(); k != nil {
 		t.Errorf("unexpected %s", k)
 	}
-	cur = view.OpenCursor(nil)
+	cur, _ = view.OpenCursor(nil)
 	testynext(t, cur, 0, keys, vals)
 	if k, _ := cur.Key(); k != nil {
 		t.Errorf("unexpected %s", k)
@@ -1010,7 +1010,7 @@ func TestLLRBViewCursor(t *testing.T) {
 	view.Abort()
 
 	txn := llrb.BeginTxn(0x12345)
-	cur = txn.OpenCursor([]byte(keys[0]))
+	cur, _ = txn.OpenCursor([]byte(keys[0]))
 	cur.Delcursor(true /*lsm*/)
 	cur.Delete([]byte(keys[1]), nil, true /*lsm*/)
 	value := []byte("newvalue")
@@ -1062,7 +1062,8 @@ func TestLLRBScan(t *testing.T) {
 
 	view := llrb.View(0)
 	defer view.Abort()
-	count, cur := 0, view.OpenCursor(nil)
+	count := 0
+	cur, _ := view.OpenCursor(nil)
 	scan := llrb.Scan()
 
 	refkey, refval, refseqno, refdeleted, _ := cur.YNext(false /*fin*/)
@@ -1233,7 +1234,7 @@ func BenchmarkLLRBGetNext(b *testing.B) {
 	defer llrb.Destroy()
 
 	txn := llrb.BeginTxn(0)
-	cur := txn.OpenCursor(nil)
+	cur, _ := txn.OpenCursor(nil)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -1247,7 +1248,7 @@ func BenchmarkLLRBYNext(b *testing.B) {
 	defer llrb.Destroy()
 
 	view := llrb.BeginTxn(0)
-	cur := view.OpenCursor(nil)
+	cur, _ := view.OpenCursor(nil)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

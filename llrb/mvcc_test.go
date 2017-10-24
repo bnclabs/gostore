@@ -900,12 +900,12 @@ func TestMVCCTxnCursor(t *testing.T) {
 
 	txn := mvcc.BeginTxn(0x1234)
 	for i, key := range keys {
-		cur := txn.OpenCursor([]byte(key))
+		cur, _ := txn.OpenCursor([]byte(key))
 		testgetnext(t, cur, i, keys, vals)
 		if k, _, _, _ := cur.GetNext(); k != nil {
 			t.Errorf("unexpected %s", k)
 		}
-		cur = txn.OpenCursor([]byte(key))
+		cur, _ = txn.OpenCursor([]byte(key))
 		testynext(t, cur, i, keys, vals)
 		if k, _ := cur.Key(); k != nil {
 			t.Errorf("unexpected %s", k)
@@ -913,7 +913,7 @@ func TestMVCCTxnCursor(t *testing.T) {
 			t.Errorf("unexpected %s", v)
 		}
 	}
-	cur := txn.OpenCursor([]byte(keys[0]))
+	cur, _ := txn.OpenCursor([]byte(keys[0]))
 	cur.Delcursor(true /*lsm*/)
 	cur.Delete([]byte(keys[1]), nil, true /*lsm*/)
 	value := []byte("newvalue")
@@ -975,17 +975,17 @@ func TestMVCCViewCursor(t *testing.T) {
 
 	for i, key := range keys {
 		view := mvcc.View(0x1234 + uint64(i))
-		cur := view.OpenCursor([]byte(key))
+		cur, _ := view.OpenCursor([]byte(key))
 		testgetnext(t, cur, i, keys, vals)
 		view.Abort()
 		view = mvcc.View(0)
-		cur = view.OpenCursor([]byte(key))
+		cur, _ = view.OpenCursor([]byte(key))
 		testynext(t, cur, i, keys, vals)
 		view.Abort()
 	}
 
 	txn := mvcc.BeginTxn(0x12345)
-	cur := txn.OpenCursor([]byte(keys[0]))
+	cur, _ := txn.OpenCursor([]byte(keys[0]))
 	cur.Delcursor(true /*lsm*/)
 	cur.Delete([]byte(keys[1]), nil, true /*lsm*/)
 	value := []byte("newvalue")
@@ -1043,7 +1043,8 @@ func TestMVCCScan(t *testing.T) {
 
 	view := llrb.View(0)
 	defer view.Abort()
-	count, cur := 0, view.OpenCursor(nil)
+	count := 0
+	cur, _ := view.OpenCursor(nil)
 	scan := llrb.Scan()
 
 	refkey, refval, refseqno, refdeleted, _ := cur.YNext(false /*fin*/)
@@ -1214,7 +1215,7 @@ func BenchmarkMVCCGetNext(b *testing.B) {
 	defer mvcc.Destroy()
 
 	txn := mvcc.BeginTxn(0)
-	cur := txn.OpenCursor(nil)
+	cur, _ := txn.OpenCursor(nil)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -1228,7 +1229,7 @@ func BenchmarkMVCCYNext(b *testing.B) {
 	defer mvcc.Destroy()
 
 	view := mvcc.BeginTxn(0)
-	cur := view.OpenCursor(nil)
+	cur, _ := view.OpenCursor(nil)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

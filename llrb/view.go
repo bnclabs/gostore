@@ -23,9 +23,9 @@ func (view *View) ID() uint64 {
 }
 
 // OpenCursor open an active cursor inside the index.
-func (view *View) OpenCursor(key []byte) api.Cursor {
+func (view *View) OpenCursor(key []byte) (api.Cursor, error) {
 	cur := view.getcursor().opencursor(nil, view.snapshot, key)
-	return cur
+	return cur, nil
 }
 
 // Abort view, must be called once done with the view.
@@ -45,12 +45,12 @@ func (view *View) Set(key, value, oldvalue []byte) []byte {
 
 // Delete is not allowed.
 func (view *View) Delete(key, oldvalue []byte, lsm bool) []byte {
-	panic("Set not allowed on view")
+	panic("Delete not allowed on view")
 }
 
 // Commit not allowed.
 func (view *View) Commit() error {
-	panic("Set not allowed on view")
+	panic("Commit not allowed on view")
 }
 
 //---- Exported Read methods
