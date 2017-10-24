@@ -23,7 +23,7 @@ func pull(
 	return cp(k, key), cp(v, val), seqno, del, err
 }
 
-// YGet is a iterate combinator that takes two iteration API and return
+// YSort is a iterate combinator that takes two iteration API and return
 // a new iterator that handles LSM.
 func YSort(a, b api.Iterator) api.Iterator {
 	var aseqno, bseqno uint64
