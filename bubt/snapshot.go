@@ -33,6 +33,7 @@ type Snapshot struct {
 	zsizes   []int64
 
 	n_count    int64
+	footprint  int64
 	zblocksize int64
 	mblocksize int64
 	logprefix  string
@@ -81,10 +82,13 @@ func OpenSnapshot(
 	}
 	snap.rw.RLock()
 
-	// initialize the current capacity of zblock-files.
+	// initialize the current capacity of zblock-files and its footprint.
+	snap.footprint = filesize(snap.readm)
 	snap.zsizes = make([]int64, len(snap.readzs))
 	for i := range snap.zfiles {
-		snap.zsizes[i] = filesize(snap.readzs[i])
+		zsize := filesize(snap.readzs[i])
+		snap.footprint += zsize
+		snap.zsizes[i] = zsize
 	}
 	return
 }
@@ -220,6 +224,11 @@ func (snap *Snapshot) ID() string {
 // Count number of indexed entries.
 func (snap *Snapshot) Count() int64 {
 	return snap.n_count
+}
+
+// Footprint return the size occupied by this instance on disk.
+func (snap *Snapshot) Footprint() int64 {
+	return snap.footprint
 }
 
 // Close snapshot, will release all in-memory resources but will keep
