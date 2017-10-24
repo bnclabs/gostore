@@ -70,7 +70,7 @@ type Transactor interface {
 	Get(key, value []byte) (v []byte, deleted, ok bool)
 
 	// OpenCursor open an active cursor inside the index.
-	OpenCursor(key []byte) Cursor
+	OpenCursor(key []byte) (Cursor, error)
 
 	// Abort transaction, underlying index won't be touched.
 	Abort()
