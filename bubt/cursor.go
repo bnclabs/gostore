@@ -134,3 +134,18 @@ func (cur *Cursor) nextblock(snap *Snapshot) error {
 	cur.finished = true
 	return io.EOF
 }
+
+// Set not allowed.
+func (cur *Cursor) Set(key, value, oldvalue []byte) []byte {
+	panic("Set not allowed on view-cursor")
+}
+
+// Delete not allowed.
+func (cur *Cursor) Delete(key, oldvalue []byte, lsm bool) []byte {
+	panic("Delete not allowed on view-cursor")
+}
+
+// Delcursor not allowed.
+func (cur *Cursor) Delcursor(lsm bool) {
+	panic("Delcursor not allowed on view-cursor")
+}

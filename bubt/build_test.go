@@ -264,7 +264,7 @@ func TestCursorGetNext(t *testing.T) {
 	miter := mi.Scan()
 	for key, _, _, _, err := miter(false /*fin*/); err == nil; {
 		dview, mview := snap.View(id), mi.View(id)
-		mcur := mview.OpenCursor(key)
+		mcur, _ := mview.OpenCursor(key)
 		dcur, err1 := dview.OpenCursor(key)
 		if err1 != nil {
 			t.Error(err1)
@@ -330,7 +330,7 @@ func TestCursorYNext(t *testing.T) {
 	miter := mi.Scan()
 	for key, _, _, _, err := miter(false /*fin*/); err == nil; {
 		dview, mview := snap.View(id), mi.View(id)
-		mcur := mview.OpenCursor(key)
+		mcur, _ := mview.OpenCursor(key)
 		dcur, err1 := dview.OpenCursor(key)
 		if err1 != nil {
 			t.Error(err1)

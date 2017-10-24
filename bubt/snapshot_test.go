@@ -79,7 +79,8 @@ func BenchmarkCursorKey(b *testing.B) {
 	defer snap.Close()
 
 	view := snap.View(0x1)
-	cur, _ := view.OpenCursor(nil)
+	x, _ := view.OpenCursor(nil)
+	cur := x.(*Cursor)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		cur.Key()
@@ -94,7 +95,8 @@ func BenchmarkCursorValue(b *testing.B) {
 	defer snap.Close()
 
 	view := snap.View(0x1)
-	cur, _ := view.OpenCursor(nil)
+	x, _ := view.OpenCursor(nil)
+	cur := x.(*Cursor)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		cur.Value()

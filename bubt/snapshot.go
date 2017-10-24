@@ -216,6 +216,8 @@ func (snap *Snapshot) readheader(r io.ReaderAt) (*Snapshot, error) {
 	return snap, nil
 }
 
+//---- Exported Control methods
+
 // ID of snapshot, same as name argument passed to OpenSnapshot.
 func (snap *Snapshot) ID() string {
 	return snap.name
@@ -280,6 +282,8 @@ func (snap *Snapshot) Destroy() {
 	}
 }
 
+//---- Exported Read methods
+
 // Get value for key, if value argument is not nil it will be used to
 // copy the entry's value. Also returns entry's cas, whether entry is
 // marked as deleted by LSM. If ok is false, then key is not found.
@@ -338,9 +342,16 @@ func (snap *Snapshot) findinzblock(
 	return
 }
 
+// BeginTxn is not allowed.
+func (snap *Snapshot) BeginTxn(id uint64) api.Transactor {
+	panic("not allowed")
+}
+
 // View start a read only transaction. Any number of views can be created
 // on this snapshot provided they are not concurrently accessed.
-func (snap *Snapshot) View(id uint64) (view *View) {
+func (snap *Snapshot) View(id uint64) api.Transactor {
+	var view *View
+
 	select {
 	case view = <-snap.viewcache:
 	default:
@@ -370,4 +381,22 @@ func (snap *Snapshot) Scan() api.Iterator {
 		return nil
 	}
 	return cur.YNext
+}
+
+//---- Exported Write methods
+
+// Set is not allowed.
+func (snap *Snapshot) Set(key, value, oldvalue []byte) (ov []byte, cas uint64) {
+	panic("not allowed")
+}
+
+// SetCAS is not allowed.
+func (snap *Snapshot) SetCAS(
+	key, value, oldvalue []byte, cas uint64) ([]byte, uint64, error) {
+	panic("not allowed")
+}
+
+// Delete is not allowed.
+func (snap *Snapshot) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
+	panic("not allowed")
 }

@@ -1,5 +1,7 @@
 package bubt
 
+import "github.com/prataprc/gostore/api"
+
 // View read only transaction instance.
 type View struct {
 	id      uint64
@@ -15,12 +17,27 @@ func (view *View) ID() uint64 {
 }
 
 // OpenCursor open an active cursor, point at key, inside the index.
-func (view *View) OpenCursor(key []byte) (*Cursor, error) {
+func (view *View) OpenCursor(key []byte) (api.Cursor, error) {
 	cur, err := view.getcursor().opencursor(view.snap, key)
 	if err != nil {
 		return nil, err
 	}
 	return cur, nil
+}
+
+// Set not allowed.
+func (view *View) Set(key, value, oldvalue []byte) []byte {
+	panic("Set not allowed on view")
+}
+
+// Delete not allowed.
+func (view *View) Delete(key, oldvalue []byte, lsm bool) []byte {
+	panic("Delete not allowed on view")
+}
+
+// Commit not allowed.
+func (view *View) Commit() error {
+	panic("Commit not allowed on view")
 }
 
 // Abort view, must be called once done with the view.
