@@ -142,7 +142,9 @@ func makeBubt(n int) (*Snapshot, [][]byte) {
 	if err != nil {
 		panic(err)
 	}
-	bubt.Build(mi.Scan(), []byte("this is metadata"))
+	if err := bubt.Build(mi.Scan(), []byte("this is metadata")); err != nil {
+		panic(err)
+	}
 	bubt.Close()
 
 	snap, err := OpenSnapshot(name, paths, true /*mmap*/)

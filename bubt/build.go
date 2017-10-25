@@ -31,23 +31,22 @@ type Bubt struct {
 }
 
 // NewBubt create a Bubt instance to build a new bottoms-up btree.
-func NewBubt(name string, paths []string, msize, zsize int64) (*Bubt, error) {
-	var err error
+func NewBubt(
+	name string, paths []string, msize, zsize int64) (tree *Bubt, err error) {
 
-	tree := &Bubt{name: name, mblocksize: msize, zblocksize: zsize}
+	tree = &Bubt{name: name, mblocksize: msize, zblocksize: zsize}
 	mpath, zpaths := tree.pickmzpath(paths)
 	tree.logprefix = fmt.Sprintf("BUBT [%s]", name)
 
 	defer func() {
 		if r := recover(); r != nil {
-			log.Fatalf("%v %v", tree.logprefix, r)
+			err = fmt.Errorf("%v", r)
 			tree.Close()
 		}
 	}()
 
 	mfile := filepath.Join(mpath, name, "bubt-mindex.data")
-	tree.mflusher, err = startflusher(0, mfile)
-	if err != nil {
+	if tree.mflusher, err = startflusher(0, mfile); err != nil {
 		panic(err)
 	}
 	tree.zflushers = make([]*bubtflusher, 0)
@@ -65,12 +64,12 @@ func NewBubt(name string, paths []string, msize, zsize int64) (*Bubt, error) {
 
 // Build starts building the tree from iterator, iterator is expected
 // to be a full-table scan over another data-store.
-func (tree *Bubt) Build(iter api.Iterator, metadata []byte) {
+func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 	log.Infof("%v starting bottoms up build ...\n", tree.logprefix)
 
 	defer func() {
 		if r := recover(); r != nil {
-			log.Fatalf("%v failed: %v", tree.logprefix, r)
+			err = fmt.Errorf("%v", r)
 		}
 	}()
 
@@ -111,7 +110,6 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) {
 	var key, value []byte
 	var seqno uint64
 	var deleted bool
-	var err error
 
 	buildz := func() {
 		z.reset()
@@ -240,6 +238,7 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) {
 	log.Infof("%v builder wrote metadata %v bytes", tree.logprefix, len(block))
 
 	log.Infof("%v ... bottoms up build completed\n", tree.logprefix)
+	return nil
 }
 
 // Close instance after building the btree. This will mark disk files as

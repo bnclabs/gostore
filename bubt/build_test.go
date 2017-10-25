@@ -22,7 +22,9 @@ func TestDestroy(t *testing.T) {
 		t.Fatal(err)
 	}
 	metadata := "metadata"
-	bubt.Build(nil, []byte(metadata))
+	if err := bubt.Build(nil, []byte(metadata)); err != nil {
+		t.Fatal(err)
+	}
 	bubt.Close()
 
 	snap, err := OpenSnapshot(name, paths, false /*mmap*/)
@@ -64,7 +66,9 @@ func TestBuildMetadata(t *testing.T) {
 	for i := range metadata {
 		metadata[i] = byte(i % 256)
 	}
-	bubt.Build(nil, metadata)
+	if err := bubt.Build(nil, metadata); err != nil {
+		t.Fatal(err)
+	}
 	bubt.Close()
 
 	snap, err := OpenSnapshot(name, paths, false /*mmap*/)
@@ -108,7 +112,9 @@ func TestSnapshotGet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bubt.Build(mi.Scan(), []byte("this is metadata"))
+	if err := bubt.Build(mi.Scan(), []byte("this is metadata")); err != nil {
+		t.Fatal(err)
+	}
 	bubt.Close()
 
 	snap, err := OpenSnapshot(name, paths, mmap)
@@ -156,7 +162,9 @@ func TestSnapshotScan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bubt.Build(mi.Scan(), []byte("this is metadata"))
+	if err := bubt.Build(mi.Scan(), []byte("this is metadata")); err != nil {
+		t.Fatal(err)
+	}
 	bubt.Close()
 
 	snap, err := OpenSnapshot(name, paths, mmap)
@@ -207,7 +215,9 @@ func TestView(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bubt.Build(mi.Scan(), []byte("this is metadata"))
+	if err := bubt.Build(mi.Scan(), []byte("this is metadata")); err != nil {
+		t.Fatal(err)
+	}
 	bubt.Close()
 
 	snap, err := OpenSnapshot(name, paths, mmap)
@@ -250,7 +260,9 @@ func TestCursorGetNext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bubt.Build(mi.Scan(), []byte("this is metadata"))
+	if err := bubt.Build(mi.Scan(), []byte("this is metadata")); err != nil {
+		t.Fatal(err)
+	}
 	bubt.Close()
 
 	snap, err := OpenSnapshot(name, paths, mmap)
@@ -316,7 +328,9 @@ func TestCursorYNext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bubt.Build(mi.Scan(), []byte("this is metadata"))
+	if err := bubt.Build(mi.Scan(), []byte("this is metadata")); err != nil {
+		t.Fatal(err)
+	}
 	bubt.Close()
 
 	snap, err := OpenSnapshot(name, paths, mmap)
