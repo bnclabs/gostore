@@ -35,7 +35,10 @@ func TestYSort(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bb.Build(llrb1.Scan(), []byte("this is metadata for llrb1"))
+	err = bb.Build(llrb1.Scan(), []byte("this is metadata for llrb1"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	bb.Close()
 
 	bubt1, err := bubt.OpenSnapshot(name, paths, mmap)
@@ -48,7 +51,10 @@ func TestYSort(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bb.Build(llrb2.Scan(), []byte("this is metadata for bubt4"))
+	err = bb.Build(llrb2.Scan(), []byte("this is metadata for bubt4"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	bb.Close()
 
 	bubt2, err := bubt.OpenSnapshot(name, paths, mmap)
@@ -110,7 +116,10 @@ func BenchmarkYSort(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	bb.Build(llrb1.Scan(), []byte("this is metadata for llrb1"))
+	err = bb.Build(llrb1.Scan(), []byte("this is metadata for llrb1"))
+	if err != nil {
+		b.Fatal(err)
+	}
 	bb.Close()
 
 	bubt1, err := bubt.OpenSnapshot(name, paths, mmap)
@@ -123,7 +132,10 @@ func BenchmarkYSort(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	bb.Build(llrb2.Scan(), []byte("this is metadata for bubt4"))
+	err = bb.Build(llrb2.Scan(), []byte("this is metadata for bubt4"))
+	if err != nil {
+		b.Fatal(err)
+	}
 	bb.Close()
 
 	bubt2, err := bubt.OpenSnapshot(name, paths, mmap)
