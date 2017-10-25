@@ -227,8 +227,17 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 	log.Infof("%v builder wrote settings %v bytes", tree.logprefix, len(block))
 
 	// flush 1 or more m-blocks of metadata
+	if len(metadata) > 0 {
+		if err := tree.Writemetadata(metadata); err != nil {
+			return nil
+		}
+	}
+	return nil
+}
+
+func (tree *Bubt) Writemetadata(metadata []byte) error {
 	ln := (((int64(len(metadata)+15) / tree.mblocksize) + 1) * tree.mblocksize)
-	block = make([]byte, ln)
+	block := make([]byte, ln)
 	binary.BigEndian.PutUint64(block, uint64(len(metadata)))
 	copy(block[8:], metadata)
 	binary.BigEndian.PutUint64(block[ln-8:], uint64(ln))
@@ -236,8 +245,6 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 		panic(err)
 	}
 	log.Infof("%v builder wrote metadata %v bytes", tree.logprefix, len(block))
-
-	log.Infof("%v ... bottoms up build completed\n", tree.logprefix)
 	return nil
 }
 
