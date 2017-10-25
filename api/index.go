@@ -45,8 +45,12 @@ type Index interface {
 	// on this snapshot until it is Aborted.
 	View(id uint64) Transactor
 
-	// Destroy releases all resources held by the index. No other method call
-	// are allowed after Destroy.
+	// Close releases all temporary resources held by the index. No other
+	// method call are allowed after Close.
+	Close()
+
+	// Destroy releases all temporary and permanent resources held by the
+	// index. No other method call are allowed after Destroy.
 	Destroy()
 }
 
