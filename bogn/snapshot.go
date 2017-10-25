@@ -1,7 +1,11 @@
 package bogn
 
+import "fmt"
+
 import "github.com/prataprc/gostore/api"
 import "github.com/prataprc/gostore/lib"
+import "github.com/prataprc/gostore/lsm"
+import "github.com/prataprc/gostore/llrb"
 
 type snapshot struct {
 	bogn       *Bogn
@@ -13,11 +17,31 @@ type snapshot struct {
 	cachech chan *setcache
 }
 
+func opensnapshot(bogn *Bogn, disks [16]api.Index) (*snapshot, error) {
+	var err error
+	head := &snapshot{bogn: bogn, disks: disks}
+	head.mw, err = bogn.newmemstore("mw", nil)
+	if err != nil {
+		return nil, err
+	}
+	if bogn.workingset {
+		head.setch = make(chan *setcache, 1000)   // TODO: no magic number
+		head.cachech = make(chan *setcache, 1000) // TODO: no magic number
+		head.mc, err = bogn.newmemstore("mc", nil)
+		if err != nil {
+			return nil, err
+		}
+		go cacher(bogn, head.mc, head.setch, head.cachech)
+	}
+	head.yget = head.reduceyget()
+	return head, nil
+}
+
 func newsnapshot(
 	bogn *Bogn, mw, mr, mc api.Index, disks [16]api.Index) *snapshot {
 
-	head := snapshot{bogn: bogn, mw: mw, mr: mr, mc: mc}
-	copy(head.disks, disks)
+	head := &snapshot{bogn: bogn, mw: mw, mr: mr, mc: mc}
+	copy(head.disks[:], disks[:])
 	if head.mc != nil {
 		head.setch = make(chan *setcache, 1000)   // TODO: no magic number
 		head.cachech = make(chan *setcache, 1000) // TODO: no magic number
@@ -27,33 +51,32 @@ func newsnapshot(
 	return head
 }
 
-func (bs *snapshot) getseqno() uint64 {
-	bs.bogn.rw.Lock()
-	seqno := bs.mw.Getseqno()
-	bs.bogn.rw.Unlock()
-	return seqno
-}
-
-func (bs *snapshot) latestlevel() (int, api.Index) {
-	for level, disk := range bs.disks {
+func (snap *snapshot) latestlevel() (int, api.Index) {
+	for level, disk := range snap.disks {
 		if disk != nil {
+			if lvl, _ := snap.bogn.path2level(disk.ID()); level != lvl {
+				panic(fmt.Errorf("mismatch in level %v != %v", level, lvl))
+			}
 			return level, disk
 		}
 	}
 	return -1, nil
 }
 
-func (bs *snapshot) oldestlevel() (int, api.Index) {
-	for level := len(bs.disks) - 1; level >= 0; level-- {
-		if disk := bs.disks[i]; disk != nil {
+func (snap *snapshot) oldestlevel() (int, api.Index) {
+	for level := len(snap.disks) - 1; level >= 0; level-- {
+		if disk := snap.disks[level]; disk != nil {
+			if lvl, _ := snap.bogn.path2level(disk.ID()); level != lvl {
+				panic(fmt.Errorf("mismatch in level %v != %v", level, lvl))
+			}
 			return level, disk
 		}
 	}
 	return -1, nil
 }
 
-func (bs *snapshot) disklevels(disks []api.Index) []api.Index {
-	for _, disk := range bs.disks {
+func (snap *snapshot) disklevels(disks []api.Index) []api.Index {
+	for _, disk := range snap.disks {
 		if disk != nil {
 			disks = append(disks, disk)
 		}
@@ -61,50 +84,51 @@ func (bs *snapshot) disklevels(disks []api.Index) []api.Index {
 	return disks
 }
 
-func (bs *snapshot) memheap() int64 {
-	memindexes, heap := []api.Index{bs.mw, ms.mr, ms.mc}, int64(0)
+func (snap *snapshot) memheap() int64 {
+	memindexes, heap := []api.Index{snap.mw, snap.mr, snap.mc}, int64(0)
 	for _, memindex := range memindexes {
-		switch index := memindex.(type) {
+		switch v := memindex.(type) {
 		case *llrb.LLRB:
-			stats := index.Stats()
+			stats := v.Stats()
 			heap += stats["node.heap"].(int64) + stats["value.heap"].(int64)
 		case *llrb.MVCC:
-			stats := index.Stats()
+			stats := v.Stats()
 			heap += stats["node.heap"].(int64) + stats["value.heap"].(int64)
 		}
 	}
 	return heap
 }
 
-func (bs *snapshot) reduceyget() (get api.Getter) {
+func (snap *snapshot) reduceyget() (get api.Getter) {
 	gets := []api.Getter{}
-	gets = append(gets, bs.mw.Get)
-	if bs.mr != nil {
-		gets = append(gets, bs.mr.Get)
+	gets = append(gets, snap.mw.Get)
+	if snap.mr != nil {
+		gets = append(gets, snap.mr.Get)
 	}
-	if bs.mc != nil {
-		gets = append(gets, bs.mc.Get)
+	if snap.mc != nil {
+		gets = append(gets, snap.mc.Get)
 	}
 
 	var dget api.Getter
-	for i, disk := range bs.disklevels() {
-		if dget != nil && bs.mc != nil {
-			dget = bs.cachingget(disk.get)
+	for _, disk := range snap.disklevels([]api.Index{}) {
+		if dget != nil && snap.mc != nil {
+			dget = snap.cachedget(disk.Get)
 		} else {
 			dget = disk.Get
 		}
 		gets = append(gets, dget)
 	}
 
-	get = gets[len(gets)-1].Get
+	get = gets[len(gets)-1]
 	for i := len(gets) - 2; i >= 0; i-- {
 		get = lsm.YGet(get, gets[i])
 	}
 	return
 }
 
-func (bs *snapshot) cachingget(get api.Getter) api.Getter {
-	return func(key, value []byte) {
+// try caching the entry from this get operation.
+func (snap *snapshot) cachedget(get api.Getter) api.Getter {
+	return func(key, value []byte) ([]byte, uint64, bool, bool) {
 		value, cas, deleted, ok := get(key, value)
 		if ok == false {
 			return value, cas, deleted, ok
@@ -113,7 +137,7 @@ func (bs *snapshot) cachingget(get api.Getter) api.Getter {
 		// TODO: if `mc` is skip list with concurrent writes, could
 		// be an optimized solution.
 		select {
-		case cmd := <-cachech:
+		case cmd := <-snap.cachech:
 			cmd.key = lib.Fixbuffer(cmd.key, int64(len(key)))
 			copy(cmd.key, key)
 			cmd.value = lib.Fixbuffer(cmd.value, int64(len(value)))
@@ -121,7 +145,7 @@ func (bs *snapshot) cachingget(get api.Getter) api.Getter {
 			cmd.seqno = cas
 			cmd.deleted = deleted
 			select {
-			case bs.setch <- cmd:
+			case snap.setch <- cmd:
 			default:
 			}
 
@@ -131,72 +155,85 @@ func (bs *snapshot) cachingget(get api.Getter) api.Getter {
 	}
 }
 
-func (bs *snapshot) iterator() (scan api.Iterator) {
+func (snap *snapshot) iterator() (scan api.Iterator) {
 	var ref [20]api.Iterator
 	scans := ref[:0]
 
-	scans = append(scans, bs.mw.Scan)
-	if bs.mr != nil {
-		scans = append(scans, bs.mr.Scan)
+	scans = append(scans, snap.mw.Scan())
+	if snap.mr != nil {
+		scans = append(scans, snap.mr.Scan())
 	}
-	for _, disk := range bs.disklevels() {
-		scans = append(scans, disk.Scan)
+	for _, disk := range snap.disklevels([]api.Index{}) {
+		scans = append(scans, disk.Scan())
 	}
 
-	scan = scans[len(scans)-1].Scan
+	scan = scans[len(scans)-1]
 	for i := len(scans) - 2; i >= 0; i-- {
 		scan = lsm.YSort(scan, scans[i])
 	}
 	return
 }
 
-func (bs *snapshot) flushiterator(disk api.Index) (scan api.Iterator) {
+func (snap *snapshot) persistiterator() (scan api.Iterator) {
 	var ref [20]api.Iterator
 	scans := ref[:0]
 
-	scans = append(scans, bs.mw.Scan)
-	if bs.mr != nil {
-		scans = append(scans, bs.mr.Scan)
+	scans = append(scans, snap.mw.Scan())
+	for _, disk := range snap.disklevels([]api.Index{}) {
+		scans = append(scans, disk.Scan())
 	}
-	if bs.mc != nil {
-		scans = append(scans, bs.mc.Scan)
+
+	scan = scans[len(scans)-1]
+	for i := len(scans) - 2; i >= 0; i-- {
+		scan = lsm.YSort(scan, scans[i])
+	}
+	return
+}
+
+func (snap *snapshot) flushiterator(disk api.Index) (scan api.Iterator) {
+	var ref [20]api.Iterator
+	scans := ref[:0]
+
+	scans = append(scans, snap.mw.Scan())
+	if snap.mr != nil {
+		scans = append(scans, snap.mr.Scan())
+	}
+	if snap.mc != nil {
+		scans = append(scans, snap.mc.Scan())
 	}
 	if disk != nil {
-		scans = append(disk.Scan)
+		scans = append(scans, disk.Scan())
 	}
 
-	scan = scans[len(scans)-1].Scan
+	scan = scans[len(scans)-1]
 	for i := len(scans) - 2; i >= 0; i-- {
 		scan = lsm.YSort(scan, scans[i])
 	}
 	return
 }
 
-func (bs *snapshot) compaciterator(d0, d1 api.Index) (scan api.Iterator) {
+func (snap *snapshot) compactiterator(d0, d1 api.Index) (scan api.Iterator) {
 	if d0 == nil {
-		return d1.Scan
+		return d1.Scan()
 	} else if d1 == nil {
-		return d0.Scan
+		return d0.Scan()
 	}
-	scan = lsm.YSort(d1.scan, d0.scans[i])
+	scan = lsm.YSort(d1.Scan(), d0.Scan())
 	return
 }
 
-func (bs *snapshot) delete(key, value []byte, lsm bool) ([]byte, uint64) {
-	return bs.mw.Delete(key, value, lsm)
+func (snap *snapshot) delete(key, value []byte, lsm bool) ([]byte, uint64) {
+	return snap.mw.Delete(key, value, lsm)
 }
 
-func (bs *snapshot) set(key, value, oldvalue []byte) ([]byte, uint64) {
-	return bs.mw.Set(key, value, oldvalue)
+func (snap *snapshot) set(key, value, oldvalue []byte) ([]byte, uint64) {
+	return snap.mw.Set(key, value, oldvalue)
 }
 
-func (bs *snapshot) setCAS(
-	key, value, oldvalue, cas uint64) ([]byte, uint64, error) {
-	return bs.mw.SetCAS(key, value, oldvalue)
+func (snap *snapshot) setCAS(
+	key, value, oldvalue []byte, cas uint64) ([]byte, uint64, error) {
+	return snap.mw.SetCAS(key, value, oldvalue, cas)
 }
 
-func (bs *snapshot) finish() {
-	if bs != nil {
-		close(bs.setch)
-	}
+func (snap *snapshot) close() {
 }

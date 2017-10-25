@@ -1,5 +1,6 @@
 package bogn
 
+import "sync/atomic"
 import "runtime/debug"
 
 import "github.com/prataprc/golog"
@@ -11,6 +12,7 @@ func (bogn *Bogn) purgeindex(index api.Index) {
 }
 
 func purger(bogn *Bogn, purgech chan api.Index) {
+	atomic.AddInt64(&bogn.nroutines, 1)
 	log.Infof("%v starting purger", bogn.logprefix)
 	defer func() {
 		if r := recover(); r != nil {
@@ -19,6 +21,7 @@ func purger(bogn *Bogn, purgech chan api.Index) {
 		} else {
 			log.Infof("%v stopped purger", bogn.logprefix)
 		}
+		atomic.AddInt64(&bogn.nroutines, -1)
 	}()
 
 	for item := range purgech {

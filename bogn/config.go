@@ -1,7 +1,5 @@
 package bogn
 
-import "fmt"
-
 import s "github.com/prataprc/gosettings"
 import "github.com/cloudfoundry/gosigar"
 
@@ -13,7 +11,6 @@ func Defaultsettings() s.Settings {
 		"workingset":        false,
 		"ratio":             .25,
 		"flushperiod":       100,
-		"compacttick":       1,
 		"llrb.keycapacity":  free,
 		"llrb.valcapacity":  free,
 		"llrb.snapshottick": 4,
