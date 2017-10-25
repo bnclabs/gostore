@@ -510,6 +510,11 @@ func (mvcc *MVCC) clonetree(nd *Llrbnode) *Llrbnode {
 	return newnd
 }
 
+// Close alias for Destroy.
+func (mvcc *MVCC) Close() {
+	mvcc.Destroy()
+}
+
 // Destroy releases all resources held by the tree. No other
 // method call are allowed after Destroy.
 func (mvcc *MVCC) Destroy() {
