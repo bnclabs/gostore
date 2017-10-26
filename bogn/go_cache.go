@@ -18,7 +18,7 @@ type setcache struct {
 
 func cacher(bogn *Bogn, mc api.Index, setch, cachech chan *setcache) {
 	atomic.AddInt64(&bogn.nroutines, 1)
-	log.Infof("%v starting cacher %s", bogn.logprefix, mc.ID())
+	log.Infof("%v starting cacher for %s", bogn.logprefix, mc.ID())
 	defer func() {
 		mc.Destroy()
 		if r := recover(); r != nil {
@@ -45,6 +45,7 @@ func cacher(bogn *Bogn, mc api.Index, setch, cachech chan *setcache) {
 			if _, cas := mc.Delete(cmd.key, nil, true); cas != cmd.seqno {
 				panic("impossible situation")
 			}
+
 		} else if _, cas := mc.Set(cmd.key, cmd.value, nil); cas != cmd.seqno {
 			panic("impossible situation")
 		}

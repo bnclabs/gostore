@@ -1,6 +1,7 @@
 package bogn
 
 import "fmt"
+import "sync/atomic"
 
 import "github.com/prataprc/gostore/api"
 import "github.com/prataprc/gostore/lib"
@@ -8,10 +9,15 @@ import "github.com/prataprc/gostore/lsm"
 import "github.com/prataprc/gostore/llrb"
 
 type snapshot struct {
-	bogn       *Bogn
-	mw, mr, mc api.Index
-	disks      [16]api.Index
-	yget       api.Getter
+	refcount int64
+	purgetry int64 // must be 8-byte aligned
+
+	bogn         *Bogn
+	mw, mr, mc   api.Index
+	disks        [16]api.Index
+	yget         api.Getter
+	next         *snapshot
+	purgeindexes []api.Index
 
 	setch   chan *setcache
 	cachech chan *setcache
@@ -19,7 +25,7 @@ type snapshot struct {
 
 func opensnapshot(bogn *Bogn, disks [16]api.Index) (*snapshot, error) {
 	var err error
-	head := &snapshot{bogn: bogn, disks: disks}
+	head := &snapshot{bogn: bogn, disks: disks, next: nil}
 	head.mw, err = bogn.newmemstore("mw", nil)
 	if err != nil {
 		return nil, err
@@ -54,7 +60,7 @@ func newsnapshot(
 func (snap *snapshot) latestlevel() (int, api.Index) {
 	for level, disk := range snap.disks {
 		if disk != nil {
-			if lvl, _ := snap.bogn.path2level(disk.ID()); level != lvl {
+			if lvl, _, _ := snap.bogn.path2level(disk.ID()); level != lvl {
 				panic(fmt.Errorf("mismatch in level %v != %v", level, lvl))
 			}
 			return level, disk
@@ -66,7 +72,7 @@ func (snap *snapshot) latestlevel() (int, api.Index) {
 func (snap *snapshot) oldestlevel() (int, api.Index) {
 	for level := len(snap.disks) - 1; level >= 0; level-- {
 		if disk := snap.disks[level]; disk != nil {
-			if lvl, _ := snap.bogn.path2level(disk.ID()); level != lvl {
+			if lvl, _, _ := snap.bogn.path2level(disk.ID()); level != lvl {
 				panic(fmt.Errorf("mismatch in level %v != %v", level, lvl))
 			}
 			return level, disk
@@ -174,6 +180,7 @@ func (snap *snapshot) iterator() (scan api.Iterator) {
 	return
 }
 
+// iterate on write store and disk store.
 func (snap *snapshot) persistiterator() (scan api.Iterator) {
 	var ref [20]api.Iterator
 	scans := ref[:0]
@@ -183,13 +190,14 @@ func (snap *snapshot) persistiterator() (scan api.Iterator) {
 		scans = append(scans, disk.Scan())
 	}
 
-	scan = scans[len(scans)-1]
+	scan = scans[len(scans)-1] // disk store.
 	for i := len(scans) - 2; i >= 0; i-- {
 		scan = lsm.YSort(scan, scans[i])
 	}
 	return
 }
 
+// iterate on write store, read store, cache store and a latest disk store.
 func (snap *snapshot) flushiterator(disk api.Index) (scan api.Iterator) {
 	var ref [20]api.Iterator
 	scans := ref[:0]
@@ -236,4 +244,39 @@ func (snap *snapshot) setCAS(
 }
 
 func (snap *snapshot) close() {
+	snap.bogn = nil
+	snap.mw, snap.mr, snap.mc = nil, nil, nil
+	for i := range snap.disks {
+		snap.disks[i] = nil
+	}
+	snap.yget, snap.next, snap.purgeindexes = nil, nil, nil
+	close(snap.setch)
+}
+
+func (snap *snapshot) getref() int64 {
+	return atomic.LoadInt64(&snap.refcount)
+}
+
+func (snap *snapshot) refer() int64 {
+	return atomic.AddInt64(&snap.refcount, 1)
+}
+
+func (snap *snapshot) release() int64 {
+	refcount := atomic.AddInt64(&snap.refcount, -1)
+	return refcount
+}
+
+func (snap *snapshot) setpurge() {
+	atomic.StoreInt64(&snap.purgetry, 1)
+}
+
+func (snap *snapshot) clearpurge() {
+	atomic.StoreInt64(&snap.purgetry, 0)
+}
+
+func (snap *snapshot) istrypurge() bool {
+	if atomic.LoadInt64(&snap.purgetry) > 0 {
+		return true
+	}
+	return false
 }

@@ -1,17 +1,13 @@
 package bogn
 
+import "time"
 import "sync/atomic"
 import "runtime/debug"
 
 import "github.com/prataprc/golog"
-import "github.com/prataprc/gostore/api"
 import "github.com/prataprc/gostore/lib"
 
-func (bogn *Bogn) purgeindex(index api.Index) {
-	bogn.purgech <- index
-}
-
-func purger(bogn *Bogn, purgech chan api.Index) {
+func purger(bogn *Bogn) {
 	atomic.AddInt64(&bogn.nroutines, 1)
 	log.Infof("%v starting purger", bogn.logprefix)
 	defer func() {
@@ -24,11 +20,40 @@ func purger(bogn *Bogn, purgech chan api.Index) {
 		atomic.AddInt64(&bogn.nroutines, -1)
 	}()
 
-	for item := range purgech {
-		if item == nil {
-			continue
+	ticker := time.NewTicker(Compacttick)
+loop:
+	for range ticker.C {
+		snap := bogn.currsnapshot()
+		if snap != nil && purgesnapshot(snap.next) {
+			snap.next = nil
 		}
-		log.Infof("%v purging %q ...", bogn.logprefix, item.ID())
-		item.Destroy()
+		select {
+		case <-bogn.finch:
+			break loop
+		default:
+		}
 	}
+}
+
+func purgesnapshot(snap *snapshot) bool {
+	if snap == nil {
+		return true
+	}
+	if purgesnapshot(snap.next) {
+		snap.next = nil
+		snap.setpurge()
+		if snap.getref() == 0 {
+			// all older snapshots are purged,
+			// and this snapshot is not refered by anyone.
+			for _, index := range snap.purgeindexes {
+				index.Close()
+				index.Destroy()
+				log.Infof("%v purged %q", snap.bogn.logprefix, index.ID())
+			}
+			snap.close()
+			return true
+		}
+		snap.clearpurge()
+	}
+	return false
 }

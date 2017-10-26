@@ -15,7 +15,7 @@ func Defaultsettings() s.Settings {
 		"llrb.valcapacity":  free,
 		"llrb.snapshottick": 4,
 		"llrb.allocator":    "flist",
-		"bubt.diskpaths":    "/opt/bogr/",
+		"bubt.diskpaths":    "/opt/bogn/",
 		"bubt.msize":        4096,
 		"bubt.zsize":        4096,
 		"bubt.mmap":         true,
