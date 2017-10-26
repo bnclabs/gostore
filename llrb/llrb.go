@@ -885,9 +885,9 @@ func (llrb *LLRB) clonetree(nd *Llrbnode) *Llrbnode {
 	return newnd
 }
 
-// Close alias for Destroy.
+// Close does nothing.
 func (llrb *LLRB) Close() {
-	llrb.Destroy()
+	return
 }
 
 // Destroy releases all resources held by the tree. No other
