@@ -233,6 +233,11 @@ func (snap *Snapshot) Footprint() int64 {
 	return snap.footprint
 }
 
+// Metadata return metadata blob associated with this snapshot.
+func (snap *Snapshot) Metadata() []byte {
+	return snap.metadata
+}
+
 // Close snapshot, will release all in-memory resources but will keep
 // the disk files. All Opened-Snapshots must be closed before it can
 // be destoryed.
