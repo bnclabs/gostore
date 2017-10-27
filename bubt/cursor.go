@@ -14,11 +14,14 @@ type Cursor struct {
 	fposs    []int64
 
 	index    int
-	zblock   []byte
+	buf      *buffers
 	finished bool
 }
 
-func (cur *Cursor) opencursor(snap *Snapshot, key []byte) (*Cursor, error) {
+func (cur *Cursor) opencursor(
+	snap *Snapshot, key []byte, buf *buffers) (*Cursor, error) {
+
+	cur.buf = buf
 	if key == nil { // from beginning
 		cur.shardidx = 0
 		for i := 0; i < len(snap.readzs); i++ {
@@ -30,8 +33,8 @@ func (cur *Cursor) opencursor(snap *Snapshot, key []byte) (*Cursor, error) {
 		return cur, nil
 	}
 
-	shardidx, fpos := snap.findinmblock(key)
-	cur.index, _, _, _, _ = snap.findinzblock(shardidx, fpos, key, nil)
+	shardidx, fpos := snap.findinmblock(key, buf)
+	cur.index, _, _, _, _ = snap.findinzblock(shardidx, fpos, key, nil, buf)
 	cur.shardidx = shardidx
 	for i := byte(0); i < cur.shardidx; i++ {
 		cur.fposs[i] = fpos + snap.zblocksize
@@ -40,10 +43,10 @@ func (cur *Cursor) opencursor(snap *Snapshot, key []byte) (*Cursor, error) {
 		cur.fposs[i] = fpos
 	}
 	// populate zblock
-	n, err := snap.readzs[shardidx].ReadAt(cur.zblock, fpos)
+	n, err := snap.readzs[shardidx].ReadAt(cur.buf.zblock, fpos)
 	if err != nil {
 		return nil, err
-	} else if n < len(cur.zblock) {
+	} else if n < len(cur.buf.zblock) {
 		return nil, fmt.Errorf("bubt.snap.mblock.partialread")
 	}
 	return cur, nil
@@ -56,7 +59,7 @@ func (cur *Cursor) Key() (key []byte, deleted bool) {
 	} else if cur.index < 0 {
 		key, _, _, deleted, _ = cur.getnext()
 	} else {
-		key, _, _, deleted = zsnap(cur.zblock).entryat(cur.index)
+		key, _, _, deleted = zsnap(cur.buf.zblock).entryat(cur.index)
 	}
 	return
 }
@@ -68,7 +71,7 @@ func (cur *Cursor) Value() (value []byte) {
 	} else if cur.index < 0 {
 		_, value, _, _, _ = cur.getnext()
 	} else {
-		_, value, _, _ = zsnap(cur.zblock).entryat(cur.index)
+		_, value, _, _ = zsnap(cur.buf.zblock).entryat(cur.index)
 	}
 	return
 }
@@ -85,7 +88,7 @@ func (cur *Cursor) getnext() ([]byte, []byte, uint64, bool, error) {
 		return nil, nil, 0, false, io.EOF
 	}
 
-	key, value, seqno, deleted := zsnap(cur.zblock).getnext(cur.index)
+	key, value, seqno, deleted := zsnap(cur.buf.zblock).getnext(cur.index)
 	if key != nil {
 		cur.index++
 		return key, value, seqno, deleted, nil
@@ -95,7 +98,7 @@ func (cur *Cursor) getnext() ([]byte, []byte, uint64, bool, error) {
 	if err := cur.nextblock(cur.snap); err != nil {
 		return nil, nil, 0, false, err
 	}
-	key, value, seqno, deleted = zsnap(cur.zblock).entryat(cur.index)
+	key, value, seqno, deleted = zsnap(cur.buf.zblock).entryat(cur.index)
 	if key != nil {
 		return key, value, seqno, deleted, nil
 	}
@@ -110,7 +113,7 @@ func (cur *Cursor) YNext(fin bool) (key,
 
 	if cur.ynext == false {
 		cur.ynext = true
-		key, value, seqno, deleted = zsnap(cur.zblock).entryat(cur.index)
+		key, value, seqno, deleted = zsnap(cur.buf.zblock).entryat(cur.index)
 		return
 	}
 	return cur.getnext()
@@ -122,8 +125,8 @@ func (cur *Cursor) nextblock(snap *Snapshot) error {
 		fpos := cur.fposs[cur.shardidx]
 		if fpos < till {
 			readz := snap.readzs[cur.shardidx]
-			n, err := readz.ReadAt(cur.zblock, fpos)
-			if err == nil && n == len(cur.zblock) {
+			n, err := readz.ReadAt(cur.buf.zblock, fpos)
+			if err == nil && n == len(cur.buf.zblock) {
 				cur.index = 0
 				return nil
 			}

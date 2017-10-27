@@ -18,8 +18,10 @@ func (view *View) ID() uint64 {
 
 // OpenCursor open an active cursor, point at key, inside the index.
 func (view *View) OpenCursor(key []byte) (api.Cursor, error) {
-	cur, err := view.getcursor().opencursor(view.snap, key)
+	buf := view.snap.getreadbuffer()
+	cur, err := view.getcursor().opencursor(view.snap, key, buf)
 	if err != nil {
+		view.snap.putreadbuffer(buf)
 		return nil, err
 	}
 	return cur, nil
@@ -65,9 +67,8 @@ func (view *View) getcursor() (cur *Cursor) {
 	case cur = <-view.snap.curcache:
 	default:
 		cur = &Cursor{
-			snap:   view.snap,
-			fposs:  make([]int64, len(view.snap.readzs)),
-			zblock: make([]byte, view.snap.zblocksize),
+			snap:  view.snap,
+			fposs: make([]int64, len(view.snap.readzs)),
 		}
 	}
 	cur.ynext, cur.finished, cur.index = false, false, 0
@@ -79,6 +80,7 @@ func (view *View) getcursor() (cur *Cursor) {
 }
 
 func (view *View) putcursor(cur *Cursor) {
+	view.snap.putreadbuffer(cur.buf)
 	select {
 	case view.snap.curcache <- cur:
 	default: // leave it for GC

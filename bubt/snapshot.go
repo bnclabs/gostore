@@ -41,9 +41,13 @@ type Snapshot struct {
 
 	viewcache   chan *View
 	curcache    chan *Cursor
-	indexcache  chan blkindex
-	zblockcache chan []byte
-	mblockcache chan []byte
+	readbuffers chan *buffers
+}
+
+type buffers struct {
+	index  blkindex
+	zblock []byte
+	mblock []byte
 }
 
 // OpenSnapshot from paths.
@@ -55,9 +59,7 @@ func OpenSnapshot(
 		name:        name,
 		viewcache:   make(chan *View, cachesize),
 		curcache:    make(chan *Cursor, cachesize),
-		indexcache:  make(chan blkindex, cachesize),
-		zblockcache: make(chan []byte, cachesize),
-		mblockcache: make(chan []byte, cachesize),
+		readbuffers: make(chan *buffers, cachesize),
 		logprefix:   fmt.Sprintf("BUBT [%s]", name),
 	}
 
@@ -298,20 +300,24 @@ func (snap *Snapshot) Destroy() {
 func (snap *Snapshot) Get(
 	key, value []byte) (v []byte, cas uint64, deleted, ok bool) {
 
-	shardidx, fpos := snap.findinmblock(key)
-	_, v, cas, deleted, ok = snap.findinzblock(shardidx, fpos, key, value)
+	buf := snap.getreadbuffer()
+	shardidx, fpos := snap.findinmblock(key, buf)
+	_, v, cas, deleted, ok = snap.findinzblock(shardidx, fpos, key, value, buf)
+	snap.putreadbuffer(buf)
 	return v, cas, deleted, ok
 }
 
-func (snap *Snapshot) findinmblock(key []byte) (shardidx byte, fpos int64) {
-	mblock := snap.getmblock()
+func (snap *Snapshot) findinmblock(
+	key []byte, buf *buffers) (shardidx byte, fpos int64) {
+
+	mblock := buf.mblock
 	n, err := snap.readm.ReadAt(mblock, snap.root)
 	if err != nil {
 		panic(err)
 	} else if n < len(mblock) {
 		panic(fmt.Errorf("bubt.snap.mblock.partialread"))
 	}
-	m, mbindex := msnap(mblock), snap.getindex()
+	m, mbindex := msnap(mblock), buf.index[:0]
 	mbindex = m.getindex(mbindex[:0])
 	shardidx, fpos = m.findkey(0, mbindex, key)
 	for shardidx == 0 {
@@ -325,18 +331,16 @@ func (snap *Snapshot) findinmblock(key []byte) (shardidx byte, fpos int64) {
 		mbindex = m.getindex(mbindex[:0])
 		shardidx, fpos = m.findkey(0, mbindex, key)
 	}
-	snap.putmblock(mblock)
-	snap.putindex(mbindex)
 	return shardidx - 1, fpos
 }
 
 func (snap *Snapshot) findinzblock(
-	shardidx byte, fpos int64,
-	key, v []byte) (index int, value []byte, cas uint64, deleted, ok bool) {
+	shardidx byte, fpos int64, key, v []byte,
+	buf *buffers) (index int, value []byte, cas uint64, deleted, ok bool) {
 
 	var val []byte
 
-	zblock := snap.getzblock()
+	zblock := buf.zblock
 	readz := snap.readzs[shardidx]
 	n, err := readz.ReadAt(zblock, fpos)
 	if err != nil {
@@ -344,7 +348,7 @@ func (snap *Snapshot) findinzblock(
 	} else if n < len(zblock) {
 		panic(fmt.Errorf("bubt.snap.zblock.partialread"))
 	}
-	z, zbindex := zsnap(zblock), snap.getindex()
+	z, zbindex := zsnap(zblock), buf.index[:0]
 	zbindex = z.getindex(zbindex[:0])
 	index, val, cas, deleted, ok = z.findkey(0, zbindex, key)
 
@@ -352,9 +356,6 @@ func (snap *Snapshot) findinzblock(
 		value = lib.Fixbuffer(v, int64(len(val)))
 		copy(value, val)
 	}
-
-	snap.putzblock(zblock)
-	snap.putindex(zbindex)
 	return
 }
 
@@ -419,50 +420,22 @@ func (snap *Snapshot) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 
 //---- local methods
 
-func (snap *Snapshot) getindex() (index blkindex) {
+func (snap *Snapshot) getreadbuffer() (buf *buffers) {
 	select {
-	case index = <-snap.indexcache:
+	case buf = <-snap.readbuffers:
 	default:
-		index = make(blkindex, 0, 256)
+		buf = &buffers{
+			index:  make(blkindex, 0, 256),
+			mblock: make([]byte, snap.mblocksize),
+			zblock: make([]byte, snap.zblocksize),
+		}
 	}
-	return
+	return buf
 }
 
-func (snap *Snapshot) putindex(index blkindex) {
+func (snap *Snapshot) putreadbuffer(buf *buffers) {
 	select {
-	case snap.indexcache <- index:
-	default: // Leave it for GC.
-	}
-}
-
-func (snap *Snapshot) getzblock() (zblock []byte) {
-	select {
-	case zblock = <-snap.zblockcache:
-	default:
-		zblock = lib.Fixbuffer(nil, snap.zblocksize)
-	}
-	return
-}
-
-func (snap *Snapshot) putzblock(zblock []byte) {
-	select {
-	case snap.zblockcache <- zblock:
-	default: // Leave it for GC.
-	}
-}
-
-func (snap *Snapshot) getmblock() (mblock []byte) {
-	select {
-	case mblock = <-snap.mblockcache:
-	default:
-		mblock = lib.Fixbuffer(nil, snap.mblocksize)
-	}
-	return
-}
-
-func (snap *Snapshot) putmblock(mblock []byte) {
-	select {
-	case snap.mblockcache <- mblock:
+	case snap.readbuffers <- buf:
 	default: // Leave it for GC.
 	}
 }
