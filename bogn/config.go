@@ -3,6 +3,9 @@ package bogn
 import s "github.com/prataprc/gosettings"
 import "github.com/cloudfoundry/gosigar"
 
+// TODO: consolidate keycapacity and valcapacity into memcapacity under bogn
+// settings.
+
 func Defaultsettings() s.Settings {
 	_, _, free := getsysmem()
 	return s.Settings{
