@@ -68,6 +68,7 @@ func OpenSnapshot(
 			err = fmt.Errorf("%s", r)
 		}
 		if err != nil {
+			log.Errorf("%v %v", snap.logprefix, err)
 			snap.Close()
 		}
 	}()
@@ -82,8 +83,7 @@ func OpenSnapshot(
 	snap.lockfile = filepath.Join(filepath.Dir(snap.mfile), "bubt.lock")
 	if snap.rw, err = flock.New(snap.lockfile); err != nil {
 		snap.rw = nil
-		snap.Close()
-		return nil, err
+		return
 	}
 	snap.rw.RLock()
 
@@ -96,6 +96,17 @@ func OpenSnapshot(
 		snap.zsizes[i] = zsize
 	}
 	return
+}
+
+// PurgeSnapshot remove disk footprint of this snapshot.
+func PurgeSnapshot(name string, paths []string) {
+	log.Infof("force purging snapshot %v", name)
+	for _, path := range paths {
+		dirpath := filepath.Join(path, name)
+		if err := os.RemoveAll(dirpath); err != nil {
+			log.Errorf("%v", err)
+		}
+	}
 }
 
 func (snap *Snapshot) loadreaders(paths []string, mmap bool) error {
@@ -267,9 +278,11 @@ func (snap *Snapshot) Destroy() {
 	if snap == nil {
 		return
 	}
+	log.Infof("%v purging snapshot", snap.logprefix)
 	dirs := map[string]bool{}
 	if snap.rw != nil {
 		snap.rw.Lock()
+		// lock and remove m-file and one or more z-files.
 		if err := os.Remove(snap.mfile); err != nil {
 			log.Errorf("%v %v", snap.logprefix, err)
 		}
@@ -282,9 +295,11 @@ func (snap *Snapshot) Destroy() {
 		}
 		snap.rw.Unlock()
 	}
+	// remove lock file
 	if err := os.Remove(snap.lockfile); err != nil {
 		log.Errorf("%v %v", snap.logprefix, err)
 	}
+	// remove directories path/name for each path in paths
 	for dir := range dirs {
 		if err := os.Remove(dir); err != nil {
 			log.Errorf("%v %v", snap.logprefix, err)
