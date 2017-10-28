@@ -26,14 +26,14 @@ type snapshot struct {
 func opensnapshot(bogn *Bogn, disks [16]api.Index) (*snapshot, error) {
 	var err error
 	head := &snapshot{bogn: bogn, disks: disks, next: nil}
-	head.mw, err = bogn.newmemstore("mw", nil)
+	head.mw, err = bogn.newmemstore("mw", 0)
 	if err != nil {
 		return nil, err
 	}
 	if bogn.workingset {
 		head.setch = make(chan *setcache, 1000)   // TODO: no magic number
 		head.cachech = make(chan *setcache, 1000) // TODO: no magic number
-		head.mc, err = bogn.newmemstore("mc", nil)
+		head.mc, err = bogn.newmemstore("mc", 0)
 		if err != nil {
 			return nil, err
 		}
@@ -55,6 +55,24 @@ func newsnapshot(
 	}
 	head.yget = head.reduceyget()
 	return head
+}
+
+func (snap *snapshot) mwseqno() uint64 {
+	switch index := snap.mw.(type) {
+	case *llrb.LLRB:
+		return index.Getseqno()
+	case *llrb.MVCC:
+		return index.Getseqno()
+	}
+	panic("unreachable code")
+}
+
+func (snap *snapshot) addtopurge(indexes ...api.Index) {
+	if len(snap.purgeindexes) > 0 {
+		snap.purgeindexes = append(snap.purgeindexes, indexes...)
+	} else {
+		snap.purgeindexes = append([]api.Index{}, indexes...)
+	}
 }
 
 func (snap *snapshot) latestlevel() (int, api.Index) {
@@ -202,10 +220,7 @@ func (snap *snapshot) flushiterator(disk api.Index) (scan api.Iterator) {
 	var ref [20]api.Iterator
 	scans := ref[:0]
 
-	scans = append(scans, snap.mw.Scan())
-	if snap.mr != nil {
-		scans = append(scans, snap.mr.Scan())
-	}
+	scans = append(scans, snap.mr.Scan())
 	if snap.mc != nil {
 		scans = append(scans, snap.mc.Scan())
 	}

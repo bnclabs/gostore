@@ -13,7 +13,7 @@ func Defaultsettings() s.Settings {
 		"dgm":               false,
 		"workingset":        false,
 		"ratio":             .25,
-		"flushperiod":       100,
+		"period":            100,
 		"llrb.keycapacity":  free,
 		"llrb.valcapacity":  free,
 		"llrb.snapshottick": 4,

@@ -35,7 +35,7 @@ type Bogn struct {
 	dgm         bool
 	workingset  bool
 	ratio       float64
-	flushperiod time.Duration
+	period      time.Duration
 	memcapacity int64
 	setts       s.Settings
 	logprefix   string
@@ -59,10 +59,11 @@ func New(name string, setts s.Settings) (*Bogn, error) {
 	}
 	bogn.setheadsnapshot(head)
 
-	go purger(bogn)
-	go compactor(bogn, bogn.flushperiod)
-
 	log.Infof("%v started", bogn.logprefix)
+
+	go purger(bogn)
+	go compactor(bogn)
+
 	return bogn, nil
 }
 
@@ -71,7 +72,7 @@ func (bogn *Bogn) readsettings(setts s.Settings) *Bogn {
 	bogn.dgm = setts.Bool("dgm")
 	bogn.workingset = setts.Bool("workingset")
 	bogn.ratio = setts.Float64("ratio")
-	bogn.flushperiod = time.Duration(setts.Int64("flushperiod")) * time.Second
+	bogn.period = time.Duration(setts.Int64("period")) * time.Second
 	bogn.setts = setts
 
 	atomic.StoreInt64(&bogn.dgmstate, 0)
@@ -123,7 +124,7 @@ func (bogn *Bogn) flushelapsed() bool {
 				panic(err)
 			}
 			x, _ := strconv.Atoi(md["flushunix"].(string))
-			if time.Since(time.Unix(int64(x), 0)) > bogn.flushperiod {
+			if time.Since(time.Unix(int64(x), 0)) > bogn.period {
 				return true
 			}
 		}
@@ -204,6 +205,7 @@ func (bogn *Bogn) Log() {
 }
 
 func (bogn *Bogn) Compact() {
+	bogn.compactdisksnaps(bogn.setts)
 }
 
 func (bogn *Bogn) Close() {
@@ -265,28 +267,20 @@ func (bogn *Bogn) Delete(key, oldvalue []byte) ([]byte, uint64) {
 
 //---- local methods
 
-func (bogn *Bogn) newmemstore(level string, old api.Index) (api.Index, error) {
+func (bogn *Bogn) newmemstore(level string, seqno uint64) (api.Index, error) {
 	name := fmt.Sprintf("%v-%v", bogn.name, level)
 
 	switch bogn.memstore {
 	case "llrb":
 		llrbsetts := bogn.setts.Section("llrb.").Trim("llrb.")
 		index := llrb.NewLLRB(name, llrbsetts)
-		if old != nil {
-			index.Setseqno(old.(*llrb.LLRB).Getseqno())
-		} else {
-			index.Setseqno(0)
-		}
+		index.Setseqno(seqno)
 		return index, nil
 
 	case "mvcc":
 		llrbsetts := bogn.setts.Section("llrb.").Trim("llrb.")
 		index := llrb.NewMVCC(name, llrbsetts)
-		if old != nil {
-			index.Setseqno(old.(*llrb.LLRB).Getseqno())
-		} else {
-			index.Setseqno(0)
-		}
+		index.Setseqno(seqno)
 		return index, nil
 	}
 	return nil, fmt.Errorf("invalid memstore %q", bogn.memstore)
@@ -302,6 +296,7 @@ func (bogn *Bogn) builddiskstore(
 		}
 	}()
 
+	// book-keep largest seqno for this snapshot.
 	var diskseqno uint64
 
 	wrap := func(fin bool) ([]byte, []byte, uint64, bool, error) {
@@ -367,6 +362,9 @@ func (bogn *Bogn) opendisksnaps(setts s.Settings) ([16]api.Index, error) {
 			}
 		}
 	}
+	for _, disk := range disks {
+		log.Infof("%v open-snapshot %v", bogn.logprefix, disk.ID())
+	}
 	return disks, nil
 }
 
@@ -410,7 +408,6 @@ func (bogn *Bogn) buildlevels(
 	if err != nil {
 		return disks, err
 	}
-	log.Infof("%v open-snapshot %v", bogn.logprefix, disks[level].ID())
 
 	if od := disks[level]; od == nil { // first version
 		disks[level] = disk
