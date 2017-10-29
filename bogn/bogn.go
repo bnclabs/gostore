@@ -6,6 +6,7 @@ import "unsafe"
 import "time"
 import "strings"
 import "strconv"
+import "runtime"
 import "io/ioutil"
 import "sync/atomic"
 import "encoding/json"
@@ -57,6 +58,7 @@ func New(name string, setts s.Settings) (*Bogn, error) {
 		bogn.Close()
 		return nil, err
 	}
+	head.refer()
 	bogn.setheadsnapshot(head)
 
 	log.Infof("%v started", bogn.logprefix)
@@ -97,6 +99,22 @@ func (bogn *Bogn) setheadsnapshot(snapshot *snapshot) {
 	atomic.StorePointer(&bogn.snapshot, unsafe.Pointer(snapshot))
 }
 
+func (bogn *Bogn) latestsnapshot() *snapshot {
+	for {
+		snap := bogn.currsnapshot()
+		if snap == nil {
+			return nil
+		}
+		snap.refer()
+		if snap.istrypurge() {
+			return snap
+		}
+		snap.release()
+		runtime.Gosched()
+	}
+	panic("unreachable code")
+}
+
 func (bogn *Bogn) mwmetadata(seqno uint64) []byte {
 	metadata := map[string]interface{}{
 		"seqno":     seqno,
@@ -132,21 +150,52 @@ func (bogn *Bogn) flushelapsed() bool {
 	return false
 }
 
-func (bogn *Bogn) pickflushdisk() (level, version int, disk api.Index) {
+func (bogn *Bogn) pickflushdisk(disk0 api.Index) (api.Index, int, int) {
 	snap := bogn.currsnapshot()
 
-	if level, disk := snap.latestlevel(); level < 0 {
-		return len(snap.disks) - 1, 1, nil
+	if level, disk := snap.latestlevel(); level < 0 && disk0 != nil {
+		panic("impossible situation")
 
-	} else if disk != nil {
-		_, version, _ = bogn.path2level(disk.ID())
+	} else if level < 0 {
+		return nil, len(snap.disks) - 1, 1
+
+	} else if disk.ID() == disk0.ID() {
+		return nil, level - 1, 1
+
+	} else if level0, _, _ := bogn.path2level(disk0.ID()); level0 <= level {
+		panic("impossible situation")
+
+	} else {
+		_, version, _ := bogn.path2level(disk.ID())
 		footprint := float64(disk.(*bubt.Snapshot).Footprint())
 		if (float64(snap.memheap()) / footprint) > bogn.ratio {
-			return level - 1, 1, nil
+			return disk, level - 1, 1
 		}
-		return level, version + 1, disk
+		return disk, level, version + 1
 	}
 	panic("unreachable code")
+}
+
+func (bogn *Bogn) pickcompactdisks() (disk0, disk1 api.Index, nextlevel int) {
+	snap := bogn.currsnapshot()
+	disks := snap.disklevels([]api.Index{})
+	for i := 0; i < len(disks)-1; i++ {
+		disk0, disk1 = disks[i], disks[i+1]
+		footprint0 := float64(disk0.(*bubt.Snapshot).Footprint())
+		footprint1 := float64(disk1.(*bubt.Snapshot).Footprint())
+		if (footprint0 / footprint1) < bogn.ratio {
+			continue
+		}
+		level1, _, _ := bogn.path2level(disk1.ID())
+		if nextlevel = snap.nextemptylevel(level1); nextlevel < 0 {
+			level0, _, _ := bogn.path2level(disk0.ID())
+			if nextlevel = snap.nextemptylevel(level0); nextlevel < 0 {
+				nextlevel = level1
+			}
+		}
+		return disk0, disk1, nextlevel
+	}
+	return nil, nil, -1
 }
 
 func (bogn *Bogn) levelname(level, version int, sha string) string {
@@ -209,19 +258,18 @@ func (bogn *Bogn) Compact() {
 }
 
 func (bogn *Bogn) Close() {
-	bogn.snaprw.Lock()
-	defer bogn.snaprw.Unlock()
-
 	close(bogn.finch)
-	for atomic.LoadInt64(&bogn.nroutines) > 0 { // wait till all routines exit
+	for atomic.LoadInt64(&bogn.nroutines) > 0 {
 		time.Sleep(100 * time.Millisecond)
 	}
-	bogn.currsnapshot().close()
+	for purgesnapshot(bogn.currsnapshot()) {
+		time.Sleep(100 * time.Millisecond)
+	}
+	bogn.setheadsnapshot(nil)
 }
 
 func (bogn *Bogn) Destroy() {
-	bogn.Close()
-	// TODO: cleanup disk footprint.
+	bogn.destroydisksnaps()
 }
 
 //---- Exported read methods
@@ -390,6 +438,27 @@ func (bogn *Bogn) compactdisksnaps(setts s.Settings) {
 		}
 	}
 	bogn.closelevels(disks[:]...)
+	return
+}
+
+func (bogn *Bogn) destroydisksnaps(setts s.Settings) error {
+	bubtsetts := bogn.setts.Section("bubt.").Trim("bubt.")
+	paths := bubtsetts.Strings("diskpaths")
+
+	for _, path := range paths {
+		fis, err := ioutil.ReadDir(path)
+		if err != nil {
+			log.Errorf("%v %v", bogn.logprefix, err)
+			return
+		}
+		for _, fi := range fis {
+			level, version, uuid := bogn.path2level(fi.Name())
+			if level < 0 {
+				continue // not a bogn directory
+			}
+			bubt.PurgeSnapshot(name, paths)
+		}
+	}
 	return
 }
 

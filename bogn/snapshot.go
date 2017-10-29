@@ -1,6 +1,7 @@
 package bogn
 
 import "fmt"
+import "unsafe"
 import "sync/atomic"
 
 import "github.com/prataprc/gostore/api"
@@ -10,13 +11,13 @@ import "github.com/prataprc/gostore/llrb"
 
 type snapshot struct {
 	refcount int64
-	purgetry int64 // must be 8-byte aligned
+	purgetry int64          // must be 8-byte aligned
+	next     unsafe.Pointer // *snapshot
 
 	bogn         *Bogn
 	mw, mr, mc   api.Index
 	disks        [16]api.Index
 	yget         api.Getter
-	next         *snapshot
 	purgeindexes []api.Index
 
 	setch   chan *setcache
@@ -85,6 +86,20 @@ func (snap *snapshot) latestlevel() (int, api.Index) {
 		}
 	}
 	return -1, nil
+}
+
+func (snap *snapshot) nextemptylevel(level int) (nextlevel int) {
+	if level >= (len(snap.disks) - 1) {
+		return -1
+	}
+	nextlevel = -1
+	for l, disk := range snap.disks[level+1:] {
+		if disk == nil {
+			nextlevel = level + 1 + l
+		}
+		return nextlevel
+	}
+	return nextlevel
 }
 
 func (snap *snapshot) oldestlevel() (int, api.Index) {
@@ -259,13 +274,17 @@ func (snap *snapshot) setCAS(
 }
 
 func (snap *snapshot) close() {
+	if snap.bogn.workingset {
+		close(snap.setch)
+	}
+
 	snap.bogn = nil
 	snap.mw, snap.mr, snap.mc = nil, nil, nil
 	for i := range snap.disks {
 		snap.disks[i] = nil
 	}
-	snap.yget, snap.next, snap.purgeindexes = nil, nil, nil
-	close(snap.setch)
+	snap.yget, snap.purgeindexes = nil, nil
+	atomic.StorePointer(&snap.next, nil)
 }
 
 func (snap *snapshot) getref() int64 {

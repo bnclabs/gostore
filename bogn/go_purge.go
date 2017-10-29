@@ -24,8 +24,9 @@ func purger(bogn *Bogn) {
 loop:
 	for range ticker.C {
 		snap := bogn.currsnapshot()
-		if snap != nil && purgesnapshot(snap.next) {
-			snap.next = nil
+		next := (*snapshot)(atomic.LoadPointer(&snap.next))
+		if snap != nil && purgesnapshot(next) {
+			atomic.StorePointer(&snap.next, nil)
 		}
 		select {
 		case <-bogn.finch:
@@ -39,8 +40,9 @@ func purgesnapshot(snap *snapshot) bool {
 	if snap == nil {
 		return true
 	}
-	if purgesnapshot(snap.next) {
-		snap.next = nil
+	next := (*snapshot)(atomic.LoadPointer(&snap.next))
+	if purgesnapshot(next) {
+		atomic.StorePointer(&snap.next, nil)
 		snap.setpurge()
 		if snap.getref() == 0 {
 			// all older snapshots are purged,
