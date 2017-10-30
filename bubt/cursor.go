@@ -95,15 +95,15 @@ func (cur *Cursor) getnext() ([]byte, []byte, uint64, bool, error) {
 	}
 	cur.fposs[cur.shardidx] += cur.snap.zblocksize
 	cur.shardidx = (cur.shardidx + 1) % byte(len(cur.fposs))
-	if err := cur.nextblock(cur.snap); err != nil {
-		return nil, nil, 0, false, err
+	err := cur.nextblock(cur.snap)
+	if err == nil {
+		key, value, seqno, deleted = zsnap(cur.buf.zblock).entryat(cur.index)
+		if key != nil {
+			return key, value, seqno, deleted, nil
+		}
+		panic("impossible situation")
 	}
-	key, value, seqno, deleted = zsnap(cur.buf.zblock).entryat(cur.index)
-	if key != nil {
-		return key, value, seqno, deleted, nil
-	}
-	cur.finished = true
-	return nil, nil, 0, false, io.EOF
+	return nil, nil, 0, false, err
 }
 
 // YNext can be used for lsm-sort. Similar to GetNext, but includes the
