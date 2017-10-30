@@ -19,10 +19,10 @@ import "github.com/cloudfoundry/gosigar"
 //      Type of allocator to use.
 //
 func Defaultsettings() s.Settings {
-	ramsize, _, _ := getsysmem()
+	_, _, freeram := getsysmem()
 	setts := s.Settings{
-		"keycapacity":  ramsize,
-		"valcapacity":  ramsize,
+		"keycapacity":  freeram,
+		"valcapacity":  freeram,
 		"snapshottick": 4,
 		"allocator":    "flist",
 	}
