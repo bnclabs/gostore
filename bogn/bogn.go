@@ -233,30 +233,22 @@ func (bogn *Bogn) ID() string {
 	return bogn.name
 }
 
+// TODO: to be implemented.
 func (bogn *Bogn) BeginTxn(id uint64) api.Transactor {
 	return nil
 }
 
+// TODO: to be implemented.
 func (bogn *Bogn) View(id uint64) api.Transactor {
 	return nil
 }
 
-func (bogn *Bogn) Clone(id uint64) *Bogn {
-	return nil
-}
-
-func (bogn *Bogn) Stats() map[string]interface{} {
-	return nil
-}
-
-func (bogn *Bogn) Log() {
-	return
-}
-
+// Compact away oldver version of disk snapshots.
 func (bogn *Bogn) Compact() {
 	bogn.compactdisksnaps(bogn.setts)
 }
 
+// Close this instance, no calls allowed after Close.
 func (bogn *Bogn) Close() {
 	close(bogn.finch)
 	for atomic.LoadInt64(&bogn.nroutines) > 0 {
@@ -268,24 +260,45 @@ func (bogn *Bogn) Close() {
 	bogn.setheadsnapshot(nil)
 }
 
+// Destroy the disk footprint of this instance, no calls allowed
+// after Close.
 func (bogn *Bogn) Destroy() {
-	bogn.destroydisksnaps()
+	bogn.destroydisksnaps(bogn.setts)
+	return
 }
 
 //---- Exported read methods
 
+// Get value for key, if value argument points to valid buffer it will, be
+// used to copy the entry's value. Also returns entry's cas, whether entry
+// is marked as deleted by LSM. If ok is false, then key is not found.
 func (bogn *Bogn) Get(
 	key, value []byte) (v []byte, cas uint64, deleted, ok bool) {
 
-	return bogn.currsnapshot().yget(key, value)
+	snap := bogn.latestsnapshot()
+	v, cas, deleted, ok = snap.yget(key, value)
+	snap.release()
+	return
 }
 
+// Scan return a full table iterator.
 func (bogn *Bogn) Scan() api.Iterator {
-	return bogn.currsnapshot().iterator()
+	snap := bogn.latestsnapshot()
+	iter := snap.iterator()
+	return func(fin bool) (key, val []byte, seqno uint64, del bool, e error) {
+		if fin == false {
+			return iter(fin)
+		}
+		snap.release()
+		return
+	}
 }
 
 //---- Exported write methods
 
+// Set a key, value pair in the index, if key is already present, its value
+// will be over-written. Make sure key is not nil. Return old value if
+// oldvalue points to valid buffer.
 func (bogn *Bogn) Set(key, value, oldvalue []byte) (ov []byte, cas uint64) {
 	bogn.snaprw.RLock()
 	ov, cas = bogn.currsnapshot().set(key, value, oldvalue)
@@ -293,6 +306,10 @@ func (bogn *Bogn) Set(key, value, oldvalue []byte) (ov []byte, cas uint64) {
 	return ov, cas
 }
 
+// SetCAS a key, value pair in the index, if CAS is ZERO then key should
+// not be present in the index, otherwise existing CAS should match the
+// supplied CAS. Value will be over-written. Make sure key is not nil.
+// Return old value if oldvalue points to valid buffer.
 func (bogn *Bogn) SetCAS(
 	key, value, oldvalue []byte, cas uint64) ([]byte, uint64, error) {
 
@@ -302,6 +319,10 @@ func (bogn *Bogn) SetCAS(
 	return ov, cas, err
 }
 
+// Delete key from index. Key should not be nil, if key found return its
+// value. If lsm is true, then don't delete the node instead mark the node
+// as deleted. Again, if lsm is true but key is not found in index, a new
+// entry will inserted.
 func (bogn *Bogn) Delete(key, oldvalue []byte) ([]byte, uint64) {
 	bogn.snaprw.RLock()
 	lsm := false
@@ -449,17 +470,17 @@ func (bogn *Bogn) destroydisksnaps(setts s.Settings) error {
 		fis, err := ioutil.ReadDir(path)
 		if err != nil {
 			log.Errorf("%v %v", bogn.logprefix, err)
-			return
+			return err
 		}
 		for _, fi := range fis {
-			level, version, uuid := bogn.path2level(fi.Name())
+			level, _, _ := bogn.path2level(fi.Name())
 			if level < 0 {
 				continue // not a bogn directory
 			}
-			bubt.PurgeSnapshot(name, paths)
+			bubt.PurgeSnapshot(fi.Name(), paths)
 		}
 	}
-	return
+	return nil
 }
 
 // open snapshots for latest version in each level.

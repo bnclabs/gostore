@@ -1,6 +1,5 @@
 package bogn
 
-import "sync/atomic"
 import "runtime/debug"
 
 import "github.com/prataprc/gostore/api"
