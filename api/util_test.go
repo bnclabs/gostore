@@ -39,6 +39,8 @@ func TestFixbuffer(t *testing.T) {
 func TestBytes2str(t *testing.T) {
 	if Bytes2str(nil) != "" {
 		t.Errorf("unexpected %v", Bytes2str(nil))
+	} else if ref := "hello"; Bytes2str([]byte(ref)) != ref {
+		t.Errorf("unexpected %v", Bytes2str([]byte(ref)))
 	}
 }
 
