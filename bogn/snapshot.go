@@ -230,6 +230,13 @@ func (snap *snapshot) persistiterator() (scan api.Iterator) {
 	return
 }
 
+func (snap *snapshot) windupiterator(disk api.Index) (scan api.Iterator) {
+	if disk == nil {
+		return snap.mw.Scan()
+	}
+	return lsm.YSort(disk.Scan(), snap.mw.Scan())
+}
+
 // iterate on write store, read store, cache store and a latest disk store.
 func (snap *snapshot) flushiterator(disk api.Index) (scan api.Iterator) {
 	var ref [20]api.Iterator

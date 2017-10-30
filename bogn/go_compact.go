@@ -24,6 +24,7 @@ func compactor(bogn *Bogn) {
 		} else {
 			log.Infof("%v stopped compactor", bogn.logprefix)
 		}
+
 		atomic.AddInt64(&bogn.nroutines, -1)
 		if snap := bogn.currsnapshot(); snap != nil {
 			snap.release()
@@ -51,6 +52,8 @@ loop:
 	for range ticker.C {
 		if bogn.isclosed() {
 			break loop
+		} else if bogn.durable == false {
+			continue
 		}
 
 		if respch == nil { // try to start disk compaction.
@@ -77,6 +80,10 @@ loop:
 			default:
 			}
 		}
+	}
+
+	if err := dowindup(bogn); err != nil {
+		panic(err)
 	}
 }
 
@@ -285,6 +292,39 @@ func findisk(bogn *Bogn, disk0, disk1, ndisk api.Index) error {
 
 		snap.addtopurge(disk0, disk1)
 		log.Infof("%v compact disk", snap.bogn.logprefix, ndisk.ID())
+	}()
+	return nil
+}
+
+func dowindup(bogn *Bogn) error {
+	if bogn.durable == false {
+		return nil
+	}
+	snap := bogn.currsnapshot()
+	disk, nlevel, nversion := bogn.pickflushdisk(nil)
+	if nlevel < 0 {
+		panic("impossible situation")
+	}
+	now, iter := time.Now(), snap.windupiterator(disk)
+	ndisk, count, err := bogn.builddiskstore(nlevel, nversion, iter)
+	if err != nil {
+		return err
+	}
+	fmsg := "%v took %v to build %v with %v entries\n"
+	log.Infof(fmsg, bogn.logprefix, time.Since(now), ndisk.ID(), count)
+
+	func() {
+		bogn.snaprw.Lock()
+		defer bogn.snaprw.Unlock()
+
+		head := newsnapshot(bogn, nil, nil, nil, snap.disks)
+		atomic.StorePointer(&head.next, unsafe.Pointer(snap))
+		head.refer()
+		bogn.setheadsnapshot(head)
+		snap.release()
+
+		snap.addtopurge(snap.mw, snap.mr, snap.mc, disk)
+		log.Infof("%v windup ...", snap.bogn.logprefix, ndisk.ID())
 	}()
 	return nil
 }

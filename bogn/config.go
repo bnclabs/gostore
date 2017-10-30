@@ -13,6 +13,9 @@ import "github.com/prataprc/gostore/llrb"
 // "memstore" (string, default: "llrb")
 //		Type of index for in memory storage, can be "llrb" or "mvcc".
 //
+// "durable" (bool, default:false)
+//		Persist index on disk.
+//
 // "dgm" (bool, default:false)
 //		Disk-Greater-than-Memory, configure bogn-index whose size won't
 //      fit in memory.
@@ -40,7 +43,7 @@ import "github.com/prataprc/gostore/llrb"
 //
 // "bubt.mmap" (bool, default: true)
 //		BottomsUpBTree, whether to memory-map leaf node, intermediate
-// 		nodes are always memory-mapped.
+//		nodes are always memory-mapped.
 //
 // "bubt.diskpaths" (string, default: "/opt/bogn/")
 //		BottomsUpBTree, comma separated list of path to persist intermediate
@@ -49,6 +52,7 @@ import "github.com/prataprc/gostore/llrb"
 func Defaultsettings() s.Settings {
 	setts := s.Settings{
 		"memstore":       "mvcc",
+		"durable":        false,
 		"dgm":            false,
 		"workingset":     false,
 		"ratio":          .25,

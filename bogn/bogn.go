@@ -33,6 +33,7 @@ type Bogn struct {
 	snaprw   sync.RWMutex
 
 	memstore    string
+	durable     bool
 	dgm         bool
 	workingset  bool
 	ratio       float64
@@ -71,6 +72,7 @@ func New(name string, setts s.Settings) (*Bogn, error) {
 
 func (bogn *Bogn) readsettings(setts s.Settings) *Bogn {
 	bogn.memstore = setts.String("memstore")
+	bogn.durable = setts.Bool("durable")
 	bogn.dgm = setts.Bool("dgm")
 	bogn.workingset = setts.Bool("workingset")
 	bogn.ratio = setts.Float64("ratio")
@@ -153,27 +155,28 @@ func (bogn *Bogn) flushelapsed() bool {
 func (bogn *Bogn) pickflushdisk(disk0 api.Index) (api.Index, int, int) {
 	snap := bogn.currsnapshot()
 
-	if level, disk := snap.latestlevel(); level < 0 && disk0 != nil {
+	level, disk := snap.latestlevel()
+	if level < 0 && disk0 != nil {
 		panic("impossible situation")
 
 	} else if level < 0 {
 		return nil, len(snap.disks) - 1, 1
 
-	} else if disk.ID() == disk0.ID() {
-		return nil, level - 1, 1
-
-	} else if level0, _, _ := bogn.path2level(disk0.ID()); level0 <= level {
-		panic("impossible situation")
-
-	} else {
-		_, version, _ := bogn.path2level(disk.ID())
-		footprint := float64(disk.(*bubt.Snapshot).Footprint())
-		if (float64(snap.memheap()) / footprint) > bogn.ratio {
-			return disk, level - 1, 1
+	} else if disk != nil {
+		level0, _, _ := bogn.path2level(disk0.ID())
+		if level0 <= level {
+			panic("impossible situation")
 		}
-		return disk, level, version + 1
+		if disk.ID() == disk0.ID() {
+			return nil, level - 1, 1
+		}
 	}
-	panic("unreachable code")
+	_, version, _ := bogn.path2level(disk.ID())
+	footprint := float64(disk.(*bubt.Snapshot).Footprint())
+	if (float64(snap.memheap()) / footprint) > bogn.ratio {
+		return disk, level - 1, 1
+	}
+	return disk, level, version + 1
 }
 
 func (bogn *Bogn) pickcompactdisks() (disk0, disk1 api.Index, nextlevel int) {
