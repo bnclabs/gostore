@@ -128,6 +128,7 @@ func makecompactor(bogn *Bogn) func(api.Index) error {
 }
 
 // called only when full data set in memory.
+// TODO: support `workingset` even when `dgm` is false.
 func dopersist(bogn *Bogn) (err error) {
 	snap := bogn.currsnapshot()
 
@@ -163,7 +164,8 @@ func dopersist(bogn *Bogn) (err error) {
 		snap.release()
 
 		snap.addtopurge(snap.disklevels([]api.Index{})...)
-		log.Infof("%v compact persisted %v", snap.bogn.logprefix, ndisk.ID())
+		fmsg := "%v for snapshot %v compact persisted %v"
+		log.Infof(fmsg, snap.bogn.logprefix, head.id, ndisk.ID())
 	}()
 
 	return nil
@@ -190,7 +192,8 @@ func doflush(bogn *Bogn, disk0 api.Index) (err error) {
 		bogn.setheadsnapshot(head)
 		snap.release()
 
-		log.Infof("%v compact flush ...", snap.bogn.logprefix)
+		fmsg := "%v for snapshot %v compact flush ..."
+		log.Infof(fmsg, snap.bogn.logprefix, head.id)
 	}()
 
 	snap = bogn.latestsnapshot()
@@ -231,7 +234,8 @@ func doflush(bogn *Bogn, disk0 api.Index) (err error) {
 		snap.release()
 
 		snap.addtopurge(snap.mr, snap.mc, disk)
-		log.Infof("%v compact flush ... ok", snap.bogn.logprefix, ndisk.ID())
+		fmsg := "%v for snapshot %v compact flush to %v"
+		log.Infof(fmsg, snap.bogn.logprefix, head.id, ndisk.ID())
 	}()
 
 	return nil
@@ -253,8 +257,8 @@ func startdisk(
 	iter := snap.compactiterator(disk0, disk1)
 
 	go func() {
-		fmsg := "%v compacting %q + %q ..."
-		log.Infof(fmsg, bogn.logprefix, disk0.ID(), disk1.ID())
+		fmsg := "%v for snapshot %v compacting %q + %q ..."
+		log.Infof(fmsg, bogn.logprefix, snap.id, disk0.ID(), disk1.ID())
 
 		now := time.Now()
 		ndisk, count, err := bogn.builddiskstore(nextlevel, version+1, iter)
@@ -291,7 +295,8 @@ func findisk(bogn *Bogn, disk0, disk1, ndisk api.Index) error {
 		snap.release()
 
 		snap.addtopurge(disk0, disk1)
-		log.Infof("%v compact disk", snap.bogn.logprefix, ndisk.ID())
+		fmsg := "%v for snapshot %v compact disk"
+		log.Infof(fmsg, snap.bogn.logprefix, head.id, ndisk.ID())
 	}()
 	return nil
 }
@@ -324,7 +329,8 @@ func dowindup(bogn *Bogn) error {
 		snap.release()
 
 		snap.addtopurge(snap.mw, snap.mr, snap.mc, disk)
-		log.Infof("%v windup ...", snap.bogn.logprefix, ndisk.ID())
+		fmsg := "%v for snapshot %v windup ..."
+		log.Infof(fmsg, snap.bogn.logprefix, head.id, ndisk.ID())
 	}()
 	return nil
 }

@@ -87,8 +87,7 @@ func (bogn *Bogn) readsettings(setts s.Settings) *Bogn {
 	switch bogn.memstore {
 	case "llrb", "mvcc":
 		llrbsetts := bogn.setts.Section("llrb.").Trim("llrb.")
-		bogn.memcapacity = llrbsetts.Int64("keycapacity")
-		bogn.memcapacity += llrbsetts.Int64("valcapacity")
+		bogn.memcapacity = llrbsetts.Int64("memcapacity")
 	}
 	return bogn
 }

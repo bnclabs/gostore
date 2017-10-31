@@ -14,6 +14,7 @@ type snapshot struct {
 	purgetry int64          // must be 8-byte aligned
 	next     unsafe.Pointer // *snapshot
 
+	id           string
 	bogn         *Bogn
 	mw, mr, mc   api.Index
 	disks        [16]api.Index
@@ -26,7 +27,13 @@ type snapshot struct {
 
 func opensnapshot(bogn *Bogn, disks [16]api.Index) (*snapshot, error) {
 	var err error
-	head := &snapshot{bogn: bogn, disks: disks, next: nil}
+	var uuidbuf [8]byte
+	uuid, err := lib.Newuuid(uuidbuf[:])
+	if err != nil {
+		return nil, err
+	}
+
+	head := &snapshot{id: string(uuid), bogn: bogn, disks: disks, next: nil}
 	head.mw, err = bogn.newmemstore("mw", 0)
 	if err != nil {
 		return nil, err
