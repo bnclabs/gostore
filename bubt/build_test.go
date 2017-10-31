@@ -248,7 +248,7 @@ func TestView(t *testing.T) {
 
 func TestCursorGetNext(t *testing.T) {
 	paths := makepaths()
-	mi, _ := makeLLRB(10000)
+	mi, _ := makeLLRB(10)
 	defer mi.Destroy()
 
 	rand.Seed(time.Now().UnixNano())
@@ -312,6 +312,32 @@ func TestCursorGetNext(t *testing.T) {
 		dview.Abort()
 		key, _, _, _, err = miter(false /*fin*/)
 	}
+
+	// corner cases, open cursor after the end of the index.
+	dview := snap.View(id)
+	dcur, err1 := dview.OpenCursor([]byte("zzzzzzzzzzzzzzzzzzz"))
+	if err1 != nil {
+		t.Errorf("unexpected %v", err1)
+	} else if key, _ := dcur.Key(); key != nil {
+		t.Errorf("unexpected %q", key)
+	} else if value := dcur.Value(); key != nil {
+		t.Errorf("unexpected %q", value)
+	} else if _, _, _, err = dcur.GetNext(); err != io.EOF {
+		t.Errorf("unexpected %v", err)
+	}
+
+	// check write operations.
+	do := func(fn func()) {
+		defer func() {
+			if recover() == nil {
+				t.Errorf("expected error")
+			}
+		}()
+		fn()
+	}
+	do(func() { dcur.Set(nil, nil, nil) })
+	do(func() { dcur.Delete(nil, nil, false) })
+	do(func() { dcur.Delcursor(false) })
 }
 
 func TestCursorYNext(t *testing.T) {
