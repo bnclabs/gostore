@@ -3,9 +3,6 @@ package bogn
 import s "github.com/prataprc/gosettings"
 import "github.com/prataprc/gostore/llrb"
 
-// TODO: consolidate keycapacity and valcapacity into memcapacity under bogn
-// settings.
-
 // Defaultsettings for bogn instances. Applications can get the default
 // settings and tune settings parameter for desired behaviour. Default
 // settings include llrb.Defaultsettings().
@@ -64,6 +61,5 @@ func Defaultsettings() s.Settings {
 	}
 	llrbsetts := llrb.Defaultsettings().AddPrefix("llrb.")
 	setts = (s.Settings{}).Mixin(setts, llrbsetts)
-	// TODO: make sure that keycapacity + valcapacity is less than 256MB.
 	return setts
 }

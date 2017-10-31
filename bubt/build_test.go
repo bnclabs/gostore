@@ -400,9 +400,7 @@ func TestCursorYNext(t *testing.T) {
 }
 
 func makeLLRB(n int) (*llrb.LLRB, [][]byte) {
-	setts := s.Settings{
-		"keycapacity": 1024 * 1024 * 1024, "valcapacity": 1024 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 1024 * 1024 * 1024}
 	mi := llrb.NewLLRB("buildllrb", setts)
 	k, v := []byte("key000000000000"), []byte("val00000000000000")
 	keys := [][]byte{}

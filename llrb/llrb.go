@@ -33,8 +33,7 @@ type LLRB struct { // tree container
 	txnsmeta
 
 	// settings
-	keycapacity int64
-	valcapacity int64
+	memcapacity int64
 	allocator   string
 	setts       s.Settings
 	logprefix   string
@@ -50,8 +49,8 @@ func NewLLRB(name string, setts s.Settings) *LLRB {
 	llrb.readsettings(setts)
 	llrb.setts = setts
 
-	llrb.nodearena = malloc.NewArena(llrb.keycapacity, llrb.allocator)
-	llrb.valarena = malloc.NewArena(llrb.valcapacity, llrb.allocator)
+	llrb.nodearena = malloc.NewArena(llrb.memcapacity, llrb.allocator)
+	llrb.valarena = malloc.NewArena(llrb.memcapacity, llrb.allocator)
 
 	// statistics
 	llrb.h_upsertdepth = lib.NewhistorgramInt64(10, 100, 10)
@@ -64,8 +63,7 @@ func NewLLRB(name string, setts s.Settings) *LLRB {
 //---- local accessor methods.
 
 func (llrb *LLRB) readsettings(setts s.Settings) *LLRB {
-	llrb.keycapacity = setts.Int64("keycapacity")
-	llrb.valcapacity = setts.Int64("valcapacity")
+	llrb.memcapacity = setts.Int64("memcapacity")
 	llrb.allocator = setts.String("allocator")
 	return llrb
 }

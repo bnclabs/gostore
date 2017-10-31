@@ -8,10 +8,7 @@ import "github.com/prataprc/gostore/bubt"
 import s "github.com/prataprc/gosettings"
 
 func TestYSort(t *testing.T) {
-	setts := s.Settings{
-		"keycapacity": 1024 * 1024 * 1024,
-		"valcapacity": 1024 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 1024 * 1024 * 1024}
 	ref := llrb.NewLLRB("refllrb", setts)
 
 	llrb1, keys := makeLLRB("llrb1", 100000, nil, ref, -1, -1)
@@ -94,10 +91,7 @@ func TestYSort(t *testing.T) {
 }
 
 func BenchmarkYSort(b *testing.B) {
-	setts := s.Settings{
-		"keycapacity": 1024 * 1024 * 1024,
-		"valcapacity": 1024 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 1024 * 1024 * 1024}
 	ref := llrb.NewLLRB("refllrb", setts)
 
 	llrb1, nkeys := makeLLRB("llrb1", b.N, nil, ref, -1, -1)

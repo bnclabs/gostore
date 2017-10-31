@@ -5,11 +5,8 @@ import "github.com/cloudfoundry/gosigar"
 
 // Defaultsettings for llrb instance.
 //
-// "keycapacity" (int64)
-//		Memory capacity required for keys. Default will be ramsize.
-//
-// "valcapacity" (int64)
-//		Memory capacity required for values. Default will be ramsize.
+// "memcapacity" (int64)
+//		Memory capacity required for keys / values. Default will be ramsize.
 //
 // "snapshottick" (int64, default: 4)
 //      Used only in MVCC, time period in millisecond, for generating
@@ -21,8 +18,7 @@ import "github.com/cloudfoundry/gosigar"
 func Defaultsettings() s.Settings {
 	_, _, freeram := getsysmem()
 	setts := s.Settings{
-		"keycapacity":  freeram,
-		"valcapacity":  freeram,
+		"memcapacity":  freeram,
 		"snapshottick": 4,
 		"allocator":    "flist",
 	}

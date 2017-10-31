@@ -13,9 +13,7 @@ import "github.com/prataprc/gostore/api"
 import s "github.com/prataprc/gosettings"
 
 func TestMVCCEmpty(t *testing.T) {
-	setts := s.Settings{
-		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
 	mvcc := NewMVCC("empty", setts)
 	defer mvcc.Destroy()
 
@@ -58,9 +56,7 @@ func TestMVCCEmpty(t *testing.T) {
 func TestMVCCLoad(t *testing.T) {
 	var cas uint64
 
-	setts := s.Settings{
-		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
 	mvcc := NewMVCC("load", setts)
 	defer mvcc.Destroy()
 
@@ -179,9 +175,7 @@ func TestMVCCLoad(t *testing.T) {
 }
 
 func TestMVCCDotdump(t *testing.T) {
-	setts := s.Settings{
-		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
 	mvcc := NewMVCC("load", setts)
 	defer mvcc.Destroy()
 
@@ -214,9 +208,7 @@ func TestMVCCDotdump(t *testing.T) {
 }
 
 func TestMVCCLoadLarge(t *testing.T) {
-	setts := s.Settings{
-		"keycapacity": 100 * 1024 * 1024, "valcapacity": 100 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 100 * 1024 * 1024}
 	mvcc := NewMVCC("loadlarge", setts)
 	defer mvcc.Destroy()
 
@@ -275,9 +267,7 @@ func TestMVCCLoadLarge(t *testing.T) {
 }
 
 func TestMVCCClone(t *testing.T) {
-	setts := s.Settings{
-		"keycapacity": 100 * 1024 * 1024, "valcapacity": 100 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 100 * 1024 * 1024}
 	mvcc := NewMVCC("clone", setts)
 	defer mvcc.Destroy()
 
@@ -343,9 +333,7 @@ func TestMVCCSetCAS(t *testing.T) {
 	var err error
 	var cas uint64
 
-	setts := s.Settings{
-		"keycapacity": 100 * 1024 * 1024, "valcapacity": 100 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 100 * 1024 * 1024}
 	mvcc := NewMVCC("setcas", setts)
 	defer mvcc.Destroy()
 
@@ -505,9 +493,7 @@ func TestMVCCDelete(t *testing.T) {
 	var err error
 	var cas uint64
 
-	setts := s.Settings{
-		"keycapacity": 100 * 1024 * 1024, "valcapacity": 100 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 100 * 1024 * 1024}
 	mvcc := NewMVCC("delete", setts)
 	defer mvcc.Destroy()
 
@@ -724,9 +710,7 @@ func TestMVCCDelete(t *testing.T) {
 }
 
 func TestMVCCTxn(t *testing.T) {
-	setts := s.Settings{
-		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
 	mvcc := NewMVCC("txn", setts)
 	defer mvcc.Destroy()
 	snaptick := time.Duration(Defaultsettings().Int64("snapshottick") * 2)
@@ -833,9 +817,7 @@ func TestMVCCTxn(t *testing.T) {
 }
 
 func TestMVCCView(t *testing.T) {
-	setts := s.Settings{
-		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
 	mvcc := NewMVCC("view", setts)
 	defer mvcc.Destroy()
 	snaptick := time.Duration(Defaultsettings().Int64("snapshottick") * 2)
@@ -878,9 +860,7 @@ func TestMVCCView(t *testing.T) {
 }
 
 func TestMVCCTxnCursor(t *testing.T) {
-	setts := s.Settings{
-		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
 	mvcc := NewMVCC("view", setts)
 	defer mvcc.Destroy()
 
@@ -958,9 +938,7 @@ func TestMVCCTxnCursor(t *testing.T) {
 }
 
 func TestMVCCViewCursor(t *testing.T) {
-	setts := s.Settings{
-		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
 	mvcc := NewMVCC("view", setts)
 	defer mvcc.Destroy()
 
@@ -1036,9 +1014,7 @@ func TestMVCCViewCursor(t *testing.T) {
 }
 
 func TestMVCCScan(t *testing.T) {
-	setts := s.Settings{
-		"keycapacity": 100 * 1024 * 1024, "valcapacity": 100 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 100 * 1024 * 1024}
 	llrb := NewMVCC("scan", setts)
 	defer llrb.Destroy()
 	snaptick := time.Duration(Defaultsettings().Int64("snapshottick") * 2)
@@ -1105,9 +1081,7 @@ func BenchmarkMVCCCount(b *testing.B) {
 func BenchmarkMVCCSet(b *testing.B) {
 	var scratch [8]byte
 
-	setts := s.Settings{
-		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
 	mvcc := NewMVCC("bench", setts)
 	defer mvcc.Destroy()
 
@@ -1123,9 +1097,7 @@ func BenchmarkMVCCSet(b *testing.B) {
 func BenchmarkMVCCCAS(b *testing.B) {
 	var scratch [8]byte
 
-	setts := s.Settings{
-		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
 	mvcc := NewMVCC("bench", setts)
 	defer mvcc.Destroy()
 
@@ -1268,9 +1240,7 @@ func BenchmarkMVCCScan(b *testing.B) {
 func makeBenchMVCC(n int) *MVCC {
 	var scratch [8]byte
 
-	setts := s.Settings{
-		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
 	mvcc := NewMVCC("bench", setts)
 	k, v := []byte("key000000000000"), []byte("val00000000000000")
 	for i := 0; i < n; i++ {

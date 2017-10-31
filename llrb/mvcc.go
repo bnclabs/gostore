@@ -40,8 +40,7 @@ type MVCC struct {
 	snapcache chan *mvccsnapshot
 
 	// settings
-	keycapacity int64
-	valcapacity int64
+	memcapacity int64
 	snaptick    time.Duration // mvcc settings
 	allocator   string
 	setts       s.Settings
@@ -63,8 +62,8 @@ func NewMVCC(name string, setts s.Settings) *MVCC {
 	mvcc.setts = setts
 
 	// setup arena for nodes and node-values.
-	mvcc.nodearena = malloc.NewArena(mvcc.keycapacity, mvcc.allocator)
-	mvcc.valarena = malloc.NewArena(mvcc.valcapacity, mvcc.allocator)
+	mvcc.nodearena = malloc.NewArena(mvcc.memcapacity, mvcc.allocator)
+	mvcc.valarena = malloc.NewArena(mvcc.memcapacity, mvcc.allocator)
 
 	// statistics
 	mvcc.snapshot = nil
@@ -84,8 +83,7 @@ func NewMVCC(name string, setts s.Settings) *MVCC {
 //---- local accessor methods.
 
 func (mvcc *MVCC) readsettings(setts s.Settings) *MVCC {
-	mvcc.keycapacity = setts.Int64("keycapacity")
-	mvcc.valcapacity = setts.Int64("valcapacity")
+	mvcc.memcapacity = setts.Int64("memcapacity")
 	snaptick := setts.Int64("snapshottick")
 	mvcc.snaptick = time.Duration(snaptick) * time.Millisecond
 	mvcc.allocator = setts.String("allocator")

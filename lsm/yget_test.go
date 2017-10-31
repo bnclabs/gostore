@@ -155,10 +155,7 @@ func makeLLRB(
 	name string, n int, keys [][]byte,
 	ref *llrb.LLRB, mod1, mod2 int) (*llrb.LLRB, [][]byte) {
 
-	setts := s.Settings{
-		"keycapacity": 1024 * 1024 * 1024,
-		"valcapacity": 1024 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 1024 * 1024 * 1024}
 	mi := llrb.NewLLRB(name, setts)
 	mi.Setseqno(ref.Getseqno())
 

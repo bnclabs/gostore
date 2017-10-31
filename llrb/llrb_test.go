@@ -13,9 +13,7 @@ import "github.com/prataprc/gostore/api"
 import s "github.com/prataprc/gosettings"
 
 func TestLLRBEmpty(t *testing.T) {
-	setts := s.Settings{
-		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
 	llrb := NewLLRB("empty", setts)
 	defer llrb.Destroy()
 
@@ -58,9 +56,7 @@ func TestLLRBEmpty(t *testing.T) {
 func TestLLRBLoad(t *testing.T) {
 	var cas uint64
 
-	setts := s.Settings{
-		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
 	llrb := NewLLRB("load", setts)
 	defer llrb.Destroy()
 
@@ -176,9 +172,7 @@ func TestLLRBLoad(t *testing.T) {
 }
 
 func TestLLRBDotdump(t *testing.T) {
-	setts := s.Settings{
-		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
 	llrb := NewLLRB("load", setts)
 	defer llrb.Destroy()
 
@@ -211,9 +205,7 @@ func TestLLRBDotdump(t *testing.T) {
 }
 
 func TestLLRBLoadLarge(t *testing.T) {
-	setts := s.Settings{
-		"keycapacity": 100 * 1024 * 1024, "valcapacity": 100 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 100 * 1024 * 1024}
 	llrb := NewLLRB("loadlarge", setts)
 	defer llrb.Destroy()
 
@@ -275,9 +267,7 @@ func TestLLRBLoadLarge(t *testing.T) {
 }
 
 func TestLLRBClone(t *testing.T) {
-	setts := s.Settings{
-		"keycapacity": 100 * 1024 * 1024, "valcapacity": 100 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 100 * 1024 * 1024}
 	llrb := NewLLRB("clone", setts)
 	defer llrb.Destroy()
 
@@ -345,9 +335,7 @@ func TestLLRBSetCAS(t *testing.T) {
 	var err error
 	var cas uint64
 
-	setts := s.Settings{
-		"keycapacity": 100 * 1024 * 1024, "valcapacity": 100 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 100 * 1024 * 1024}
 	llrb := NewLLRB("setcas", setts)
 	defer llrb.Destroy()
 
@@ -503,9 +491,7 @@ func TestLLRBDelete(t *testing.T) {
 	var err error
 	var cas uint64
 
-	setts := s.Settings{
-		"keycapacity": 100 * 1024 * 1024, "valcapacity": 100 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 100 * 1024 * 1024}
 	llrb := NewLLRB("delete", setts)
 	defer llrb.Destroy()
 
@@ -730,9 +716,7 @@ func TestLLRBDelete(t *testing.T) {
 }
 
 func TestLLRBTxn(t *testing.T) {
-	setts := s.Settings{
-		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
 	llrb := NewLLRB("txn", setts)
 	defer llrb.Destroy()
 
@@ -829,9 +813,7 @@ func TestLLRBTxn(t *testing.T) {
 }
 
 func TestLLRBView(t *testing.T) {
-	setts := s.Settings{
-		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
 	llrb := NewLLRB("view", setts)
 	defer llrb.Destroy()
 
@@ -870,9 +852,7 @@ func TestLLRBView(t *testing.T) {
 }
 
 func TestLLRBTxnCursor(t *testing.T) {
-	setts := s.Settings{
-		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
 	llrb := NewLLRB("view", setts)
 	defer llrb.Destroy()
 
@@ -958,9 +938,7 @@ func TestLLRBTxnCursor(t *testing.T) {
 }
 
 func TestLLRBViewCursor(t *testing.T) {
-	setts := s.Settings{
-		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
 	llrb := NewLLRB("view", setts)
 	defer llrb.Destroy()
 
@@ -1044,9 +1022,7 @@ func TestLLRBViewCursor(t *testing.T) {
 }
 
 func TestLLRBScan(t *testing.T) {
-	setts := s.Settings{
-		"keycapacity": 100 * 1024 * 1024, "valcapacity": 100 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 100 * 1024 * 1024}
 	llrb := NewLLRB("scan", setts)
 	defer llrb.Destroy()
 
@@ -1109,9 +1085,7 @@ func BenchmarkLLRBCount(b *testing.B) {
 func BenchmarkLLRBSet(b *testing.B) {
 	var scratch [8]byte
 
-	setts := s.Settings{
-		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
 	llrb := NewLLRB("bench", setts)
 	defer llrb.Destroy()
 
@@ -1127,9 +1101,7 @@ func BenchmarkLLRBSet(b *testing.B) {
 func BenchmarkLLRBCAS(b *testing.B) {
 	var scratch [8]byte
 
-	setts := s.Settings{
-		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
 	llrb := NewLLRB("bench", setts)
 	defer llrb.Destroy()
 
@@ -1272,9 +1244,7 @@ func BenchmarkLLRBScan(b *testing.B) {
 func makeBenchLLRB(n int) *LLRB {
 	var scratch [8]byte
 
-	setts := s.Settings{
-		"keycapacity": 10 * 1024 * 1024, "valcapacity": 10 * 1024 * 1024,
-	}
+	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
 	llrb := NewLLRB("bench", setts)
 	k, v := []byte("key000000000000"), []byte("val00000000000000")
 	for i := 0; i < n; i++ {
