@@ -1,6 +1,7 @@
 package bogn
 
 import "io"
+import "os"
 import "fmt"
 import "sync"
 import "unsafe"
@@ -47,6 +48,9 @@ type Bogn struct {
 // New create a new bogn instance.
 func New(name string, setts s.Settings) (*Bogn, error) {
 	bogn := (&Bogn{name: name}).readsettings(setts)
+	if err := bogn.makepaths(setts); err != nil {
+		return nil, err
+	}
 	bogn.finch = make(chan struct{})
 	bogn.logprefix = fmt.Sprintf("BOGN [%v]", name)
 
@@ -91,6 +95,18 @@ func (bogn *Bogn) readsettings(setts s.Settings) *Bogn {
 		bogn.memcapacity = llrbsetts.Int64("memcapacity")
 	}
 	return bogn
+}
+
+func (bogn *Bogn) makepaths(setts s.Settings) error {
+	bubtsetts := setts.Section("bubt.").Trim("bubt.")
+	for _, path := range bubtsetts.Strings("diskpaths") {
+		if err := os.MkdirAll(path, 0775); err != nil {
+			log.Errorf("%v %v", bogn.logprefix, err)
+			return err
+		}
+	}
+	return nil
+
 }
 
 func (bogn *Bogn) currsnapshot() *snapshot {
@@ -258,7 +274,7 @@ func (bogn *Bogn) Log() {
 	if snap.mc != nil {
 		log.Infof("%v cache-store count %v\n", bogn.indexcount(snap.mc))
 	}
-	for _, disk := range snap.disklevels() {
+	for _, disk := range snap.disklevels([]api.Index{}) {
 		log.Infof("%v disk-store count %v\n", bogn.indexcount(disk))
 	}
 	snap.release()
@@ -314,7 +330,7 @@ func (bogn *Bogn) Scan() api.Iterator {
 		} else if fin == false {
 			key, val, seqno, del, e = iter(fin)
 			if err = e; err == io.EOF {
-				snap.release
+				snap.release()
 			}
 			return
 		}
