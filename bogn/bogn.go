@@ -1,5 +1,6 @@
 package bogn
 
+import "io"
 import "fmt"
 import "sync"
 import "unsafe"
@@ -231,6 +232,7 @@ func (bogn *Bogn) isclosed() bool {
 
 //---- Exported Control methods
 
+// ID is same as the name of the instance used when creating it.
 func (bogn *Bogn) ID() string {
 	return bogn.name
 }
@@ -243,6 +245,23 @@ func (bogn *Bogn) BeginTxn(id uint64) api.Transactor {
 // TODO: to be implemented.
 func (bogn *Bogn) View(id uint64) api.Transactor {
 	return nil
+}
+
+func (bogn *Bogn) Log() {
+	snap := bogn.latestsnapshot()
+	if snap.mw != nil {
+		log.Infof("%v write-store count %v\n", bogn.indexcount(snap.mw))
+	}
+	if snap.mr != nil {
+		log.Infof("%v read-store count %v\n", bogn.indexcount(snap.mr))
+	}
+	if snap.mc != nil {
+		log.Infof("%v cache-store count %v\n", bogn.indexcount(snap.mc))
+	}
+	for _, disk := range snap.disklevels() {
+		log.Infof("%v disk-store count %v\n", bogn.indexcount(disk))
+	}
+	snap.release()
 }
 
 // Compact away oldver version of disk snapshots.
@@ -285,12 +304,21 @@ func (bogn *Bogn) Get(
 
 // Scan return a full table iterator.
 func (bogn *Bogn) Scan() api.Iterator {
+	var err error
 	snap := bogn.latestsnapshot()
 	iter := snap.iterator()
 	return func(fin bool) (key, val []byte, seqno uint64, del bool, e error) {
-		if fin == false {
-			return iter(fin)
+		if err == io.EOF {
+			return nil, nil, 0, false, err
+
+		} else if fin == false {
+			key, val, seqno, del, e = iter(fin)
+			if err = e; err == io.EOF {
+				snap.release
+			}
+			return
 		}
+		err = io.EOF
 		snap.release()
 		return
 	}
@@ -325,9 +353,8 @@ func (bogn *Bogn) SetCAS(
 // value. If lsm is true, then don't delete the node instead mark the node
 // as deleted. Again, if lsm is true but key is not found in index, a new
 // entry will inserted.
-func (bogn *Bogn) Delete(key, oldvalue []byte) ([]byte, uint64) {
+func (bogn *Bogn) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 	bogn.snaprw.RLock()
-	lsm := false
 	if atomic.LoadInt64(&bogn.dgmstate) == 1 { // auto-enable lsm in dgm
 		lsm = true
 	}
@@ -557,4 +584,16 @@ func (bogn *Bogn) destroylevels(indexes ...api.Index) {
 		index.Close()
 		index.Destroy()
 	}
+}
+
+func (bogn *Bogn) indexcount(index api.Index) int64 {
+	switch idx := index.(type) {
+	case *llrb.LLRB:
+		return idx.Count()
+	case *llrb.MVCC:
+		return idx.Count()
+	case *bubt.Snapshot:
+		return idx.Count()
+	}
+	panic("impossible situation")
 }
