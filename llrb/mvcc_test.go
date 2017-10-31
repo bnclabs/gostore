@@ -838,6 +838,8 @@ func TestMVCCView(t *testing.T) {
 	}
 	mvcc := NewMVCC("view", setts)
 	defer mvcc.Destroy()
+	snaptick := time.Duration(Defaultsettings().Int64("snapshottick") * 2)
+	snaptick = snaptick * time.Millisecond
 
 	keys := []string{
 		"key1", "key2", "key3", "key4", "key5", "key6", "key7", "key8",
@@ -851,6 +853,8 @@ func TestMVCCView(t *testing.T) {
 		k, v := lib.Str2bytes(key), lib.Str2bytes(vals[i])
 		mvcc.Set(k, v, nil)
 	}
+
+	time.Sleep(snaptick)
 
 	view := mvcc.View(0x1234)
 	defer view.Abort()
@@ -880,6 +884,9 @@ func TestMVCCTxnCursor(t *testing.T) {
 	mvcc := NewMVCC("view", setts)
 	defer mvcc.Destroy()
 
+	snaptick := time.Duration(Defaultsettings().Int64("snapshottick") * 2)
+	snaptick = snaptick * time.Millisecond
+
 	keys := []string{
 		"key1", "key11", "key12", "key13", "key14", "key15", "key16",
 		"key17", "key18",
@@ -897,6 +904,8 @@ func TestMVCCTxnCursor(t *testing.T) {
 	mvcc.Delete([]byte(keys[15]), nil, true /*lsm*/)
 
 	// mvcc.getroot().ptrdump(" ")
+
+	time.Sleep(snaptick)
 
 	txn := mvcc.BeginTxn(0x1234)
 	for i, key := range keys {
@@ -955,6 +964,9 @@ func TestMVCCViewCursor(t *testing.T) {
 	mvcc := NewMVCC("view", setts)
 	defer mvcc.Destroy()
 
+	snaptick := time.Duration(Defaultsettings().Int64("snapshottick") * 2)
+	snaptick = snaptick * time.Millisecond
+
 	keys := []string{
 		"key1", "key11", "key12", "key13", "key14", "key15", "key16",
 		"key17", "key18",
@@ -972,6 +984,7 @@ func TestMVCCViewCursor(t *testing.T) {
 	mvcc.Delete([]byte(keys[15]), nil, true /*lsm*/)
 
 	// mvcc.getroot().ptrdump(" ")
+	time.Sleep(snaptick)
 
 	for i, key := range keys {
 		view := mvcc.View(0x1234 + uint64(i))
@@ -983,6 +996,8 @@ func TestMVCCViewCursor(t *testing.T) {
 		testynext(t, cur, i, keys, vals)
 		view.Abort()
 	}
+
+	time.Sleep(snaptick)
 
 	txn := mvcc.BeginTxn(0x12345)
 	cur, _ := txn.OpenCursor([]byte(keys[0]))
