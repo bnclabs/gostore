@@ -8,6 +8,7 @@ import "github.com/prataprc/gostore/api"
 import "github.com/prataprc/gostore/lib"
 import "github.com/prataprc/gostore/lsm"
 import "github.com/prataprc/gostore/llrb"
+import "github.com/prataprc/golog"
 
 type snapshot struct {
 	refcount int64
@@ -27,15 +28,11 @@ type snapshot struct {
 
 func opensnapshot(bogn *Bogn, disks [16]api.Index) (*snapshot, error) {
 	var err error
-	var uuidbuf [8]byte
-	uuid, err := lib.Newuuid(uuidbuf[:])
-	if err != nil {
-		return nil, err
-	}
 
-	head := &snapshot{id: string(uuid), bogn: bogn, disks: disks, next: nil}
-	head.mw, err = bogn.newmemstore("mw", 0)
-	if err != nil {
+	uuid := bogn.newuuid()
+
+	head := &snapshot{id: uuid, bogn: bogn, disks: disks, next: nil}
+	if head.mw, err = bogn.newmemstore("mw", 0); err != nil {
 		return nil, err
 	}
 	if bogn.workingset {
@@ -48,13 +45,18 @@ func opensnapshot(bogn *Bogn, disks [16]api.Index) (*snapshot, error) {
 		go cacher(bogn, head.mc, head.setch, head.cachech)
 	}
 	head.yget = head.reduceyget()
+	log.Infof("%v open-snapshot %s", bogn.logprefix, head.id)
 	return head, nil
 }
 
 func newsnapshot(
-	bogn *Bogn, mw, mr, mc api.Index, disks [16]api.Index) *snapshot {
+	bogn *Bogn, mw, mr, mc api.Index, disks [16]api.Index,
+	uuid string) *snapshot {
 
-	head := &snapshot{bogn: bogn, mw: mw, mr: mr, mc: mc}
+	if uuid == "" {
+		uuid = bogn.newuuid()
+	}
+	head := &snapshot{id: uuid, bogn: bogn, mw: mw, mr: mr, mc: mc}
 	copy(head.disks[:], disks[:])
 	if head.mc != nil {
 		head.setch = make(chan *setcache, 1000)   // TODO: no magic number
@@ -62,6 +64,7 @@ func newsnapshot(
 		go cacher(bogn, head.mc, head.setch, head.cachech)
 	}
 	head.yget = head.reduceyget()
+	log.Infof("%v new-snapshot %s", bogn.logprefix, head.id)
 	return head
 }
 
@@ -147,7 +150,9 @@ func (snap *snapshot) memheap() int64 {
 
 func (snap *snapshot) reduceyget() (get api.Getter) {
 	gets := []api.Getter{}
-	gets = append(gets, snap.mw.Get)
+	if snap.mw != nil {
+		gets = append(gets, snap.mw.Get)
+	}
 	if snap.mr != nil {
 		gets = append(gets, snap.mr.Get)
 	}
@@ -165,6 +170,9 @@ func (snap *snapshot) reduceyget() (get api.Getter) {
 		gets = append(gets, dget)
 	}
 
+	if len(gets) == 0 {
+		return nil
+	}
 	get = gets[len(gets)-1]
 	for i := len(gets) - 2; i >= 0; i-- {
 		get = lsm.YGet(get, gets[i])
@@ -205,14 +213,23 @@ func (snap *snapshot) iterator() (scan api.Iterator) {
 	var ref [20]api.Iterator
 	scans := ref[:0]
 
-	scans = append(scans, snap.mw.Scan())
+	if iter := snap.mw.Scan(); iter != nil {
+		scans = append(scans, iter)
+	}
 	if snap.mr != nil {
-		scans = append(scans, snap.mr.Scan())
+		if iter := snap.mr.Scan(); iter != nil {
+			scans = append(scans, iter)
+		}
 	}
 	for _, disk := range snap.disklevels([]api.Index{}) {
-		scans = append(scans, disk.Scan())
+		if iter := disk.Scan(); iter != nil {
+			scans = append(scans, iter)
+		}
 	}
 
+	if len(scans) == 0 {
+		return nil
+	}
 	scan = scans[len(scans)-1]
 	for i := len(scans) - 2; i >= 0; i-- {
 		scan = lsm.YSort(scan, scans[i])
@@ -225,11 +242,18 @@ func (snap *snapshot) persistiterator() (scan api.Iterator) {
 	var ref [20]api.Iterator
 	scans := ref[:0]
 
-	scans = append(scans, snap.mw.Scan())
+	if iter := snap.mw.Scan(); iter != nil {
+		scans = append(scans, iter)
+	}
 	for _, disk := range snap.disklevels([]api.Index{}) {
-		scans = append(scans, disk.Scan())
+		if iter := disk.Scan(); iter != nil {
+			scans = append(scans, iter)
+		}
 	}
 
+	if len(scans) == 0 {
+		return nil
+	}
 	scan = scans[len(scans)-1] // disk store.
 	for i := len(scans) - 2; i >= 0; i-- {
 		scan = lsm.YSort(scan, scans[i])
@@ -238,10 +262,26 @@ func (snap *snapshot) persistiterator() (scan api.Iterator) {
 }
 
 func (snap *snapshot) windupiterator(disk api.Index) (scan api.Iterator) {
-	if disk == nil {
-		return snap.mw.Scan()
+	var ref [20]api.Iterator
+	scans := ref[:0]
+
+	if iter := snap.mw.Scan(); iter != nil {
+		scans = append(scans, iter)
 	}
-	return lsm.YSort(disk.Scan(), snap.mw.Scan())
+	if disk != nil {
+		if iter := disk.Scan(); iter != nil {
+			scans = append(scans, iter)
+		}
+	}
+
+	if len(scans) == 0 {
+		return nil
+	}
+	scan = scans[len(scans)-1]
+	for i := len(scans) - 2; i >= 0; i-- {
+		scan = lsm.YSort(scan, scans[i])
+	}
+	return scan
 }
 
 // iterate on write store, read store, cache store and a latest disk store.
@@ -249,14 +289,23 @@ func (snap *snapshot) flushiterator(disk api.Index) (scan api.Iterator) {
 	var ref [20]api.Iterator
 	scans := ref[:0]
 
-	scans = append(scans, snap.mr.Scan())
+	if iter := snap.mr.Scan(); iter != nil {
+		scans = append(scans, iter)
+	}
 	if snap.mc != nil {
-		scans = append(scans, snap.mc.Scan())
+		if iter := snap.mc.Scan(); iter != nil {
+			scans = append(scans, iter)
+		}
 	}
 	if disk != nil {
-		scans = append(scans, disk.Scan())
+		if iter := disk.Scan(); iter != nil {
+			scans = append(scans, iter)
+		}
 	}
 
+	if len(scans) == 0 {
+		return nil
+	}
 	scan = scans[len(scans)-1]
 	for i := len(scans) - 2; i >= 0; i-- {
 		scan = lsm.YSort(scan, scans[i])
@@ -265,12 +314,29 @@ func (snap *snapshot) flushiterator(disk api.Index) (scan api.Iterator) {
 }
 
 func (snap *snapshot) compactiterator(d0, d1 api.Index) (scan api.Iterator) {
+	var ref [20]api.Iterator
+	scans := ref[:0]
+
 	if d0 == nil {
 		return d1.Scan()
 	} else if d1 == nil {
 		return d0.Scan()
 	}
-	scan = lsm.YSort(d1.Scan(), d0.Scan())
+
+	if iter := d0.Scan(); iter != nil {
+		scans = append(scans, iter)
+	}
+	if iter := d1.Scan(); iter != nil {
+		scans = append(scans, iter)
+	}
+
+	if len(scans) == 0 {
+		return nil
+	}
+	scan = scans[len(scans)-1]
+	for i := len(scans) - 2; i >= 0; i-- {
+		scan = lsm.YSort(scan, scans[i])
+	}
 	return
 }
 

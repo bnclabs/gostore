@@ -49,7 +49,7 @@ import "github.com/prataprc/gostore/llrb"
 func Defaultsettings() s.Settings {
 	setts := s.Settings{
 		"memstore":       "mvcc",
-		"durable":        false,
+		"durable":        true,
 		"dgm":            false,
 		"workingset":     false,
 		"ratio":          .25,

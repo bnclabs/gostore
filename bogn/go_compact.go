@@ -139,8 +139,8 @@ func dopersist(bogn *Bogn) (err error) {
 		}
 	}
 
-	now, iter := time.Now(), snap.persistiterator()
-	ndisk, count, err := bogn.builddiskstore(level, version, iter)
+	now, iter, uuid := time.Now(), snap.persistiterator(), bogn.newuuid()
+	ndisk, count, err := bogn.builddiskstore(level, version, uuid, iter)
 	if err != nil {
 		return err
 	}
@@ -156,7 +156,7 @@ func dopersist(bogn *Bogn) (err error) {
 		bogn.snaprw.Lock()
 		defer bogn.snaprw.Unlock()
 
-		head := newsnapshot(bogn, snap.mw, nil, nil, disks)
+		head := newsnapshot(bogn, snap.mw, nil, nil, disks, uuid)
 		head.yget = head.mw.Get
 		atomic.StorePointer(&head.next, unsafe.Pointer(snap))
 		head.refer()
@@ -186,7 +186,7 @@ func doflush(bogn *Bogn, disk0 api.Index) (err error) {
 		if mw, err = bogn.newmemstore("mw", snap.mwseqno()); err != nil {
 			panic(err) // should never happen
 		}
-		head := newsnapshot(bogn, mw, snap.mw, snap.mc, snap.disks)
+		head := newsnapshot(bogn, mw, snap.mw, snap.mc, snap.disks, "")
 		atomic.StorePointer(&head.next, unsafe.Pointer(snap))
 		head.refer()
 		bogn.setheadsnapshot(head)
@@ -196,9 +196,9 @@ func doflush(bogn *Bogn, disk0 api.Index) (err error) {
 		log.Infof(fmsg, snap.bogn.logprefix, head.id)
 	}()
 
-	snap = bogn.latestsnapshot()
+	snap, uuid := bogn.latestsnapshot(), bogn.newuuid()
 	now, iter := time.Now(), snap.flushiterator(disk)
-	ndisk, count, err := bogn.builddiskstore(nlevel, nversion, iter)
+	ndisk, count, err := bogn.builddiskstore(nlevel, nversion, uuid, iter)
 	if err != nil {
 		return err
 	}
@@ -227,7 +227,7 @@ func doflush(bogn *Bogn, disk0 api.Index) (err error) {
 
 		// TODO: between head1 and head newly cached entries would be
 		// lost.
-		head := newsnapshot(bogn, snap.mw, nil, mc, disks)
+		head := newsnapshot(bogn, snap.mw, nil, mc, disks, uuid)
 		atomic.StorePointer(&head.next, unsafe.Pointer(snap))
 		head.refer()
 		bogn.setheadsnapshot(head)
@@ -243,25 +243,25 @@ func doflush(bogn *Bogn, disk0 api.Index) (err error) {
 
 func startdisk(
 	bogn *Bogn,
-	disk0, disk1 api.Index, nextlevel int) (chan api.Index, chan error) {
+	disk0, disk1 api.Index, nlevel int) (chan api.Index, chan error) {
 
 	var version int
 
 	snap := bogn.currsnapshot()
-	ndisk, version := snap.disks[nextlevel], 1
+	ndisk, version := snap.disks[nlevel], 1
 	if ndisk != nil {
 		_, version, _ = bogn.path2level(ndisk.ID())
 	}
 
 	respch, errch := make(chan api.Index, 1), make(chan error, 1)
-	iter := snap.compactiterator(disk0, disk1)
+	iter, uuid := snap.compactiterator(disk0, disk1), bogn.newuuid()
 
 	go func() {
 		fmsg := "%v for snapshot %v compacting %q + %q ..."
 		log.Infof(fmsg, bogn.logprefix, snap.id, disk0.ID(), disk1.ID())
 
 		now := time.Now()
-		ndisk, count, err := bogn.builddiskstore(nextlevel, version+1, iter)
+		ndisk, count, err := bogn.builddiskstore(nlevel, version+1, uuid, iter)
 		if err != nil {
 			errch <- err
 			return
@@ -284,11 +284,12 @@ func findisk(bogn *Bogn, disk0, disk1, ndisk api.Index) error {
 	nlevel, _, _ := bogn.path2level(ndisk.ID())
 	disks[level0], disks[level1], disks[nlevel] = nil, nil, ndisk
 
+	_, _, uuid := bogn.path2level(ndisk.ID())
 	func() {
 		bogn.snaprw.Lock()
 		defer bogn.snaprw.Unlock()
 
-		head := newsnapshot(bogn, snap.mw, snap.mr, snap.mc, disks)
+		head := newsnapshot(bogn, snap.mw, snap.mr, snap.mc, disks, uuid)
 		atomic.StorePointer(&head.next, unsafe.Pointer(snap))
 		head.refer()
 		bogn.setheadsnapshot(head)
@@ -310,8 +311,8 @@ func dowindup(bogn *Bogn) error {
 	if nlevel < 0 {
 		panic("impossible situation")
 	}
-	now, iter := time.Now(), snap.windupiterator(disk)
-	ndisk, count, err := bogn.builddiskstore(nlevel, nversion, iter)
+	now, iter, uuid := time.Now(), snap.windupiterator(disk), bogn.newuuid()
+	ndisk, count, err := bogn.builddiskstore(nlevel, nversion, uuid, iter)
 	if err != nil {
 		return err
 	}
@@ -322,14 +323,14 @@ func dowindup(bogn *Bogn) error {
 		bogn.snaprw.Lock()
 		defer bogn.snaprw.Unlock()
 
-		head := newsnapshot(bogn, nil, nil, nil, snap.disks)
+		head := newsnapshot(bogn, nil, nil, nil, snap.disks, uuid)
 		atomic.StorePointer(&head.next, unsafe.Pointer(snap))
 		head.refer()
 		bogn.setheadsnapshot(head)
 		snap.release()
 
 		snap.addtopurge(snap.mw, snap.mr, snap.mc, disk)
-		fmsg := "%v for snapshot %v windup ..."
+		fmsg := "%v for snapshot %s windup on disk %v"
 		log.Infof(fmsg, snap.bogn.logprefix, head.id, ndisk.ID())
 	}()
 	return nil
