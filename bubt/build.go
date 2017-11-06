@@ -39,8 +39,7 @@ func NewBubt(
 	tree.logprefix = fmt.Sprintf("BUBT [%s]", name)
 
 	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("%v", r)
+		if err != nil {
 			tree.Close()
 		}
 	}()
@@ -66,12 +65,6 @@ func NewBubt(
 // to be a full-table scan over another data-store.
 func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 	log.Infof("%v starting bottoms up build ...\n", tree.logprefix)
-
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("%v", r)
-		}
-	}()
 
 	n_count := int64(0)
 	z := newz(tree.zblocksize)
@@ -251,7 +244,9 @@ func (tree *Bubt) Writemetadata(metadata []byte) error {
 // Close instance after building the btree. This will mark disk files as
 // immutable for rest of its life-time. Use OpenSnapshot for reading.
 func (tree *Bubt) Close() {
-	tree.mflusher.close()
+	if tree.mflusher != nil {
+		tree.mflusher.close()
+	}
 	for _, zflusher := range tree.zflushers {
 		zflusher.close()
 	}

@@ -64,11 +64,7 @@ func OpenSnapshot(
 	}
 
 	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("%s", r)
-		}
 		if err != nil {
-			log.Errorf("%v %v", snap.logprefix, err)
 			snap.Close()
 		}
 	}()
@@ -83,6 +79,7 @@ func OpenSnapshot(
 	snap.lockfile = filepath.Join(filepath.Dir(snap.mfile), "bubt.lock")
 	if snap.rw, err = flock.New(snap.lockfile); err != nil {
 		snap.rw = nil
+		log.Errorf("%v flock.New(): %v", snap.logprefix, err)
 		return
 	}
 	snap.rw.RLock()
@@ -120,6 +117,7 @@ func (snap *Snapshot) loadreaders(paths []string, mmap bool) error {
 				npaths = append(npaths, filepath.Join(path, snap.name))
 			}
 		} else {
+			log.Errorf("%v ReadDir(): %v", snap.logprefix, err)
 			return err
 		}
 	}
@@ -134,12 +132,15 @@ func (snap *Snapshot) loadreaders(paths []string, mmap bool) error {
 				}
 			}
 		} else {
+			log.Errorf("%v ReadDir(): %v", snap.logprefix, err)
 			return err
 		}
 	}
 
 	if snap.mfile == "" {
-		return fmt.Errorf("bubt.snap.nomindex")
+		err := fmt.Errorf("bubt.snap.nomindex")
+		log.Errorf("%v %v", snap.logprefix, err)
+		return err
 	}
 	snap.readm = openfile(snap.mfile, true)
 
@@ -158,7 +159,9 @@ func (snap *Snapshot) loadreaders(paths []string, mmap bool) error {
 func (snap *Snapshot) readheader(r io.ReaderAt) (*Snapshot, error) {
 	fsize := filesize(r)
 	if fsize < 0 {
-		return snap, fmt.Errorf("bubt.snap.nomarker")
+		err := fmt.Errorf("bubt.snap.nomarker")
+		log.Errorf("%v %v", snap.logprefix, err)
+		return snap, err
 	}
 
 	// validate marker block
@@ -166,47 +169,64 @@ func (snap *Snapshot) readheader(r io.ReaderAt) (*Snapshot, error) {
 	buffer := lib.Fixbuffer(nil, MarkerBlocksize)
 	n, err := r.ReadAt(buffer, fpos)
 	if err != nil {
+		log.Errorf("%v Read Markerblocksize: %v", snap.logprefix, err)
 		return snap, err
 	} else if n < len(buffer) {
-		return snap, fmt.Errorf("bubt.snap.partialmarker")
+		err := fmt.Errorf("bubt.snap.partialmarker")
+		log.Errorf("%v Read Markerblocksize: %v", snap.logprefix, err)
+		return snap, err
 	}
 	for _, c := range buffer {
 		if c != MarkerByte {
-			fmt.Errorf("bubt.snap.invalidmarker")
+			err = fmt.Errorf("bubt.snap.invalidmarker")
+			log.Errorf("%v Read Markerblock: %v", snap.logprefix, err)
+			return snap, err
 		}
 	}
 
 	// read metadata blocks
 	if fpos -= 8; fpos < 0 {
-		return snap, fmt.Errorf("bubt.snap.nomdlen")
+		err := fmt.Errorf("bubt.snap.nomdlen")
+		log.Errorf("%v Read metadatablock: %v", snap.logprefix, err)
+		return snap, err
 	}
 
 	var scratch [8]byte
 	n, err = r.ReadAt(scratch[:], fpos)
 	if err != nil {
+		log.Errorf("%v Read metadatablock: %v", snap.logprefix, err)
 		return snap, err
 	} else if n < len(scratch) {
-		return snap, fmt.Errorf("bubt.snap.partialmdlen")
+		err := fmt.Errorf("bubt.snap.partialmdlen")
+		log.Errorf("%v Read metadatablock: %v", snap.logprefix, err)
+		return snap, err
 	}
 	mdlen := binary.BigEndian.Uint64(scratch[:])
 
 	if fpos -= int64(mdlen) - 8; fpos < 0 {
-		return snap, fmt.Errorf("bubt.snap.nometadata")
+		err := fmt.Errorf("bubt.snap.nometadata")
+		log.Errorf("%v Read metadatablock: %v", snap.logprefix, err)
+		return snap, err
 	}
 
 	snap.metadata = lib.Fixbuffer(nil, int64(mdlen))
 	n, err = r.ReadAt(snap.metadata, fpos)
 	if err != nil {
+		log.Errorf("%v Read metadatablock: %v", snap.logprefix, err)
 		return snap, err
 	} else if n < len(snap.metadata) {
-		return snap, fmt.Errorf("bubt.snap.partialmetadata")
+		err := fmt.Errorf("bubt.snap.partialmetadata")
+		log.Errorf("%v Read metadatablock: %v", snap.logprefix, err)
+		return snap, err
 	}
 	ln := binary.BigEndian.Uint64(snap.metadata)
 	snap.metadata = snap.metadata[8 : 8+ln]
 
 	// read settings
 	if fpos -= MarkerBlocksize; fpos < 0 {
-		return snap, fmt.Errorf("bubt.snap.nosettings")
+		err := fmt.Errorf("bubt.snap.nosettings")
+		log.Errorf("%v Read settings: %v", snap.logprefix, err)
+		return snap, err
 	}
 
 	setts := s.Settings{}
@@ -214,14 +234,19 @@ func (snap *Snapshot) readheader(r io.ReaderAt) (*Snapshot, error) {
 	buffer = lib.Fixbuffer(buffer, MarkerBlocksize)
 	n, err = r.ReadAt(buffer, fpos)
 	if err != nil {
+		log.Errorf("%v Read settings: %v", snap.logprefix, err)
 		return snap, err
 	} else if n < len(buffer) {
-		return snap, fmt.Errorf("bubt.snap.partialsettings")
+		err := fmt.Errorf("bubt.snap.partialsettings")
+		log.Errorf("%v Read settings: %v", snap.logprefix, err)
+		return snap, err
 	}
 	ln = binary.BigEndian.Uint64(buffer)
 	json.Unmarshal(buffer[8:8+ln], &setts)
 	if snap.name != setts.String("name") {
-		return snap, fmt.Errorf("bubt.snap.invalidsettings")
+		err := fmt.Errorf("bubt.snap.invalidsettings")
+		log.Errorf("%v Read settings: %v", snap.logprefix, err)
+		return snap, err
 	}
 	snap.zblocksize = setts.Int64("zblocksize")
 	snap.mblocksize = setts.Int64("mblocksize")
@@ -278,7 +303,7 @@ func (snap *Snapshot) Destroy() {
 	if snap == nil {
 		return
 	}
-	log.Infof("%v purging snapshot", snap.logprefix)
+	log.Infof("%v purging disk snapshot", snap.logprefix)
 	dirs := map[string]bool{}
 	if snap.rw != nil {
 		snap.rw.Lock()

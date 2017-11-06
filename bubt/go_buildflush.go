@@ -27,6 +27,7 @@ func startflusher(idx int, file string) (*bubtflusher, error) {
 	}
 	path := filepath.Dir(file)
 	if err := os.MkdirAll(path, 0770); err != nil {
+		log.Errorf("os.MkdirAll(%q): %v", path, err)
 		return nil, err
 	} else {
 		flusher.fd = createfile(flusher.file)
