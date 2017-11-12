@@ -1,5 +1,6 @@
 package lsm
 
+import "io"
 import "bytes"
 
 import "github.com/prataprc/gostore/api"
@@ -15,10 +16,16 @@ func pull(
 	x api.Iterator, fin bool,
 	k, v []byte) ([]byte, []byte, uint64, bool, error) {
 
+	if x == nil {
+		return k, v, 0, false, io.EOF
+	}
 	key, val, seqno, del, err := x(fin)
 	for err == nil && bytes.Compare(key, k) == 0 {
 		//fmt.Printf("skip %s %s %s %v\n", key, k, err)
 		key, val, seqno, del, err = x(fin)
+	}
+	if err != nil {
+		return k, v, seqno, del, err
 	}
 	return cp(k, key), cp(v, val), seqno, del, err
 }
@@ -26,16 +33,12 @@ func pull(
 // YSort is a iterate combinator that takes two iteration API and return
 // a new iterator that handles LSM.
 func YSort(a, b api.Iterator) api.Iterator {
-	var aseqno, bseqno uint64
-	var adel, bdel bool
-	var aerr, berr error
+	key, val := make([]byte, 0, 16), make([]byte, 0, 16)
 
-	key, val := make([]byte, 16), make([]byte, 16)
-
-	bkey, bval := make([]byte, 16), make([]byte, 16)
-	bkey, bval, bseqno, bdel, berr = pull(b, false /*fin*/, bkey, bval)
-	akey, aval := make([]byte, 16), make([]byte, 16)
-	akey, aval, aseqno, adel, aerr = pull(a, false /*fin*/, akey, aval)
+	bkey, bval := make([]byte, 0, 16), make([]byte, 0, 16)
+	bkey, bval, bseqno, bdel, berr := pull(b, false /*fin*/, bkey, bval)
+	akey, aval := make([]byte, 0, 16), make([]byte, 0, 16)
+	akey, aval, aseqno, adel, aerr := pull(a, false /*fin*/, akey, aval)
 	//fmt.Printf("%v/a - %q %q %v\n", akey, aval, aseqno)
 	//fmt.Printf("%v/b - %q %q %v\n", bkey, bval, bseqno)
 
@@ -44,7 +47,10 @@ func YSort(a, b api.Iterator) api.Iterator {
 		var del bool
 		var err error
 
-		if aerr != nil {
+		if aerr != nil && berr != nil {
+			key, val, seqno, del, err = nil, nil, 0, false, io.EOF
+
+		} else if aerr != nil {
 			key, val = cp(key, bkey), cp(val, bval)
 			seqno, del, err = bseqno, bdel, berr
 			bkey, bval, bseqno, bdel, berr = pull(b, fin, bkey, bval)

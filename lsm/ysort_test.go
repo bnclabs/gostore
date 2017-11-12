@@ -90,6 +90,65 @@ func TestYSort(t *testing.T) {
 	}
 }
 
+func TestYSort1(t *testing.T) {
+	setts := s.Settings{"memcapacity": 1024 * 1024 * 1024}
+	ref := llrb.NewLLRB("refllrb", setts)
+
+	llrb1, keys := makeLLRB("llrb1", 100000, nil, ref, -1, -1)
+	llrb3, keys := makeLLRB("llrb3", 0, keys, ref, 4, 8)
+	defer llrb1.Destroy()
+	defer llrb3.Destroy()
+
+	t.Logf("llrb1 has %v items", llrb1.Count())
+	t.Logf("llrb3 has %v items", llrb3.Count())
+
+	paths := makepaths()
+
+	name, msize, zsize, mmap := "bubt1", int64(4096), int64(4096), false
+	bb, err := bubt.NewBubt(name, paths, msize, zsize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = bb.Build(llrb1.Scan(), []byte("this is metadata for llrb1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bb.Close()
+
+	bubt1, err := bubt.OpenSnapshot(name, paths, mmap)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer bubt1.Destroy()
+	defer bubt1.Close()
+
+	refiter := ref.Scan()
+	miter := YSort(llrb3.Scan(), nil)
+	iter := YSort(bubt1.Scan(), YSort(nil, miter))
+	key, value, seqno, deleted, err := refiter(false)
+	for err == nil {
+		k, v, s, d, e := iter(false)
+		//fmt.Printf("iter %q %q %v %v %v\n", k, v, s, d, e)
+		if bytes.Compare(key, k) != 0 {
+			t.Errorf("expected %q, got %q", key, k)
+		} else if err != e {
+			t.Errorf("%q expected %v, got %v", key, err, e)
+		} else if d != deleted {
+			t.Errorf("%q expected %v, got %v", key, deleted, d)
+		} else if s != seqno {
+			t.Errorf("%q expected %v, got %v", key, seqno, s)
+		} else if deleted == false && bytes.Compare(value, v) != 0 {
+			t.Errorf("%q expected %q, got %q", key, value, v)
+		}
+		key, value, seqno, deleted, err = refiter(false)
+	}
+	_, _, _, _, e := iter(false)
+	if e != err {
+		t.Errorf("unexpected %v", e)
+	}
+}
+
 func BenchmarkYSort(b *testing.B) {
 	setts := s.Settings{"memcapacity": 1024 * 1024 * 1024}
 	ref := llrb.NewLLRB("refllrb", setts)
