@@ -18,7 +18,7 @@ func TestScanner(t *testing.T) {
 	}
 	verify := func(from, till int) {
 		i := from
-		sb.startread()
+		sb.prepareread()
 		key, val, seqno, deleted := sb.pop()
 		for key != nil {
 			tdata := testdata[i]
@@ -41,14 +41,14 @@ func TestScanner(t *testing.T) {
 		}
 	}
 
-	sb.startwrite()
+	sb.preparewrite()
 	from := 0
 	for till, tdata := range testdata {
 		key, val := tdata[0].([]byte), tdata[1].([]byte)
 		seqno, deleted := tdata[2].(uint64), tdata[3].(bool)
 		if n := sb.append(key, val, seqno, deleted); n >= scanlimit {
 			verify(from, till)
-			sb.startwrite()
+			sb.preparewrite()
 			from = till + 1
 		}
 	}

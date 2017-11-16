@@ -462,6 +462,20 @@ func (mvcc *MVCC) Log() {
 	sizes, zs = mvcc.valarena.Utilization()
 	log.Infof("%v val %v", mvcc.logprefix, loguz(sizes, zs, "node"))
 
+	log.Infof("%v count: %10d\n", mvcc.logprefix, stats["n_count"])
+	a, b, c := stats["n_inserts"], stats["n_updates"], stats["n_deletes"]
+	log.Infof("%v write: %10d %10d %10d\n", mvcc.logprefix, a, b, c)
+	a, b, c = stats["n_nodes"], stats["n_frees"], stats["n_clones"]
+	log.Infof("%v nodes: %10d %10d %10d\n", mvcc.logprefix, a, b, c)
+	a, b, c = stats["n_txns"], stats["n_commits"], stats["n_aborts"]
+	log.Infof("%v txns : %10d %10d %10d\n", mvcc.logprefix, a, b, c)
+	log.Infof("%v n_reclaims: %10d", stats["n_reclaims"])
+	a, b, c = stats["n_snapshots"], stats["n_purgedss"], stats["n_activess"]
+	log.Infof("%v snapshots: %10d %10d %10d", a, b, c)
+	log.Infof("%v h_bulkfree: %v", stats["h_bulkfree"])
+	log.Infof("%v h_reclaims: %v", stats["h_reclaims"])
+	log.Infof("%v h_versions: %v", stats["h_versions"])
+
 	// log snapshots
 	snapshot, items := mvcc.currsnapshot(), []string{}
 	for snapshot != nil {
@@ -1112,9 +1126,9 @@ func (mvcc *MVCC) startscan(key []byte, sb *scanbuf, leseqno uint64) uint64 {
 	if key == nil {
 		leseqno = mvcc.seqno
 	}
-	sb.startwrite()
+	sb.preparewrite()
 	mvcc.scan(mvcc.getroot(), key, sb, leseqno)
-	sb.startread()
+	sb.prepareread()
 	mvcc.runlock()
 	return leseqno
 }

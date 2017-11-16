@@ -22,7 +22,7 @@ func makescanbuf() *scanbuf {
 	}
 }
 
-func (sb *scanbuf) startwrite() {
+func (sb *scanbuf) preparewrite() {
 	sb.windex = 0
 }
 
@@ -51,7 +51,7 @@ func (sb *scanbuf) append(key, value []byte, seqno uint64, deleted bool) int {
 	return sb.windex
 }
 
-func (sb *scanbuf) startread() {
+func (sb *scanbuf) prepareread() {
 	sb.rindex = 0
 }
 

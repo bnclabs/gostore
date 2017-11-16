@@ -656,9 +656,9 @@ func (llrb *LLRB) startscan(key []byte, sb *scanbuf, leseqno uint64) uint64 {
 	if key == nil {
 		leseqno = llrb.seqno
 	}
-	sb.startwrite()
+	sb.preparewrite()
 	llrb.scan(llrb.getroot(), key, sb, leseqno)
-	sb.startread()
+	sb.prepareread()
 	llrb.runlock()
 	return leseqno
 }
@@ -849,6 +849,14 @@ func (llrb *LLRB) Log() {
 	// log information about key memory utilization
 	sizes, zs = llrb.valarena.Utilization()
 	log.Infof("%v val %v", llrb.logprefix, loguz(sizes, zs, "node"))
+
+	log.Infof("%v count: %10d\n", llrb.logprefix, stats["n_count"])
+	a, b, c := stats["n_inserts"], stats["n_updates"], stats["n_deletes"]
+	log.Infof("%v write: %10d %10d %10d\n", llrb.logprefix, a, b, c)
+	a, b, c = stats["n_nodes"], stats["n_frees"], stats["n_clones"]
+	log.Infof("%v nodes: %10d %10d %10d\n", llrb.logprefix, a, b, c)
+	a, b, c = stats["n_txns"], stats["n_commits"], stats["n_aborts"]
+	log.Infof("%v txns : %10d %10d %10d\n", llrb.logprefix, a, b, c)
 
 	llrb.runlock()
 }
