@@ -68,7 +68,6 @@ func TestReload(t *testing.T) {
 	iter = index.Scan()
 	key1, val1, seqno1, del1, err1 = miter(false /*fin*/)
 	key2, val2, seqno2, del2, err2 = iter(false /*fin*/)
-	t.Logf("%s %s err1: %v, err2:%v", key1, key2, err1, err2)
 	for err1 == nil && err2 == nil {
 		if string(key1) != string(key2) {
 			t.Errorf("expected %q, got %q", key1, key2)
@@ -81,7 +80,6 @@ func TestReload(t *testing.T) {
 		}
 		key1, val1, seqno1, del1, err1 = miter(false /*fin*/)
 		key2, val2, seqno2, del2, err2 = iter(false /*fin*/)
-		t.Logf("%s %s err1: %v, err2:%v", key1, key2, err1, err2)
 	}
 	if err1 != io.EOF || err2 != io.EOF {
 		t.Errorf("unexpected %v %v", err1, err2)

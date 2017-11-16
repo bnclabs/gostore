@@ -50,12 +50,15 @@ func compactor(bogn *Bogn) {
 
 loop:
 	for range ticker.C {
-		if bogn.isclosed() {
+		if bogn.isclosed() && respch == nil {
 			break loop
+
 		} else if bogn.durable == false {
+			log.Debugf("%v skip compaction iteration ...", bogn.logprefix)
 			continue
 		}
 
+		log.Debugf("%v go-compact iteration ...", bogn.logprefix)
 		if respch == nil { // try to start disk compaction.
 			disk0, disk1, nextlevel = bogn.pickcompactdisks()
 			if nextlevel >= 0 {
@@ -63,14 +66,14 @@ loop:
 			}
 		}
 
-		if err := docompact(disk0); err != nil {
-			panic(err)
-
-		} else {
+		if respch != nil {
 			select {
 			case ndisk := <-respch:
 				if err := findisk(bogn, disk0, disk1, ndisk); err != nil {
 					panic(err)
+				}
+				if bogn.isclosed() {
+					break loop
 				}
 				respch, errch = nil, nil
 
@@ -80,6 +83,10 @@ loop:
 			default:
 			}
 		}
+
+		if err := docompact(disk0); err != nil {
+			panic(err)
+		}
 	}
 
 	if err := dowindup(bogn); err != nil {
@@ -88,13 +95,13 @@ loop:
 }
 
 func makecompactor(bogn *Bogn) func(api.Index) error {
-	mwcap := float64(bogn.memcapacity)
+	memcap := float64(bogn.memcapacity)
 	// adaptive threshold.
-	mwthreshold := int64(mwcap * .9) // start with 90% of configured capacity
-	if bogn.workingset {             // start with 30% of configured capacity
-		mwthreshold = int64(mwcap * .3)
+	mwthreshold := int64(memcap * .9) // start with 90% of configured capacity
+	if bogn.workingset {              // start with 30% of configured capacity
+		mwthreshold = int64(memcap * .3)
 	} else if bogn.dgm { // start with 50% of configured capacity
-		mwthreshold = int64(mwcap * .5)
+		mwthreshold = int64(memcap * .5)
 	}
 
 	return func(disk0 api.Index) error {
@@ -106,7 +113,7 @@ func makecompactor(bogn *Bogn) func(api.Index) error {
 		if atomic.LoadInt64(&bogn.dgmstate) == 0 { // fullset in memory
 			if overflow { // fallback to dgm mode.
 				atomic.StoreInt64(&bogn.dgmstate, 1)
-				mwthreshold = int64(mwcap * .5) // start with 50% of capacity
+				mwthreshold = int64(memcap * .5) // start with 50% of capacity
 
 			} else if bogn.flushelapsed() {
 				return dopersist(bogn)
@@ -120,7 +127,7 @@ func makecompactor(bogn *Bogn) func(api.Index) error {
 			err := doflush(bogn, disk0)
 			// adaptive threshold
 			bgheap := float64(snap.memheap())
-			mwthreshold += int64((mwcap - float64(mwthreshold)) - bgheap)
+			mwthreshold += int64((memcap - float64(mwthreshold)) - bgheap)
 			return err
 		}
 		return nil
@@ -130,6 +137,8 @@ func makecompactor(bogn *Bogn) func(api.Index) error {
 // called only when full data set in memory.
 // TODO: support `workingset` even when `dgm` is false.
 func dopersist(bogn *Bogn) (err error) {
+	log.Infof("%v dopersist ...", bogn.logprefix)
+
 	snap := bogn.currsnapshot()
 
 	lvl, level, version := -1, len(snap.disks)-1, 1
@@ -137,15 +146,14 @@ func dopersist(bogn *Bogn) (err error) {
 		if lvl, version, _ = bogn.path2level(disk.ID()); lvl != level {
 			panic(fmt.Errorf("mismatch in level %v != %v", level, lvl))
 		}
+		version++
 	}
 
-	now, iter, uuid := time.Now(), snap.persistiterator(), bogn.newuuid()
-	ndisk, count, err := bogn.builddiskstore(level, version, uuid, iter)
+	iter, uuid := snap.persistiterator(), bogn.newuuid()
+	ndisk, err := bogn.builddiskstore(level, version, uuid, iter)
 	if err != nil {
 		return err
 	}
-	fmsg := "%v took %v to build %v with %v entries\n"
-	log.Infof(fmsg, bogn.logprefix, time.Since(now), ndisk.ID(), count)
 
 	// organise the next set of stores, keep the write-store as it is
 	// and update the latest disk store.
@@ -161,9 +169,10 @@ func dopersist(bogn *Bogn) (err error) {
 		atomic.StorePointer(&head.next, unsafe.Pointer(snap))
 		head.refer()
 		bogn.setheadsnapshot(head)
-		snap.release()
 
 		snap.addtopurge(snap.disklevels([]api.Index{})...)
+		snap.release()
+
 		fmsg := "%v for snapshot %v compact persisted %v"
 		log.Infof(fmsg, snap.bogn.logprefix, head.id, ndisk.ID())
 	}()
@@ -172,7 +181,10 @@ func dopersist(bogn *Bogn) (err error) {
 }
 
 func doflush(bogn *Bogn, disk0 api.Index) (err error) {
+	log.Infof("%v doflush ...", bogn.logprefix)
+
 	snap := bogn.currsnapshot()
+
 	disk, nlevel, nversion := bogn.pickflushdisk(disk0)
 	if nlevel < 0 {
 		panic("impossible situation")
@@ -197,13 +209,11 @@ func doflush(bogn *Bogn, disk0 api.Index) (err error) {
 	}()
 
 	snap, uuid := bogn.latestsnapshot(), bogn.newuuid()
-	now, iter := time.Now(), snap.flushiterator(disk)
-	ndisk, count, err := bogn.builddiskstore(nlevel, nversion, uuid, iter)
+	iter := snap.flushiterator(disk)
+	ndisk, err := bogn.builddiskstore(nlevel, nversion, uuid, iter)
 	if err != nil {
 		return err
 	}
-	fmsg := "%v took %v to build %v with %v entries\n"
-	log.Infof(fmsg, bogn.logprefix, time.Since(now), ndisk.ID(), count)
 
 	var disks [16]api.Index
 	copy(disks[:], snap.disks[:])
@@ -231,9 +241,10 @@ func doflush(bogn *Bogn, disk0 api.Index) (err error) {
 		atomic.StorePointer(&head.next, unsafe.Pointer(snap))
 		head.refer()
 		bogn.setheadsnapshot(head)
-		snap.release()
 
 		snap.addtopurge(snap.mr, snap.mc, disk)
+		snap.release()
+
 		fmsg := "%v for snapshot %v compact flush to %v"
 		log.Infof(fmsg, snap.bogn.logprefix, head.id, ndisk.ID())
 	}()
@@ -244,6 +255,10 @@ func doflush(bogn *Bogn, disk0 api.Index) (err error) {
 func startdisk(
 	bogn *Bogn,
 	disk0, disk1 api.Index, nlevel int) (chan api.Index, chan error) {
+
+	return nil, nil // TODO: remove this.
+
+	log.Infof("%v startdisk ...", bogn.logprefix)
 
 	var version int
 
@@ -260,14 +275,11 @@ func startdisk(
 		fmsg := "%v for snapshot %v compacting %q + %q ..."
 		log.Infof(fmsg, bogn.logprefix, snap.id, disk0.ID(), disk1.ID())
 
-		now := time.Now()
-		ndisk, count, err := bogn.builddiskstore(nlevel, version+1, uuid, iter)
+		ndisk, err := bogn.builddiskstore(nlevel, version+1, uuid, iter)
 		if err != nil {
 			errch <- err
 			return
 		}
-		fmsg = "%v took %v to build %v with %v entries\n"
-		log.Infof(fmsg, bogn.logprefix, time.Since(now), ndisk.ID(), count)
 
 		respch <- ndisk
 	}()
@@ -275,6 +287,8 @@ func startdisk(
 }
 
 func findisk(bogn *Bogn, disk0, disk1, ndisk api.Index) error {
+	log.Infof("%v findisk ...", bogn.logprefix)
+
 	snap := bogn.currsnapshot()
 
 	var disks [16]api.Index
@@ -293,9 +307,10 @@ func findisk(bogn *Bogn, disk0, disk1, ndisk api.Index) error {
 		atomic.StorePointer(&head.next, unsafe.Pointer(snap))
 		head.refer()
 		bogn.setheadsnapshot(head)
-		snap.release()
 
 		snap.addtopurge(disk0, disk1)
+		snap.release()
+
 		fmsg := "%v for snapshot %v compact disk"
 		log.Infof(fmsg, snap.bogn.logprefix, head.id, ndisk.ID())
 	}()
@@ -306,18 +321,28 @@ func dowindup(bogn *Bogn) error {
 	if bogn.durable == false {
 		return nil
 	}
+
 	snap := bogn.currsnapshot()
-	disk, nlevel, nversion := bogn.pickflushdisk(nil)
-	if nlevel < 0 {
-		panic("impossible situation")
+
+	nlevel, nversion := len(snap.disks)-1, 1
+	disk := snap.disks[nlevel]
+	if disk != nil {
+		_, nversion, _ = bogn.path2level(disk.ID())
+		nversion++
 	}
-	now, iter, uuid := time.Now(), snap.windupiterator(disk), bogn.newuuid()
-	ndisk, count, err := bogn.builddiskstore(nlevel, nversion, uuid, iter)
+
+	if bogn.dgm == true {
+		disk, nlevel, nversion = bogn.pickflushdisk(nil)
+		if nlevel < 0 {
+			panic("impossible situation")
+		}
+	}
+
+	iter, uuid := snap.windupiterator(disk), bogn.newuuid()
+	ndisk, err := bogn.builddiskstore(nlevel, nversion, uuid, iter)
 	if err != nil {
 		return err
 	}
-	fmsg := "%v took %v to build %v with %v entries\n"
-	log.Infof(fmsg, bogn.logprefix, time.Since(now), ndisk.ID(), count)
 
 	func() {
 		bogn.snaprw.Lock()
@@ -327,9 +352,10 @@ func dowindup(bogn *Bogn) error {
 		atomic.StorePointer(&head.next, unsafe.Pointer(snap))
 		head.refer()
 		bogn.setheadsnapshot(head)
-		snap.release()
 
 		snap.addtopurge(snap.mw, snap.mr, snap.mc, disk)
+		snap.release()
+
 		fmsg := "%v for snapshot %s windup on disk %v"
 		log.Infof(fmsg, snap.bogn.logprefix, head.id, ndisk.ID())
 	}()

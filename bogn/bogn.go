@@ -19,6 +19,7 @@ import "github.com/prataprc/gostore/llrb"
 import "github.com/prataprc/gostore/bubt"
 import "github.com/prataprc/golog"
 import s "github.com/prataprc/gosettings"
+import humanize "github.com/dustin/go-humanize"
 
 // TODO: enable count aggregation across snapshots, with data-structures
 // that support LSM it is difficult to maintain accurate count.
@@ -30,7 +31,10 @@ type Bogn struct {
 	dgmstate  int64
 
 	name     string
+	epoch    time.Time
 	snapshot unsafe.Pointer // *snapshot
+	mwver    int
+	mcver    int
 	finch    chan struct{}
 	snaprw   sync.RWMutex
 
@@ -48,6 +52,7 @@ type Bogn struct {
 // New create a new bogn instance.
 func New(name string, setts s.Settings) (*Bogn, error) {
 	bogn := (&Bogn{name: name}).readsettings(setts)
+	bogn.epoch = time.Now()
 	if err := bogn.makepaths(setts); err != nil {
 		return nil, err
 	}
@@ -135,8 +140,8 @@ func (bogn *Bogn) latestsnapshot() *snapshot {
 
 func (bogn *Bogn) mwmetadata(seqno uint64) []byte {
 	metadata := map[string]interface{}{
-		"seqno":     seqno,
-		"flushunix": fmt.Sprintf("%q", time.Now().Unix()),
+		"seqno":     fmt.Sprintf(`"%v"`, seqno),
+		"flushunix": fmt.Sprintf(`"%v"`, time.Now().Unix()),
 	}
 	data, err := json.Marshal(metadata)
 	if err != nil {
@@ -146,26 +151,29 @@ func (bogn *Bogn) mwmetadata(seqno uint64) []byte {
 }
 
 func (bogn *Bogn) flushelapsed() bool {
-	var md map[string]interface{}
-	if snap := bogn.currsnapshot(); snap != nil {
-		if _, disk := snap.latestlevel(); disk != nil {
-			var metadata []byte
-			switch index := disk.(type) {
-			case *bubt.Snapshot:
-				metadata = index.Metadata()
-			default:
-				panic("impossible situation")
-			}
-			if err := json.Unmarshal(metadata, &md); err != nil {
-				panic(err)
-			}
-			x, _ := strconv.Atoi(md["flushunix"].(string))
-			if time.Since(time.Unix(int64(x), 0)) > bogn.period {
-				return true
-			}
-		}
+	snap := bogn.currsnapshot()
+	if snap == nil {
+		return false
 	}
-	return false
+	_, disk := snap.latestlevel()
+	if disk == nil {
+		return int64(time.Since(bogn.epoch)) > int64(bogn.period)
+	}
+
+	var metadata []byte
+	switch index := disk.(type) {
+	case *bubt.Snapshot:
+		metadata = index.Metadata()
+	default:
+		panic("impossible situation")
+	}
+
+	var md map[string]interface{}
+	if err := json.Unmarshal(metadata, &md); err != nil {
+		panic(err)
+	}
+	x, _ := strconv.Atoi(strings.Trim(md["flushunix"].(string), `"`))
+	return time.Now().Sub(time.Unix(int64(x), 0)) > bogn.period
 }
 
 // should not overlap with disk0.
@@ -264,26 +272,48 @@ func (bogn *Bogn) View(id uint64) api.Transactor {
 	return nil
 }
 
+// Compact away oldver version of disk snapshots.
+func (bogn *Bogn) Compact() {
+	bogn.compactdisksnaps(bogn.setts)
+}
+
+// Log vital statistics for all active bogn levels.
 func (bogn *Bogn) Log() {
+	bogn.snaprw.RLock()
+	defer bogn.snaprw.RUnlock()
+
 	snap := bogn.latestsnapshot()
 	if snap.mw != nil {
-		log.Infof("%v write-store count %v\n", bogn.indexcount(snap.mw))
+		bogn.logstore(snap.mw)
 	}
 	if snap.mr != nil {
-		log.Infof("%v read-store count %v\n", bogn.indexcount(snap.mr))
+		bogn.logstore(snap.mw)
 	}
 	if snap.mc != nil {
-		log.Infof("%v cache-store count %v\n", bogn.indexcount(snap.mc))
+		bogn.logstore(snap.mw)
 	}
 	for _, disk := range snap.disklevels([]api.Index{}) {
-		log.Infof("%v disk-store count %v\n", bogn.indexcount(disk))
+		bogn.logstore(disk)
 	}
 	snap.release()
 }
 
-// Compact away oldver version of disk snapshots.
-func (bogn *Bogn) Compact() {
-	bogn.compactdisksnaps(bogn.setts)
+// Validate active bogn levels.
+func (bogn *Bogn) Validate() {
+	bogn.snaprw.RLock()
+	defer bogn.snaprw.RUnlock()
+
+	snap := bogn.latestsnapshot()
+	if snap.mw != nil {
+		bogn.validatestore(snap.mw)
+	}
+	if snap.mc != nil {
+		bogn.validatestore(snap.mc)
+	}
+	for _, disk := range snap.disklevels([]api.Index{}) {
+		bogn.validatestore(disk)
+	}
+	snap.release()
 }
 
 // Close this instance, no calls allowed after Close.
@@ -389,7 +419,17 @@ func (bogn *Bogn) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 //---- local methods
 
 func (bogn *Bogn) newmemstore(level string, seqno uint64) (api.Index, error) {
-	name := fmt.Sprintf("%v-%v", bogn.name, level)
+
+	var name string
+
+	switch level {
+	case "mw":
+		name = fmt.Sprintf("%v-%v-%v", bogn.name, level, bogn.mwver)
+		bogn.mwver++
+	case "mc":
+		name = fmt.Sprintf("%v-%v-%v", bogn.name, level, bogn.mcver)
+		bogn.mcver++
+	}
 
 	switch bogn.memstore {
 	case "llrb":
@@ -409,10 +449,10 @@ func (bogn *Bogn) newmemstore(level string, seqno uint64) (api.Index, error) {
 
 func (bogn *Bogn) builddiskstore(
 	level, ver int, uuid string,
-	iter api.Iterator) (index api.Index, count uint64, err error) {
+	iter api.Iterator) (index api.Index, err error) {
 
 	// book-keep largest seqno for this snapshot.
-	var diskseqno uint64
+	var diskseqno, count uint64
 
 	wrap := func(fin bool) ([]byte, []byte, uint64, bool, error) {
 		if iter != nil {
@@ -428,6 +468,7 @@ func (bogn *Bogn) builddiskstore(
 		return nil, nil, 0, false, io.EOF
 	}
 
+	now := time.Now()
 	name := bogn.levelname(level, ver, uuid)
 
 	bubtsetts := bogn.setts.Section("bubt.").Trim("bubt.")
@@ -437,16 +478,16 @@ func (bogn *Bogn) builddiskstore(
 	bt, err := bubt.NewBubt(name, paths, msize, zsize)
 	if err != nil {
 		log.Errorf("%v NewBubt(): %v", bogn.logprefix, err)
-		return nil, count, err
+		return nil, err
 	}
 
 	// build
 	if err = bt.Build(wrap, nil); err != nil {
 		log.Errorf("%v Build(): %v", bogn.logprefix, err)
-		return nil, count, err
+		return nil, err
 	} else if err = bt.Writemetadata(bogn.mwmetadata(diskseqno)); err != nil {
 		log.Errorf("%v Writemetadata(): %v", bogn.logprefix, err)
-		return nil, count, err
+		return nil, err
 	}
 	bt.Close()
 
@@ -455,9 +496,15 @@ func (bogn *Bogn) builddiskstore(
 	ndisk, err := bubt.OpenSnapshot(name, paths, mmap)
 	if err != nil {
 		log.Errorf("%v OpenSnapshot(): %v", bogn.logprefix, err)
-		return nil, count, err
+		return nil, err
 	}
-	return ndisk, count, nil
+
+	footprint := humanize.Bytes(uint64(ndisk.Footprint()))
+	elapsed := time.Since(now)
+	fmsg := "%v took %v to build %v with %v entries, %v\n"
+	log.Infof(fmsg, bogn.logprefix, elapsed, ndisk.ID(), count, footprint)
+
+	return ndisk, nil
 }
 
 // open latest versions for each disk level
@@ -488,7 +535,7 @@ func (bogn *Bogn) opendisksnaps(setts s.Settings) ([16]api.Index, error) {
 		if disk == nil {
 			continue
 		}
-		log.Infof("%v open-snapshot %v", bogn.logprefix, disk.ID())
+		log.Infof("%v open-disksnapshot %v", bogn.logprefix, disk.ID())
 	}
 	return disks, nil
 }
@@ -608,16 +655,26 @@ func (bogn *Bogn) destroylevels(indexes ...api.Index) {
 	}
 }
 
-func (bogn *Bogn) indexcount(index api.Index) int64 {
+func (bogn *Bogn) logstore(index api.Index) {
 	switch idx := index.(type) {
 	case *llrb.LLRB:
-		return idx.Count()
+		idx.Log()
 	case *llrb.MVCC:
-		return idx.Count()
+		idx.Log()
 	case *bubt.Snapshot:
-		return idx.Count()
+		idx.Log()
 	}
-	panic("impossible situation")
+}
+
+func (bogn *Bogn) validatestore(index api.Index) {
+	switch idx := index.(type) {
+	case *llrb.LLRB:
+		idx.Validate()
+	case *llrb.MVCC:
+		idx.Validate()
+	case *bubt.Snapshot:
+		idx.Validate()
+	}
 }
 
 func (bogn *Bogn) newuuid() string {
