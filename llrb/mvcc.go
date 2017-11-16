@@ -469,12 +469,12 @@ func (mvcc *MVCC) Log() {
 	log.Infof("%v nodes: %10d %10d %10d\n", mvcc.logprefix, a, b, c)
 	a, b, c = stats["n_txns"], stats["n_commits"], stats["n_aborts"]
 	log.Infof("%v txns : %10d %10d %10d\n", mvcc.logprefix, a, b, c)
-	log.Infof("%v n_reclaims: %10d", stats["n_reclaims"])
+	log.Infof("%v rclms: %10d", mvcc.logprefix, stats["n_reclaims"])
 	a, b, c = stats["n_snapshots"], stats["n_purgedss"], stats["n_activess"]
-	log.Infof("%v snapshots: %10d %10d %10d", a, b, c)
-	log.Infof("%v h_bulkfree: %v", stats["h_bulkfree"])
-	log.Infof("%v h_reclaims: %v", stats["h_reclaims"])
-	log.Infof("%v h_versions: %v", stats["h_versions"])
+	log.Infof("%v snaps: %10d %10d %10d", mvcc.logprefix, a, b, c)
+	log.Infof("%v h_bulkfree: %v", mvcc.logprefix, stats["h_bulkfree"])
+	log.Infof("%v h_reclaims: %v", mvcc.logprefix, stats["h_reclaims"])
+	log.Infof("%v h_versions: %v", mvcc.logprefix, stats["h_versions"])
 
 	// log snapshots
 	snapshot, items := mvcc.currsnapshot(), []string{}
