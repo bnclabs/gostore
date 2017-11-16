@@ -200,7 +200,7 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 		}
 	}
 
-	// flush 1 m-block of settings
+	// flush 1 MarkerBlocksize of settings
 	block := make([]byte, MarkerBlocksize)
 	setts := s.Settings{
 		"name":       tree.name,

@@ -279,6 +279,18 @@ func (snap *Snapshot) Metadata() []byte {
 	return snap.metadata
 }
 
+// Log vital information
+func (snap *Snapshot) Log() {
+	fmsg := "%v zblock:%v mblock:%v footprint: %v n_count: %v"
+	zsize, msize := snap.zblocksize, snap.mblocksize
+	footprint, n_count := snap.footprint, snap.n_count
+	log.Infof(fmsg, snap.logprefix, zsize, msize, footprint, n_count)
+}
+
+// Validate disk snapshot TODO
+func (snap *Snapshot) Validate() {
+}
+
 // Close snapshot, will release all in-memory resources but will keep
 // the disk files. All Opened-Snapshots must be closed before it can
 // be destoryed.
