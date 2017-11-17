@@ -138,11 +138,9 @@ func (snap *snapshot) memheap() int64 {
 	for _, memindex := range memindexes {
 		switch v := memindex.(type) {
 		case *llrb.LLRB:
-			stats := v.Stats()
-			heap += stats["node.heap"].(int64) + stats["value.heap"].(int64)
+			heap += v.Footprint()
 		case *llrb.MVCC:
-			stats := v.Stats()
-			heap += stats["node.heap"].(int64) + stats["value.heap"].(int64)
+			heap += v.Footprint()
 		}
 	}
 	return heap
