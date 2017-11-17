@@ -80,7 +80,8 @@ func (arena *Arena) Alloc(n int64) unsafe.Pointer {
 	} else {
 		size = SuitableSlab(arena.slabs, n)
 	}
-	return arena.mpools[size].allocchunk(arena, size)
+	ptr := arena.mpools[size].allocchunk(arena, size)
+	return ptr
 }
 
 // Allocslab implement api.Mallocer{} interface.
