@@ -210,11 +210,6 @@ func (mvcc *MVCC) logarenasettings() {
 }
 
 func (mvcc *MVCC) lock() bool {
-	select {
-	case <-mvcc.finch:
-		return false
-	default:
-	}
 	mvcc.rw.Lock()
 	return true
 }
@@ -224,11 +219,6 @@ func (mvcc *MVCC) unlock() {
 }
 
 func (mvcc *MVCC) rlock() bool {
-	select {
-	case <-mvcc.finch:
-		return false
-	default:
-	}
 	mvcc.rw.RLock()
 	return true
 }

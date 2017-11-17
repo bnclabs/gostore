@@ -89,6 +89,8 @@ func validatellrbtree(
 
 	if nd == nil {
 		return blacks, 0, 0
+	} else if nd.isdirty() {
+		panic(errors.New("node cannot be dirty"))
 	}
 
 	h.Add(depth)

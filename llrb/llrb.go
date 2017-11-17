@@ -147,11 +147,6 @@ func (llrb *LLRB) delcounts(nd *Llrbnode) {
 }
 
 func (llrb *LLRB) lock() bool {
-	select {
-	case <-llrb.finch:
-		return false
-	default:
-	}
 	llrb.rw.Lock()
 	return true
 }
@@ -161,11 +156,6 @@ func (llrb *LLRB) unlock() {
 }
 
 func (llrb *LLRB) rlock() bool {
-	select {
-	case <-llrb.finch:
-		return false
-	default:
-	}
 	llrb.rw.RLock()
 	return true
 }
