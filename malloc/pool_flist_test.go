@@ -164,3 +164,22 @@ func BenchmarkMpoolAllocX(b *testing.B) {
 		mpool.free(ptr)
 	}
 }
+
+func BenchmarkFlistAlloc(b *testing.B) {
+	capacity := int64(10 * 1024 * 1024 * 1024)
+	marena := NewArena(capacity, "flist")
+	pools := newFlistPool()
+
+	size, n := int64(96), int64(65536)
+	for i := 0; i < int(n-1); i++ {
+		pools.allocchunk(marena, size)
+	}
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		pools.allocchunk(marena, size)
+	}
+
+	marena.Release()
+}
