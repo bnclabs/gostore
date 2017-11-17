@@ -522,6 +522,12 @@ func (mvcc *MVCC) clonetree(nd *Llrbnode) *Llrbnode {
 	return newnd
 }
 
+// Footprint return the heap footprint consumed by mvcc instance.
+func (mvcc *MVCC) Footprint() int64 {
+	stats := mvcc.Stats()
+	return stats["node.heap"].(int64) + stats["value.heap"].(int64)
+}
+
 // Close does nothing
 func (mvcc *MVCC) Close() {
 	return

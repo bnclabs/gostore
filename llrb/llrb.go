@@ -891,6 +891,12 @@ func (llrb *LLRB) clonetree(nd *Llrbnode) *Llrbnode {
 	return newnd
 }
 
+// Footprint return the heap footprint consumed by llrb instance.
+func (llrb *LLRB) Footprint() int64 {
+	stats := llrb.Stats()
+	return stats["node.heap"].(int64) + stats["value.heap"].(int64)
+}
+
 // Close does nothing.
 func (llrb *LLRB) Close() {
 	return
