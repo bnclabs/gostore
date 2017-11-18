@@ -85,7 +85,6 @@ func (llrb *LLRB) newnode(k, v []byte) *Llrbnode {
 	if len(v) > 0 {
 		ptr = llrb.valarena.Alloc(int64(nvaluesize + len(v)))
 		nv := (*nodevalue)(ptr)
-		nv.hdr = 0
 		nd.setnodevalue(nv.setvalue(v))
 	}
 	llrb.n_nodes++
@@ -241,7 +240,6 @@ func (llrb *LLRB) upsert(
 		if len(value) > 0 { // add new value if req.
 			ptr := llrb.valarena.Alloc(int64(nvaluesize + len(value)))
 			nv := (*nodevalue)(ptr)
-			nv.hdr = 0
 			nd, dirty = nd.setnodevalue(nv.setvalue(value)), true
 		}
 		newnd = nd
@@ -353,7 +351,6 @@ func (llrb *LLRB) upsertcas(
 			if len(value) > 0 { // add new value if req.
 				ptr := llrb.valarena.Alloc(int64(nvaluesize + len(value)))
 				nv := (*nodevalue)(ptr)
-				nv.hdr = 0
 				nd, dirty = nd.setnodevalue(nv.setvalue(value)), true
 			}
 			newnd = nd

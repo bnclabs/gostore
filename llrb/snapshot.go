@@ -1,9 +1,9 @@
 package llrb
 
 import "io"
+import "fmt"
 import "unsafe"
 import "strings"
-import "strconv"
 import "sync/atomic"
 
 import "github.com/prataprc/gostore/lib"
@@ -16,7 +16,7 @@ type mvccsnapshot struct {
 	purgetry int64
 	n_count  int64
 
-	id       []byte
+	id       int64
 	mvcc     *MVCC
 	root     unsafe.Pointer // *Llrbnode
 	next     unsafe.Pointer // *mvccsnapshot
@@ -26,7 +26,7 @@ type mvccsnapshot struct {
 
 // Should be under write-lock.
 func (snap *mvccsnapshot) initsnapshot(
-	mvcc *MVCC, head *mvccsnapshot) *mvccsnapshot {
+	id int64, mvcc *MVCC, head *mvccsnapshot) *mvccsnapshot {
 
 	snap.mvcc, snap.root = mvcc, nil
 	atomic.StorePointer(&snap.next, unsafe.Pointer(head))
@@ -36,8 +36,7 @@ func (snap *mvccsnapshot) initsnapshot(
 		snap.n_count = mvcc.Count()
 	}
 	snap.reclaims, snap.reclaim = snap.reclaims[:0], snap.reclaim[:0]
-	ptr := (uintptr)(snap.root)
-	snap.id = strconv.AppendUint(snap.id[:0], (uint64)(ptr), 16)
+	atomic.StoreInt64(&snap.id, id)
 	return snap
 }
 
@@ -118,6 +117,9 @@ func (snap *mvccsnapshot) refer() int64 {
 
 func (snap *mvccsnapshot) release() int64 {
 	refcount := atomic.AddInt64(&snap.refcount, -1)
+	if refcount < 0 {
+		panic(fmt.Errorf("unexpected refcount %v", refcount))
+	}
 	return refcount
 }
 

@@ -1180,8 +1180,8 @@ func BenchmarkMVCCView(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		txn := mvcc.View(0)
-		txn.Abort()
+		view := mvcc.View(0)
+		view.Abort()
 	}
 }
 

@@ -1,11 +1,16 @@
 package llrb
 
 import "time"
+import "sync/atomic"
 
 // go-routine to generate snapshots.
 func housekeeper(mvcc *MVCC, interval time.Duration, finch chan struct{}) {
+	atomic.AddInt64(&mvcc.n_routines, 1)
 	tick := time.NewTicker(interval)
-	defer tick.Stop()
+	defer func() {
+		tick.Stop()
+		atomic.AddInt64(&mvcc.n_routines, -1)
+	}()
 
 loop:
 	for {

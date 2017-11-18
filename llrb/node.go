@@ -12,9 +12,10 @@ import "github.com/prataprc/gostore/api"
 const nodesize = int(unsafe.Sizeof(Llrbnode{})) - 8 // + metadatasize + keylen
 
 const (
-	ndBlack   uint64 = 0x1
-	ndDirty   uint64 = 0x2
-	ndDeleted uint64 = 0x4
+	ndBlack      uint64 = 0x1
+	ndDirty      uint64 = 0x2
+	ndDeleted    uint64 = 0x4
+	ndValreclaim uint64 = 0x8
 )
 
 // Llrbnode defines a node in LLRB tree.
@@ -174,6 +175,21 @@ func (nd *Llrbnode) setseqnodeleted(seqno uint64) *Llrbnode {
 	seqflags = (seqflags & 0xf) | (seqno << 4)
 	seqflags = seqflags | ndDeleted
 	return nd.setseqflags(seqflags)
+}
+
+func (nd *Llrbnode) setreclaim() *Llrbnode {
+	seqflags := nd.getseqflags()
+	return nd.setseqflags(seqflags | ndValreclaim)
+}
+
+func (nd *Llrbnode) clearreclaim() *Llrbnode {
+	seqflags := nd.getseqflags()
+	return nd.setseqflags(seqflags & (^ndValreclaim))
+}
+
+func (nd *Llrbnode) isreclaim() bool {
+	seqflags := nd.getseqflags()
+	return (seqflags & ndValreclaim) == ndValreclaim
 }
 
 // Value return the value byte-slice for this entry.
