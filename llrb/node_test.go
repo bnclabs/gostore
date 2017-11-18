@@ -52,6 +52,13 @@ func TestLlrbnode(t *testing.T) {
 	} else if nd.setblack().togglelink().isred() == false {
 		t.Errorf("unexpected false")
 	}
+
+	if nd.setreclaim().isreclaim() == false {
+		t.Errorf("unexpected false")
+	} else if nd.setreclaim().clearreclaim().isreclaim() == true {
+		t.Errorf("unexpected true")
+	}
+
 	if nd.setdirty().isdirty() == false {
 		t.Errorf("unexpected false")
 	} else if nd.setdirty().cleardirty().isdirty() == true {
