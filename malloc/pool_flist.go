@@ -65,7 +65,7 @@ func (pool *poolflist) allocchunk() (unsafe.Pointer, bool) {
 	pool.freelist = pool.freelist[:pool.freeoff]
 	pool.freeoff--
 	ptr := uintptr(pool.base) + uintptr(nthblock*pool.size)
-	//initblock(ptr, pool.size)
+	initblock(ptr, pool.size)
 	pool.mallocated += pool.size
 	mask := uintptr(Alignment - 1)
 	if (ptr & mask) != 0 {
