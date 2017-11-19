@@ -22,6 +22,7 @@ type Arena struct {
 	maxchunks [6]int64              // 0-512,1-1K,16K,128K,1M,16M
 	mpools    map[int64]memoryPools // size -> list of api.MemoryPool
 	slabindex [3925]uint16
+	freefn    func(unsafe.Pointer)
 
 	// settings
 	capacity  int64 // memory capacity to be managed by this arena
@@ -47,6 +48,7 @@ func NewArena(capacity int64, allocator string) *Arena {
 		switch arena.allocator {
 		case "flist":
 			arena.mpools[slab] = newFlistPool()
+			arena.freefn = arena.flistFree
 		default:
 			panic(fmt.Errorf("invalid allocator %v", arena.allocator))
 		}
@@ -115,15 +117,14 @@ func (arena *Arena) Chunklen(ptr unsafe.Pointer) int64 {
 
 // Free implement api.Mallocer{} interface.
 func (arena *Arena) Free(ptr unsafe.Pointer) {
-	switch arena.allocator {
-	case "flist":
-		ptr = unsafe.Pointer(uintptr(ptr) - 8)
-		poolptr := (**poolflist)(ptr)
-		pool := *poolptr
-		pool.free(ptr)
-		return
-	}
-	panic("unreachable code")
+	arena.freefn(ptr)
+}
+
+func (arena *Arena) flistFree(ptr unsafe.Pointer) {
+	ptr = unsafe.Pointer(uintptr(ptr) - 8)
+	poolptr := (**poolflist)(ptr)
+	pool := *poolptr
+	pool.free(ptr)
 }
 
 // Release implement Mallocer{} interface.
