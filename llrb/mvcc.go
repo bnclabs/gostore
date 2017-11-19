@@ -383,7 +383,7 @@ func (mvcc *MVCC) validatestats(stats map[string]interface{}) {
 
 	entries := mvcc.Count()
 	maxreclaim := 7 * math.Log2(float64(entries))  // 7x the height
-	meanreclaim := 3 * math.Log2(float64(entries)) // 3x the height
+	meanreclaim := 4 * math.Log2(float64(entries)) // 4x the height
 	if max := float64(mvcc.h_reclaims.Max()); max > 0 {
 		if entries > 1000 && max > maxreclaim {
 			fmsg := "validatestats(): max %v reclaim exceeds 7*log2(%v)"
@@ -392,7 +392,7 @@ func (mvcc *MVCC) validatestats(stats map[string]interface{}) {
 	}
 	if mean := float64(mvcc.h_reclaims.Mean()); mean > 0 {
 		if entries > 1000 && mean > meanreclaim {
-			fmsg := "validatestats(): mean %v reclaim exceeds 3*log2(%v)"
+			fmsg := "validatestats(): mean %v reclaim exceeds 4*log2(%v)"
 			panic(fmt.Errorf(fmsg, mean, entries))
 		}
 	}
@@ -467,9 +467,15 @@ func (mvcc *MVCC) Log() {
 	log.Infof("%v rclms: %10d", mvcc.logprefix, stats["n_reclaims"])
 	a, b, c = stats["n_snapshots"], stats["n_purgedss"], stats["n_activess"]
 	log.Infof("%v snaps: %10d %10d %10d", mvcc.logprefix, a, b, c)
-	log.Infof("%v h_bulkfree: %v", mvcc.logprefix, stats["h_bulkfree"])
-	log.Infof("%v h_reclaims: %v", mvcc.logprefix, stats["h_reclaims"])
-	log.Infof("%v h_versions: %v", mvcc.logprefix, stats["h_versions"])
+	hstat := stats["h_bulkfree"].(map[string]interface{})
+	a, b, c = hstat["samples"], hstat["max"], hstat["mean"]
+	log.Infof("%v h_bulkfree: %10d %10d %10d", mvcc.logprefix, a, b, c)
+	hstat = stats["h_reclaims"].(map[string]interface{})
+	a, b, c = hstat["samples"], hstat["max"], hstat["mean"]
+	log.Infof("%v h_reclaims: %10d %10d %10d", mvcc.logprefix, a, b, c)
+	hstat = stats["h_versions"].(map[string]interface{})
+	a, b, c = hstat["samples"], hstat["max"], hstat["mean"]
+	log.Infof("%v h_versions: %10d %10d %10d", mvcc.logprefix, a, b, c)
 
 	// log snapshots
 	snapshot, items := mvcc.currsnapshot(), []string{}
