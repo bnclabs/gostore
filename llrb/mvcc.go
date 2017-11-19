@@ -19,9 +19,9 @@ import humanize "github.com/dustin/go-humanize"
 
 // MVCC manages a single instance of LLRB tree in MVCC mode.
 type MVCC struct {
-	llrbstats     // 64-bit aligned snapshot statistics.
-	n_routines    int64
-	h_upsertdepth *lib.HistogramInt64
+	llrbstats    // 64-bit aligned snapshot statistics.
+	n_routines   int64
+	n_maxverions int64
 	// can be unaligned fields
 	name      string
 	nodearena api.Mallocer
@@ -35,7 +35,6 @@ type MVCC struct {
 	snapshot   unsafe.Pointer // *mvccpointer
 	h_bulkfree *lib.HistogramInt64
 	h_reclaims *lib.HistogramInt64
-	h_versions *lib.HistogramInt64
 	// cache
 	snapcache chan *mvccsnapshot
 
@@ -67,10 +66,8 @@ func NewMVCC(name string, setts s.Settings) *MVCC {
 
 	// statistics
 	mvcc.snapshot = nil
-	mvcc.h_upsertdepth = lib.NewhistorgramInt64(10, 100, 10)
 	mvcc.h_bulkfree = lib.NewhistorgramInt64(100, 1000, 1000)
 	mvcc.h_reclaims = lib.NewhistorgramInt64(10, 200, 20)
-	mvcc.h_versions = lib.NewhistorgramInt64(1, 30, 10)
 
 	mvcc.makesnapshot()
 	go housekeeper(mvcc, mvcc.snaptick, mvcc.finch)
@@ -292,6 +289,7 @@ func (mvcc *MVCC) stats() map[string]interface{} {
 	m["n_snapshots"] = mvcc.n_snapshots
 	m["n_purgedss"] = mvcc.n_purgedss
 	m["n_activess"] = atomic.LoadInt64(&mvcc.n_activess)
+	m["n_maxverions"] = mvcc.n_maxverions
 
 	capacity, heap, alloc, overhead := mvcc.nodearena.Info()
 	m["keymemory"] = mvcc.keymemory
@@ -308,10 +306,8 @@ func (mvcc *MVCC) stats() map[string]interface{} {
 	m["value.overhead"] = overhead
 	m["value.blocks"] = mvcc.valarena.Slabs()
 
-	m["h_upsertdepth"] = mvcc.h_upsertdepth.Fullstats()
 	m["h_bulkfree"] = mvcc.h_bulkfree.Fullstats()
 	m["h_reclaims"] = mvcc.h_reclaims.Fullstats()
-	m["h_versions"] = mvcc.h_versions.Fullstats()
 	return m
 }
 
@@ -464,7 +460,8 @@ func (mvcc *MVCC) Log() {
 	log.Infof("%v nodes: %10d %10d %10d\n", mvcc.logprefix, a, b, c)
 	a, b, c = stats["n_txns"], stats["n_commits"], stats["n_aborts"]
 	log.Infof("%v txns : %10d %10d %10d\n", mvcc.logprefix, a, b, c)
-	log.Infof("%v rclms: %10d", mvcc.logprefix, stats["n_reclaims"])
+	a, b = stats["n_reclaims"], stats["n_maxverions"]
+	log.Infof("%v rclms: %10d %10d", mvcc.logprefix, a, b)
 	a, b, c = stats["n_snapshots"], stats["n_purgedss"], stats["n_activess"]
 	log.Infof("%v snaps: %10d %10d %10d", mvcc.logprefix, a, b, c)
 	hstat := stats["h_bulkfree"].(map[string]interface{})
@@ -473,9 +470,6 @@ func (mvcc *MVCC) Log() {
 	hstat = stats["h_reclaims"].(map[string]interface{})
 	a, b, c = hstat["samples"], hstat["max"], hstat["mean"]
 	log.Infof("%v h_reclaims: %10d %10d %10d", mvcc.logprefix, a, b, c)
-	hstat = stats["h_versions"].(map[string]interface{})
-	a, b, c = hstat["samples"], hstat["max"], hstat["mean"]
-	log.Infof("%v h_versions: %10d %10d %10d", mvcc.logprefix, a, b, c)
 
 	// log snapshots
 	snapshot, items := mvcc.currsnapshot(), []string{}
@@ -498,10 +492,8 @@ func (mvcc *MVCC) Clone(name string) *MVCC {
 	newmvcc := NewMVCC(mvcc.name, mvcc.setts)
 	newmvcc.lock()
 	newmvcc.llrbstats = mvcc.llrbstats
-	newmvcc.h_upsertdepth = mvcc.h_upsertdepth.Clone()
 	newmvcc.h_bulkfree = mvcc.h_bulkfree.Clone()
 	newmvcc.h_reclaims = mvcc.h_reclaims.Clone()
-	newmvcc.h_versions = mvcc.h_versions.Clone()
 	newmvcc.seqno = mvcc.seqno
 
 	newmvcc.setroot(newmvcc.clonetree(mvcc.getroot()))
@@ -603,7 +595,6 @@ func (mvcc *MVCC) set(key, value, oldvalue []byte) (ov []byte, cas uint64) {
 
 	mvcc.seqno++
 	reclaim := mvcc.currsnapshot().reclaim[:0]
-	mvcc.h_versions.Add(mvcc.n_activess)
 
 	root := mvcc.getroot()
 	root, newnd, oldnd, reclaim = mvcc.upsert(root, 1, key, value, reclaim)
@@ -639,7 +630,6 @@ func (mvcc *MVCC) upsert(
 
 	if nd == nil {
 		newnd := mvcc.newnode(key, value)
-		mvcc.h_upsertdepth.Add(depth)
 		return newnd, newnd, nil, reclaim
 	}
 	reclaim = append(reclaim, nd)
@@ -670,7 +660,6 @@ func (mvcc *MVCC) upsert(
 		}
 		ndmvcc.setdirty()
 		newnd = ndmvcc
-		mvcc.h_upsertdepth.Add(depth)
 	}
 
 	ndmvcc, reclaim = mvcc.walkuprot23(ndmvcc, reclaim)
@@ -716,7 +705,6 @@ func (mvcc *MVCC) setcas(
 
 	mvcc.seqno++
 	reclaim := mvcc.currsnapshot().reclaim[:0]
-	mvcc.h_versions.Add(mvcc.n_activess)
 
 	root, depth := mvcc.getroot(), int64(1)
 	root, newnd, oldnd, reclaim, err =
@@ -764,7 +752,6 @@ func (mvcc *MVCC) upsertcas(
 
 	} else if nd == nil { // Expected a create
 		newnd := mvcc.newnode(key, value)
-		mvcc.h_upsertdepth.Add(depth)
 		return newnd, newnd, nil, reclaim, nil
 	}
 	reclaim = append(reclaim, nd)
@@ -810,7 +797,6 @@ func (mvcc *MVCC) upsertcas(
 			}
 			ndmvcc.setdirty()
 			newnd = ndmvcc
-			mvcc.h_upsertdepth.Add(depth)
 		}
 	}
 
@@ -837,7 +823,6 @@ func (mvcc *MVCC) dodelete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 
 	mvcc.seqno++
 	reclaim := mvcc.currsnapshot().reclaim[:0]
-	mvcc.h_versions.Add(mvcc.n_activess)
 
 	if oldvalue != nil {
 		oldvalue = lib.Fixbuffer(oldvalue, 0)
@@ -1326,6 +1311,9 @@ func (mvcc *MVCC) makesnapshot() {
 		}
 	}
 	mvcc.n_activess++
+	if mvcc.n_activess > mvcc.n_maxverions {
+		mvcc.n_maxverions = mvcc.n_activess
+	}
 	mvcc.unlock()
 }
 
