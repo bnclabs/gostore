@@ -207,7 +207,8 @@ func BenchmarkArenaAlloc(b *testing.B) {
 	marena := NewArena(capacity, "flist")
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		marena.Alloc(96)
+		//marena.Alloc(96)
+		marena.Alloc(int64(i%1024) + 1)
 	}
 }
 
@@ -216,7 +217,8 @@ func BenchmarkArenaFree(b *testing.B) {
 	marena := NewArena(capacity, "flist")
 	ptrs := []unsafe.Pointer{}
 	for i := 0; i < b.N; i++ {
-		ptr := marena.Alloc(96)
+		//ptr := marena.Alloc(96)
+		ptr := marena.Alloc(int64(i%1024) + 1)
 		ptrs = append(ptrs, ptr)
 	}
 	b.ResetTimer()
