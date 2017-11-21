@@ -69,11 +69,12 @@ func NewMVCC(name string, setts s.Settings) *MVCC {
 	mvcc.h_bulkfree = lib.NewhistorgramInt64(100, 1000, 1000)
 	mvcc.h_reclaims = lib.NewhistorgramInt64(10, 200, 20)
 
+	mvcc.logarenasettings()
+
 	mvcc.makesnapshot()
 	go housekeeper(mvcc, mvcc.snaptick, mvcc.finch)
 
 	log.Infof("%v started ...\n", mvcc.logprefix)
-	mvcc.logarenasettings()
 	return mvcc
 }
 
@@ -191,11 +192,6 @@ func (mvcc *MVCC) appendreclaim(reclaim []*Llrbnode) {
 }
 
 func (mvcc *MVCC) logarenasettings() {
-	if !mvcc.rlock() {
-		return
-	}
-	defer mvcc.runlock()
-
 	stats := mvcc.stats()
 
 	// key arena
