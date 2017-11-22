@@ -8,8 +8,8 @@ import "fmt"
 var _ = fmt.Sprintf("dummy")
 
 func TestNewpoolflist(t *testing.T) {
-	size, n := int64(96), int64(65536)
-	mpool := newpoolflist(size, n, nil, nil, nil)
+	size, n := int64(96), int64(Maxchunks)
+	mpool := newpoolflist(size, n, nil)
 	if mpool.capacity != size*n {
 		t.Errorf("expected %v, got %v", size*n, mpool.capacity)
 	} else if mpool.size != size {
@@ -21,9 +21,9 @@ func TestMpoolAlloc(t *testing.T) {
 	size, n := int64(96), int64(56)
 	pools := newFlistPool()
 	ptrs := make([]unsafe.Pointer, 0, n)
-	mpool := newpoolflist(size, n, pools, nil, nil)
-	if len(mpool.freelist) != int(n) {
-		t.Errorf("expected %v, got %v", n, len(mpool.freelist))
+	mpool := newpoolflist(size, n, pools)
+	if x := mpool.checkallocated(); x != 0 {
+		t.Errorf("expected %v, got %v", 0, x)
 	}
 	// allocate
 	for i := int64(0); i < n; i++ {
@@ -41,13 +41,13 @@ func TestMpoolAlloc(t *testing.T) {
 	}
 	if _, ok := mpool.allocchunk(); ok {
 		t.Errorf("expected pool to be exhausted")
-	} else if len(mpool.freelist) != 0 || mpool.freeoff != -1 {
-		t.Errorf("unexpected %v %v", len(mpool.freelist), mpool.freeoff)
+	} else if mpool.freeoff != -1 {
+		t.Errorf("unexpected %p", mpool.freeoff)
 	}
 
 	mpool.free(ptrs[0])
-	if len(mpool.freelist) != 1 || mpool.freeoff != 0 {
-		t.Errorf("unexpected %v %v", len(mpool.freelist), mpool.freeoff)
+	if mpool.freeoff == -1 {
+		t.Errorf("unexpected %p", mpool.freeoff)
 	}
 
 	// free
@@ -59,13 +59,13 @@ func TestMpoolAlloc(t *testing.T) {
 			t.Errorf("expected %v, got %v", y, alloc)
 		}
 	}
-	if len(mpool.freelist) != int(n) || mpool.freeoff != int(n-1) {
-		t.Errorf("unexpected %v, %v", len(mpool.freelist), mpool.freeoff)
+	if x := mpool.checkallocated(); x != 0 {
+		t.Errorf("unexpected %v", x)
 	}
 
-	size, n = 96, 65536
+	size, n = 96, int64(Maxchunks)
 	ptrs = make([]unsafe.Pointer, 0, n)
-	mpool = newpoolflist(size, n, pools, nil, nil)
+	mpool = newpoolflist(size, n, pools)
 	// allocate all of them
 	ptrs = make([]unsafe.Pointer, 0, n)
 	for i := int64(0); i < n; i++ {
@@ -77,18 +77,22 @@ func TestMpoolAlloc(t *testing.T) {
 	}
 	// randmly free 70% of the block
 	for i := 0; i < int(float64(n)*0.99); i++ {
-		mpool.free(ptrs[rand.Intn(int(n))])
+		off := rand.Intn(int(n))
+		if ptrs[off] != nil {
+			mpool.free(ptrs[off])
+			ptrs[off] = nil
+		}
 	}
 	capacity, heap, alloc, overhead := mpool.info()
 	if _, ok := mpool.allocchunk(); !ok {
 		t.Errorf("unexpected false")
-	} else if capacity != 6291456 {
+	} else if capacity != 1966080 {
 		t.Errorf("unexpected capacity %v", capacity)
-	} else if heap != 6291456 {
+	} else if heap != 1966080 {
 		t.Errorf("unexpected heap %v", heap)
-	} else if alloc != 62976 {
+	} else if alloc != 733824 {
 		t.Errorf("unexpected alloc %v", alloc)
-	} else if overhead != 112 {
+	} else if overhead != 104 {
 		t.Errorf("unexpected overhead %v", overhead)
 	}
 
@@ -116,7 +120,7 @@ func TestMpoolAlloc(t *testing.T) {
 
 func TestPoolinfo(t *testing.T) {
 	size, n := int64(96), int64(1024)
-	mpool := newpoolflist(size, n, nil, nil, nil)
+	mpool := newpoolflist(size, n, nil)
 	capacity, heap, alloc, overhead := mpool.info()
 	if capacity != 98304 {
 		t.Errorf("unexpected capacity %v", capacity)
@@ -124,14 +128,14 @@ func TestPoolinfo(t *testing.T) {
 		t.Errorf("unexpected heap %v", heap)
 	} else if alloc != 0 {
 		t.Errorf("unexpected alloc %v", alloc)
-	} else if overhead != 112 {
+	} else if overhead != 104 {
 		t.Errorf("unexpected overhead %v", overhead)
 	}
 }
 
 func TestCheckAllocated(t *testing.T) {
 	size, n := int64(96), int64(56)
-	mpool := newpoolflist(size, n, nil, nil, nil)
+	mpool := newpoolflist(size, n, nil)
 	// allocate
 	for i := int64(0); i < n; i++ {
 		mpool.allocchunk()
@@ -143,16 +147,16 @@ func TestCheckAllocated(t *testing.T) {
 }
 
 func BenchmarkNewpoolflist(b *testing.B) {
-	size, n := int64(96), int64(65536)
+	size, n := int64(96), int64(1024)
 	for i := 0; i < b.N; i++ {
-		newpoolflist(size, n, nil, nil, nil)
+		newpoolflist(size, n, nil)
 	}
 }
 
 func BenchmarkMpoolAllocX(b *testing.B) {
-	size, n := int64(96), int64(65536)
+	size, n := int64(96), int64(Maxchunks)
 	pools := newFlistPool()
-	mpool := newpoolflist(size, n, pools, nil, nil)
+	mpool := newpoolflist(size, n, pools)
 	for i := 0; i < int(n-1); i++ {
 		mpool.allocchunk()
 	}

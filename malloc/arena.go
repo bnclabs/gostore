@@ -175,7 +175,7 @@ func (arena *Arena) Utilization() ([]int, []float64) {
 }
 
 func (arena *Arena) adaptiveNumchunks(size, npools int64) int64 {
-	maxchunk, numchunks := Maxchunks, int64(1)<<uint64(npools)
+	maxchunk, numchunks := Maxchunks, int64(1*64)<<uint64(npools)
 	if size < 512 {
 		maxchunk = arena.maxchunks[0]
 	} else if size < 1024 {

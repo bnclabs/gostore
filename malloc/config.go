@@ -17,7 +17,7 @@ const Maxarenasize = int64(1024 * 1024 * 1024 * 1024)
 const Maxpools = int64(512)
 
 // Maxchunks maximum number of chunks allowed in a pool.
-const Maxchunks = int64(1024)
+const Maxchunks = int64(20 * 1024)
 
 type memoryPools interface {
 	// Allocate a new chunk from pool, no more memory available get a
