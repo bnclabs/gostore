@@ -7,6 +7,8 @@ import "C"
 
 import "fmt"
 import "unsafe"
+
+import "runtime"
 import "sync/atomic"
 
 type block struct {
@@ -82,6 +84,7 @@ func (pool *poolflist) allocchunk() (ptr unsafe.Pointer, ok bool) {
 			ok = true
 			break
 		}
+		runtime.Gosched()
 	}
 	if shiftup && pool.pools != nil {
 		if pool.size == 1264 {
@@ -122,6 +125,7 @@ func (pool *poolflist) free(ptr unsafe.Pointer) {
 			atomic.StoreInt64(&pool.spinlock, 0)
 			break
 		}
+		runtime.Gosched()
 	}
 	if tofreelist {
 		//fmt.Println("tofreelist")
@@ -137,6 +141,7 @@ func (pool *poolflist) info() (capacity, heap, alloc, overhead int64) {
 			atomic.StoreInt64(&pool.spinlock, 0)
 			return pool.capacity, pool.capacity, mallocated, self
 		}
+		runtime.Gosched()
 	}
 }
 

@@ -3,6 +3,7 @@ package malloc
 import "fmt"
 import "testing"
 import "unsafe"
+import "sync"
 import "reflect"
 import "math/rand"
 
@@ -223,8 +224,8 @@ func BenchmarkArenaAlloc(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		marena.Alloc(int64(i%1024) + 1)
-		//marena.Alloc(96)
+		//marena.Alloc(int64(i%1024) + 1)
+		marena.Alloc(96)
 	}
 }
 
@@ -261,4 +262,82 @@ func BenchmarkOSMalloc(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		osmalloc(96)
 	}
+}
+
+func BenchmarkMalloc(b *testing.B) {
+	capacity := int64(10 * 1024 * 1024 * 1024)
+	marena := NewArena(capacity, "flist")
+
+	ptrs := make([]unsafe.Pointer, 0, b.N)
+	for i := 0; i < b.N; i++ {
+		ptr := marena.Alloc(89)
+		ptrs = append(ptrs, ptr)
+	}
+	for _, ptr := range ptrs {
+		marena.Free(ptr)
+	}
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		marena.Alloc(89)
+	}
+}
+
+func BenchmarkMallocCC2(b *testing.B) {
+	capacity := int64(10 * 1024 * 1024 * 1024)
+	marena := NewArena(capacity, "flist")
+
+	ptrs := make([]unsafe.Pointer, 0, b.N)
+	for i := 0; i < b.N; i++ {
+		ptr := marena.Alloc(89)
+		ptrs = append(ptrs, ptr)
+	}
+	for _, ptr := range ptrs {
+		marena.Free(ptr)
+	}
+	b.ResetTimer()
+
+	var wg sync.WaitGroup
+	do := func(wg *sync.WaitGroup) {
+		for i := 0; i < b.N/2; i++ {
+			marena.Alloc(89)
+		}
+		wg.Done()
+	}
+	wg.Add(2)
+
+	go do(&wg)
+	go do(&wg)
+
+	wg.Wait()
+}
+
+func BenchmarkMallocCC4(b *testing.B) {
+	capacity := int64(10 * 1024 * 1024 * 1024)
+	marena := NewArena(capacity, "flist")
+
+	ptrs := make([]unsafe.Pointer, 0, b.N)
+	for i := 0; i < b.N; i++ {
+		ptr := marena.Alloc(89)
+		ptrs = append(ptrs, ptr)
+	}
+	for _, ptr := range ptrs {
+		marena.Free(ptr)
+	}
+	b.ResetTimer()
+
+	var wg sync.WaitGroup
+	do := func(wg *sync.WaitGroup) {
+		for i := 0; i < b.N/4; i++ {
+			marena.Alloc(89)
+		}
+		wg.Done()
+	}
+	wg.Add(4)
+
+	go do(&wg)
+	go do(&wg)
+	go do(&wg)
+	go do(&wg)
+	wg.Wait()
 }
