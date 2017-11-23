@@ -275,7 +275,7 @@ func (mvcc *MVCC) stats() map[string]interface{} {
 	m["n_nodes"] = mvcc.n_nodes
 	m["n_frees"] = mvcc.n_frees
 	m["n_clones"] = mvcc.n_clones
-	m["n_txns"] = mvcc.n_txns
+	m["n_txns"] = atomic.LoadInt64(&mvcc.n_txns)
 	m["n_commits"] = mvcc.n_commits
 	m["n_aborts"] = mvcc.n_aborts
 	m["keymemory"] = mvcc.keymemory
@@ -471,7 +471,8 @@ func (mvcc *MVCC) Log() {
 	snapshot, items := mvcc.currsnapshot(), []string{}
 	for snapshot != nil {
 		snapid := atomic.LoadInt64(&snapshot.id)
-		item := fmt.Sprintf("%v(%v)", snapid, snapshot.refcount)
+		refcount := atomic.LoadInt64(&snapshot.refcount)
+		item := fmt.Sprintf("%v(%v)", snapid, refcount)
 		items = append(items, item)
 		snapshot = (*mvccsnapshot)(atomic.LoadPointer(&snapshot.next))
 	}

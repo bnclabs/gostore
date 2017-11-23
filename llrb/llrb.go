@@ -725,7 +725,7 @@ func (llrb *LLRB) stats() map[string]interface{} {
 	m["n_nodes"] = llrb.n_nodes
 	m["n_frees"] = llrb.n_frees
 	m["n_clones"] = llrb.n_clones
-	m["n_txns"] = llrb.n_txns
+	m["n_txns"] = atomic.LoadInt64(&llrb.n_txns)
 	m["n_commits"] = llrb.n_commits
 	m["n_aborts"] = llrb.n_aborts
 	m["keymemory"] = llrb.keymemory
