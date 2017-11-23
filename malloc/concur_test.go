@@ -4,6 +4,7 @@ import "fmt"
 import "testing"
 import "unsafe"
 import "sync"
+import "time"
 import "reflect"
 import "math/rand"
 import "sync/atomic"
@@ -94,5 +95,67 @@ func testfree(arena *Arena, n byte, ch chan testalloc, wg *sync.WaitGroup) {
 		}
 		arena.Free(msg.ptr)
 		atomic.AddInt64(&ccfreed, int64(msg.size+8))
+	}
+}
+
+func BenchmarkConcur(b *testing.B) {
+	var awg, fwg sync.WaitGroup
+
+	nroutines, repeat := 50, 1000000
+
+	chans := make([]chan unsafe.Pointer, 0, nroutines)
+	for n := 0; n < nroutines; n++ {
+		chans = append(chans, make(chan unsafe.Pointer, 1000))
+	}
+
+	now := time.Now()
+	capacity := int64(10 * 1024 * 1024 * 1024)
+	marena := NewArena(capacity, "flist")
+	awg.Add(nroutines)
+	fwg.Add(nroutines)
+	for n := 0; n < nroutines; n++ {
+		go benchallocator(marena, byte(n), repeat, chans, &awg)
+		go benchfree(marena, byte(n), chans[n], &fwg)
+	}
+
+	awg.Wait()
+	b.Logf("allocations are done\n")
+
+	for _, ch := range chans {
+		close(ch)
+	}
+
+	fwg.Wait()
+
+	b.Logf("Took %v for %v", time.Since(now), repeat*nroutines)
+	b.Log(marena.Info())
+}
+
+func benchallocator(
+	arena *Arena, n byte, repeat int,
+	chans []chan unsafe.Pointer, wg *sync.WaitGroup) {
+
+	defer wg.Done()
+
+	slabs := arena.Slabs()[:50]
+	src := make([]byte, slabs[len(slabs)-1])
+	for i := range src {
+		src[i] = n
+	}
+
+	for i := 0; i < repeat; i++ {
+		size := slabs[rand.Intn(len(slabs))] - 8
+		ptr := arena.Alloc(size)
+
+		chans[rand.Intn(len(chans))] <- ptr
+	}
+}
+
+func benchfree(
+	arena *Arena, n byte, ch chan unsafe.Pointer, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	for ptr := range ch {
+		arena.Free(ptr)
 	}
 }
