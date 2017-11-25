@@ -11,11 +11,6 @@ import "unsafe"
 import "runtime"
 import "sync/atomic"
 
-type block struct {
-	ptr       unsafe.Pointer
-	blocknext unsafe.Pointer // *block
-}
-
 // poolflist manages a memory block sliced up into equal sized chunks.
 type poolflist struct {
 	// 64-bit aligned stats
@@ -48,7 +43,7 @@ func newpoolflist(size, n int64, pools *flistPools) *poolflist {
 	for i := int64(0); i < n; i++ {
 		pool.freelist[i] = uint16(i)
 		ptr := unsafe.Pointer(uintptr(pool.base) + uintptr(i*pool.size))
-		*((**poolflist)(ptr)) = pool
+		*((*uintptr)(ptr)) = (uintptr)(unsafe.Pointer(pool))
 	}
 	pool.freeoff = n - 1
 	return pool
@@ -63,34 +58,32 @@ func (pool *poolflist) chunklen() int64 {
 }
 
 func (pool *poolflist) allocchunk() (ptr unsafe.Pointer, ok bool) {
-	if pool.size == 1264 {
-		//fmt.Printf("alloc %p %v\n", pool, pool.size)
-	}
-	shiftup := false
 	for {
 		if atomic.CompareAndSwapInt64(&pool.spinlock, 0, 1) {
+			if (pool.mallocated + pool.size) == pool.capacity {
+				old := unsafe.Pointer(pool)
+				new := atomic.LoadPointer(&pool.next)
+				pools := pool.pools
+				if pools != nil {
+					if !atomic.CompareAndSwapPointer(&pools.free, old, new) {
+						atomic.StoreInt64(&pool.spinlock, 0)
+						return nil, false
+					}
+				}
+			}
 			if pool.freeoff < 0 {
 				atomic.StoreInt64(&pool.spinlock, 0)
-				return
+				return nil, false
 			}
 			nth := int64(pool.freelist[pool.freeoff])
 			ptr = unsafe.Pointer(uintptr(pool.base) + uintptr(nth*pool.size))
 			pool.mallocated += pool.size
-			if pool.mallocated == pool.capacity {
-				shiftup = true
-			}
 			pool.freeoff--
 			atomic.StoreInt64(&pool.spinlock, 0)
-			ok = true
-			break
+			//fmt.Printf("allocchunk %p %v \n", pool, pool.size)
+			return ptr, true
 		}
 		runtime.Gosched()
-	}
-	if shiftup && pool.pools != nil {
-		if pool.size == 1264 {
-			//fmt.Printf("shiftup %p %v\n", pool, pool.size)
-		}
-		pool.pools.shiftup()
 	}
 	return
 }
@@ -98,9 +91,6 @@ func (pool *poolflist) allocchunk() (ptr unsafe.Pointer, ok bool) {
 func (pool *poolflist) free(ptr unsafe.Pointer) {
 	if ptr == nil {
 		panic("poolflist.free(): nil pointer")
-	}
-	if pool.size == 1264 {
-		//fmt.Printf("free %p %v\n", pool, pool.size)
 	}
 	diffptr := uint64(uintptr(ptr) - uintptr(pool.base))
 	if (diffptr % uint64(pool.size)) != 0 {
@@ -110,7 +100,6 @@ func (pool *poolflist) free(ptr unsafe.Pointer) {
 	nth := uint16(diffptr / uint64(pool.size))
 	n := pool.capacity / pool.size
 	initblock((uintptr)(ptr)+8, pool.size-8)
-	tofreelist := false
 	for {
 		if atomic.CompareAndSwapInt64(&pool.spinlock, 0, 1) {
 			pool.freeoff++
@@ -118,7 +107,8 @@ func (pool *poolflist) free(ptr unsafe.Pointer) {
 				panic("impossible situation")
 			}
 			if pool.mallocated == pool.capacity {
-				tofreelist = true
+				//fmt.Printf("tofreelist %p %v\n", pool, pool.size)
+				pool.pools.addtofree(pool)
 			}
 			pool.freelist[pool.freeoff] = nth
 			pool.mallocated -= pool.size
@@ -126,10 +116,6 @@ func (pool *poolflist) free(ptr unsafe.Pointer) {
 			break
 		}
 		runtime.Gosched()
-	}
-	if tofreelist {
-		//fmt.Println("tofreelist")
-		pool.pools.addtofree(pool)
 	}
 }
 
@@ -163,7 +149,6 @@ type flistPools struct {
 	free     unsafe.Pointer // *poolflist
 	listhead unsafe.Pointer // *poolflist
 	npools   int64
-	spinlock int64
 }
 
 func newFlistPool() *flistPools {
@@ -183,27 +168,9 @@ func (pools *flistPools) addtolist(head *poolflist) {
 
 func (pools *flistPools) addtofree(head *poolflist) {
 	new := unsafe.Pointer(head)
-	if head.size == 1264 {
-		//fmt.Printf("addtofree %p %v\n", head, head.size)
-	}
 	for {
 		old := atomic.LoadPointer(&pools.free)
-		head.next = old
-		if atomic.CompareAndSwapPointer(&pools.free, old, new) {
-			return
-		}
-	}
-}
-
-func (pools *flistPools) shiftup() {
-	for {
-		old := atomic.LoadPointer(&pools.free)
-		if old == nil {
-			return
-		}
-		head := (*poolflist)(old)
-		new := head.next
-		head.next = nil
+		atomic.StorePointer(&head.next, old)
 		if atomic.CompareAndSwapPointer(&pools.free, old, new) {
 			return
 		}
@@ -212,12 +179,13 @@ func (pools *flistPools) shiftup() {
 
 func (pools *flistPools) allocchunk(arena *Arena, size int64) unsafe.Pointer {
 	free := atomic.LoadPointer(&pools.free)
+	//fmt.Printf("all %p\n", free)
 	if free == nil {
 		npools := atomic.AddInt64(&pools.npools, 1)
 		numchunks := arena.adaptiveNumchunks(size, npools)
 		pool := newpoolflist(size, numchunks, pools)
 		pools.addtolist(pool)
-		//fmt.Printf("newpoolflist %10d %10d %10d\n", size, numchunks, npools)
+		//fmt.Printf("newpoolflist %p %p %10d %10d %10d\n", pool, pools, size, numchunks, npools)
 		pools.addtofree(pool)
 		free = atomic.LoadPointer(&pools.free)
 	}
