@@ -57,23 +57,29 @@ func (pool *poolflist) chunklen() int64 {
 	return pool.size - 8
 }
 
+// this pool is the first pool in flistPools' free-list.
 func (pool *poolflist) allocchunk() (ptr unsafe.Pointer, ok bool) {
+	shiftup := func() bool {
+		if pools := pool.pools; pools != nil {
+			old := unsafe.Pointer(pool)
+			new := atomic.LoadPointer(&pool.next)
+			return atomic.CompareAndSwapPointer(&pools.free, old, new)
+		}
+		return true
+	}
+
 	for {
 		if atomic.CompareAndSwapInt64(&pool.spinlock, 0, 1) {
-			if (pool.mallocated + pool.size) == pool.capacity {
-				old := unsafe.Pointer(pool)
-				new := atomic.LoadPointer(&pool.next)
-				pools := pool.pools
-				if pools != nil {
-					if !atomic.CompareAndSwapPointer(&pools.free, old, new) {
-						atomic.StoreInt64(&pool.spinlock, 0)
-						return nil, false
-					}
-				}
-			}
 			if pool.freeoff < 0 {
+				shiftup()
 				atomic.StoreInt64(&pool.spinlock, 0)
 				return nil, false
+			}
+			if (pool.mallocated + pool.size) == pool.capacity {
+				if !shiftup() {
+					atomic.StoreInt64(&pool.spinlock, 0)
+					return nil, false
+				}
 			}
 			nth := int64(pool.freelist[pool.freeoff])
 			ptr = unsafe.Pointer(uintptr(pool.base) + uintptr(nth*pool.size))
@@ -89,6 +95,8 @@ func (pool *poolflist) allocchunk() (ptr unsafe.Pointer, ok bool) {
 }
 
 func (pool *poolflist) free(ptr unsafe.Pointer) {
+	// TODO: panic checks can be removed once this implementation
+	// becomes stable.
 	if ptr == nil {
 		panic("poolflist.free(): nil pointer")
 	}
@@ -106,12 +114,12 @@ func (pool *poolflist) free(ptr unsafe.Pointer) {
 			if pool.freeoff >= n {
 				panic("impossible situation")
 			}
-			if pool.mallocated == pool.capacity {
+			pool.freelist[pool.freeoff] = nth
+			pool.mallocated -= pool.size
+			if pool.mallocated == (pool.capacity - pool.size) {
 				//fmt.Printf("tofreelist %p %v\n", pool, pool.size)
 				pool.pools.addtofree(pool)
 			}
-			pool.freelist[pool.freeoff] = nth
-			pool.mallocated -= pool.size
 			atomic.StoreInt64(&pool.spinlock, 0)
 			break
 		}
