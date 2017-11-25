@@ -22,6 +22,7 @@ func TestMpoolAlloc(t *testing.T) {
 	pools := newFlistPool()
 	ptrs := make([]unsafe.Pointer, 0, n)
 	mpool := newpoolflist(size, n, pools)
+	pools.free = unsafe.Pointer(mpool)
 	if x := mpool.checkallocated(); x != 0 {
 		t.Errorf("expected %v, got %v", 0, x)
 	}
@@ -31,7 +32,7 @@ func TestMpoolAlloc(t *testing.T) {
 		capacity, _, alloc, _ := mpool.info()
 		available := capacity - alloc
 		if ok == false {
-			t.Errorf("unable to allocate even first block")
+			t.Errorf("unable to block")
 		} else if y := (i + 1) * size; alloc != y {
 			t.Errorf("expected %v, got %v", y, alloc)
 		} else if y = (n - i - 1) * size; available != y {
@@ -66,6 +67,7 @@ func TestMpoolAlloc(t *testing.T) {
 	size, n = 96, int64(Maxchunks)
 	ptrs = make([]unsafe.Pointer, 0, n)
 	mpool = newpoolflist(size, n, pools)
+	pools.free = unsafe.Pointer(mpool)
 	// allocate all of them
 	ptrs = make([]unsafe.Pointer, 0, n)
 	for i := int64(0); i < n; i++ {
@@ -90,7 +92,7 @@ func TestMpoolAlloc(t *testing.T) {
 		t.Errorf("unexpected capacity %v", capacity)
 	} else if heap != 1966080 {
 		t.Errorf("unexpected heap %v", heap)
-	} else if alloc != 733824 {
+	} else if alloc != 731904 {
 		t.Errorf("unexpected alloc %v", alloc)
 	} else if overhead != 104 {
 		t.Errorf("unexpected overhead %v", overhead)
@@ -157,6 +159,7 @@ func BenchmarkMpoolAllocX(b *testing.B) {
 	size, n := int64(96), int64(Maxchunks)
 	pools := newFlistPool()
 	mpool := newpoolflist(size, n, pools)
+	pools.free = unsafe.Pointer(mpool)
 	for i := 0; i < int(n-1); i++ {
 		mpool.allocchunk()
 	}

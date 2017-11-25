@@ -20,7 +20,7 @@ var ccallocated, ccfreed int64
 func TestConcur(t *testing.T) {
 	var awg, fwg sync.WaitGroup
 
-	nroutines, repeat := 50, 1000000
+	nroutines, repeat := 50, 100000
 
 	chans := make([]chan testalloc, 0, nroutines)
 	for n := 0; n < nroutines; n++ {
