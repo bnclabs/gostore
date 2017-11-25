@@ -98,14 +98,19 @@ func testfree(arena *Arena, n byte, ch chan testalloc, wg *sync.WaitGroup) {
 	}
 }
 
-func BenchmarkConcur(b *testing.B) {
+func BenchmarkConcur1(b *testing.B) {
+	dobenchconcur(b, 1, 10000000)
+}
+
+func BenchmarkConcur50(b *testing.B) {
+	dobenchconcur(b, 50, 1000000)
+}
+
+func dobenchconcur(b *testing.B, nroutines, repeat int) {
 	var awg, fwg sync.WaitGroup
-
-	nroutines, repeat := 50, 1000000
-
 	chans := make([]chan unsafe.Pointer, 0, nroutines)
 	for n := 0; n < nroutines; n++ {
-		chans = append(chans, make(chan unsafe.Pointer, 1000))
+		chans = append(chans, make(chan unsafe.Pointer, 100000))
 	}
 
 	now := time.Now()
@@ -144,10 +149,10 @@ func benchallocator(
 	}
 
 	for i := 0; i < repeat; i++ {
-		size := slabs[rand.Intn(len(slabs))] - 8
+		size := slabs[i%len(slabs)] - 8
 		ptr := arena.Alloc(size)
 
-		chans[rand.Intn(len(chans))] <- ptr
+		chans[i%len(chans)] <- ptr
 	}
 }
 
