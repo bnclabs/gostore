@@ -56,7 +56,7 @@ func TestLLRBEmpty(t *testing.T) {
 func TestLLRBLoad(t *testing.T) {
 	var cas uint64
 
-	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
+	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
 	llrb := NewLLRB("load", setts)
 	defer llrb.Destroy()
 
@@ -205,7 +205,7 @@ func TestLLRBDotdump(t *testing.T) {
 }
 
 func TestLLRBLoadLarge(t *testing.T) {
-	setts := s.Settings{"memcapacity": 100 * 1024 * 1024}
+	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
 	llrb := NewLLRB("loadlarge", setts)
 	defer llrb.Destroy()
 
@@ -267,7 +267,7 @@ func TestLLRBLoadLarge(t *testing.T) {
 }
 
 func TestLLRBClone(t *testing.T) {
-	setts := s.Settings{"memcapacity": 100 * 1024 * 1024}
+	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
 	llrb := NewLLRB("clone", setts)
 	defer llrb.Destroy()
 
@@ -335,7 +335,7 @@ func TestLLRBSetCAS(t *testing.T) {
 	var err error
 	var cas uint64
 
-	setts := s.Settings{"memcapacity": 100 * 1024 * 1024}
+	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
 	llrb := NewLLRB("setcas", setts)
 	defer llrb.Destroy()
 
@@ -491,7 +491,7 @@ func TestLLRBDelete(t *testing.T) {
 	var err error
 	var cas uint64
 
-	setts := s.Settings{"memcapacity": 100 * 1024 * 1024}
+	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
 	llrb := NewLLRB("delete", setts)
 	defer llrb.Destroy()
 
@@ -699,12 +699,12 @@ func TestLLRBDelete(t *testing.T) {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_txns"].(int64); x != 0 {
 		t.Errorf("unexpected %v", x)
-	} else if u := nodeutz(stats); u < 95.0 {
+	} else if u := nodeutz(stats); u != 0 {
 		t.Errorf("unexpected %v", u)
-	} else if u := valueutz(stats); u < 95.0 {
+	} else if u := valueutz(stats); u != 0 {
 		t.Errorf("unexpected %v", u)
 	}
-	if stats["node.heap"].(int64) != 0 {
+	if stats["node.heap"].(int64) != 65280 {
 		t.Errorf("unexpected %v", stats["node.heap"])
 	} else if stats["node.alloc"].(int64) != 0 {
 		t.Errorf("unexpected %v", stats["node.alloc"])
