@@ -15,6 +15,7 @@ type mvccsnapshot struct {
 	refcount int64
 	purgetry int64
 	n_count  int64
+	seqno    uint64
 
 	id       int64
 	mvcc     *MVCC

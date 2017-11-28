@@ -13,7 +13,7 @@ import "github.com/prataprc/gostore/api"
 import s "github.com/prataprc/gosettings"
 
 func TestMVCCEmpty(t *testing.T) {
-	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
+	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
 	mvcc := NewMVCC("empty", setts)
 	defer mvcc.Destroy()
 
@@ -56,7 +56,7 @@ func TestMVCCEmpty(t *testing.T) {
 func TestMVCCLoad(t *testing.T) {
 	var cas uint64
 
-	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
+	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
 	mvcc := NewMVCC("load", setts)
 	defer mvcc.Destroy()
 
@@ -175,7 +175,7 @@ func TestMVCCLoad(t *testing.T) {
 }
 
 func TestMVCCDotdump(t *testing.T) {
-	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
+	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
 	mvcc := NewMVCC("load", setts)
 	defer mvcc.Destroy()
 
@@ -208,7 +208,7 @@ func TestMVCCDotdump(t *testing.T) {
 }
 
 func TestMVCCLoadLarge(t *testing.T) {
-	setts := s.Settings{"memcapacity": 100 * 1024 * 1024}
+	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
 	mvcc := NewMVCC("loadlarge", setts)
 	defer mvcc.Destroy()
 
@@ -239,6 +239,10 @@ func TestMVCCLoadLarge(t *testing.T) {
 		t.Errorf("unexpected %v", mvcc.Count())
 	}
 
+	snaptick := time.Duration(Defaultsettings().Int64("snapshottick") * 4)
+
+	time.Sleep(snaptick * 10)
+
 	// validate
 	stats := mvcc.Stats()
 	if x := stats["keymemory"].(int64); x != int64(rkm) {
@@ -259,15 +263,15 @@ func TestMVCCLoadLarge(t *testing.T) {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_txns"].(int64); x != 0 {
 		t.Errorf("unexpected %v", x)
-	} else if u := nodeutz(stats); u < 40 {
+	} else if u := nodeutz(stats); u < 20 {
 		t.Errorf("unexpected %v", u)
-	} else if u := valueutz(stats); u < 40 {
+	} else if u := valueutz(stats); u < 20 {
 		t.Errorf("unexpected %v", u)
 	}
 }
 
 func TestMVCCClone(t *testing.T) {
-	setts := s.Settings{"memcapacity": 100 * 1024 * 1024}
+	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
 	mvcc := NewMVCC("clone", setts)
 	defer mvcc.Destroy()
 
@@ -282,6 +286,8 @@ func TestMVCCClone(t *testing.T) {
 	}
 	clone := mvcc.Clone("loadclone")
 	defer clone.Destroy()
+
+	time.Sleep(1 * time.Second)
 
 	// test loaded data
 	value := make([]byte, 1024)
@@ -333,7 +339,7 @@ func TestMVCCSetCAS(t *testing.T) {
 	var err error
 	var cas uint64
 
-	setts := s.Settings{"memcapacity": 100 * 1024 * 1024}
+	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
 	mvcc := NewMVCC("setcas", setts)
 	defer mvcc.Destroy()
 
@@ -461,6 +467,7 @@ func TestMVCCSetCAS(t *testing.T) {
 	if mvcc.Count() != int64(n) {
 		t.Errorf("unexpected %v", mvcc.Count())
 	}
+	time.Sleep(mvcc.snaptick * 10)
 
 	// validate
 	stats := mvcc.Stats()
@@ -482,9 +489,9 @@ func TestMVCCSetCAS(t *testing.T) {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_txns"].(int64); x != 0 {
 		t.Errorf("unexpected %v", x)
-	} else if u := nodeutz(stats); u < 40 {
+	} else if u := nodeutz(stats); u < 20 {
 		t.Errorf("unexpected %v", u)
-	} else if u := valueutz(stats); u < 40 {
+	} else if u := valueutz(stats); u < 20 {
 		t.Errorf("unexpected %v", u)
 	}
 }
@@ -493,7 +500,7 @@ func TestMVCCDelete(t *testing.T) {
 	var err error
 	var cas uint64
 
-	setts := s.Settings{"memcapacity": 100 * 1024 * 1024}
+	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
 	mvcc := NewMVCC("delete", setts)
 	defer mvcc.Destroy()
 
@@ -644,6 +651,8 @@ func TestMVCCDelete(t *testing.T) {
 		t.Errorf("unexpected %v", mvcc.Count())
 	}
 
+	time.Sleep(mvcc.snaptick * 10)
+
 	// validate
 	stats := mvcc.Stats()
 	if x := stats["keymemory"].(int64); x != int64(rkm) {
@@ -664,9 +673,9 @@ func TestMVCCDelete(t *testing.T) {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_txns"].(int64); x != 0 {
 		t.Errorf("unexpected %v", x)
-	} else if u := nodeutz(stats); u < 45 {
+	} else if u := nodeutz(stats); u < 20 {
 		t.Errorf("unexpected %v", u)
-	} else if u := valueutz(stats); u < 45 {
+	} else if u := valueutz(stats); u < 20 {
 		t.Errorf("unexpected %v", u)
 	}
 
@@ -710,7 +719,7 @@ func TestMVCCDelete(t *testing.T) {
 }
 
 func TestMVCCTxn(t *testing.T) {
-	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
+	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
 	mvcc := NewMVCC("txn", setts)
 	defer mvcc.Destroy()
 	snaptick := time.Duration(Defaultsettings().Int64("snapshottick") * 2)
@@ -817,7 +826,7 @@ func TestMVCCTxn(t *testing.T) {
 }
 
 func TestMVCCView(t *testing.T) {
-	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
+	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
 	mvcc := NewMVCC("view", setts)
 	defer mvcc.Destroy()
 	snaptick := time.Duration(Defaultsettings().Int64("snapshottick") * 2)
@@ -860,7 +869,7 @@ func TestMVCCView(t *testing.T) {
 }
 
 func TestMVCCTxnCursor(t *testing.T) {
-	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
+	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
 	mvcc := NewMVCC("view", setts)
 	defer mvcc.Destroy()
 
@@ -938,7 +947,7 @@ func TestMVCCTxnCursor(t *testing.T) {
 }
 
 func TestMVCCViewCursor(t *testing.T) {
-	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
+	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
 	mvcc := NewMVCC("view", setts)
 	defer mvcc.Destroy()
 
@@ -1014,7 +1023,7 @@ func TestMVCCViewCursor(t *testing.T) {
 }
 
 func TestMVCCScan(t *testing.T) {
-	setts := s.Settings{"memcapacity": 100 * 1024 * 1024}
+	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
 	llrb := NewMVCC("scan", setts)
 	defer llrb.Destroy()
 	snaptick := time.Duration(Defaultsettings().Int64("snapshottick") * 2)
