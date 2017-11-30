@@ -393,7 +393,7 @@ func (mvcc *MVCC) Log() {
 	}
 	defer mvcc.runlock()
 
-	stats := mvcc.stats()
+	lprefix, stats := mvcc.logprefix, mvcc.stats()
 
 	summary := func(args ...string) string {
 		ss := []interface{}{}
@@ -438,21 +438,21 @@ func (mvcc *MVCC) Log() {
 
 	log.Infof("%v count: %10d\n", mvcc.logprefix, stats["n_count"])
 	a, b, c := stats["n_inserts"], stats["n_updates"], stats["n_deletes"]
-	log.Infof("%v write: %10d %10d %10d\n", mvcc.logprefix, a, b, c)
+	log.Infof("%v write: %10d(ins) %10d(ups) %10d(del)\n", lprefix, a, b, c)
 	a, b, c = stats["n_nodes"], stats["n_frees"], stats["n_clones"]
-	log.Infof("%v nodes: %10d %10d %10d\n", mvcc.logprefix, a, b, c)
+	log.Infof("%v nodes: %10d(nds) %10d(fre) %10d(cln)\n", lprefix, a, b, c)
 	a, b, c = stats["n_txns"], stats["n_commits"], stats["n_aborts"]
-	log.Infof("%v txns : %10d %10d %10d\n", mvcc.logprefix, a, b, c)
+	log.Infof("%v txns : %10d(txn) %10d(com) %10d(abr)\n", lprefix, a, b, c)
 	a, b = stats["n_reclaims"], stats["n_maxverions"]
-	log.Infof("%v rclms: %10d %10d", mvcc.logprefix, a, b)
+	log.Infof("%v rclms: %10d(rcm) %10d(ver)", lprefix, a, b)
 	a, b, c = stats["n_snapshots"], stats["n_purgedss"], stats["n_activess"]
-	log.Infof("%v snaps: %10d %10d %10d", mvcc.logprefix, a, b, c)
+	log.Infof("%v snaps: %10d(tot) %10d(pur) %10d(act)", mvcc.logprefix, a, b, c)
 	hstat := stats["h_bulkfree"].(map[string]interface{})
 	a, b, c = hstat["samples"], hstat["max"], hstat["mean"]
-	log.Infof("%v h_bulkfree: %10d %10d %10d", mvcc.logprefix, a, b, c)
+	log.Infof("%v h_bulkfree: %10d(cnt) %10d(max) %10d(mea)", lprefix, a, b, c)
 	hstat = stats["h_reclaims"].(map[string]interface{})
 	a, b, c = hstat["samples"], hstat["max"], hstat["mean"]
-	log.Infof("%v h_reclaims: %10d %10d %10d", mvcc.logprefix, a, b, c)
+	log.Infof("%v h_reclaims: %10d(cnt) %10d(max) %10d(mea)", lprefix, a, b, c)
 
 	// log snapshots
 	wsnap := mvcc.writesnapshot()

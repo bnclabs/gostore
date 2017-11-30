@@ -390,8 +390,7 @@ func (llrb *LLRB) dodelete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 	seqno := llrb.seqno
 	if lsm {
 		if nd, ok := llrb.getkey(llrb.getroot(), key); ok {
-			nd.setdeleted()
-			nd.setseqno(llrb.seqno)
+			nd.setseqnodeleted(llrb.seqno)
 			if oldvalue != nil {
 				val = nd.Value()
 				oldvalue = lib.Fixbuffer(oldvalue, int64(len(val)))
@@ -797,7 +796,7 @@ func (llrb *LLRB) Log() {
 		return
 	}
 
-	stats := llrb.stats()
+	lprefix, stats := llrb.logprefix, llrb.stats()
 
 	summary := func(args ...string) string {
 		ss := []interface{}{}
@@ -842,11 +841,11 @@ func (llrb *LLRB) Log() {
 
 	log.Infof("%v count: %10d\n", llrb.logprefix, stats["n_count"])
 	a, b, c := stats["n_inserts"], stats["n_updates"], stats["n_deletes"]
-	log.Infof("%v write: %10d %10d %10d\n", llrb.logprefix, a, b, c)
+	log.Infof("%v write: %10d(ins) %10d(ups) %10d(del)\n", lprefix, a, b, c)
 	a, b, c = stats["n_nodes"], stats["n_frees"], stats["n_clones"]
-	log.Infof("%v nodes: %10d %10d %10d\n", llrb.logprefix, a, b, c)
+	log.Infof("%v nodes: %10d(nds) %10d(fre) %10d(cln)\n", lprefix, a, b, c)
 	a, b, c = stats["n_txns"], stats["n_commits"], stats["n_aborts"]
-	log.Infof("%v txns : %10d %10d %10d\n", llrb.logprefix, a, b, c)
+	log.Infof("%v txns : %10d(txn) %10d(com) %10d(abr)\n", lprefix, a, b, c)
 
 	llrb.runlock()
 }
