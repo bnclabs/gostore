@@ -81,19 +81,22 @@ func (txn *Txn) OpenCursor(key []byte) (api.Cursor, error) {
 //---- Exported Read methods
 
 // Get value for key from snapshot.
-func (txn *Txn) Get(key, value []byte) (v []byte, deleted, ok bool) {
+func (txn *Txn) Get(
+	key, value []byte) (v []byte, cas uint64, deleted, ok bool) {
+
 	index := crc32.Checksum(key, txn.tblcrc32)
 	head, _ := txn.writes[index]
 	_, next := head.get(key)
 	if next == nil {
-		v, _, deleted, ok = txn.getonsnap(key, value)
+		v, cas, deleted, ok = txn.getonsnap(key, value)
 		return
+
 	} else if next.cmd == cmdDelete {
-		return lib.Fixbuffer(v, 0), true, true
+		return lib.Fixbuffer(v, 0), next.seqno, true, true
 	}
 	v = lib.Fixbuffer(value, int64(len(next.value)))
 	copy(v, next.value)
-	return v, false, true
+	return v, next.seqno, false, true
 }
 
 //---- Exported Write methods
@@ -104,8 +107,11 @@ func (txn *Txn) Set(key, value, oldvalue []byte) []byte {
 	var seqno uint64
 
 	node := txn.getrecord()
-	node.cmd, node.key, node.value = cmdSet, key, value
-	node.seqno, node.next = 0, nil
+	node.key = lib.Fixbuffer(node.key, int64(len(key)))
+	copy(node.key, key)
+	node.value = lib.Fixbuffer(node.value, int64(len(value)))
+	copy(node.value, value)
+	node.cmd, node.seqno, node.next = cmdSet, 0, nil
 
 	index := crc32.Checksum(key, txn.tblcrc32)
 	head, _ := txn.writes[index]
@@ -131,8 +137,9 @@ func (txn *Txn) Delete(key, oldvalue []byte, lsm bool) []byte {
 	var seqno uint64
 
 	node := txn.getrecord()
-	node.cmd, node.key = cmdDelete, key
-	node.seqno, node.lsm, node.next = 0, lsm, nil
+	node.key = lib.Fixbuffer(node.key, int64(len(key)))
+	copy(node.key, key)
+	node.cmd, node.seqno, node.lsm, node.next = cmdDelete, 0, lsm, nil
 	node.value = lib.Fixbuffer(node.value, 0)
 
 	index := crc32.Checksum(key, txn.tblcrc32)

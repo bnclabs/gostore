@@ -56,8 +56,10 @@ func (view *View) Commit() error {
 //---- Exported Read methods
 
 // Get value for key from snapshot.
-func (view *View) Get(key, value []byte) (v []byte, deleted, ok bool) {
-	v, _, deleted, ok = view.getonsnap(key, value)
+func (view *View) Get(
+	key, value []byte) (v []byte, cas uint64, deleted, ok bool) {
+
+	v, cas, deleted, ok = view.getonsnap(key, value)
 	return
 }
 

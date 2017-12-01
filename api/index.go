@@ -71,7 +71,7 @@ type Transactor interface {
 	Delete(key, oldvalue []byte, lsm bool) []byte
 
 	// Get value for key from snapshot.
-	Get(key, value []byte) (v []byte, deleted, ok bool)
+	Get(key, value []byte) (v []byte, cas uint64, deleted, ok bool)
 
 	// OpenCursor open an active cursor inside the index.
 	OpenCursor(key []byte) (Cursor, error)

@@ -55,9 +55,11 @@ func (view *View) Abort() {
 // Get value for key, if value argument is not nil it will be used to copy the
 // entry's value. Also return whether entry is marked as deleted by LSM.
 // If ok is false, then key is not found.
-func (view *View) Get(key, value []byte) (v []byte, deleted, ok bool) {
-	v, _, deleted, ok = view.snap.Get(key, value)
-	return v, deleted, ok
+func (view *View) Get(
+	key, value []byte) (v []byte, cas uint64, deleted, ok bool) {
+
+	v, cas, deleted, ok = view.snap.Get(key, value)
+	return v, cas, deleted, ok
 }
 
 //---- local methods

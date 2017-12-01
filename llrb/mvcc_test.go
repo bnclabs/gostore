@@ -743,13 +743,15 @@ func TestMVCCTxn(t *testing.T) {
 	}
 	// get entries
 	key = []byte("plumless")
-	oldvalue, deleted, ok := txn.Get(key, oldvalue)
+	oldvalue, cas, deleted, ok := txn.Get(key, oldvalue)
 	if ok == false {
 		t.Errorf("unexpected false")
 	} else if deleted == true {
 		t.Errorf("unexpected deleted")
 	} else if string(oldvalue) != "value1" {
 		t.Errorf("unexpected %s", oldvalue)
+	} else if cas != 0 {
+		t.Errorf("unexpected %v", cas)
 	}
 	if err := txn.Commit(); err != nil {
 		t.Fatal(err)
@@ -787,13 +789,15 @@ func TestMVCCTxn(t *testing.T) {
 	if string(oldvalue) != "value111" {
 		t.Errorf("unexpected %s", oldvalue)
 	}
-	value, deleted, ok = txn.Get(key, []byte{})
+	value, cas, deleted, ok = txn.Get(key, []byte{})
 	if deleted == false {
 		t.Errorf("expected as deleted")
 	} else if ok == false {
 		t.Errorf("expected key")
 	} else if len(value) > 0 {
 		t.Errorf("unexpected %s", value)
+	} else if cas != 1 {
+		t.Errorf("unexpected %v", cas)
 	}
 	if err := txn.Commit(); err != nil {
 		t.Fatal(err)
@@ -819,7 +823,7 @@ func TestMVCCTxn(t *testing.T) {
 	txn.Abort()
 	// get entries
 	key = []byte("plumless")
-	value, _, _ = txn.Get(key, value)
+	value, _, _, _ = txn.Get(key, value)
 	if string(value) != "value1" {
 		t.Errorf("unexpected %s", value)
 	}
@@ -854,16 +858,19 @@ func TestMVCCView(t *testing.T) {
 		t.Errorf("unexpected %v", view.ID())
 	}
 	var deleted, ok bool
+	var cas uint64
 	value := []byte{}
 	for i, key := range keys {
 		k := lib.Str2bytes(key)
-		value, deleted, ok = view.Get(k, value)
+		value, cas, deleted, ok = view.Get(k, value)
 		if string(value) != vals[i] {
 			t.Errorf("for %v expected %v, got %v", i, vals[i], value)
 		} else if deleted == true {
 			t.Errorf("unexpected deleted")
 		} else if ok == false {
 			t.Errorf("key %s missing", k)
+		} else if cas != uint64(i)+1 {
+			t.Errorf("expected  %v, got %v", i+1, cas)
 		}
 	}
 }

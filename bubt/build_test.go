@@ -233,16 +233,18 @@ func TestView(t *testing.T) {
 		t.Errorf("expected %v, got %v", id, view.ID())
 	}
 	miter := mi.Scan()
-	for key, value, _, deleted, err := miter(false /*fin*/); err == nil; {
-		v, d, ok := view.Get(key, []byte{})
+	for key, value, cas, deleted, err := miter(false /*fin*/); err == nil; {
+		v, c, d, ok := view.Get(key, []byte{})
 		if d != deleted {
 			t.Errorf("%s expected %v, got %v", key, deleted, d)
 		} else if deleted == false && ok == false {
 			t.Errorf("%s unexpected false", key)
 		} else if bytes.Compare(v, value) != 0 {
 			t.Errorf("%s expected %q, got %q", key, value, v)
+		} else if cas != c {
+			t.Errorf("%s expected %v, got %v", key, cas, c)
 		}
-		key, value, _, deleted, err = miter(false /*fin*/)
+		key, value, cas, deleted, err = miter(false /*fin*/)
 	}
 }
 
