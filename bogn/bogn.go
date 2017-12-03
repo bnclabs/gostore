@@ -37,6 +37,7 @@ type Bogn struct {
 	mcver    int
 	finch    chan struct{}
 	snaprw   sync.RWMutex
+	txnmeta
 
 	memstore    string
 	durable     bool
@@ -262,13 +263,49 @@ func (bogn *Bogn) ID() string {
 	return bogn.name
 }
 
-// TODO: to be implemented.
+// BeginTxn starts a read-write transaction. All transactions should either
+// be committed or aborted. If transactions are not released for long time
+// it might increase the memory pressure on the system. Concurrent
+// transactions are allowed, and serialized internally.
 func (bogn *Bogn) BeginTxn(id uint64) api.Transactor {
+	bogn.snaprw.RLock()
+	if snap := bogn.latestsnapshot(); snap != nil {
+		txn := bogn.gettxn(id, bogn, snap)
+		return txn
+	}
 	return nil
 }
 
-// TODO: to be implemented.
+func (bogn *Bogn) commit(txn *Txn) error {
+	err := txn.mwtxn.Commit()
+	txn.snap.release()
+	bogn.puttxn(txn)
+
+	bogn.snaprw.RUnlock()
+	return err
+}
+
+func (bogn *Bogn) aborttxn(txn *Txn) error {
+	txn.snap.release()
+	bogn.puttxn(txn)
+
+	bogn.snaprw.RUnlock()
+	return nil
+}
+
+// View starts a read-only transaction. Other than that it is similar
+// to BeginTxn. All view transactions should be aborted.
 func (bogn *Bogn) View(id uint64) api.Transactor {
+	if snap := bogn.latestsnapshot(); snap != nil {
+		view := bogn.getview(id, bogn, snap)
+		return view
+	}
+	return nil
+}
+
+func (bogn *Bogn) abortview(view *View) error {
+	view.snap.release()
+	bogn.putview(view)
 	return nil
 }
 

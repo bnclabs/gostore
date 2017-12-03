@@ -44,7 +44,7 @@ func opensnapshot(bogn *Bogn, disks [16]api.Index) (*snapshot, error) {
 		}
 		go cacher(bogn, head.mc, head.setch, head.cachech)
 	}
-	head.yget = head.reduceyget()
+	head.yget = head.latestyget()
 	log.Infof("%v open-snapshot %s", bogn.logprefix, head.id)
 	return head, nil
 }
@@ -63,7 +63,7 @@ func newsnapshot(
 		head.cachech = make(chan *setcache, 1000) // TODO: no magic number
 		go cacher(bogn, head.mc, head.setch, head.cachech)
 	}
-	head.yget = head.reduceyget()
+	head.yget = head.latestyget()
 	log.Infof("%v new-snapshot %s", bogn.logprefix, head.id)
 	return head
 }
@@ -146,7 +146,7 @@ func (snap *snapshot) memheap() int64 {
 	return heap
 }
 
-func (snap *snapshot) reduceyget() (get api.Getter) {
+func (snap *snapshot) latestyget() (get api.Getter) {
 	gets := []api.Getter{}
 	if snap.mw != nil {
 		gets = append(gets, snap.mw.Get)
@@ -176,6 +176,44 @@ func (snap *snapshot) reduceyget() (get api.Getter) {
 		get = lsm.YGet(get, gets[i])
 	}
 	return
+}
+
+func (snap *snapshot) txnyget(
+	mwtxn api.Transactor, gets []api.Getter) (api.Getter, []api.Getter) {
+
+	if gets == nil {
+		gets = make([]api.Getter, 0, 8)
+	}
+	gets = gets[:0]
+
+	if mwtxn != nil {
+		gets = append(gets, mwtxn.Get)
+	}
+	if snap.mr != nil {
+		gets = append(gets, snap.mr.Get)
+	}
+	if snap.mc != nil {
+		gets = append(gets, snap.mc.Get)
+	}
+
+	var dget api.Getter
+	for _, disk := range snap.disklevels([]api.Index{}) {
+		if dget != nil && snap.mc != nil {
+			dget = snap.cachedget(disk.Get)
+		} else {
+			dget = disk.Get
+		}
+		gets = append(gets, dget)
+	}
+
+	if len(gets) == 0 {
+		return nil, gets
+	}
+	get := gets[len(gets)-1]
+	for i := len(gets) - 2; i >= 0; i-- {
+		get = lsm.YGet(get, gets[i])
+	}
+	return get, gets
 }
 
 // try caching the entry from this get operation.
