@@ -296,6 +296,7 @@ func (bogn *Bogn) aborttxn(txn *Txn) error {
 // View starts a read-only transaction. Other than that it is similar
 // to BeginTxn. All view transactions should be aborted.
 func (bogn *Bogn) View(id uint64) api.Transactor {
+	bogn.snaprw.RLock()
 	if snap := bogn.latestsnapshot(); snap != nil {
 		view := bogn.getview(id, bogn, snap)
 		return view
@@ -306,6 +307,7 @@ func (bogn *Bogn) View(id uint64) api.Transactor {
 func (bogn *Bogn) abortview(view *View) error {
 	view.snap.release()
 	bogn.putview(view)
+	bogn.snaprw.RUnlock()
 	return nil
 }
 
