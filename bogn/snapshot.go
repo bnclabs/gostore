@@ -376,10 +376,6 @@ func (snap *snapshot) compactiterator(d0, d1 api.Index) (scan api.Iterator) {
 	return
 }
 
-func (snap *snapshot) delete(key, value []byte, lsm bool) ([]byte, uint64) {
-	return snap.mw.Delete(key, value, lsm)
-}
-
 func (snap *snapshot) set(key, value, oldvalue []byte) ([]byte, uint64) {
 	return snap.mw.Set(key, value, oldvalue)
 }
@@ -387,6 +383,10 @@ func (snap *snapshot) set(key, value, oldvalue []byte) ([]byte, uint64) {
 func (snap *snapshot) setCAS(
 	key, value, oldvalue []byte, cas uint64) ([]byte, uint64, error) {
 	return snap.mw.SetCAS(key, value, oldvalue, cas)
+}
+
+func (snap *snapshot) delete(key, value []byte, lsm bool) ([]byte, uint64) {
+	return snap.mw.Delete(key, value, lsm)
 }
 
 func (snap *snapshot) close() {
