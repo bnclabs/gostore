@@ -69,7 +69,7 @@ func OpenSnapshot(
 		}
 	}()
 
-	if err = snap.loadreaders(paths, mmap); err != nil {
+	if err = snap.loadreaders(name, paths, mmap); err != nil {
 		return
 	}
 	if _, err = snap.readheader(snap.readm); err != nil {
@@ -106,15 +106,17 @@ func PurgeSnapshot(name string, paths []string) {
 	}
 }
 
-func (snap *Snapshot) loadreaders(paths []string, mmap bool) error {
+func (snap *Snapshot) loadreaders(
+	name string, paths []string, mmap bool) error {
+
 	npaths := []string{}
 	for _, path := range paths {
 		if fis, err := ioutil.ReadDir(path); err == nil {
 			for _, fi := range fis {
-				if !fi.IsDir() || filepath.Base(fi.Name()) != snap.name {
+				if !fi.IsDir() || filepath.Base(fi.Name()) != name {
 					continue
 				}
-				npaths = append(npaths, filepath.Join(path, snap.name))
+				npaths = append(npaths, filepath.Join(path, name))
 			}
 		} else {
 			log.Errorf("%v ReadDir(): %v", snap.logprefix, err)
