@@ -29,6 +29,7 @@ type Bogn struct {
 	// atomic access, 8-byte aligned
 	nroutines int64
 	dgmstate  int64
+	snapspin  uint64
 
 	name     string
 	epoch    time.Time
@@ -137,6 +138,61 @@ func (bogn *Bogn) latestsnapshot() *snapshot {
 		runtime.Gosched()
 	}
 	panic("unreachable code")
+}
+
+var writelatch uint64 = 0x8000000000000000
+var writelock uint64 = 0xc000000000000000
+
+func (bogn *Bogn) snaprlock() {
+	for {
+		l := atomic.AddUint64(&bogn.snapspin, 1)
+		if l&writelatch == 0 {
+			return
+		}
+		// write latch is on
+		atomic.AddUint64(&bogn.snapspin, ^uint64(0))
+		runtime.Gosched()
+	}
+}
+
+func (bogn *Bogn) snaprunlock() {
+	l := atomic.AddUint64(&bogn.snapspin, ^uint64(0)) & writelock
+	if l == 0 || l == writelatch {
+		return
+	}
+	panic("impossible situation")
+}
+
+func (bogn *Bogn) snaplock() {
+	setwritelatch := func() {
+		for {
+			old := atomic.LoadUint64(&bogn.snapspin)
+			new := old | writelatch
+			if atomic.CompareAndSwapUint64(&bogn.snapspin, old, new) {
+				return
+			}
+			runtime.Gosched()
+		}
+	}
+
+	for {
+		setwritelatch()
+		if old := atomic.LoadUint64(&bogn.snapspin); old == writelatch {
+			new := old | writelock
+			if atomic.CompareAndSwapUint64(&bogn.snapspin, old, new) {
+				return
+			}
+		}
+		runtime.Gosched()
+	}
+}
+
+func (bogn *Bogn) snapunlock() {
+	for {
+		if atomic.CompareAndSwapUint64(&bogn.snapspin, writelock, 0) {
+			return
+		}
+	}
 }
 
 func (bogn *Bogn) mwmetadata(seqno uint64) []byte {
@@ -562,7 +618,7 @@ func (bogn *Bogn) opendisksnaps(setts s.Settings) ([16]api.Index, error) {
 		}
 		for _, fi := range fis {
 			if level, _, _ := bogn.path2level(fi.Name()); level < 0 {
-				continue // not a bogn directory
+				continue // not a bogn disk level
 			}
 			disks, err = bogn.buildlevels(fi.Name(), paths, mmap, disks)
 			if err != nil {
@@ -627,11 +683,11 @@ func (bogn *Bogn) destroydisksnaps(setts s.Settings) error {
 
 // open snapshots for latest version in each level.
 func (bogn *Bogn) buildlevels(
-	filename string, paths []string, mmap bool,
+	dirname string, paths []string, mmap bool,
 	disks [16]api.Index) ([16]api.Index, error) {
 
-	level, version, _ := bogn.path2level(filename)
-	disk, err := bubt.OpenSnapshot(filename, paths, mmap)
+	level, version, _ := bogn.path2level(dirname)
+	disk, err := bubt.OpenSnapshot(dirname, paths, mmap)
 	if err != nil {
 		return disks, nil
 	}

@@ -3,6 +3,10 @@ package bogn
 import "io"
 import "fmt"
 import "testing"
+import "time"
+import "sync"
+import "sync/atomic"
+import "math/rand"
 
 import "github.com/prataprc/gostore/llrb"
 
@@ -89,4 +93,68 @@ func TestReload(t *testing.T) {
 	index.Destroy()
 
 	t.Logf("reload and iteration successful")
+}
+
+func TestSnaplock(t *testing.T) {
+	bogn := &Bogn{}
+	buffer := make([]byte, 1000)
+	finch := make(chan struct{})
+	var wg sync.WaitGroup
+	var rcounts [16]int64
+	var wcounts [16]int64
+
+	reader := func(i int) {
+		defer wg.Done()
+
+		for {
+			bogn.snaprlock()
+			x := buffer[len(buffer)-1]
+			for _, ch := range buffer {
+				if ch != x {
+					t.Errorf("expected %v, got %v", x, ch)
+				}
+			}
+			bogn.snaprunlock()
+			atomic.AddInt64(&rcounts[i], 1)
+
+			select {
+			case <-finch:
+				return
+			default:
+			}
+		}
+	}
+	writer := func(i int) {
+		defer wg.Done()
+
+		for {
+			bogn.snaplock()
+			x := byte(rand.Intn(256))
+			for i := range buffer {
+				buffer[i] = x
+			}
+			bogn.snapunlock()
+			atomic.AddInt64(&wcounts[i], 1)
+
+			select {
+			case <-finch:
+				return
+			default:
+			}
+		}
+	}
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go reader(i)
+		if (i % 8) == 0 {
+			wg.Add(1)
+			go writer(i)
+		}
+	}
+	time.Sleep(10 * time.Second)
+	close(finch)
+	wg.Wait()
+
+	t.Logf("rcounts: %v", rcounts)
+	t.Logf("wcounts: %v", wcounts)
 }
