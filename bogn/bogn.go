@@ -324,7 +324,7 @@ func (bogn *Bogn) ID() string {
 // it might increase the memory pressure on the system. Concurrent
 // transactions are allowed, and serialized internally.
 func (bogn *Bogn) BeginTxn(id uint64) api.Transactor {
-	bogn.snaprw.RLock()
+	bogn.snaprlock()
 	if snap := bogn.latestsnapshot(); snap != nil {
 		txn := bogn.gettxn(id, bogn, snap)
 		return txn
@@ -337,7 +337,7 @@ func (bogn *Bogn) commit(txn *Txn) error {
 	txn.snap.release()
 	bogn.puttxn(txn)
 
-	bogn.snaprw.RUnlock()
+	bogn.snaprunlock()
 	return err
 }
 
@@ -345,14 +345,14 @@ func (bogn *Bogn) aborttxn(txn *Txn) error {
 	txn.snap.release()
 	bogn.puttxn(txn)
 
-	bogn.snaprw.RUnlock()
+	bogn.snaprunlock()
 	return nil
 }
 
 // View starts a read-only transaction. Other than that it is similar
 // to BeginTxn. All view transactions should be aborted.
 func (bogn *Bogn) View(id uint64) api.Transactor {
-	bogn.snaprw.RLock()
+	bogn.snaprlock()
 	if snap := bogn.latestsnapshot(); snap != nil {
 		view := bogn.getview(id, bogn, snap)
 		return view
@@ -363,7 +363,7 @@ func (bogn *Bogn) View(id uint64) api.Transactor {
 func (bogn *Bogn) abortview(view *View) error {
 	view.snap.release()
 	bogn.putview(view)
-	bogn.snaprw.RUnlock()
+	bogn.snaprunlock()
 	return nil
 }
 
@@ -374,8 +374,8 @@ func (bogn *Bogn) Compact() {
 
 // Log vital statistics for all active bogn levels.
 func (bogn *Bogn) Log() {
-	bogn.snaprw.RLock()
-	defer bogn.snaprw.RUnlock()
+	bogn.snaprlock()
+	defer bogn.snaprunlock()
 
 	snap := bogn.latestsnapshot()
 	if snap.mw != nil {
@@ -395,8 +395,8 @@ func (bogn *Bogn) Log() {
 
 // Validate active bogn levels.
 func (bogn *Bogn) Validate() {
-	bogn.snaprw.RLock()
-	defer bogn.snaprw.RUnlock()
+	bogn.snaprlock()
+	defer bogn.snaprunlock()
 
 	snap := bogn.latestsnapshot()
 	if snap.mw != nil {
@@ -478,9 +478,9 @@ func (bogn *Bogn) Scan() api.Iterator {
 // will be over-written. Make sure key is not nil. Return old value if
 // oldvalue points to valid buffer.
 func (bogn *Bogn) Set(key, value, oldvalue []byte) (ov []byte, cas uint64) {
-	bogn.snaprw.RLock()
+	bogn.snaprlock()
 	ov, cas = bogn.currsnapshot().set(key, value, oldvalue)
-	bogn.snaprw.RUnlock()
+	bogn.snaprunlock()
 	return ov, cas
 }
 
@@ -491,9 +491,9 @@ func (bogn *Bogn) Set(key, value, oldvalue []byte) (ov []byte, cas uint64) {
 func (bogn *Bogn) SetCAS(
 	key, value, oldvalue []byte, cas uint64) ([]byte, uint64, error) {
 
-	bogn.snaprw.RLock()
+	bogn.snaprlock()
 	ov, cas, err := bogn.currsnapshot().setCAS(key, value, oldvalue, cas)
-	bogn.snaprw.RUnlock()
+	bogn.snaprunlock()
 	return ov, cas, err
 }
 
@@ -502,12 +502,12 @@ func (bogn *Bogn) SetCAS(
 // as deleted. Again, if lsm is true but key is not found in index, a new
 // entry will inserted.
 func (bogn *Bogn) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
-	bogn.snaprw.RLock()
+	bogn.snaprlock()
 	if atomic.LoadInt64(&bogn.dgmstate) == 1 { // auto-enable lsm in dgm
 		lsm = true
 	}
 	ov, cas := bogn.currsnapshot().delete(key, oldvalue, lsm)
-	bogn.snaprw.RUnlock()
+	bogn.snaprunlock()
 	return ov, cas
 }
 

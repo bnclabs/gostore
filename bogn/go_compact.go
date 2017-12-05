@@ -161,8 +161,8 @@ func dopersist(bogn *Bogn) (err error) {
 	disks[level] = ndisk
 
 	func() {
-		bogn.snaprw.Lock()
-		defer bogn.snaprw.Unlock()
+		bogn.snaplock()
+		defer bogn.snapunlock()
 
 		head := newsnapshot(bogn, snap.mw, nil, nil, disks, uuid)
 		head.yget = head.mw.Get
@@ -191,8 +191,8 @@ func doflush(bogn *Bogn, disk0 api.Index) (err error) {
 	}
 
 	func() {
-		bogn.snaprw.Lock()
-		defer bogn.snaprw.Unlock()
+		bogn.snaplock()
+		defer bogn.snapunlock()
 
 		var mw api.Index
 		if mw, err = bogn.newmemstore("mw", snap.mwseqno()); err != nil {
@@ -224,8 +224,8 @@ func doflush(bogn *Bogn, disk0 api.Index) (err error) {
 	}
 
 	func() {
-		bogn.snaprw.Lock()
-		defer bogn.snaprw.Unlock()
+		bogn.snaplock()
+		defer bogn.snapunlock()
 
 		var mc api.Index
 
@@ -300,8 +300,8 @@ func findisk(bogn *Bogn, disk0, disk1, ndisk api.Index) error {
 
 	_, _, uuid := bogn.path2level(ndisk.ID())
 	func() {
-		bogn.snaprw.Lock()
-		defer bogn.snaprw.Unlock()
+		bogn.snaplock()
+		defer bogn.snapunlock()
 
 		head := newsnapshot(bogn, snap.mw, snap.mr, snap.mc, disks, uuid)
 		atomic.StorePointer(&head.next, unsafe.Pointer(snap))
@@ -345,8 +345,8 @@ func dowindup(bogn *Bogn) error {
 	}
 
 	func() {
-		bogn.snaprw.Lock()
-		defer bogn.snaprw.Unlock()
+		bogn.snaplock()
+		defer bogn.snapunlock()
 
 		head := newsnapshot(bogn, nil, nil, nil, snap.disks, uuid)
 		atomic.StorePointer(&head.next, unsafe.Pointer(snap))
