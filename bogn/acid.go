@@ -32,7 +32,7 @@ func (meta *txnmeta) puttxn(txn *Txn) {
 	for _, cur := range txn.cursors {
 		txn.putcursor(cur)
 	}
-	txn.cursors = txn.cursors[:0]
+	txn.cursors, txn.gets = txn.cursors[:0], txn.gets[:0]
 	select {
 	case meta.txncache <- txn:
 	default: // Left for GC
@@ -47,7 +47,7 @@ func (meta *txnmeta) getview(
 	default:
 		view = newview(id, bogn, snap, meta.cursors)
 	}
-	view.id, view.snap = id, snap
+	view.id, view.bogn, view.snap = id, bogn, snap
 	if view.id == 0 {
 		view.id = uint64(time.Now().UnixNano())
 	}
@@ -58,7 +58,7 @@ func (meta *txnmeta) putview(view *View) {
 	for _, cur := range view.cursors {
 		view.putcursor(cur)
 	}
-	view.cursors = view.cursors[:0]
+	view.cursors, view.gets = view.cursors[:0], view.gets[:0]
 	select {
 	case meta.viewcache <- view:
 	default: // Left for GC

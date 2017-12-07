@@ -25,9 +25,10 @@ func newtxn(id uint64, bogn *Bogn, snap *snapshot, cch chan *Cursor) *Txn {
 	txn := &Txn{
 		id: id, bogn: bogn, snap: snap,
 		cursors: make([]*Cursor, 0, 8), curchan: cch,
+		gets: make([]api.Getter, 32),
 	}
 	txn.mwtxn = snap.mw.BeginTxn(id)
-	txn.yget, txn.gets = snap.txnyget(txn.mwtxn, txn.gets)
+	txn.yget = snap.txnyget(txn.mwtxn, txn.gets)
 	return txn
 }
 

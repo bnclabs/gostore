@@ -19,9 +19,10 @@ func newview(id uint64, bogn *Bogn, snap *snapshot, cch chan *Cursor) *View {
 	view := &View{
 		id: id, snap: snap,
 		cursors: make([]*Cursor, 0, 8), curchan: cch,
+		gets: make([]api.Getter, 32),
 	}
 	view.mwview = snap.mw.View(id)
-	view.yget, view.gets = snap.txnyget(view.mwview, view.gets)
+	view.yget = snap.txnyget(view.mwview, view.gets)
 	return view
 }
 

@@ -21,6 +21,7 @@ func TestReload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	index.Start()
 
 	n := 10000
 	k, v := []byte("key000000000000"), []byte("val00000000000000")
@@ -67,6 +68,7 @@ func TestReload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	index.Start()
 
 	miter = mindex.Scan()
 	iter = index.Scan()

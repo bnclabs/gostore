@@ -76,10 +76,13 @@ func New(name string, setts s.Settings) (*Bogn, error) {
 
 	log.Infof("%v started", bogn.logprefix)
 
+	return bogn, nil
+}
+
+func (bogn *Bogn) Start() *Bogn {
 	go purger(bogn)
 	go compactor(bogn)
-
-	return bogn, nil
+	return bogn
 }
 
 func (bogn *Bogn) readsettings(setts s.Settings) *Bogn {
@@ -237,28 +240,33 @@ func (bogn *Bogn) flushelapsed() bool {
 func (bogn *Bogn) pickflushdisk(disk0 api.Index) (api.Index, int, int) {
 	snap := bogn.currsnapshot()
 
-	level, disk := snap.latestlevel()
-	if level < 0 && disk0 != nil {
+	latestlevel, latestdisk := snap.latestlevel()
+	if latestlevel < 0 && disk0 != nil {
 		panic("impossible situation")
 
-	} else if level < 0 {
+	} else if latestlevel < 0 { // first time flush.
 		return nil, len(snap.disks) - 1, 1
 
-	} else if disk != nil && disk0 != nil {
+	} else if latestdisk != nil && disk0 != nil {
 		level0, _, _ := bogn.path2level(disk0.ID())
-		if level0 <= level {
+		if level0 < latestlevel {
 			panic("impossible situation")
-		}
-		if disk.ID() == disk0.ID() {
-			return nil, level - 1, 1
+		} else if level0 == latestlevel { // fall back by one level.
+			if latestlevel == 0 {
+				panic("all levels are exhausted")
+			}
+			return nil, latestlevel - 1, 1
 		}
 	}
-	_, version, _ := bogn.path2level(disk.ID())
-	footprint := float64(disk.(*bubt.Snapshot).Footprint())
+	_, version, _ := bogn.path2level(latestdisk.ID())
+	footprint := float64(latestdisk.(*bubt.Snapshot).Footprint())
 	if (float64(snap.memheap()) / footprint) > bogn.ratio {
-		return disk, level - 1, 1
+		if latestlevel == 0 {
+			panic("all levels are exhausted")
+		}
+		return latestdisk, latestlevel - 1, 1
 	}
-	return disk, level, version + 1
+	return latestdisk, latestlevel, version + 1
 }
 
 func (bogn *Bogn) pickcompactdisks() (disk0, disk1 api.Index, nextlevel int) {
@@ -287,10 +295,10 @@ func (bogn *Bogn) levelname(level, version int, sha string) string {
 	return fmt.Sprintf("%v-%v-%v-%v", bogn.name, level, version, sha)
 }
 
-func (bogn *Bogn) path2level(filename string) (level, ver int, uuid string) {
+func (bogn *Bogn) path2level(dirname string) (level, ver int, uuid string) {
 	var err error
 
-	parts := strings.Split(filename, "-")
+	parts := strings.Split(dirname, "-")
 	if len(parts) == 4 && parts[0] == bogn.name {
 		if level, err = strconv.Atoi(parts[1]); err != nil {
 			return -1, -1, ""
@@ -421,7 +429,7 @@ func (bogn *Bogn) Close() {
 }
 
 // Destroy the disk footprint of this instance, no calls allowed
-// after Close.
+// after Destroy.
 func (bogn *Bogn) Destroy() {
 	bogn.destroydisksnaps(bogn.setts)
 	return
@@ -514,7 +522,6 @@ func (bogn *Bogn) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 //---- local methods
 
 func (bogn *Bogn) newmemstore(level string, seqno uint64) (api.Index, error) {
-
 	var name string
 
 	switch level {
@@ -543,7 +550,7 @@ func (bogn *Bogn) newmemstore(level string, seqno uint64) (api.Index, error) {
 }
 
 func (bogn *Bogn) builddiskstore(
-	level, ver int, uuid string,
+	level, version int, sha string,
 	iter api.Iterator) (index api.Index, err error) {
 
 	// book-keep largest seqno for this snapshot.
@@ -564,13 +571,13 @@ func (bogn *Bogn) builddiskstore(
 	}
 
 	now := time.Now()
-	name := bogn.levelname(level, ver, uuid)
+	dirname := bogn.levelname(level, version, sha)
 
 	bubtsetts := bogn.setts.Section("bubt.").Trim("bubt.")
 	paths := bubtsetts.Strings("diskpaths")
 	msize := bubtsetts.Int64("msize")
 	zsize := bubtsetts.Int64("zsize")
-	bt, err := bubt.NewBubt(name, paths, msize, zsize)
+	bt, err := bubt.NewBubt(dirname, paths, msize, zsize)
 	if err != nil {
 		log.Errorf("%v NewBubt(): %v", bogn.logprefix, err)
 		return nil, err
@@ -588,7 +595,7 @@ func (bogn *Bogn) builddiskstore(
 
 	// open disk
 	mmap := bubtsetts.Bool("mmap")
-	ndisk, err := bubt.OpenSnapshot(name, paths, mmap)
+	ndisk, err := bubt.OpenSnapshot(dirname, paths, mmap)
 	if err != nil {
 		log.Errorf("%v OpenSnapshot(): %v", bogn.logprefix, err)
 		return nil, err
@@ -617,15 +624,29 @@ func (bogn *Bogn) opendisksnaps(setts s.Settings) ([16]api.Index, error) {
 			return disks, err
 		}
 		for _, fi := range fis {
-			if level, _, _ := bogn.path2level(fi.Name()); level < 0 {
+			dirname := fi.Name()
+			level, version, _ := bogn.path2level(dirname)
+			if level < 0 {
 				continue // not a bogn disk level
 			}
-			disks, err = bogn.buildlevels(fi.Name(), paths, mmap, disks)
+			disk, err := bubt.OpenSnapshot(dirname, paths, mmap)
 			if err != nil {
 				return disks, err
 			}
+			if od := disks[level]; od == nil { // first version
+				disks[level] = disk
+
+			} else if _, over, _ := bogn.path2level(od.ID()); over < version {
+				bogn.closelevels(od)
+				disks[level] = disk
+
+			} else {
+				bogn.closelevels(disk)
+			}
 		}
 	}
+
+	// log information about active disksnapshots.
 	for _, disk := range disks {
 		if disk == nil {
 			continue
@@ -650,10 +671,26 @@ func (bogn *Bogn) compactdisksnaps(setts s.Settings) {
 			return
 		}
 		for _, fi := range fis {
-			if level, _, _ := bogn.path2level(fi.Name()); level < 0 {
+			dirname := fi.Name()
+			level, version, _ := bogn.path2level(dirname)
+			if level < 0 {
 				continue // not a bogn directory
 			}
-			disks = bogn.compactlevels(fi.Name(), paths, mmap, disks)
+			disk, err := bubt.OpenSnapshot(dirname, paths, mmap)
+			if err != nil { // bad snapshot
+				bubt.PurgeSnapshot(dirname, paths)
+				continue
+			}
+			if od := disks[level]; od == nil { // first version
+				disks[level] = disk
+
+			} else if _, over, _ := bogn.path2level(od.ID()); over < version {
+				bogn.destroylevels(disks[level])
+				disks[level] = disk
+
+			} else {
+				bogn.destroylevels(disk)
+			}
 		}
 	}
 	bogn.closelevels(disks[:]...)
@@ -679,60 +716,6 @@ func (bogn *Bogn) destroydisksnaps(setts s.Settings) error {
 		}
 	}
 	return nil
-}
-
-// open snapshots for latest version in each level.
-func (bogn *Bogn) buildlevels(
-	dirname string, paths []string, mmap bool,
-	disks [16]api.Index) ([16]api.Index, error) {
-
-	level, version, _ := bogn.path2level(dirname)
-	disk, err := bubt.OpenSnapshot(dirname, paths, mmap)
-	if err != nil {
-		return disks, nil
-	}
-
-	if od := disks[level]; od == nil { // first version
-		disks[level] = disk
-
-	} else if _, over, _ := bogn.path2level(od.ID()); over < version {
-		bogn.closelevels(od)
-		disks[level] = disk
-
-	} else {
-		bogn.closelevels(disk)
-	}
-	return disks, nil
-}
-
-// destory older versions if multiple versions are detected for a disk level
-func (bogn *Bogn) compactlevels(
-	filename string, paths []string, mmap bool,
-	disks [16]api.Index) [16]api.Index {
-
-	level, version, uuid := bogn.path2level(filename)
-	if level < 0 { // not a bogn snapshot
-		return disks
-	}
-
-	name := bogn.levelname(level, version, uuid)
-	disk, err := bubt.OpenSnapshot(name, paths, mmap)
-	if err != nil {
-		bubt.PurgeSnapshot(name, paths)
-		return disks
-	}
-
-	if od := disks[level]; od == nil { // first version
-		disks[level] = disk
-
-	} else if _, over, _ := bogn.path2level(od.ID()); over < version {
-		bogn.destroylevels(disks[level])
-		disks[level] = disk
-
-	} else {
-		bogn.destroylevels(disk)
-	}
-	return disks
 }
 
 // release resources held in disk levels.
