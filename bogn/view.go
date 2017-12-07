@@ -8,6 +8,9 @@ type View struct {
 	bogn   *Bogn
 	snap   *snapshot
 	mwview api.Transactor
+	mrview api.Transactor
+	mcview api.Transactor
+	dviews []api.Transactor
 	yget   api.Getter
 
 	cursors []*Cursor
@@ -16,12 +19,26 @@ type View struct {
 }
 
 func newview(id uint64, bogn *Bogn, snap *snapshot, cch chan *Cursor) *View {
+	var disks [256]api.Index
+
 	view := &View{
 		id: id, snap: snap,
-		cursors: make([]*Cursor, 0, 8), curchan: cch,
-		gets: make([]api.Getter, 32),
+		dviews:  make([]api.Transactor, 0, 32),
+		cursors: make([]*Cursor, 0, 8),
+		curchan: cch,
+		gets:    make([]api.Getter, 32),
 	}
 	view.mwview = snap.mw.View(id)
+	if snap.mr != nil {
+		view.mrview = snap.mr.View(id)
+	}
+	if snap.mc != nil {
+		view.mcview = snap.mc.View(id)
+	}
+	for _, disk := range snap.disklevels(disks[:]) {
+		view.dviews = append(view.dviews, disk.View(id))
+	}
+
 	view.yget = snap.txnyget(view.mwview, view.gets)
 	return view
 }
@@ -49,6 +66,17 @@ func (view *View) Commit() error {
 
 // Abort view, must be called once done with the view.
 func (view *View) Abort() {
+	if view.mrview != nil {
+		view.mrview.Abort()
+	}
+	if view.mcview != nil {
+		view.mcview.Abort()
+	}
+	for _, dview := range view.dviews {
+		dview.Abort()
+	}
+
+	view.mwview.Abort()
 	view.bogn.abortview(view)
 }
 

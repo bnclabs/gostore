@@ -160,14 +160,12 @@ func (snap *snapshot) latestyget() (get api.Getter) {
 		gets = append(gets, snap.mc.Get)
 	}
 
-	var dget api.Getter
 	for _, disk := range snap.disklevels([]api.Index{}) {
-		if dget != nil && snap.mc != nil {
-			dget = snap.cachedget(disk.Get)
+		if snap.mc != nil {
+			gets = append(gets, snap.cachedget(disk.Get))
 		} else {
-			dget = disk.Get
+			gets = append(gets, disk.Get)
 		}
-		gets = append(gets, dget)
 	}
 
 	if len(gets) == 0 {
@@ -181,10 +179,10 @@ func (snap *snapshot) latestyget() (get api.Getter) {
 }
 
 func (snap *snapshot) txnyget(
-	mwtxn api.Transactor, gets []api.Getter) api.Getter {
+	tv api.Transactor, gets []api.Getter) api.Getter {
 
-	if mwtxn != nil {
-		gets = append(gets, mwtxn.Get)
+	if tv != nil {
+		gets = append(gets, tv.Get)
 	}
 	if snap.mr != nil {
 		gets = append(gets, snap.mr.Get)
@@ -193,14 +191,12 @@ func (snap *snapshot) txnyget(
 		gets = append(gets, snap.mc.Get)
 	}
 
-	var dget api.Getter
 	for _, disk := range snap.disklevels([]api.Index{}) {
-		if dget != nil && snap.mc != nil {
-			dget = snap.cachedget(disk.Get)
+		if snap.mc != nil {
+			gets = append(gets, snap.cachedget(disk.Get))
 		} else {
-			dget = disk.Get
+			gets = append(gets, disk.Get)
 		}
-		gets = append(gets, dget)
 	}
 
 	if len(gets) == 0 {

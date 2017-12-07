@@ -5,11 +5,14 @@ import "github.com/prataprc/gostore/api"
 // Txn transaction definition. Transaction gives a gaurantee of isolation and
 // atomicity on the latest snapshot.
 type Txn struct {
-	id    uint64
-	bogn  *Bogn
-	snap  *snapshot
-	mwtxn api.Transactor
-	yget  api.Getter
+	id     uint64
+	bogn   *Bogn
+	snap   *snapshot
+	mwtxn  api.Transactor
+	mrview api.Transactor
+	mcview api.Transactor
+	dviews []api.Transactor
+	yget   api.Getter
 
 	cursors []*Cursor
 	curchan chan *Cursor
@@ -22,12 +25,26 @@ const (
 )
 
 func newtxn(id uint64, bogn *Bogn, snap *snapshot, cch chan *Cursor) *Txn {
+	var disks [256]api.Index
+
 	txn := &Txn{
 		id: id, bogn: bogn, snap: snap,
-		cursors: make([]*Cursor, 0, 8), curchan: cch,
-		gets: make([]api.Getter, 32),
+		dviews:  make([]api.Transactor, 0, 32),
+		cursors: make([]*Cursor, 0, 8),
+		curchan: cch,
+		gets:    make([]api.Getter, 0, 32),
 	}
 	txn.mwtxn = snap.mw.BeginTxn(id)
+	if snap.mr != nil {
+		txn.mrview = snap.mr.View(id)
+	}
+	if snap.mc != nil {
+		txn.mcview = snap.mc.View(id)
+	}
+	for _, disk := range snap.disklevels(disks[:]) {
+		txn.dviews = append(txn.dviews, disk.View(id))
+	}
+
 	txn.yget = snap.txnyget(txn.mwtxn, txn.gets)
 	return txn
 }
@@ -53,11 +70,39 @@ func (txn *Txn) OpenCursor(key []byte) (api.Cursor, error) {
 // ErrorRollback if ACID properties are not met while applying the
 // write operations. Transactions are never partially committed.
 func (txn *Txn) Commit() error {
-	return txn.bogn.commit(txn)
+	if txn.mrview != nil {
+		txn.mrview.Abort()
+	}
+	if txn.mcview != nil {
+		txn.mcview.Abort()
+	}
+	for _, dview := range txn.dviews {
+		dview.Abort()
+	}
+
+	err1 := txn.mwtxn.Commit()
+	err2 := txn.bogn.commit(txn)
+	if err1 != nil {
+		return err1
+	} else if err2 != nil {
+		return err2
+	}
+	return nil
 }
 
 // Abort transaction, underlying index won't be touched.
 func (txn *Txn) Abort() {
+	if txn.mrview != nil {
+		txn.mrview.Abort()
+	}
+	if txn.mcview != nil {
+		txn.mcview.Abort()
+	}
+	for _, dview := range txn.dviews {
+		dview.Abort()
+	}
+
+	txn.mwtxn.Abort()
 	txn.bogn.aborttxn(txn)
 }
 
@@ -90,13 +135,14 @@ func (txn *Txn) getcursor() (cur *Cursor) {
 	select {
 	case cur = <-txn.curchan:
 	default:
-		cur = &Cursor{}
+		cur = &Cursor{iters: make([]api.Iterator, 0, 32)}
 	}
 	txn.cursors = append(txn.cursors, cur)
 	return
 }
 
 func (txn *Txn) putcursor(cur *Cursor) {
+	cur.iters = cur.iters[:0]
 	select {
 	case txn.curchan <- cur:
 	default: // leave it for GC

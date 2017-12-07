@@ -19,52 +19,47 @@ type Cursor struct {
 	iters []api.Iterator
 }
 
-func (cur *Cursor) opencursor(
-	txn *Txn, view *View, key []byte) (*Cursor, error) {
+func (cur *Cursor) opencursor(t *Txn, v *View, key []byte) (*Cursor, error) {
+	var mrview, mcview api.Transactor
+	var dviews [32]api.Transactor
+	var dviews1 []api.Transactor
 
-	cur.txn = txn // will be nil if opened on a view.
+	cur.txn, cur.view = t, v
 
-	if cur.iters == nil {
-		cur.iters = make([]api.Iterator, 0, 8)
-	}
-	cur.iters = cur.iters[:0]
-
-	var snap *snapshot
-	var id uint64
-	if txn != nil {
-		mwcur, err := txn.mwtxn.OpenCursor(key)
+	if cur.txn != nil {
+		mwcur, err := cur.txn.mwtxn.OpenCursor(key)
 		if err != nil {
 			return cur, err
 		}
 		cur.iters = append(cur.iters, mwcur.YNext)
-		snap, id = txn.snap, txn.id
-	} else if view != nil {
-		mwcur, err := view.mwview.OpenCursor(key)
+		mrview, mcview = cur.txn.mrview, cur.txn.mcview
+		dviews1 = dviews[:copy(dviews[:], cur.txn.dviews)]
+
+	} else if cur.view != nil {
+		mwcur, err := cur.view.mwview.OpenCursor(key)
 		if err != nil {
 			return cur, err
 		}
 		cur.iters = append(cur.iters, mwcur.YNext)
-		snap, id = view.snap, view.id
+		mrview, mcview = cur.view.mrview, cur.view.mcview
+		dviews1 = dviews[:copy(dviews[:], cur.view.dviews)]
 	}
 
-	if snap.mr != nil {
-		mview := snap.mr.View(id)
-		mcur, err := mview.OpenCursor(key)
+	if mrview != nil {
+		mcur, err := mrview.OpenCursor(key)
 		if err != nil {
 			return cur, err
 		}
 		cur.iters = append(cur.iters, mcur.YNext)
 	}
-	if snap.mc != nil {
-		mview := snap.mc.View(id)
-		mcur, err := mview.OpenCursor(key)
+	if mcview != nil {
+		mcur, err := mcview.OpenCursor(key)
 		if err != nil {
 			return cur, err
 		}
 		cur.iters = append(cur.iters, mcur.YNext)
 	}
-	for _, disk := range snap.disklevels([]api.Index{}) {
-		dview := disk.View(id)
+	for _, dview := range dviews1 {
 		dcur, err := dview.OpenCursor(key)
 		if err != nil {
 			return cur, err

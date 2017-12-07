@@ -340,8 +340,7 @@ func (bogn *Bogn) BeginTxn(id uint64) api.Transactor {
 	return nil
 }
 
-func (bogn *Bogn) commit(txn *Txn) error {
-	err := txn.mwtxn.Commit()
+func (bogn *Bogn) commit(txn *Txn) (err error) {
 	txn.snap.release()
 	bogn.puttxn(txn)
 
@@ -371,6 +370,7 @@ func (bogn *Bogn) View(id uint64) api.Transactor {
 func (bogn *Bogn) abortview(view *View) error {
 	view.snap.release()
 	bogn.putview(view)
+
 	bogn.snaprunlock()
 	return nil
 }

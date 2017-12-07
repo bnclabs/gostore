@@ -1,6 +1,7 @@
 package bogn
 
 import "time"
+import "runtime"
 
 type txnmeta struct {
 	cursors   chan *Cursor
@@ -9,10 +10,10 @@ type txnmeta struct {
 }
 
 func (meta *txnmeta) inittxns() {
-	maxtxns := 1000 // TODO: no magic number
+	maxtxns := runtime.GOMAXPROCS(-1) * 10
 	meta.txncache = make(chan *Txn, maxtxns)
 	meta.viewcache = make(chan *View, maxtxns)
-	meta.cursors = make(chan *Cursor, maxtxns*2)
+	meta.cursors = make(chan *Cursor, maxtxns*4)
 }
 
 func (meta *txnmeta) gettxn(id uint64, bogn *Bogn, snap *snapshot) (txn *Txn) {
@@ -32,6 +33,8 @@ func (meta *txnmeta) puttxn(txn *Txn) {
 	for _, cur := range txn.cursors {
 		txn.putcursor(cur)
 	}
+	txn.mwtxn, txn.mrview, txn.mcview = nil, nil, nil
+	txn.dviews = txn.dviews[:0]
 	txn.cursors, txn.gets = txn.cursors[:0], txn.gets[:0]
 	select {
 	case meta.txncache <- txn:
@@ -58,6 +61,8 @@ func (meta *txnmeta) putview(view *View) {
 	for _, cur := range view.cursors {
 		view.putcursor(cur)
 	}
+	view.mwview, view.mrview, view.mcview = nil, nil, nil
+	view.dviews = view.dviews[:0]
 	view.cursors, view.gets = view.cursors[:0], view.gets[:0]
 	select {
 	case meta.viewcache <- view:
