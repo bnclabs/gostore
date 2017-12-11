@@ -19,15 +19,20 @@ type View struct {
 }
 
 func newview(id uint64, bogn *Bogn, snap *snapshot, cch chan *Cursor) *View {
-	var disks [256]api.Index
-
 	view := &View{
 		id: id, snap: snap,
 		dviews:  make([]api.Transactor, 0, 32),
 		cursors: make([]*Cursor, 0, 8),
 		curchan: cch,
-		gets:    make([]api.Getter, 32),
+		gets:    make([]api.Getter, 0, 32),
 	}
+	return view
+}
+
+func (view *View) initview() *View {
+	var disks [256]api.Index
+
+	id, snap := view.id, view.snap
 	view.mwview = snap.mw.View(id)
 	if snap.mr != nil {
 		view.mrview = snap.mr.View(id)
@@ -35,10 +40,9 @@ func newview(id uint64, bogn *Bogn, snap *snapshot, cch chan *Cursor) *View {
 	if snap.mc != nil {
 		view.mcview = snap.mc.View(id)
 	}
-	for _, disk := range snap.disklevels(disks[:]) {
+	for _, disk := range snap.disklevels(disks[:0]) {
 		view.dviews = append(view.dviews, disk.View(id))
 	}
-
 	view.yget = snap.txnyget(view.mwview, view.gets)
 	return view
 }
@@ -55,6 +59,7 @@ func (view *View) OpenCursor(key []byte) (api.Cursor, error) {
 	cur, err := view.getcursor().opencursor(nil, view, key)
 	if err != nil {
 		view.putcursor(cur)
+		return nil, err
 	}
 	return cur, err
 }
@@ -112,6 +117,7 @@ func (view *View) getcursor() (cur *Cursor) {
 }
 
 func (view *View) putcursor(cur *Cursor) {
+	cur.deleted, cur.iter, cur.iters = false, nil, cur.iters[:0]
 	select {
 	case view.curchan <- cur:
 	default: // leave it for GC

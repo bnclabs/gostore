@@ -54,6 +54,7 @@ type Bogn struct {
 // New create a new bogn instance.
 func New(name string, setts s.Settings) (*Bogn, error) {
 	bogn := (&Bogn{name: name}).readsettings(setts)
+	bogn.inittxns()
 	bogn.epoch = time.Now()
 	if err := bogn.makepaths(setts); err != nil {
 		return nil, err

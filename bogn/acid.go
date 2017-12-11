@@ -26,6 +26,7 @@ func (meta *txnmeta) gettxn(id uint64, bogn *Bogn, snap *snapshot) (txn *Txn) {
 	if txn.id == 0 {
 		txn.id = uint64(time.Now().UnixNano())
 	}
+	txn.inittxn()
 	return
 }
 
@@ -54,6 +55,7 @@ func (meta *txnmeta) getview(
 	if view.id == 0 {
 		view.id = uint64(time.Now().UnixNano())
 	}
+	view.initview()
 	return
 }
 

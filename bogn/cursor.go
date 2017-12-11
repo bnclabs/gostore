@@ -1,5 +1,7 @@
 package bogn
 
+import "fmt"
+
 import "github.com/prataprc/gostore/api"
 import "github.com/prataprc/gostore/lib"
 import "github.com/prataprc/gostore/lsm"
@@ -73,8 +75,8 @@ func (cur *Cursor) opencursor(t *Txn, v *View, key []byte) (*Cursor, error) {
 		}
 	}
 
-	_, _, _, _, err := cur.YNext(false /*fin*/)
-	return cur, err
+	cur.YNext(false /*fin*/)
+	return cur, nil
 }
 
 // Key return current key under the cursor. Returned byte slice will
@@ -103,7 +105,7 @@ func (cur *Cursor) GetNext() (key, value []byte, deleted bool, err error) {
 // does not affect the set operation.
 func (cur *Cursor) Set(key, value, oldvalue []byte) []byte {
 	if cur.txn == nil {
-		panic("Set not allowed on view-cursor")
+		panic(fmt.Errorf("Set not allowed on view-cursor"))
 	}
 	return cur.txn.Set(key, value, oldvalue)
 }
@@ -112,7 +114,7 @@ func (cur *Cursor) Set(key, value, oldvalue []byte) []byte {
 // cursor does not affect the delete operation.
 func (cur *Cursor) Delete(key, oldvalue []byte, lsm bool) []byte {
 	if cur.txn == nil {
-		panic("Delete not allowed on view-cursor")
+		panic(fmt.Errorf("Delete not allowed on view-cursor"))
 	}
 	return cur.txn.Delete(key, oldvalue, lsm)
 }
@@ -120,7 +122,7 @@ func (cur *Cursor) Delete(key, oldvalue []byte, lsm bool) []byte {
 // Delcursor deletes the entry at the cursor.
 func (cur *Cursor) Delcursor(lsm bool) {
 	if cur.txn == nil {
-		panic("Delcursor not allowed on view-cursor")
+		panic(fmt.Errorf("Delcursor not allowed on view-cursor"))
 	}
 	key, _ := cur.Key()
 	cur.txn.Delete(key, nil, lsm)

@@ -25,8 +25,6 @@ const (
 )
 
 func newtxn(id uint64, bogn *Bogn, snap *snapshot, cch chan *Cursor) *Txn {
-	var disks [256]api.Index
-
 	txn := &Txn{
 		id: id, bogn: bogn, snap: snap,
 		dviews:  make([]api.Transactor, 0, 32),
@@ -34,17 +32,23 @@ func newtxn(id uint64, bogn *Bogn, snap *snapshot, cch chan *Cursor) *Txn {
 		curchan: cch,
 		gets:    make([]api.Getter, 0, 32),
 	}
-	txn.mwtxn = snap.mw.BeginTxn(id)
+	return txn
+}
+
+func (txn *Txn) inittxn() *Txn {
+	var disks [256]api.Index
+
+	id, snap := txn.id, txn.snap
+	txn.mwtxn = snap.mw.BeginTxn(txn.id)
 	if snap.mr != nil {
 		txn.mrview = snap.mr.View(id)
 	}
 	if snap.mc != nil {
 		txn.mcview = snap.mc.View(id)
 	}
-	for _, disk := range snap.disklevels(disks[:]) {
+	for _, disk := range snap.disklevels(disks[:0]) {
 		txn.dviews = append(txn.dviews, disk.View(id))
 	}
-
 	txn.yget = snap.txnyget(txn.mwtxn, txn.gets)
 	return txn
 }
@@ -61,6 +65,7 @@ func (txn *Txn) OpenCursor(key []byte) (api.Cursor, error) {
 	cur, err := txn.getcursor().opencursor(txn, nil, key)
 	if err != nil {
 		txn.putcursor(cur)
+		return nil, err
 	}
 	return cur, err
 }
@@ -142,7 +147,7 @@ func (txn *Txn) getcursor() (cur *Cursor) {
 }
 
 func (txn *Txn) putcursor(cur *Cursor) {
-	cur.iters = cur.iters[:0]
+	cur.deleted, cur.iter, cur.iters = false, nil, cur.iters[:0]
 	select {
 	case txn.curchan <- cur:
 	default: // leave it for GC
