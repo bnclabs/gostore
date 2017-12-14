@@ -9,7 +9,7 @@ import "sync/atomic"
 
 import "github.com/prataprc/gostore/api"
 
-const nodesize = int(unsafe.Sizeof(Llrbnode{})) - 8 // + metadatasize + keylen
+const nodesize = int(unsafe.Sizeof(Llrbnode{})) - 8 // + keylen
 
 const (
 	ndBlack      uint64 = 0x1
@@ -20,12 +20,13 @@ const (
 
 // Llrbnode defines a node in LLRB tree.
 type Llrbnode struct {
-	left     *Llrbnode
-	right    *Llrbnode
-	seqflags uint64 // seqno[64:4] flags[4:0]
-	hdr      uint64 // klen[64:48] access[48:8] reserved[8:0]
-	value    unsafe.Pointer
-	key      unsafe.Pointer
+	left      *Llrbnode
+	right     *Llrbnode
+	bornseq   uint64
+	deadflags uint64 // deadseqno[64:4] flags[4:0]
+	hdr       uint64 // klen[64:48] access[48:8] reserved[8:0]
+	value     unsafe.Pointer
+	key       unsafe.Pointer
 }
 
 func (nd *Llrbnode) setnodevalue(nv *nodevalue) *Llrbnode {
@@ -92,30 +93,46 @@ func (nd *Llrbnode) setkey(key []byte) *Llrbnode {
 
 //----- seqno and flags
 
-func (nd *Llrbnode) getseqflags() uint64 {
-	return atomic.LoadUint64(&nd.seqflags)
+func (nd *Llrbnode) getdeadflags() uint64 {
+	return atomic.LoadUint64(&nd.deadflags)
 }
 
-func (nd *Llrbnode) setseqflags(seqflags uint64) *Llrbnode {
-	atomic.StoreUint64(&nd.seqflags, seqflags)
+func (nd *Llrbnode) setdeadflags(deadflags uint64) *Llrbnode {
+	atomic.StoreUint64(&nd.deadflags, deadflags)
 	return nd
 }
 
-func (nd *Llrbnode) setseqno(seqno uint64) *Llrbnode {
-	nd.setseqflags((nd.getseqflags() & 0xf) | (seqno << 4))
+func (nd *Llrbnode) setdeadseqno(seqno uint64) *Llrbnode {
+	deadflags := nd.getdeadflags()
+	deadflags = (deadflags & 0xf) | (seqno << 4)
+	deadflags = deadflags | ndDeleted
+	return nd.setdeadflags(deadflags)
+}
+
+func (nd *Llrbnode) resetdeadseqno() *Llrbnode {
+	deadflags := (nd.getdeadflags() & 0xf) & (^ndDeleted)
+	return nd.setdeadflags(deadflags)
+}
+
+func (nd *Llrbnode) setbornseqno(seqno uint64) *Llrbnode {
+	nd.bornseq = seqno
+	nd.resetdeadseqno()
 	return nd
 }
 
 func (nd *Llrbnode) getseqno() uint64 {
-	return nd.getseqflags() >> 4
+	if nd.isdeleted() {
+		return nd.getdeadflags() >> 4
+	}
+	return nd.bornseq
 }
 
 func (nd *Llrbnode) isblack() bool {
 	if nd == nil {
 		return true
 	}
-	seqflags := nd.getseqflags()
-	return (seqflags & ndBlack) == uint64(ndBlack)
+	deadflags := nd.getdeadflags()
+	return (deadflags & ndBlack) == uint64(ndBlack)
 }
 
 func (nd *Llrbnode) isred() bool {
@@ -126,70 +143,63 @@ func (nd *Llrbnode) isred() bool {
 }
 
 func (nd *Llrbnode) setblack() *Llrbnode {
-	seqflags := nd.getseqflags()
-	return nd.setseqflags(seqflags | ndBlack)
+	deadflags := nd.getdeadflags()
+	return nd.setdeadflags(deadflags | ndBlack)
 }
 
 func (nd *Llrbnode) setred() *Llrbnode {
-	seqflags := nd.getseqflags()
-	return nd.setseqflags(seqflags & (^ndBlack))
+	deadflags := nd.getdeadflags()
+	return nd.setdeadflags(deadflags & (^ndBlack))
 }
 
 func (nd *Llrbnode) togglelink() *Llrbnode {
-	seqflags := nd.getseqflags()
-	return nd.setseqflags(seqflags ^ ndBlack)
+	deadflags := nd.getdeadflags()
+	return nd.setdeadflags(deadflags ^ ndBlack)
 }
 
 func (nd *Llrbnode) setdirty() *Llrbnode {
-	seqflags := nd.getseqflags()
-	return nd.setseqflags(seqflags | ndDirty)
+	deadflags := nd.getdeadflags()
+	return nd.setdeadflags(deadflags | ndDirty)
 }
 
 func (nd *Llrbnode) cleardirty() *Llrbnode {
-	seqflags := nd.getseqflags()
-	return nd.setseqflags(seqflags & (^ndDirty))
+	deadflags := nd.getdeadflags()
+	return nd.setdeadflags(deadflags & (^ndDirty))
 }
 
 func (nd *Llrbnode) isdirty() bool {
-	seqflags := nd.getseqflags()
-	return (seqflags & ndDirty) == ndDirty
+	deadflags := nd.getdeadflags()
+	return (deadflags & ndDirty) == ndDirty
 }
 
 func (nd *Llrbnode) isdeleted() bool {
-	seqflags := nd.getseqflags()
-	return (seqflags & ndDeleted) == ndDeleted
+	deadflags := nd.getdeadflags()
+	return (deadflags & ndDeleted) == ndDeleted
 }
 
 func (nd *Llrbnode) setdeleted() *Llrbnode {
-	seqflags := nd.getseqflags()
-	return nd.setseqflags(seqflags | ndDeleted)
+	deadflags := nd.getdeadflags()
+	return nd.setdeadflags(deadflags | ndDeleted)
 }
 
 func (nd *Llrbnode) cleardeleted() *Llrbnode {
-	seqflags := nd.getseqflags()
-	return nd.setseqflags(seqflags & (^ndDeleted))
-}
-
-func (nd *Llrbnode) setseqnodeleted(seqno uint64) *Llrbnode {
-	seqflags := nd.getseqflags()
-	seqflags = (seqflags & 0xf) | (seqno << 4)
-	seqflags = seqflags | ndDeleted
-	return nd.setseqflags(seqflags)
+	deadflags := nd.getdeadflags()
+	return nd.setdeadflags(deadflags & (^ndDeleted))
 }
 
 func (nd *Llrbnode) setreclaim() *Llrbnode {
-	seqflags := nd.getseqflags()
-	return nd.setseqflags(seqflags | ndValreclaim)
+	deadflags := nd.getdeadflags()
+	return nd.setdeadflags(deadflags | ndValreclaim)
 }
 
 func (nd *Llrbnode) clearreclaim() *Llrbnode {
-	seqflags := nd.getseqflags()
-	return nd.setseqflags(seqflags & (^ndValreclaim))
+	deadflags := nd.getdeadflags()
+	return nd.setdeadflags(deadflags & (^ndValreclaim))
 }
 
 func (nd *Llrbnode) isreclaim() bool {
-	seqflags := nd.getseqflags()
-	return (seqflags & ndValreclaim) == ndValreclaim
+	deadflags := nd.getdeadflags()
+	return (deadflags & ndValreclaim) == ndValreclaim
 }
 
 // Value return the value byte-slice for this entry.

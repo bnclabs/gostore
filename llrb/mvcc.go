@@ -109,8 +109,6 @@ func (mvcc *MVCC) setheadsnapshot(snapshot *mvccsnapshot) {
 func (mvcc *MVCC) newnode(k, v []byte) *Llrbnode {
 	ptr := mvcc.nodearena.Alloc(int64(nodesize + len(k)))
 	nd := (*Llrbnode)(ptr)
-	nd.left, nd.right, nd.value = nil, nil, nil
-	nd.seqflags, nd.hdr = 0, 0
 	nd.setdirty().setred().setkey(k).setreclaim()
 	if len(v) > 0 {
 		ptr = mvcc.valarena.Alloc(int64(nvaluesize + len(v)))
@@ -632,7 +630,7 @@ func (mvcc *MVCC) set(
 	root.setblack()
 	newnd.cleardeleted()
 	newnd.cleardirty()
-	newnd.setseqno(seqno)
+	newnd.setbornseqno(seqno)
 
 	wsnap.setroot(root)
 	mvcc.upsertcounts(key, value, oldnd)
@@ -731,7 +729,7 @@ func (mvcc *MVCC) setcas(
 		if oldvalue != nil {
 			oldvalue = lib.Fixbuffer(oldvalue, 0)
 		}
-		//fmt.Printf("SetCAS %q %v %v InvaldCAS 0\n", key, nd.getseqno(), cas)
+		//fmt.Printf("SetCAS %q %v %v BadCAS 0\n", key, nd.getseqno(), cas)
 		return oldvalue, 0, api.ErrorInvalidCAS
 	}
 	oldvalue, cas = mvcc.set(wsnap, key, value, oldvalue)
@@ -836,7 +834,7 @@ func (mvcc *MVCC) dodelete(
 	if lsm {
 		if nd, ok := mvcc.getkey(wsnap.getroot(), key); ok {
 			// we don't do mvcc here.
-			nd.setseqnodeleted(seqno) // set deleted and seqno atomically.
+			nd.setdeadseqno(seqno) // set deleted and seqno atomically.
 			if oldvalue != nil {
 				val := nd.Value()
 				oldvalue = lib.Fixbuffer(oldvalue, int64(len(val)))
@@ -848,9 +846,8 @@ func (mvcc *MVCC) dodelete(
 			root, newnd, oldnd, reclaim =
 				mvcc.upsert(root, depth, key, nil, reclaim)
 			root.setblack()
-			newnd.setdeleted()
 			newnd.cleardirty()
-			newnd.setseqno(seqno)
+			newnd.setdeadseqno(seqno)
 
 			wsnap.setroot(root)
 			mvcc.upsertcounts(key, nil, oldnd /*nil*/)

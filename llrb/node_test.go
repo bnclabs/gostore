@@ -32,7 +32,7 @@ func TestLlrbnode(t *testing.T) {
 		t.Errorf("expected %s, got %s", key, x)
 	}
 	seqno := uint64(0x812345618123451)
-	if x := nd.setseqno(seqno).getseqno(); x != seqno {
+	if x := nd.setbornseqno(seqno).getseqno(); x != seqno {
 		t.Errorf("expected %x, got %x", seqno, x)
 	}
 	if nd.isblack() == true {
@@ -236,7 +236,7 @@ func BenchmarkNodeSetseqno(b *testing.B) {
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
 	nd := (*Llrbnode)(unsafe.Pointer(sl.Data))
 	for i := 0; i < b.N; i++ {
-		nd.setseqno(0x1234567789)
+		nd.setbornseqno(0x1234567789)
 	}
 }
 
@@ -244,7 +244,7 @@ func BenchmarkNodeGetseqno(b *testing.B) {
 	block1 := make([]byte, 1024)
 	sl := (*reflect.SliceHeader)(unsafe.Pointer(&block1))
 	nd := (*Llrbnode)(unsafe.Pointer(sl.Data))
-	nd.setseqno(0x123456778)
+	nd.setbornseqno(0x123456778)
 	for i := 0; i < b.N; i++ {
 		nd.getseqno()
 	}

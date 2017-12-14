@@ -1,5 +1,8 @@
 package malloc
 
+import "unsafe"
+import "reflect"
+
 // SuitableSlab return an optimal block-size for required size.
 // Argument slabs should be sorted array of int64.
 func SuitableSlab(slabs []int64, size int64) int64 {
@@ -60,5 +63,14 @@ func init() {
 	}
 	for i := 0; i < len(zeroblkinit); i++ {
 		zeroblkinit[i] = 0x00
+	}
+}
+
+func zeropoolblock(block uintptr, size int64) {
+	var dst []byte
+	sl := (*reflect.SliceHeader)(unsafe.Pointer(&dst))
+	sl.Data, sl.Len, sl.Cap = block, int(size), int(size)
+	for i := range dst {
+		dst[i] = 0
 	}
 }

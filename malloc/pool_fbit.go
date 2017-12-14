@@ -39,6 +39,7 @@ func newpoolfbit(
 		base:     C.malloc(C.size_t(capacity)),
 		fbits:    newfreebits(cacheline, n),
 	}
+	zeropoolblock(pool.base, capacity)
 	pool.prev, pool.next = prev, next
 	return pool
 }

@@ -79,8 +79,6 @@ func (llrb *LLRB) setroot(root *Llrbnode) {
 func (llrb *LLRB) newnode(k, v []byte) *Llrbnode {
 	ptr := llrb.nodearena.Alloc(int64(nodesize + len(k)))
 	nd := (*Llrbnode)(ptr)
-	nd.left, nd.right, nd.value = nil, nil, nil
-	nd.seqflags, nd.hdr = 0, 0
 	nd.setdirty().setred().setkey(k)
 	if len(v) > 0 {
 		ptr = llrb.valarena.Alloc(int64(nvaluesize + len(v)))
@@ -191,7 +189,7 @@ func (llrb *LLRB) Set(key, value, oldvalue []byte) (ov []byte, cas uint64) {
 	root.setblack()
 	newnd.cleardeleted()
 	newnd.cleardirty()
-	newnd.setseqno(llrb.seqno)
+	newnd.setbornseqno(llrb.seqno)
 	seqno := llrb.seqno
 
 	llrb.setroot(root)
@@ -285,7 +283,7 @@ func (llrb *LLRB) setcas(
 	root.setblack()
 	newnd.cleardeleted()
 	newnd.cleardirty()
-	newnd.setseqno(llrb.seqno)
+	newnd.setbornseqno(llrb.seqno)
 	seqno := llrb.seqno
 
 	llrb.setroot(root)
@@ -390,7 +388,7 @@ func (llrb *LLRB) dodelete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 	seqno := llrb.seqno
 	if lsm {
 		if nd, ok := llrb.getkey(llrb.getroot(), key); ok {
-			nd.setseqnodeleted(llrb.seqno)
+			nd.setdeadseqno(llrb.seqno)
 			if oldvalue != nil {
 				val = nd.Value()
 				oldvalue = lib.Fixbuffer(oldvalue, int64(len(val)))
@@ -400,9 +398,8 @@ func (llrb *LLRB) dodelete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 		} else {
 			root, newnd, oldnd := llrb.upsert(root, 1 /*depth*/, key, nil)
 			root.setblack()
-			newnd.setdeleted()
 			newnd.cleardirty()
-			newnd.setseqno(llrb.seqno)
+			newnd.setdeadseqno(llrb.seqno)
 			llrb.setroot(root)
 			llrb.upsertcounts(key, nil, oldnd /*nil*/)
 		}
