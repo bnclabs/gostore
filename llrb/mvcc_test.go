@@ -483,7 +483,7 @@ func TestMVCCSetCAS(t *testing.T) {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_deletes"].(int64); x != 0 {
 		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_clones"].(int64); x != 38626 {
+	} else if x := stats["n_clones"].(int64); x != 47708 {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_nodes"].(int64); x != int64(n) {
 		t.Errorf("unexpected %v", x)
@@ -607,7 +607,7 @@ func TestMVCCDelete(t *testing.T) {
 	oldvalue, cas = mvcc.Delete(k, oldvalue, true /*lsm*/)
 	if cas != uint64(n+6) {
 		t.Errorf("expected %v, got %v", n+6, cas)
-	} else if len(oldvalue) > 0 {
+	} else if string(oldvalue) != "value10" {
 		t.Errorf("unexpected %s", oldvalue)
 	}
 	rkm = rkm + len(k)
@@ -667,7 +667,7 @@ func TestMVCCDelete(t *testing.T) {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_deletes"].(int64); x != 1 {
 		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_clones"].(int64); x != 11509 {
+	} else if x := stats["n_clones"].(int64); x != 11525 {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_nodes"].(int64); x != int64(n+2) {
 		t.Errorf("unexpected %v", x)
@@ -709,7 +709,7 @@ func TestMVCCDelete(t *testing.T) {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_deletes"].(int64); x != 1002 {
 		t.Errorf("unexpected %v", x)
-	} else if x := stats["n_clones"].(int64); x != 38491 {
+	} else if x := stats["n_clones"].(int64); x != 38507 {
 		t.Errorf("unexpected %v", x)
 	} else if x := stats["n_nodes"].(int64); x != int64(n+2) {
 		t.Errorf("unexpected %v", x)

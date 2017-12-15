@@ -830,30 +830,20 @@ func (mvcc *MVCC) dodelete(
 	seqno := atomic.AddUint64(&mvcc.seqno, 1)
 	reclaim := wsnap.reclaim[:0]
 
-	if oldvalue != nil {
-		oldvalue = lib.Fixbuffer(oldvalue, 0)
-	}
 	if lsm {
-		if nd, ok := mvcc.getkey(wsnap.getroot(), key); ok {
-			// we don't do mvcc here.
-			nd.setseqnodeleted(seqno) // set deleted and seqno atomically.
-			if oldvalue != nil {
-				val := nd.Value()
-				oldvalue = lib.Fixbuffer(oldvalue, int64(len(val)))
-				copy(oldvalue, val)
-			}
+		root := wsnap.getroot()
+		root, newnd, oldnd, reclaim = mvcc.lsmdelete(root, key, reclaim)
+		root.setblack()
+		newnd.cleardirty()
+		newnd.setseqnodeleted(seqno)
+		wsnap.setroot(root)
+		if oldnd == nil {
+			mvcc.upsertcounts(key, nil, oldnd)
 
-		} else {
-			root, depth := wsnap.getroot(), int64(1)
-			root, newnd, oldnd, reclaim =
-				mvcc.upsert(root, depth, key, nil, reclaim)
-			root.setblack()
-			newnd.setdeleted()
-			newnd.cleardirty()
-			newnd.setseqno(seqno)
-
-			wsnap.setroot(root)
-			mvcc.upsertcounts(key, nil, oldnd /*nil*/)
+		} else if oldvalue != nil {
+			val := oldnd.Value()
+			oldvalue = lib.Fixbuffer(oldvalue, int64(len(val)))
+			copy(oldvalue, val)
 		}
 
 	} else {
@@ -868,12 +858,43 @@ func (mvcc *MVCC) dodelete(
 			oldvalue = lib.Fixbuffer(oldvalue, int64(len(val)))
 			copy(oldvalue, val)
 		}
+		mvcc.delcounts(deleted, lsm)
 	}
 
-	mvcc.delcounts(deleted, lsm)
 	mvcc.appendreclaim(reclaim)
 
 	return oldvalue, seqno
+}
+
+func (mvcc *MVCC) lsmdelete(
+	nd *Llrbnode, key []byte,
+	reclaim []*Llrbnode) (*Llrbnode, *Llrbnode, *Llrbnode, []*Llrbnode) {
+
+	var oldnd, newnd, ndmvcc *Llrbnode
+
+	if nd == nil {
+		newnd := mvcc.newnode(key, nil)
+		return newnd, newnd, nil, reclaim
+	}
+
+	reclaim = append(reclaim, nd)
+
+	if nd.gtkey(key, false) {
+		ndmvcc = mvcc.clonenode(nd, false)
+		ndmvcc.left, newnd, oldnd, reclaim =
+			mvcc.lsmdelete(ndmvcc.left, key, reclaim)
+	} else if nd.ltkey(key, false) {
+		ndmvcc = mvcc.clonenode(nd, false)
+		ndmvcc.right, newnd, oldnd, reclaim =
+			mvcc.lsmdelete(ndmvcc.right, key, reclaim)
+	} else {
+		ndmvcc = mvcc.clonenode(nd, true)
+		ndmvcc.setdirty()
+		newnd, oldnd = ndmvcc, nd
+	}
+
+	ndmvcc, reclaim = mvcc.walkuprot23(ndmvcc, reclaim)
+	return ndmvcc, newnd, oldnd, reclaim
 }
 
 func (mvcc *MVCC) delete(
