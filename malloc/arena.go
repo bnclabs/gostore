@@ -228,5 +228,7 @@ func (arena *Arena) slablookup(size int64, index []uint16) int64 {
 }
 
 func osmalloc(size int) uintptr {
-	return (uintptr)(C.malloc(C.size_t(size)))
+	base := (uintptr)(C.malloc(C.size_t(size)))
+	zeropoolblock(base, int64(size))
+	return base
 }

@@ -79,8 +79,6 @@ func (llrb *LLRB) setroot(root *Llrbnode) {
 func (llrb *LLRB) newnode(k, v []byte) *Llrbnode {
 	ptr := llrb.nodearena.Alloc(int64(nodesize + len(k)))
 	nd := (*Llrbnode)(ptr)
-	nd.left, nd.right, nd.value = nil, nil, nil
-	nd.seqflags, nd.hdr = 0, 0
 	nd.setdirty().setred().setkey(k)
 	if len(v) > 0 {
 		ptr = llrb.valarena.Alloc(int64(nvaluesize + len(v)))

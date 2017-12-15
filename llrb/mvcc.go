@@ -109,8 +109,6 @@ func (mvcc *MVCC) setheadsnapshot(snapshot *mvccsnapshot) {
 func (mvcc *MVCC) newnode(k, v []byte) *Llrbnode {
 	ptr := mvcc.nodearena.Alloc(int64(nodesize + len(k)))
 	nd := (*Llrbnode)(ptr)
-	nd.left, nd.right, nd.value = nil, nil, nil
-	nd.seqflags, nd.hdr = 0, 0
 	nd.setdirty().setred().setkey(k).setreclaim()
 	if len(v) > 0 {
 		ptr = mvcc.valarena.Alloc(int64(nvaluesize + len(v)))
@@ -731,7 +729,7 @@ func (mvcc *MVCC) setcas(
 		if oldvalue != nil {
 			oldvalue = lib.Fixbuffer(oldvalue, 0)
 		}
-		//fmt.Printf("SetCAS %q %v %v InvaldCAS 0\n", key, nd.getseqno(), cas)
+		//fmt.Printf("SetCAS %q %v %v BadCAS 0\n", key, nd.getseqno(), cas)
 		return oldvalue, 0, api.ErrorInvalidCAS
 	}
 	oldvalue, cas = mvcc.set(wsnap, key, value, oldvalue)

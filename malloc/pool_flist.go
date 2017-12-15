@@ -40,6 +40,7 @@ func newpoolflist(size, n int64, pools *flistPools) *poolflist {
 		freelist: make([]uint16, n),
 		freeoff:  -1,
 	}
+	zeropoolblock((uintptr)(pool.base), capacity)
 	for i := int64(0); i < n; i++ {
 		pool.freelist[i] = uint16(i)
 		ptr := unsafe.Pointer(uintptr(pool.base) + uintptr(i*pool.size))

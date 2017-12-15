@@ -9,7 +9,7 @@ import "sync/atomic"
 
 import "github.com/prataprc/gostore/api"
 
-const nodesize = int(unsafe.Sizeof(Llrbnode{})) - 8 // + metadatasize + keylen
+const nodesize = int(unsafe.Sizeof(Llrbnode{})) - 8 // + keylen
 
 const (
 	ndBlack      uint64 = 0x1
