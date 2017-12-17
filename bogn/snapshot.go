@@ -181,6 +181,8 @@ func (snap *snapshot) latestyget() (get api.Getter) {
 func (snap *snapshot) txnyget(
 	tv api.Transactor, gets []api.Getter) api.Getter {
 
+	var disks [256]api.Index
+
 	if tv != nil {
 		gets = append(gets, tv.Get)
 	}
@@ -191,7 +193,7 @@ func (snap *snapshot) txnyget(
 		gets = append(gets, snap.mc.Get)
 	}
 
-	for _, disk := range snap.disklevels([]api.Index{}) {
+	for _, disk := range snap.disklevels(disks[:0]) {
 		if snap.mc != nil {
 			gets = append(gets, snap.cachedget(disk.Get))
 		} else {
