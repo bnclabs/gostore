@@ -80,6 +80,9 @@ func New(name string, setts s.Settings) (*Bogn, error) {
 	return bogn, nil
 }
 
+// Start bogn service. Typically bogn instances are created and
+// started as:
+//   inst := NewBogn("storage", setts).Start()
 func (bogn *Bogn) Start() *Bogn {
 	go purger(bogn)
 	go compactor(bogn)
