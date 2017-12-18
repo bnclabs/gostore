@@ -1067,17 +1067,17 @@ func (mvcc *MVCC) commitrecord(wsnap *mvccsnapshot, rec *record) (err error) {
 }
 
 func (mvcc *MVCC) aborttxn(txn *Txn) error {
-	if !mvcc.lock() { // TODO: is this lock required ?
-		return fmt.Errorf("closed")
-	}
+	// if !mvcc.lock() { TODO: is this lock required ?
+	//	return fmt.Errorf("closed")
+	//}
 
 	snapshot := txn.snapshot.(*mvccsnapshot)
 	snapshot.release()
 
 	mvcc.puttxn(txn)
-	mvcc.n_aborts++
+	atomic.AddInt64(&mvcc.n_aborts, 1)
 
-	mvcc.unlock()
+	// mvcc.unlock() TODO
 	return nil
 }
 
