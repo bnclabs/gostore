@@ -3,6 +3,7 @@ package bubt
 import "os"
 import "io"
 import "fmt"
+import "bytes"
 import "regexp"
 import "strings"
 import "strconv"
@@ -289,8 +290,31 @@ func (snap *Snapshot) Log() {
 	log.Infof(fmsg, snap.logprefix, zsize, msize, footprint, n_count)
 }
 
-// Validate disk snapshot TODO
+// Validate snapshot on disk. This is a costly call, use it only
+// for testing and administration purpose.
 func (snap *Snapshot) Validate() {
+	var keymem, valmem, count int64
+	var prevkey []byte
+
+	iter := snap.Scan()
+	key, val, _, _, err := iter(false /*fin*/)
+	for err == nil {
+		keymem, valmem = keymem+int64(len(key)), valmem+int64(len(val))
+		key, val, _, _, err = iter(false /*fin*/)
+		if prevkey != nil {
+			if bytes.Compare(prevkey, key) >= 0 {
+				panic(fmt.Errorf("key %v comes before %v", prevkey, key))
+			}
+		}
+		count, prevkey = count+1, key
+	}
+	if count != snap.n_count {
+		panic(fmt.Errorf("expected %v entries, found %v", snap.n_count, count))
+	}
+	footprint := (float64(keymem) * 1.5) + (float64(valmem) * 1.5)
+	if snap.footprint != int64(footprint) {
+		panic(fmt.Errorf("footprint %v exceeds %v", snap.footprint, footprint))
+	}
 }
 
 // Close snapshot, will release all in-memory resources but will keep
