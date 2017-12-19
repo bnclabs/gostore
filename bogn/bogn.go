@@ -4,6 +4,7 @@ import "io"
 import "os"
 import "fmt"
 import "sync"
+import "bytes"
 import "unsafe"
 import "time"
 import "strings"
@@ -411,16 +412,64 @@ func (bogn *Bogn) Validate() {
 	defer bogn.snaprunlock()
 
 	snap := bogn.latestsnapshot()
+	disks, seqno := snap.disklevels([]api.Index{}), uint64(0)
+	for i := len(disks) - 1; i >= 0; i-- {
+		if disk := disks[i]; disk != nil {
+			seqno = bogn.validatedisklevel(disks[i], seqno)
+		}
+	}
+
 	if snap.mw != nil {
 		bogn.validatestore(snap.mw)
 	}
 	if snap.mc != nil {
 		bogn.validatestore(snap.mc)
 	}
-	for _, disk := range snap.disklevels([]api.Index{}) {
-		bogn.validatestore(disk)
-	}
 	snap.release()
+}
+
+func (bogn *Bogn) validatedisklevel(
+	index api.Index, minseqno uint64) (maxseqno uint64) {
+
+	var keymem, valmem, count int64
+	var prevkey []byte
+
+	var idxcount int64
+	var idxfootprint int64
+	var iter api.Iterator
+
+	switch idx := index.(type) {
+	case *bubt.Snapshot:
+		iter = idx.Scan()
+		idxcount, idxfootprint = idx.Count(), idx.Footprint()
+	}
+
+	key, val, seqno, _, err := iter(false /*fin*/)
+	for err == nil {
+		keymem, valmem = keymem+int64(len(key)), valmem+int64(len(val))
+		key, val, seqno, _, err = iter(false /*fin*/)
+		if prevkey != nil {
+			if bytes.Compare(prevkey, key) >= 0 {
+				panic(fmt.Errorf("key %v comes before %v", prevkey, key))
+			}
+		}
+		if seqno <= minseqno {
+			fmsg := "entry %v seqno %v < minseqno %v"
+			panic(fmt.Errorf(fmsg, key, seqno, minseqno))
+
+		} else if seqno > maxseqno {
+			maxseqno = seqno
+		}
+		count, prevkey = count+1, key
+	}
+	if count != idxcount {
+		panic(fmt.Errorf("expected %v entries, found %v", idxcount, count))
+	}
+	footprint := (float64(keymem) * 1.5) + (float64(valmem) * 1.5)
+	if idxfootprint != int64(footprint) {
+		panic(fmt.Errorf("footprint %v exceeds %v", idxfootprint, footprint))
+	}
+	return maxseqno
 }
 
 // Close this instance, no calls allowed after Close.
@@ -753,8 +802,6 @@ func (bogn *Bogn) validatestore(index api.Index) {
 	case *llrb.LLRB:
 		idx.Validate()
 	case *llrb.MVCC:
-		idx.Validate()
-	case *bubt.Snapshot:
 		idx.Validate()
 	}
 }
