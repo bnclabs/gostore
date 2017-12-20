@@ -415,7 +415,7 @@ func (bogn *Bogn) Validate() {
 	disks, seqno := snap.disklevels([]api.Index{}), uint64(0)
 	for i := len(disks) - 1; i >= 0; i-- {
 		if disk := disks[i]; disk != nil {
-			seqno = bogn.validatedisklevel(disks[i], seqno)
+			seqno = bogn.validatedisklevel(disk, seqno)
 		}
 	}
 
@@ -447,12 +447,12 @@ func (bogn *Bogn) validatedisklevel(
 	key, val, seqno, _, err := iter(false /*fin*/)
 	for err == nil {
 		keymem, valmem = keymem+int64(len(key)), valmem+int64(len(val))
-		key, val, seqno, _, err = iter(false /*fin*/)
 		if prevkey != nil {
 			if bytes.Compare(prevkey, key) >= 0 {
-				panic(fmt.Errorf("key %v comes before %v", prevkey, key))
+				panic(fmt.Errorf("key %s comes before %s", prevkey, key))
 			}
 		}
+
 		if seqno <= minseqno {
 			fmsg := "entry %v seqno %v < minseqno %v"
 			panic(fmt.Errorf(fmsg, key, seqno, minseqno))
@@ -460,13 +460,17 @@ func (bogn *Bogn) validatedisklevel(
 		} else if seqno > maxseqno {
 			maxseqno = seqno
 		}
-		count, prevkey = count+1, key
+		count++
+		prevkey = lib.Fixbuffer(prevkey, int64(len(key)))
+		copy(prevkey, key)
+
+		key, val, seqno, _, err = iter(false /*fin*/)
 	}
 	if count != idxcount {
 		panic(fmt.Errorf("expected %v entries, found %v", idxcount, count))
 	}
 	footprint := (float64(keymem) * 1.5) + (float64(valmem) * 1.5)
-	if idxfootprint != int64(footprint) {
+	if idxfootprint > int64(footprint) {
 		panic(fmt.Errorf("footprint %v exceeds %v", idxfootprint, footprint))
 	}
 	return maxseqno
