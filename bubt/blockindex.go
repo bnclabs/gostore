@@ -1,5 +1,7 @@
 package bubt
 
+// TODO: this can be optimized by maintaining index as []byte array
+// of offsets instead of []uint32.
 type blkindex []uint32
 
 func (hi blkindex) footprint() int64 {
