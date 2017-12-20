@@ -308,6 +308,7 @@ func (snap *Snapshot) Validate() {
 		}
 		count, prevkey = count+1, key
 	}
+
 	if count != snap.n_count {
 		panic(fmt.Errorf("expected %v entries, found %v", snap.n_count, count))
 	}
@@ -405,8 +406,7 @@ func (snap *Snapshot) findinmblock(
 		} else if n < len(mblock) {
 			panic(fmt.Errorf("bubt.snap.mblock.partialread"))
 		}
-		m = msnap(mblock)
-		mbindex = m.getindex(mbindex[:0])
+		m, mbindex = msnap(mblock), m.getindex(mbindex[:0])
 		shardidx, fpos = m.findkey(0, mbindex, key)
 	}
 	return shardidx - 1, fpos
@@ -469,10 +469,17 @@ func (snap *Snapshot) abortview(view *View) error {
 
 // Scan return a full table iterator.
 func (snap *Snapshot) Scan() api.Iterator {
-	view := &View{}
-	view.id, view.snap, view.cursors = 0xC0FFEE, snap, view.cursors[:0]
+	view := &View{cursors: make([]*Cursor, 8)}
+	view.id, view.snap = 0xC0FFEE, snap
 	cur, err := view.OpenCursor(nil)
-	if err != nil || cur == nil {
+	if err != nil {
+		fmsg := "%v view(%v).OpenCursor(nil): %v"
+		log.Errorf(fmsg, snap.logprefix, view.id, err)
+		return nil
+
+	} else if cur == nil {
+		fmsg := "%v view(%v).OpenCursor(nil) cursor is nil"
+		log.Errorf(fmsg, snap.logprefix, view.id)
 		return nil
 	}
 	return cur.YNext
