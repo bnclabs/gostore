@@ -4,8 +4,6 @@ import "fmt"
 import "bytes"
 import "encoding/binary"
 
-var _ = fmt.Sprintf("dummy")
-
 type msnap []byte
 
 func (m msnap) findkey(
@@ -13,7 +11,7 @@ func (m msnap) findkey(
 
 	switch len(index) {
 	case 0:
-		panic("impossible situation")
+		panic(fmt.Errorf("impossible situation"))
 
 	case 1:
 		cmp, vpos := m.compareat(adjust+0, key)

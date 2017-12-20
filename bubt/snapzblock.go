@@ -4,8 +4,6 @@ import "fmt"
 import "bytes"
 import "encoding/binary"
 
-var _ = fmt.Sprintf("dummy")
-
 //---- znode for reading entries.
 
 type zsnap []byte
@@ -17,7 +15,7 @@ func (z zsnap) findkey(
 	var cmp int
 	switch len(index) {
 	case 0:
-		panic("impossible situation")
+		panic(fmt.Errorf("impossible situation"))
 
 	case 1:
 		cmp, value, seqno, deleted = z.compareat(adjust+0, key)
@@ -78,6 +76,7 @@ func (z zsnap) entryat(
 	seqno, deleted = ze.seqno(), ze.isdeleted()
 	keylen, valuelen := int(ze.keylen()), int(ze.valuelen())
 	x += zentrysize
+	//fmt.Printf("z-entryat %v %v %v\n", index, x, keylen)
 	key = z[x : x+keylen]
 	x += keylen
 	value = z[x : x+valuelen]
