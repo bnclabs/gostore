@@ -22,6 +22,7 @@ func (view *View) OpenCursor(key []byte) (api.Cursor, error) {
 	cur, err := view.getcursor().opencursor(view.snap, key, buf)
 	if err != nil {
 		view.snap.putreadbuffer(buf)
+		view.putcursor(cur)
 		return nil, err
 	}
 	return cur, nil
@@ -73,7 +74,8 @@ func (view *View) getcursor() (cur *Cursor) {
 			fposs: make([]int64, len(view.snap.readzs)),
 		}
 	}
-	cur.ynext, cur.finished, cur.index = false, false, 0
+	cur.ynext = false
+	cur.index, cur.finished = 0, false
 	for i := range cur.fposs {
 		cur.fposs[i] = -1
 	}
