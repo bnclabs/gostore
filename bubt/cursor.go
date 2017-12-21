@@ -3,6 +3,8 @@ package bubt
 import "io"
 import "fmt"
 
+import "github.com/prataprc/golog"
+
 var _ = fmt.Sprintf("")
 
 // Cursor object maintains an active pointer into index. Use OpenCursor
@@ -27,8 +29,14 @@ func (cur *Cursor) opencursor(
 		for i := 0; i < len(snap.readzs); i++ {
 			cur.fposs[i] = 0
 		}
-		if err := cur.nextblock(snap); err != nil {
-			return cur, err
+
+		cur.shardidx, cur.index = 0, 0
+		// populate zblock
+		n, err := snap.readzs[cur.shardidx].ReadAt(cur.buf.zblock, 0)
+		if err != nil {
+			return nil, err
+		} else if n < len(cur.buf.zblock) {
+			return nil, fmt.Errorf("bubt.snap.mblock.partialread")
 		}
 		return cur, nil
 	}
@@ -56,10 +64,13 @@ func (cur *Cursor) opencursor(
 func (cur *Cursor) Key() (key []byte, deleted bool) {
 	if cur.finished {
 		return nil, false
-	} else if cur.index < 0 {
-		key, _, _, deleted, _ = cur.getnext()
+	}
+
+	z := zsnap(cur.buf.zblock)
+	if z.isbounded(cur.index) {
+		key, _, _, deleted = z.entryat(cur.index)
 	} else {
-		key, _, _, deleted = zsnap(cur.buf.zblock).entryat(cur.index)
+		key, _, _, deleted, _ = cur.getnext()
 	}
 	return
 }
@@ -68,10 +79,13 @@ func (cur *Cursor) Key() (key []byte, deleted bool) {
 func (cur *Cursor) Value() (value []byte) {
 	if cur.finished {
 		return nil
-	} else if cur.index < 0 {
-		_, value, _, _, _ = cur.getnext()
+	}
+
+	z := zsnap(cur.buf.zblock)
+	if z.isbounded(cur.index) {
+		_, value, _, _ = z.entryat(cur.index)
 	} else {
-		_, value, _, _ = zsnap(cur.buf.zblock).entryat(cur.index)
+		_, value, _, _, _ = cur.getnext()
 	}
 	return
 }
@@ -89,6 +103,7 @@ func (cur *Cursor) getnext() ([]byte, []byte, uint64, bool, error) {
 	}
 
 	key, value, seqno, deleted := zsnap(cur.buf.zblock).getnext(cur.index)
+	//fmt.Printf("getnext %q\n", key)
 	if key != nil {
 		cur.index++
 		return key, value, seqno, deleted, nil
@@ -98,6 +113,7 @@ func (cur *Cursor) getnext() ([]byte, []byte, uint64, bool, error) {
 	err := cur.nextblock(cur.snap)
 	if err == nil {
 		key, value, seqno, deleted = zsnap(cur.buf.zblock).entryat(cur.index)
+		//fmt.Printf("getnext-next %s\n", key)
 		if key != nil {
 			return key, value, seqno, deleted, nil
 		}
@@ -112,24 +128,33 @@ func (cur *Cursor) YNext(fin bool) (key,
 	value []byte, seqno uint64, deleted bool, err error) {
 
 	if cur.ynext == false {
+		z := zsnap(cur.buf.zblock)
 		cur.ynext = true
-		key, value, seqno, deleted = zsnap(cur.buf.zblock).entryat(cur.index)
-		return
+		if z.isbounded(cur.index) {
+			key, value, seqno, deleted = z.entryat(cur.index)
+			return
+		}
 	}
 	return cur.getnext()
 }
 
 func (cur *Cursor) nextblock(snap *Snapshot) error {
-	for i := 0; i < len(cur.fposs)-1; i++ {
-		till := snap.zsizes[cur.shardidx] - snap.zblocksize
+	for i := 0; i < len(cur.fposs); i++ {
+		till := snap.zsizes[cur.shardidx] - MarkerBlocksize
 		fpos := cur.fposs[cur.shardidx]
 		if fpos < till {
 			readz := snap.readzs[cur.shardidx]
 			n, err := readz.ReadAt(cur.buf.zblock, fpos)
-			if err == nil && n == len(cur.buf.zblock) {
-				cur.index = 0
-				return nil
+			if err != nil {
+				log.Infof("%v %v", cur.snap.logprefix, err)
+				return err
+			} else if x := len(cur.buf.zblock); n < x {
+				err := fmt.Errorf("read %v bytes for zblock %v", n, x)
+				log.Infof("%v %v", cur.snap.logprefix, err)
+				return err
 			}
+			cur.index = 0
+			return nil
 		}
 		// try next shard
 		cur.shardidx = (cur.shardidx + 1) % byte(len(cur.fposs))

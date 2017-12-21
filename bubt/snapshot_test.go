@@ -137,7 +137,7 @@ func makeBubt(n int) (*Snapshot, [][]byte) {
 	mi, keys := makeLLRB(n)
 	defer mi.Destroy()
 
-	name, paths := "benchbubt", makepaths()
+	name, paths := "benchbubt", makepaths3()
 	bubt, err := NewBubt(name, paths, 4096 /*msize*/, 4096 /*zsize*/)
 	if err != nil {
 		panic(err)

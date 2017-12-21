@@ -18,27 +18,25 @@ func (z zsnap) findkey(
 		panic(fmt.Errorf("impossible situation"))
 
 	case 1:
-		cmp, value, seqno, deleted = z.compareat(adjust+0, key)
-		if cmp == 0 {
-			//fmt.Println("zfindkey", 0)
+		cmp, value, seqno, deleted = z.compareat(adjust, key)
+		if cmp >= 0 {
+			//fmt.Println("zfindkey", adjust, 0)
 			return adjust, value, seqno, deleted, true
-		} else if cmp < 0 {
-			//fmt.Println("zfindkey", -1)
-			return adjust, nil, 0, false, false
 		}
-		//fmt.Println("zfindkey", 1)
-		return -1, nil, 0, false, false
+		// cmp < 0
+		//fmt.Println("zfindkey", adjust, -1)
+		return adjust + 1, nil, 0, false, false
 
 	default:
 		half := len(index) / 2
 		cmp, value, seqno, deleted = z.compareat(adjust+half, key)
 		if cmp == 0 {
-			//fmt.Println("zfindkey", "default")
+			//fmt.Println("zfindkey", adjust+half, 0)
 			return adjust + half, value, seqno, deleted, true
 		} else if cmp < 0 {
-			return z.findkey(adjust, index[:half], key)
+			return z.findkey(adjust+half, index[half:], key)
 		}
-		return z.findkey(adjust+half, index[half:], key)
+		return z.findkey(adjust, index[:half], key)
 	}
 	panic("unreachable code")
 }
@@ -49,11 +47,11 @@ func (z zsnap) compareat(i int, key []byte) (int, []byte, uint64, bool) {
 	ze := zentry(z[x : x+zentrysize])
 	ln := int(ze.keylen())
 	x += zentrysize
-	cmp := bytes.Compare(key, z[x:x+ln])
-	//fmt.Printf("zcompareat %v %v %s %s\n", cmp, i, key, z[x:x+ln])
-	if cmp == 0 {
+	cmp := bytes.Compare(z[x:x+ln], key)
+	//fmt.Printf("z.compareat %v %s %s %v\n", i, key, z[x:x+ln], cmp)
+	if cmp >= 0 {
 		x, ln = x+ln, int(ze.valuelen())
-		return 0, z[x : x+ln], ze.seqno(), ze.isdeleted()
+		return cmp, z[x : x+ln], ze.seqno(), ze.isdeleted()
 	}
 	return cmp, nil, 0, false
 }
@@ -86,9 +84,13 @@ func (z zsnap) entryat(
 func (z zsnap) getnext(
 	index int) (key, value []byte, seqno uint64, deleted bool) {
 
-	idxlen := int(binary.BigEndian.Uint32(z[:4]))
-	if index < 0 || (index+1) >= idxlen {
-		return nil, nil, 0, false
+	if index >= 0 && z.isbounded(index+1) {
+		return z.entryat(index + 1)
 	}
-	return z.entryat(index + 1)
+	return nil, nil, 0, false
+}
+
+func (z zsnap) isbounded(index int) bool {
+	idxlen := int(binary.BigEndian.Uint32(z[:4]))
+	return (index >= 0) && (index < idxlen)
 }

@@ -13,7 +13,7 @@ import "github.com/prataprc/gostore/llrb"
 import s "github.com/prataprc/gosettings"
 
 func TestDestroy(t *testing.T) {
-	paths := makepaths()
+	paths := makepaths3()
 	t.Log(paths)
 
 	name, msize, zsize := "testbuild", int64(4096), int64(4096)
@@ -55,7 +55,7 @@ func TestDestroy(t *testing.T) {
 }
 
 func TestBuildMetadata(t *testing.T) {
-	paths := makepaths()
+	paths := makepaths3()
 
 	name, msize, zsize := "testbuild", int64(4096), int64(8192)
 	bubt, err := NewBubt(name, paths, msize, zsize)
@@ -99,7 +99,7 @@ func TestBuildMetadata(t *testing.T) {
 }
 
 func TestSnapshotGet(t *testing.T) {
-	paths := makepaths()
+	paths := makepaths3()
 	mi, _ := makeLLRB(10000000)
 	defer mi.Destroy()
 
@@ -148,8 +148,66 @@ func TestSnapshotGet(t *testing.T) {
 	}
 }
 
-func TestSnapshotScan(t *testing.T) {
-	paths := makepaths()
+func TestSnapshotScan1(t *testing.T) {
+	paths := makepaths1()
+	mi, _ := makeLLRB(1000000)
+	defer mi.Destroy()
+
+	rand.Seed(time.Now().UnixNano())
+	name, msize := "testbuild", int64(4096)
+	zsize := []int64{msize, msize * 2}[rand.Intn(100000)%2]
+	mmap := []bool{false, true}[rand.Intn(10000)%2]
+	t.Logf("zsize: %v, mmap: %v", zsize, mmap)
+	bubt, err := NewBubt(name, paths, msize, zsize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := bubt.Build(mi.Scan(), []byte("this is metadata")); err != nil {
+		t.Fatal(err)
+	}
+	bubt.Close()
+
+	snap, err := OpenSnapshot(name, paths, mmap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer snap.Destroy()
+	defer snap.Close()
+
+	if snap.Count() != mi.Count() {
+		t.Errorf("expected %v, got %v", mi.Count(), snap.Count())
+	}
+	miter, diter := mi.Scan(), snap.Scan()
+	for key, value, seqno, deleted, err := miter(false /*fin*/); err == nil; {
+		k, v, s, d, err1 := diter(false /*fin*/)
+		if err1 != nil {
+			t.Errorf("unexpected %v", err1)
+			break
+		} else if bytes.Compare(k, key) != 0 {
+			t.Errorf("expected %q, got %q", key, k)
+			break
+		} else if bytes.Compare(v, value) != 0 {
+			t.Errorf("%s expected %q, got %q", key, value, v)
+			break
+		} else if d != deleted {
+			t.Errorf("%s expected %v, got %v", key, deleted, d)
+			break
+		} else if s != seqno {
+			t.Errorf("%s expected %v, got %v", key, seqno, s)
+			break
+		}
+		key, value, seqno, deleted, err = miter(false /*fin*/)
+	}
+	k, _, _, _, err := diter(false /*fin*/)
+	if k != nil {
+		t.Errorf("unexpected %q", k)
+	} else if err != io.EOF {
+		t.Errorf("unexpected %v", err)
+	}
+}
+
+func TestSnapshotScan2(t *testing.T) {
+	paths := makepaths3()
 	mi, _ := makeLLRB(10000000)
 	defer mi.Destroy()
 
@@ -201,8 +259,60 @@ func TestSnapshotScan(t *testing.T) {
 	}
 }
 
+func TestSnapshotScan3(t *testing.T) {
+	paths := makepaths3()
+	mi, _ := makeLLRB(10000000)
+	defer mi.Destroy()
+
+	rand.Seed(time.Now().UnixNano())
+	name, msize, zsize := "testbuild", int64(2048), int64(2048)
+	mmap := []bool{false, true}[rand.Intn(10000)%2]
+	t.Logf("zsize: %v, mmap: %v", zsize, mmap)
+	bubt, err := NewBubt(name, paths, msize, zsize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := bubt.Build(mi.Scan(), []byte("this is metadata")); err != nil {
+		t.Fatal(err)
+	}
+	bubt.Close()
+
+	snap, err := OpenSnapshot(name, paths, mmap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer snap.Destroy()
+	defer snap.Close()
+
+	if snap.Count() != mi.Count() {
+		t.Errorf("expected %v, got %v", mi.Count(), snap.Count())
+	}
+	miter, diter := mi.Scan(), snap.Scan()
+	for key, value, seqno, deleted, err := miter(false /*fin*/); err == nil; {
+		k, v, s, d, err1 := diter(false /*fin*/)
+		if err1 != nil {
+			t.Errorf("unexpected %v", err1)
+		} else if bytes.Compare(k, key) != 0 {
+			t.Errorf("expected %q, got %q", key, k)
+		} else if bytes.Compare(v, value) != 0 {
+			t.Errorf("%s expected %q, got %q", key, value, v)
+		} else if d != deleted {
+			t.Errorf("%s expected %v, got %v", key, deleted, d)
+		} else if s != seqno {
+			t.Errorf("%s expected %v, got %v", key, seqno, s)
+		}
+		key, value, seqno, deleted, err = miter(false /*fin*/)
+	}
+	k, _, _, _, err := diter(false /*fin*/)
+	if k != nil {
+		t.Errorf("unexpected %q", k)
+	} else if err != io.EOF {
+		t.Errorf("unexpected %v", err)
+	}
+}
+
 func TestView(t *testing.T) {
-	paths := makepaths()
+	paths := makepaths3()
 	mi, _ := makeLLRB(1000000)
 	defer mi.Destroy()
 
@@ -249,7 +359,7 @@ func TestView(t *testing.T) {
 }
 
 func TestCursorGetNext(t *testing.T) {
-	paths := makepaths()
+	paths := makepaths3()
 	mi, _ := makeLLRB(10)
 	defer mi.Destroy()
 
@@ -342,8 +452,8 @@ func TestCursorGetNext(t *testing.T) {
 	do(func() { dcur.Delcursor(false) })
 }
 
-func TestCursorYNext(t *testing.T) {
-	paths := makepaths()
+func TestCursorYNext1(t *testing.T) {
+	paths := makepaths3()
 	mi, _ := makeLLRB(10000)
 	defer mi.Destroy()
 
@@ -401,6 +511,64 @@ func TestCursorYNext(t *testing.T) {
 	}
 }
 
+func TestCursorYNext2(t *testing.T) {
+	paths := makepaths3()
+	mi, _ := makeLLRB(10000)
+	defer mi.Destroy()
+
+	rand.Seed(time.Now().UnixNano())
+	name, msize, zsize := "testbuild", int64(4096), int64(4096)
+	mmap := []bool{false, true}[rand.Intn(10000)%2]
+	t.Logf("zsize: %v, mmap: %v", zsize, mmap)
+	bubt, err := NewBubt(name, paths, msize, zsize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := bubt.Build(mi.Scan(), []byte("this is metadata")); err != nil {
+		t.Fatal(err)
+	}
+	bubt.Close()
+
+	snap, err := OpenSnapshot(name, paths, mmap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer snap.Destroy()
+	defer snap.Close()
+
+	key := []byte("key11730000000")
+	id := uint64(0x12345699)
+	dview, mview := snap.View(id), mi.View(id)
+	mcur, _ := mview.OpenCursor(key)
+	dcur, _ := dview.OpenCursor(key)
+	for {
+		k1, v1, s1, d1, err3 := mcur.YNext(false /*fin*/)
+		k2, v2, s2, d2, err4 := dcur.YNext(false /*fin*/)
+		//t.Logf("test got %s %s\n", k1, k2)
+		if err3 != err4 {
+			t.Errorf("%s expected %v, got %v", key, err3, err4)
+			break
+		} else if bytes.Compare(k1, k2) != 0 {
+			t.Errorf("expected %q, got %q", k1, k2)
+			break
+		} else if bytes.Compare(v1, v2) != 0 {
+			t.Errorf("%s expected %q, got %q", key, v1, v2)
+			break
+		} else if s1 != s2 {
+			t.Errorf("%s expected %v, got %v", key, s1, s2)
+			break
+		} else if d1 != d2 {
+			t.Errorf("%s expected %v, got %v", key, d1, d2)
+			break
+		}
+		if err3 != nil {
+			break
+		}
+	}
+	mview.Abort()
+	dview.Abort()
+}
+
 func makeLLRB(n int) (*llrb.LLRB, [][]byte) {
 	setts := s.Settings{"memcapacity": 1024 * 1024 * 1024}
 	mi := llrb.NewLLRB("buildllrb", setts)
@@ -418,7 +586,15 @@ func makeLLRB(n int) (*llrb.LLRB, [][]byte) {
 	return mi, keys
 }
 
-func makepaths() []string {
+func makepaths1() []string {
+	path, paths := os.TempDir(), []string{}
+	for _, base := range []string{"1"} {
+		paths = append(paths, filepath.Join(path, base))
+	}
+	return paths
+}
+
+func makepaths3() []string {
 	path, paths := os.TempDir(), []string{}
 	for _, base := range []string{"1", "2", "3"} {
 		paths = append(paths, filepath.Join(path, base))

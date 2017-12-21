@@ -53,7 +53,7 @@ func TestZBlock(t *testing.T) {
 		k = fmt.Sprintf("%17d", 100)
 		idx, value, seqno, deleted, ok := zs.findkey(0, index, []byte(k))
 		out := []interface{}{idx, value, seqno, deleted, ok}
-		ref := []interface{}{-1, []byte(nil), uint64(0), false, false}
+		ref := []interface{}{11, []byte(nil), uint64(0), false, false}
 		if reflect.DeepEqual(ref, out) == false {
 			t.Errorf("expected %v, got %v", ref, out)
 		}
