@@ -858,7 +858,7 @@ func TestLLRBView(t *testing.T) {
 	}
 }
 
-func TestLLRBTxnCursor(t *testing.T) {
+func TestLLRBTxnCursor1(t *testing.T) {
 	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
 	llrb := NewLLRB("view", setts)
 	defer llrb.Destroy()
@@ -942,6 +942,19 @@ func TestLLRBTxnCursor(t *testing.T) {
 	} else if string(value) != "newvalue" {
 		t.Errorf("unexpected %s", value)
 	}
+}
+
+func TestLLRBTxnCursor2(t *testing.T) {
+	mi, _ := makeLLRB(10000)
+	defer mi.Destroy()
+
+	key := []byte("key11730000000")
+	id := uint64(0x12345699)
+	mview := mi.View(id)
+	mcur, _ := mview.OpenCursor(key)
+	key, value, seqno, del, err := mcur.YNext(false /*fin*/)
+	t.Logf("TODO got %s %s %v %v %v\n", key, value, seqno, del, err)
+	mview.Abort()
 }
 
 func TestLLRBViewCursor(t *testing.T) {
@@ -1338,6 +1351,23 @@ func testynext(t *testing.T, cur api.Cursor, from int, keys, vals []string) {
 	if i != len(keys) {
 		t.Errorf("iterated till %v", i)
 	}
+}
+
+func makeLLRB(n int) (*LLRB, [][]byte) {
+	setts := s.Settings{"memcapacity": 1024 * 1024 * 1024}
+	mi := NewLLRB("buildllrb", setts)
+	k, v := []byte("key000000000000"), []byte("val00000000000000")
+	keys := [][]byte{}
+	for i := 0; i < n; i++ {
+		x := fmt.Sprintf("%d", i)
+		key, val := append(k[:3], x...), append(v[:3], x...)
+		mi.Set(key, val, nil)
+		if i%10 == 0 {
+			mi.Delete(key, nil, true /*lsm*/)
+		}
+		keys = append(keys, key)
+	}
+	return mi, keys
 }
 
 //buf := bytes.NewBuffer(nil)
