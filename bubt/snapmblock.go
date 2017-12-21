@@ -16,8 +16,9 @@ func (m msnap) findkey(
 	case 1:
 		cmp, vpos := m.compareat(adjust+0, key)
 		if cmp >= 0 {
-			//fmt.Printf("mfindkey %x %x\n", 0, vpos)
-			return byte(vpos >> 56), int64(vpos & 0x00FFFFFFFFFFFFFF)
+			level, fpos = byte(vpos>>56), int64(vpos&0x00FFFFFFFFFFFFFF)
+			//fmt.Printf("mfindkey %x %x\n", level, fpos)
+			return
 		}
 		//fmt.Println("mfindkey", -1)
 		return 0, -1
@@ -43,7 +44,7 @@ func (m msnap) compareat(i int, key []byte) (int, uint64) {
 	ln, vpos := uint32(me.keylen()), me.vpos()
 	x += mentrysize
 	cmp := bytes.Compare(key, m[x:x+ln])
-	//fmt.Printf("mcompareat %v %v %s %s\n", cmp, i, key, m[x:x+ln])
+	//fmt.Printf("m.compareat %v %s %s %v\n", i, key, m[x:x+ln], cmp)
 	return cmp, vpos
 }
 
