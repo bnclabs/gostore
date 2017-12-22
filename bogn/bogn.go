@@ -411,6 +411,7 @@ func (bogn *Bogn) Validate() {
 	bogn.snaprlock()
 	defer bogn.snaprunlock()
 
+	// standard validation
 	snap := bogn.latestsnapshot()
 	disks, seqno := snap.disklevels([]api.Index{}), uint64(0)
 	for i := len(disks) - 1; i >= 0; i-- {
@@ -425,9 +426,14 @@ func (bogn *Bogn) Validate() {
 	if snap.mc != nil {
 		bogn.validatestore(snap.mc)
 	}
+
 	snap.release()
 }
 
+// validate sort order.
+// validate entries for seqno greater than minseqno.
+// validate index count.
+// validate index footprint.
 func (bogn *Bogn) validatedisklevel(
 	index api.Index, minseqno uint64) (maxseqno uint64) {
 
@@ -817,4 +823,22 @@ func (bogn *Bogn) newuuid() string {
 	}
 	uuidb := make([]byte, 16)
 	return string(uuidb[:uuid.Format(uuidb)])
+}
+
+func (bogn *Bogn) diskseqno(disk api.Index) uint64 {
+	var seqno uint64
+
+	switch d := disk.(type) {
+	case *bubt.Snapshot:
+		var m map[string]interface{}
+		err := json.Unmarshal(d.Metadata(), m)
+		if err != nil {
+			panic(err)
+		}
+		seqno, err = strconv.ParseUint(m["seqno"].(string), 10, 64)
+		if err != nil {
+			panic(err)
+		}
+	}
+	return seqno
 }
