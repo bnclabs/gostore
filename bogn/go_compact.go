@@ -1,6 +1,7 @@
 package bogn
 
 import "time"
+import "fmt"
 import "unsafe"
 import "sync/atomic"
 import "runtime/debug"
@@ -139,6 +140,7 @@ func dopersist(bogn *Bogn) (err error) {
 
 	level, version := len(snap.disks)-1, 1
 	if disk := snap.disks[level]; disk != nil {
+		_, version, _ = bogn.path2level(disk.ID())
 		version++
 	}
 
@@ -180,7 +182,7 @@ func doflush(bogn *Bogn, disk0 api.Index) (err error) {
 
 	disk, nlevel, nversion := bogn.pickflushdisk(disk0)
 	if nlevel < 0 {
-		panic("impossible situation")
+		panic(fmt.Errorf("impossible situation"))
 	}
 
 	uuid := bogn.newuuid()
