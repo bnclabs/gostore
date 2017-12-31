@@ -35,6 +35,7 @@ func (snap *mvccsnapshot) initsnapshot(
 	if head != nil {
 		snap.root = atomic.LoadPointer(&head.root)
 		snap.n_count = mvcc.Count()
+		//fmt.Printf("initsnapshot %v %v\n", time.Now(), len(head.reclaims))
 	}
 	snap.reclaims, snap.reclaim = snap.reclaims[:0], snap.reclaim[:0]
 	atomic.StoreInt64(&snap.id, id)

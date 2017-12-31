@@ -22,6 +22,7 @@ type MVCC struct {
 	llrbstats    // 64-bit aligned snapshot statistics.
 	n_routines   int64
 	n_maxverions int64
+
 	// can be unaligned fields
 	name      string
 	nodearena api.Mallocer
@@ -285,6 +286,7 @@ func (mvcc *MVCC) stats() map[string]interface{} {
 	m["n_purgedss"] = atomic.LoadInt64(&mvcc.n_purgedss)
 	m["n_activess"] = atomic.LoadInt64(&mvcc.n_activess)
 	m["n_maxverions"] = atomic.LoadInt64(&mvcc.n_maxverions)
+	m["tm_snapmax"] = atomic.LoadInt64(&mvcc.tm_snapmax)
 
 	capacity, heap, alloc, overhead := mvcc.nodearena.Info()
 	m["node.capacity"] = capacity
@@ -435,19 +437,28 @@ func (mvcc *MVCC) Log() {
 	log.Infof("%v val %v", mvcc.logprefix, loguz(sizes, zs, "node"))
 
 	log.Infof("%v count: %10d\n", mvcc.logprefix, stats["n_count"])
+
 	a, b, c := stats["n_inserts"], stats["n_updates"], stats["n_deletes"]
 	log.Infof("%v write: %10d(ins) %10d(ups) %10d(del)\n", lprefix, a, b, c)
+
 	a, b, c = stats["n_nodes"], stats["n_frees"], stats["n_clones"]
 	log.Infof("%v nodes: %10d(nds) %10d(fre) %10d(cln)\n", lprefix, a, b, c)
+
 	a, b, c = stats["n_txns"], stats["n_commits"], stats["n_aborts"]
 	log.Infof("%v txns : %10d(txn) %10d(com) %10d(abr)\n", lprefix, a, b, c)
+
 	a, b = stats["n_reclaims"], stats["n_maxverions"]
-	log.Infof("%v rclms: %10d(rcm) %10d(ver)", lprefix, a, b)
+	log.Infof("%v rclms: %10d(rcm) %10d(ver) ", lprefix, a, b)
+
 	a, b, c = stats["n_snapshots"], stats["n_purgedss"], stats["n_activess"]
-	log.Infof("%v snaps: %10d(tot) %10d(pur) %10d(act)", mvcc.logprefix, a, b, c)
+	log.Infof("%v snaps: %10d(tot) %10d(pur) %10d(act)", lprefix, a, b, c)
+	a = stats["tm_snapmax"].(int64) / 1000000
+	log.Infof("%v        %10d(tms)", lprefix, a)
+
 	hstat := stats["h_bulkfree"].(map[string]interface{})
 	a, b, c = hstat["samples"], hstat["max"], hstat["mean"]
 	log.Infof("%v h_bulkfree: %10d(cnt) %10d(max) %10d(mea)", lprefix, a, b, c)
+
 	hstat = stats["h_reclaims"].(map[string]interface{})
 	a, b, c = hstat["samples"], hstat["max"], hstat["mean"]
 	log.Infof("%v h_reclaims: %10d(cnt) %10d(max) %10d(mea)", lprefix, a, b, c)
@@ -1128,7 +1139,8 @@ func (mvcc *MVCC) getkey(nd *Llrbnode, k []byte) (*Llrbnode, bool) {
 }
 
 func (mvcc *MVCC) Scan() api.Iterator {
-	currkey := make([]byte, 1024)
+	var ckey [1024]byte
+	currkey := ckey[:]
 	sb := makescanbuf()
 
 	leseqno := mvcc.startscan(nil, sb, 0)
@@ -1138,10 +1150,7 @@ func (mvcc *MVCC) Scan() api.Iterator {
 			mvcc.startscan(currkey, sb, leseqno)
 			key, value, seqno, deleted = sb.pop()
 		}
-		if cap(currkey) < len(key) {
-			currkey = make([]byte, len(key))
-		}
-		currkey = currkey[:len(key)]
+		currkey = lib.Fixbuffer(currkey, int64(len(key)))
 		copy(currkey, key)
 		if key == nil {
 			return key, value, seqno, deleted, io.EOF
@@ -1152,10 +1161,10 @@ func (mvcc *MVCC) Scan() api.Iterator {
 
 // TODO: can we instead to the snapshot and avoid rlock ?
 func (mvcc *MVCC) startscan(key []byte, sb *scanbuf, leseqno uint64) uint64 {
-	if key == nil {
-		leseqno = atomic.LoadUint64(&mvcc.seqno)
-	}
 	rsnap := mvcc.readsnapshot()
+	if key == nil {
+		leseqno = rsnap.seqno
+	}
 
 	sb.preparewrite()
 	mvcc.scan(rsnap.getroot(), key, sb, leseqno)
@@ -1324,7 +1333,8 @@ func (mvcc *MVCC) cloneifdirty(nd *Llrbnode) (*Llrbnode, bool) {
 func (mvcc *MVCC) makesnapshot() {
 	mvcc.lock()
 
-	nextsnap := mvcc.getsnapshot()
+	seqno := atomic.LoadUint64(&mvcc.seqno)
+	nextsnap := mvcc.getsnapshot(seqno)
 	n_snapshots := atomic.LoadInt64(&mvcc.n_snapshots)
 	currsnap := mvcc.currsnapshot()
 	nextsnap = nextsnap.initsnapshot(n_snapshots+1, mvcc, currsnap)
@@ -1332,8 +1342,17 @@ func (mvcc *MVCC) makesnapshot() {
 
 	mvcc.unlock()
 
-	atomic.AddInt64(&mvcc.n_snapshots, 1)
+	// update stats
 	n_activess := atomic.AddInt64(&mvcc.n_activess, 1)
+	tm_newsnap := int64(time.Now().UnixNano())
+	if mvcc.tm_lastsnap != 0 {
+		tm_snapmax := atomic.LoadInt64(&mvcc.tm_snapmax)
+		if tm := tm_newsnap - mvcc.tm_lastsnap; tm > tm_snapmax {
+			atomic.StoreInt64(&mvcc.tm_snapmax, tm)
+		}
+	}
+	mvcc.tm_lastsnap = tm_newsnap
+	atomic.AddInt64(&mvcc.n_snapshots, 1)
 
 	wsnap := mvcc.currsnapshot()
 	rsnap := (*mvccsnapshot)(atomic.LoadPointer(&wsnap.next))
@@ -1425,7 +1444,7 @@ func (mvcc *MVCC) purgesnapshot(snapshot *mvccsnapshot) bool {
 	return false
 }
 
-func (mvcc *MVCC) getsnapshot() (snapshot *mvccsnapshot) {
+func (mvcc *MVCC) getsnapshot(seqno uint64) (snapshot *mvccsnapshot) {
 	select {
 	case snapshot = <-mvcc.snapcache:
 	default:
@@ -1437,6 +1456,7 @@ func (mvcc *MVCC) getsnapshot() (snapshot *mvccsnapshot) {
 	if snapshot.reclaim == nil {
 		snapshot.reclaim = make([]*Llrbnode, 64)
 	}
+	snapshot.seqno = seqno
 	return
 }
 

@@ -28,6 +28,8 @@ type llrbstats struct { // TODO: add json tags.
 	n_snapshots int64
 	n_purgedss  int64
 	n_activess  int64
+	tm_lastsnap int64
+	tm_snapmax  int64
 }
 
 // height of the tree cannot exceed a certain limit. For example if the tree
