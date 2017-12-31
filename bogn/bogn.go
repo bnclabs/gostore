@@ -332,6 +332,10 @@ func (bogn *Bogn) ID() string {
 	return bogn.name
 }
 
+func (bogn *Bogn) Getseqno() uint64 {
+	return bogn.currsnapshot().mwseqno()
+}
+
 // BeginTxn starts a read-write transaction. All transactions should either
 // be committed or aborted. If transactions are not released for long time
 // it might increase the memory pressure on the system. Concurrent
