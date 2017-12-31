@@ -489,10 +489,12 @@ func (bogn *Bogn) validatedisklevel(
 // Close this instance, no calls allowed after Close.
 func (bogn *Bogn) Close() {
 	close(bogn.finch)
+
 	for atomic.LoadInt64(&bogn.nroutines) > 0 {
 		time.Sleep(100 * time.Millisecond)
 	}
 	bogn.setheadsnapshot(nil)
+	log.Infof("%v closed ...", bogn.logprefix)
 }
 
 // Destroy the disk footprint of this instance, no calls allowed

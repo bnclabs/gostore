@@ -1,5 +1,6 @@
 package bogn
 
+import "sync/atomic"
 import "runtime/debug"
 
 import "github.com/prataprc/gostore/api"
@@ -16,6 +17,8 @@ type setcache struct {
 }
 
 func cacher(bogn *Bogn, mc api.Index, setch, cachech chan *setcache) {
+	atomic.AddInt64(&bogn.nroutines, 1)
+
 	log.Infof("%v starting cacher for %s", bogn.logprefix, mc.ID())
 	defer func() {
 		mc.Destroy()
@@ -25,6 +28,7 @@ func cacher(bogn *Bogn, mc api.Index, setch, cachech chan *setcache) {
 		} else {
 			log.Infof("%v stopped cacher %s", bogn.logprefix, mc.ID())
 		}
+		atomic.AddInt64(&bogn.nroutines, -1)
 	}()
 
 	setseqno := func(seqno uint64) {
