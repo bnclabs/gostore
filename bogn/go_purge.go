@@ -8,8 +8,8 @@ import "github.com/prataprc/golog"
 import "github.com/prataprc/gostore/lib"
 
 func purger(bogn *Bogn) {
-	atomic.AddInt64(&bogn.nroutines, 1)
-	log.Infof("%v starting purger", bogn.logprefix)
+	log.Infof("%v starting purger ...", bogn.logprefix)
+
 	defer func() {
 		if r := recover(); r != nil {
 			log.Errorf("%v purger crashed %v", bogn.logprefix, r)
@@ -20,6 +20,7 @@ func purger(bogn *Bogn) {
 		atomic.AddInt64(&bogn.nroutines, -1)
 	}()
 
+	atomic.AddInt64(&bogn.nroutines, 1)
 	ticker := time.NewTicker(Compacttick)
 loop:
 	for range ticker.C {

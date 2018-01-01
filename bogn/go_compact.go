@@ -15,8 +15,8 @@ import "github.com/prataprc/gostore/lib"
 var Compacttick = time.Duration(1 * time.Second)
 
 func compactor(bogn *Bogn) {
-	atomic.AddInt64(&bogn.nroutines, 1)
-	log.Infof("%v starting compactor", bogn.logprefix)
+	log.Infof("%v starting compactor ...", bogn.logprefix)
+
 	defer func() {
 		if r := recover(); r != nil {
 			log.Errorf("%v compactor crashed %v", bogn.logprefix, r)
@@ -31,6 +31,7 @@ func compactor(bogn *Bogn) {
 		}
 	}()
 
+	atomic.AddInt64(&bogn.nroutines, 1)
 	ticker := time.NewTicker(Compacttick)
 	docompact := makecompactor(bogn)
 	var respch chan api.Index
@@ -168,7 +169,7 @@ func dopersist(bogn *Bogn) (err error) {
 		snap.addtopurge(snap.disklevels([]api.Index{})...)
 		snap.release()
 
-		fmsg := "%v for snapshot %v compact persisted %v"
+		fmsg := "%v new snapshot %v compact persisted %v"
 		log.Infof(fmsg, snap.bogn.logprefix, head.id, ndisk.ID())
 	}()
 
@@ -200,8 +201,8 @@ func doflush(bogn *Bogn, disk0 api.Index) (err error) {
 		bogn.setheadsnapshot(head)
 		snap.release()
 
-		fmsg := "%v for snapshot %v compact flush ..."
-		log.Infof(fmsg, snap.bogn.logprefix, head.id)
+		fmsg := "%v new snapshot %v compact flush ..."
+		log.Debugf(fmsg, snap.bogn.logprefix, head.id)
 	}()
 
 	snap, uuid = bogn.latestsnapshot(), bogn.newuuid()
@@ -241,7 +242,7 @@ func doflush(bogn *Bogn, disk0 api.Index) (err error) {
 		snap.addtopurge(snap.mr, snap.mc, disk)
 		snap.release()
 
-		fmsg := "%v for snapshot %v compact flush to %v"
+		fmsg := "%v new snapshot %v compact flush to %v"
 		log.Infof(fmsg, snap.bogn.logprefix, head.id, ndisk.ID())
 	}()
 
@@ -267,7 +268,7 @@ func startdisk(
 	iter, uuid := snap.compactiterator(disk0, disk1), bogn.newuuid()
 
 	go func() {
-		fmsg := "%v for snapshot %v compacting %q + %q ..."
+		fmsg := "%v new snapshot %v compacting %q + %q ..."
 		log.Infof(fmsg, bogn.logprefix, snap.id, disk0.ID(), disk1.ID())
 
 		ndisk, err := bogn.builddiskstore(nlevel, version, uuid, iter)
@@ -306,7 +307,7 @@ func findisk(bogn *Bogn, disk0, disk1, ndisk api.Index) error {
 		snap.addtopurge(disk0, disk1)
 		snap.release()
 
-		fmsg := "%v for snapshot %v compact disk"
+		fmsg := "%v new snapshot %v compact disk"
 		log.Infof(fmsg, snap.bogn.logprefix, head.id, ndisk.ID())
 	}()
 	return nil
@@ -353,7 +354,7 @@ func dowindup(bogn *Bogn) error {
 		snap.addtopurge(snap.mw, snap.mr, snap.mc, disk)
 		snap.release()
 
-		fmsg := "%v for snapshot %s windup on disk %v"
+		fmsg := "%v new snapshot %s windup on disk %v"
 		log.Infof(fmsg, snap.bogn.logprefix, head.id, ndisk.ID())
 	}()
 	return nil

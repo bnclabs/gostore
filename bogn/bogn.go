@@ -63,6 +63,8 @@ func New(name string, setts s.Settings) (*Bogn, error) {
 	bogn.finch = make(chan struct{})
 	bogn.logprefix = fmt.Sprintf("BOGN [%v]", name)
 
+	log.Infof("%v starting ...", bogn.logprefix)
+
 	disks, err := bogn.opendisksnaps(setts)
 	if err != nil {
 		bogn.Close()
@@ -76,8 +78,6 @@ func New(name string, setts s.Settings) (*Bogn, error) {
 	head.refer()
 	bogn.setheadsnapshot(head)
 
-	log.Infof("%v started", bogn.logprefix)
-
 	return bogn, nil
 }
 
@@ -87,6 +87,10 @@ func New(name string, setts s.Settings) (*Bogn, error) {
 func (bogn *Bogn) Start() *Bogn {
 	go purger(bogn)
 	go compactor(bogn)
+	// wait until all routines have started.
+	for atomic.LoadInt64(&bogn.nroutines) < 2 {
+		runtime.Gosched()
+	}
 	return bogn
 }
 
@@ -656,7 +660,8 @@ func (bogn *Bogn) builddiskstore(
 	if err = bt.Build(wrap, nil); err != nil {
 		log.Errorf("%v Build(): %v", bogn.logprefix, err)
 		return nil, err
-	} else if err = bt.Writemetadata(bogn.mwmetadata(diskseqno)); err != nil {
+	}
+	if _, err = bt.Writemetadata(bogn.mwmetadata(diskseqno)); err != nil {
 		log.Errorf("%v Writemetadata(): %v", bogn.logprefix, err)
 		return nil, err
 	}

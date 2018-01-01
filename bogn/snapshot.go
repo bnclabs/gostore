@@ -63,7 +63,6 @@ func newsnapshot(
 		go cacher(bogn, head.mc, head.setch, head.cachech)
 	}
 	head.yget = head.latestyget()
-	log.Infof("%v new-snapshot %s", bogn.logprefix, head.id)
 	return head
 }
 
