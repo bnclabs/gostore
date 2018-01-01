@@ -569,17 +569,93 @@ func TestCursorYNext2(t *testing.T) {
 	dview.Abort()
 }
 
+func TestOddEvenGet(t *testing.T) {
+	paths, nentries := makepaths3(), 100000
+	mi, _ := makeLLRBEven(nentries)
+	defer mi.Destroy()
+
+	rand.Seed(time.Now().UnixNano())
+	name, msize := "testbuild", int64(4096)
+	zsize := []int64{msize, msize * 2}[rand.Intn(100000)%2]
+	mmap := []bool{false, true}[rand.Intn(10000)%2]
+
+	t.Logf("msize: %v, zsize: %v, mmap: %v", msize, zsize, mmap)
+	bubt, err := NewBubt(name, paths, msize, zsize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := bubt.Build(mi.Scan(), []byte("this is metadata")); err != nil {
+		t.Fatal(err)
+	}
+	bubt.Close()
+
+	snap, err := OpenSnapshot(name, paths, mmap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer snap.Destroy()
+	defer snap.Close()
+
+	value := make([]byte, 0, 1024)
+
+	// get key that falls before entire key set
+	key := []byte("key00000000000000/")
+	_, _, _, ok := snap.Get(key, value)
+	if ok == true {
+		t.Errorf("expected missing, for %s", key)
+	}
+
+loop:
+	for i := 0; i < nentries*2; i++ {
+		key := []byte(fmt.Sprintf("key%015d", i))
+		val := []byte(fmt.Sprintf("val%015d", i))
+		v, cas, deleted, ok := snap.Get(key, value)
+		if (i%2) == 0 && ok == false {
+			t.Errorf("expected entry for %s", key)
+		} else if ok == false { // odd entry
+		} else {
+			if ((i*2)%10) == 0 && deleted == false {
+				t.Errorf("expected deleted for %s", key)
+			} else {
+				continue loop
+			}
+			if bytes.Compare(val, v) != 0 {
+				t.Errorf("for %s expected %s, got %s", key, val, v)
+			}
+			if refcas := uint64(i/2) + 1; refcas != cas {
+				t.Errorf("for %s expected %v, got %v", key, refcas, cas)
+			}
+		}
+	}
+}
+
 func makeLLRB(n int) (*llrb.LLRB, [][]byte) {
 	setts := s.Settings{"memcapacity": 1024 * 1024 * 1024}
 	mi := llrb.NewLLRB("buildllrb", setts)
-	k, v := []byte("key000000000000"), []byte("val00000000000000")
 	keys := [][]byte{}
 	for i := 0; i < n; i++ {
-		x := fmt.Sprintf("%d", i)
-		key, val := append(k[:3], x...), append(v[:3], x...)
+		key := []byte(fmt.Sprintf("key%015d", i))
+		val := []byte(fmt.Sprintf("val%015d", i))
 		mi.Set(key, val, nil)
 		if i%10 == 0 {
 			mi.Delete(key, nil, true /*lsm*/)
+		}
+		keys = append(keys, key)
+	}
+	return mi, keys
+}
+
+func makeLLRBEven(n int) (*llrb.LLRB, [][]byte) {
+	setts := s.Settings{"memcapacity": 1024 * 1024 * 1024}
+	mi := llrb.NewLLRB("buildllrb", setts)
+	keys := [][]byte{}
+	for i := 0; i < n; i++ {
+		key := []byte(fmt.Sprintf("key%015d", i*2))
+		val := []byte(fmt.Sprintf("val%015d", i*2))
+		if (i*2)%10 == 0 {
+			mi.Delete(key, nil, true /*lsm*/)
+		} else {
+			mi.Set(key, val, nil)
 		}
 		keys = append(keys, key)
 	}

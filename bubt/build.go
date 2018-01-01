@@ -64,7 +64,7 @@ func NewBubt(
 // Build starts building the tree from iterator, iterator is expected
 // to be a full-table scan over another data-store.
 func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
-	log.Infof("%v starting bottoms up build ...\n", tree.logprefix)
+	log.Debugf("%v starting bottoms up build ...\n", tree.logprefix)
 
 	n_count := int64(0)
 	z := newz(tree.zblocksize)
@@ -184,6 +184,7 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 		return m, mm
 	}
 
+	var root int64
 	if iter != nil {
 		key, value, seqno, deleted, err = iter(false /*close*/)
 		if err != nil && err.Error() != io.EOF.Error() {
@@ -192,8 +193,7 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 		} else if key != nil {
 			m := newm(tree.mblocksize)
 			m, _ = buildm(m, 20 /*levels can't go more than 20*/)
-			root := flushmblock(m)
-			log.Infof("%v root is at %v", tree.logprefix, root)
+			root = flushmblock(m)
 
 		} else {
 			log.Infof("%v empty iteration", tree.logprefix)
@@ -217,18 +217,22 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 	if err := tree.mflusher.writedata(block); err != nil {
 		panic(err)
 	}
-	log.Infof("%v builder wrote settings %v bytes", tree.logprefix, len(block))
+	lenSettings := len(block)
 
 	// flush 1 or more m-blocks of metadata
-	if len(metadata) > 0 {
-		if err := tree.Writemetadata(metadata); err != nil {
-			return nil
+	lenMetadata := len(metadata)
+	if lenMetadata > 0 {
+		if lenMetadata, err = tree.Writemetadata(metadata); err != nil {
+			return err
 		}
 	}
+
+	fmsg := "%v built with root@%v %v bytes setts %v bytes metadata"
+	log.Infof(fmsg, tree.logprefix, root, lenSettings, lenMetadata)
 	return nil
 }
 
-func (tree *Bubt) Writemetadata(metadata []byte) error {
+func (tree *Bubt) Writemetadata(metadata []byte) (int, error) {
 	ln := (((int64(len(metadata)+15) / tree.mblocksize) + 1) * tree.mblocksize)
 	block := make([]byte, ln)
 	binary.BigEndian.PutUint64(block, uint64(len(metadata)))
@@ -237,8 +241,8 @@ func (tree *Bubt) Writemetadata(metadata []byte) error {
 	if err := tree.mflusher.writedata(block); err != nil {
 		panic(err)
 	}
-	log.Infof("%v builder wrote metadata %v bytes", tree.logprefix, len(block))
-	return nil
+	log.Infof("%v wrote %v bytes metadata", tree.logprefix, len(metadata))
+	return len(block), nil
 }
 
 // Close instance after building the btree. This will mark disk files as

@@ -10,7 +10,9 @@ type zsnap []byte
 
 func (z zsnap) findkey(
 	adjust int, index blkindex,
-	key []byte) (idx int, value []byte, seqno uint64, deleted, ok bool) {
+	key []byte) (idx int, actualkey, value []byte, seqno uint64, del, ok bool) {
+
+	//fmt.Printf("zfindkey %v %v %q\n", adjust, len(index), key)
 
 	var cmp int
 	switch len(index) {
@@ -18,22 +20,23 @@ func (z zsnap) findkey(
 		panic(fmt.Errorf("impossible situation"))
 
 	case 1:
-		cmp, value, seqno, deleted = z.compareat(adjust, key)
-		if cmp >= 0 {
-			//fmt.Println("zfindkey", adjust, 0)
-			return adjust, value, seqno, deleted, true
+		cmp, actualkey, value, seqno, del = z.compareat(adjust, key)
+		if cmp == 0 { // adjust+half >= key
+			//fmt.Printf("zfindkey-1 %v %v %q\n", adjust, 0, actualkey)
+			return adjust, actualkey, value, seqno, del, true
 		}
 		// cmp < 0
-		//fmt.Println("zfindkey", adjust, -1)
-		return adjust + 1, nil, 0, false, false
+		//fmt.Printf("zfindkey-2 %v %v %q\n", adjust, -1, actualkey)
+		return adjust + 1, actualkey, nil, 0, false, false
 
 	default:
 		half := len(index) / 2
-		cmp, value, seqno, deleted = z.compareat(adjust+half, key)
+		cmp, actualkey, value, seqno, del = z.compareat(adjust+half, key)
 		if cmp == 0 {
 			//fmt.Println("zfindkey", adjust+half, 0)
-			return adjust + half, value, seqno, deleted, true
-		} else if cmp < 0 {
+			return adjust + half, actualkey, value, seqno, del, true
+
+		} else if cmp < 0 { // adjust+half < key
 			return z.findkey(adjust+half, index[half:], key)
 		}
 		return z.findkey(adjust, index[:half], key)
@@ -41,19 +44,22 @@ func (z zsnap) findkey(
 	panic("unreachable code")
 }
 
-func (z zsnap) compareat(i int, key []byte) (int, []byte, uint64, bool) {
+func (z zsnap) compareat(
+	i int, key []byte) (int, []byte, []byte, uint64, bool) {
+
 	offset := 4 + (i * 4)
 	x := int(binary.BigEndian.Uint32(z[offset : offset+4]))
 	ze := zentry(z[x : x+zentrysize])
 	ln := int(ze.keylen())
 	x += zentrysize
-	cmp := bytes.Compare(z[x:x+ln], key)
+	currkey := z[x : x+ln]
+	cmp := bytes.Compare(currkey, key)
 	//fmt.Printf("z.compareat %v %s %s %v\n", i, key, z[x:x+ln], cmp)
 	if cmp >= 0 {
 		x, ln = x+ln, int(ze.valuelen())
-		return cmp, z[x : x+ln], ze.seqno(), ze.isdeleted()
+		return cmp, currkey, z[x : x+ln], ze.seqno(), ze.isdeleted()
 	}
-	return cmp, nil, 0, false
+	return cmp, currkey, nil, 0, false
 }
 
 func (z zsnap) getindex(index blkindex) blkindex {

@@ -37,7 +37,7 @@ func TestZBlock(t *testing.T) {
 		index := zs.getindex(blkindex{})
 		j, k := uint64(0), fmt.Sprintf("%16d", 0)
 		for j < i {
-			_, value, seqno, deleted, ok := zs.findkey(0, index, []byte(k))
+			_, _, value, seqno, deleted, ok := zs.findkey(0, index, []byte(k))
 			if ok == false {
 				t.Errorf("unexpected false")
 			} else if deleted != ((j % 4) == 0) {
@@ -51,7 +51,7 @@ func TestZBlock(t *testing.T) {
 			k = fmt.Sprintf("%16d", j)
 		}
 		k = fmt.Sprintf("%17d", 100)
-		idx, value, seqno, deleted, ok := zs.findkey(0, index, []byte(k))
+		idx, _, value, seqno, deleted, ok := zs.findkey(0, index, []byte(k))
 		out := []interface{}{idx, value, seqno, deleted, ok}
 		ref := []interface{}{11, []byte(nil), uint64(0), false, false}
 		if reflect.DeepEqual(ref, out) == false {

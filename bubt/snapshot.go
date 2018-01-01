@@ -379,11 +379,19 @@ func (snap *Snapshot) Destroy() {
 func (snap *Snapshot) Get(
 	key, value []byte) (v []byte, cas uint64, deleted, ok bool) {
 
+	var foundkey []byte
+
 	buf := snap.getreadbuffer()
 	shardidx, fpos := snap.findinmblock(key, buf)
-	_, v, cas, deleted, ok = snap.findinzblock(shardidx, fpos, key, value, buf)
+	_, foundkey, v, cas, deleted, ok =
+		snap.findinzblock(shardidx, fpos, key, value, buf)
+
+	cmp := bytes.Compare(foundkey, key)
 	snap.putreadbuffer(buf)
-	return v, cas, deleted, ok
+	if cmp == 0 {
+		return v, cas, deleted, ok
+	}
+	return v, 0, false, false
 }
 
 func (snap *Snapshot) findinmblock(
@@ -414,7 +422,7 @@ func (snap *Snapshot) findinmblock(
 
 func (snap *Snapshot) findinzblock(
 	shardidx byte, fpos int64, key, v []byte,
-	buf *buffers) (index int, value []byte, cas uint64, deleted, ok bool) {
+	buf *buffers) (index int, k, value []byte, cas uint64, deleted, ok bool) {
 
 	var val []byte
 
@@ -428,7 +436,7 @@ func (snap *Snapshot) findinzblock(
 	}
 	z, zbindex := zsnap(zblock), buf.index[:0]
 	zbindex = z.getindex(zbindex[:0])
-	index, val, cas, deleted, ok = z.findkey(0, zbindex, key)
+	index, k, val, cas, deleted, ok = z.findkey(0, zbindex, key)
 
 	if v != nil {
 		value = lib.Fixbuffer(v, int64(len(val)))

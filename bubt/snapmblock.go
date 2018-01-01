@@ -9,30 +9,37 @@ type msnap []byte
 func (m msnap) findkey(
 	adjust int, index blkindex, key []byte) (level byte, fpos int64) {
 
+	//fmt.Printf("mfindkey %v %v %q\n", adjust, len(index), key)
+
 	switch len(index) {
 	case 0:
 		panic(fmt.Errorf("impossible situation"))
 
 	case 1:
-		cmp, vpos := m.compareat(adjust+0, key)
-		if cmp >= 0 {
+		cmp, vpos := m.compareat(adjust, key)
+		if cmp >= 0 { // key >= adjust
 			level, fpos = byte(vpos>>56), int64(vpos&0x00FFFFFFFFFFFFFF)
 			//fmt.Printf("mfindkey %x %x\n", level, fpos)
 			return
 		}
-		//fmt.Println("mfindkey", -1)
-		return 0, -1
+		//fmt.Println("mfindkey", 0)
+		return 0, 0
 
 	default:
 		half := len(index) / 2
 		cmp, vpos := m.compareat(adjust+half, key)
-		if cmp == 0 {
+		if cmp == 0 { // key == adjust+half
 			//fmt.Println("mfindkey", "default")
 			return byte(vpos >> 56), int64(vpos & 0x00FFFFFFFFFFFFFF)
-		} else if cmp < 0 {
-			return m.findkey(adjust, index[:half], key)
+
+		} else if cmp > 0 { // key > adjust+half
+			return m.findkey(adjust+half, index[half:], key)
+
+		} else if len(index) == 2 || len(index) == 3 {
+			_, vpos := m.compareat(adjust, key)
+			return byte(vpos >> 56), int64(vpos & 0x00FFFFFFFFFFFFFF)
 		}
-		return m.findkey(adjust+half, index[half:], key)
+		return m.findkey(adjust, index[:half], key)
 	}
 	panic("unreachable code")
 }

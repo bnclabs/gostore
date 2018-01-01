@@ -42,7 +42,7 @@ func (cur *Cursor) opencursor(
 	}
 
 	shardidx, fpos := snap.findinmblock(key, buf)
-	cur.index, _, _, _, _ = snap.findinzblock(shardidx, fpos, key, nil, buf)
+	cur.index, _, _, _, _, _ = snap.findinzblock(shardidx, fpos, key, nil, buf)
 	cur.shardidx = shardidx
 	for i := byte(0); i < cur.shardidx; i++ {
 		cur.fposs[i] = fpos + snap.zblocksize
