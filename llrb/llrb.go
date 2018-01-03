@@ -60,6 +60,27 @@ func NewLLRB(name string, setts s.Settings) *LLRB {
 	return llrb
 }
 
+// LoadLLRB creates an LLRB instance and populate it with initial set
+// of data (key, value) from iterator. After loading the data
+// applications can use Setseqno() to update the latest sequence number.
+func LoadLLRB(name string, setts s.Settings, iter api.Iterator) *LLRB {
+	llrb := NewLLRB(name, setts)
+	if iter == nil {
+		return nil
+	}
+	key, value, seqno, deleted, err := iter(false /*fin*/)
+	for err == nil {
+		llrb.Setseqno(seqno - 1)
+		if deleted {
+			llrb.Delete(key, nil, true /*lsm*/)
+		} else {
+			llrb.Set(key, value, nil)
+		}
+		key, value, seqno, deleted, err = iter(false /*fin*/)
+	}
+	return llrb
+}
+
 //---- local accessor methods.
 
 func (llrb *LLRB) readsettings(setts s.Settings) *LLRB {

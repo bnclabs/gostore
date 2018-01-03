@@ -171,6 +171,54 @@ func TestLLRBLoad(t *testing.T) {
 	}
 }
 
+func TestLoadLLRB(t *testing.T) {
+	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
+	llrb1 := NewLLRB("load", setts)
+	defer llrb1.Destroy()
+
+	// load data
+	keys := []string{
+		"key1", "key2", "key3", "key4", "key5", "key6", "key7", "key8",
+		"key11", "key12", "key13", "key14", "key15", "key16", "key17", "key18",
+	}
+	vals := []string{
+		"val1", "val2", "val3", "val4", "val5", "val6", "val7", "val8",
+		"val11", "val12", "val13", "val14", "val15", "val16", "val17", "val18",
+	}
+	for i, key := range keys {
+		k, v := lib.Str2bytes(key), lib.Str2bytes(vals[i])
+		llrb1.Set(k, v, nil)
+	}
+	llrb1.Delete([]byte("key2"), nil, true /*lsm*/)
+
+	llrb2 := LoadLLRB("warmup", setts, llrb1.Scan())
+	defer llrb2.Destroy()
+	llrb2.Setseqno(llrb1.Getseqno())
+
+	iter1, iter2 := llrb1.Scan(), llrb2.Scan()
+
+	key1, val1, seqno1, del1, err1 := iter1(false /*close*/)
+	key2, val2, seqno2, del2, err2 := iter2(false /*close*/)
+	for err1 == nil {
+		if bytes.Compare(key1, key2) != 0 {
+			t.Errorf("expected %q, got %q", key1, key2)
+		} else if del1 != del2 {
+			t.Errorf("expected %v, got %v", del1, del2)
+		} else if del1 == false && bytes.Compare(val1, val2) != 0 {
+			t.Errorf("expected %q, got %q", val1, val2)
+		} else if seqno1 != seqno2 {
+			t.Errorf("expected %v, got %v", seqno1, seqno2)
+		} else if err2 != nil {
+			t.Errorf("for %q, unexpected %v", key1, err2)
+		}
+		key1, val1, seqno1, del1, err1 = iter1(false /*close*/)
+		key2, val2, seqno2, del2, err2 = iter2(false /*close*/)
+	}
+
+	llrb1.Validate()
+	llrb2.Validate()
+}
+
 func TestLLRBDotdump(t *testing.T) {
 	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
 	llrb := NewLLRB("load", setts)

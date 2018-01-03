@@ -80,6 +80,27 @@ func NewMVCC(name string, setts s.Settings) *MVCC {
 	return mvcc
 }
 
+// LoadMVCC creates an MVCC instance and populate it with initial set
+// of data (key, value) from iterator. After loading the data
+// applications can use Setseqno() to update the latest sequence number.
+func LoadMVCC(name string, setts s.Settings, iter api.Iterator) *MVCC {
+	mvcc := NewMVCC(name, setts)
+	if iter == nil {
+		return nil
+	}
+	key, value, seqno, deleted, err := iter(false /*fin*/)
+	for err == nil {
+		mvcc.Setseqno(seqno - 1)
+		if deleted {
+			mvcc.Delete(key, nil, true /*lsm*/)
+		} else {
+			mvcc.Set(key, value, nil)
+		}
+		key, value, seqno, deleted, err = iter(false /*fin*/)
+	}
+	return mvcc
+}
+
 //---- local accessor methods.
 
 func (mvcc *MVCC) readsettings(setts s.Settings) *MVCC {
