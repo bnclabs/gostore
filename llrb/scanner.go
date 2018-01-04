@@ -1,5 +1,7 @@
 package llrb
 
+import "github.com/prataprc/gostore/lib"
+
 var scanlimit = 100
 
 type scanbuf struct {
@@ -32,18 +34,14 @@ func (sb *scanbuf) append(key, value []byte, seqno uint64, deleted bool) int {
 	}
 
 	k := sb.keys[sb.windex]
-	if k == nil || cap(k) < len(key) {
-		k = make([]byte, len(key))
-	}
-	k = k[:len(key)]
-	sb.keys[sb.windex] = k[:copy(k, key)]
+	k = lib.Fixbuffer(k, int64(len(key)))
+	copy(k, key)
+	sb.keys[sb.windex] = k
 
 	v := sb.values[sb.windex]
-	if v == nil || cap(v) < len(value) {
-		v = make([]byte, len(value))
-	}
-	v = v[:len(value)]
-	sb.values[sb.windex] = v[:copy(v, value)]
+	v = lib.Fixbuffer(v, int64(len(value)))
+	copy(v, value)
+	sb.values[sb.windex] = v
 
 	sb.seqnos[sb.windex] = seqno
 	sb.dels[sb.windex] = deleted

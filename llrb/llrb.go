@@ -635,7 +635,7 @@ func (llrb *LLRB) getkey(nd *Llrbnode, k []byte) (*Llrbnode, bool) {
 
 // Scan return a full table iterator.
 func (llrb *LLRB) Scan() api.Iterator {
-	currkey := make([]byte, 1024)
+	currkey := []byte(nil)
 	sb := makescanbuf()
 
 	leseqno := llrb.startscan(nil, sb, 0)
@@ -645,13 +645,10 @@ func (llrb *LLRB) Scan() api.Iterator {
 			llrb.startscan(currkey, sb, leseqno)
 			key, value, seqno, deleted = sb.pop()
 		}
-		if cap(currkey) < len(key) {
-			currkey = make([]byte, len(key))
-		}
-		currkey = currkey[:len(key)]
+		currkey = lib.Fixbuffer(currkey, int64(len(key)))
 		copy(currkey, key)
 		if key == nil {
-			return key, value, seqno, deleted, io.EOF
+			return nil, nil, 0, false, io.EOF
 		}
 		return key, value, seqno, deleted, nil
 	}
@@ -664,9 +661,11 @@ func (llrb *LLRB) startscan(key []byte, sb *scanbuf, leseqno uint64) uint64 {
 	if key == nil {
 		leseqno = llrb.seqno
 	}
+
 	sb.preparewrite()
 	llrb.scan(llrb.getroot(), key, sb, leseqno)
 	sb.prepareread()
+
 	llrb.runlock()
 	return leseqno
 }

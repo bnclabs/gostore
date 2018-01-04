@@ -1097,53 +1097,63 @@ func TestLLRBViewCursor(t *testing.T) {
 }
 
 func TestLLRBScan(t *testing.T) {
-	llrb := NewLLRB("scan", Defaultsettings())
-	defer llrb.Destroy()
+	load := func(n int, llrb *LLRB) {
+		for i := 0; i < n; i++ {
+			k := []byte(fmt.Sprintf("key%v", i))
+			v := []byte(fmt.Sprintf("val%v", i))
+			llrb.Set(k, v, nil)
+			llrb.Validate()
+		}
+	}
+
+	compare := func(n int, llrb *LLRB) {
+		view := llrb.View(0)
+		defer view.Abort()
+
+		count := 0
+		cur, _ := view.OpenCursor(nil)
+		iter := llrb.Scan()
+
+		refkey, refval, refseqno, refdeleted, referr := cur.YNext(false /*fin*/)
+		key, val, seqno, deleted, err := iter(false /*close*/)
+		for referr == nil && referr == nil {
+			count++
+			orgkey := []byte(fmt.Sprintf("key%v", count))
+			orgval := []byte(fmt.Sprintf("val%v", count))
+			if bytes.Compare(orgkey, key) != 0 {
+				t.Errorf("expected %q, got %q", orgkey, key)
+			} else if bytes.Compare(orgval, val) != 0 {
+				t.Errorf("for %q, expected %q, got %q", key, orgval, val)
+			} else if uint64(count) != seqno {
+				t.Errorf("for %q, expected %v, got %v", key, count, seqno)
+			}
+
+			//t.Logf("iter %q iter:%q", refkey, key)
+			if bytes.Compare(key, refkey) != 0 {
+				t.Errorf("expected %q, got %q", refkey, key)
+			} else if bytes.Compare(val, refval) != 0 {
+				t.Errorf("expected %s, got %s", refval, val)
+			} else if seqno != refseqno {
+				t.Errorf("expected %v, got %v", refseqno, seqno)
+			} else if deleted != refdeleted {
+				t.Errorf("expected %v, got %v", refdeleted, deleted)
+			}
+			refkey, refval, refseqno, refdeleted, referr = cur.YNext(false /*fin*/)
+			key, val, seqno, deleted, err = iter(false /*close*/)
+		}
+		if err != io.EOF || referr != io.EOF {
+			t.Errorf("expected nil %v, %v", referr, err)
+		}
+	}
 
 	// load data
-	scanlimit = 2
-	n := 10000
-	for i := 0; i < n; i++ {
-		k := []byte(fmt.Sprintf("key%v", i))
-		v := []byte(fmt.Sprintf("val%v", i))
-		llrb.Set(k, v, nil)
-		llrb.Validate()
+	for i := 0; i < 10000; i++ {
+		llrb := NewLLRB("scan", Defaultsettings())
+		load(i, llrb)
+		compare(i, llrb)
+		llrb.Destroy()
 	}
 
-	view := llrb.View(0)
-	defer view.Abort()
-	count := 0
-	cur, _ := view.OpenCursor(nil)
-	scan := llrb.Scan()
-
-	refkey, refval, refseqno, refdeleted, _ := cur.YNext(false /*fin*/)
-	key, val, seqno, deleted, err := scan(false /*close*/)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for refkey != nil {
-		count++
-		//t.Logf("iter %q scan:%q", refkey, key)
-		if bytes.Compare(key, refkey) != 0 {
-			t.Errorf("expected %q, got %q", refkey, key)
-		} else if bytes.Compare(val, refval) != 0 {
-			t.Errorf("expected %s, got %s", refval, val)
-		} else if seqno != refseqno {
-			t.Errorf("expected %v, got %v", refseqno, seqno)
-		} else if deleted != refdeleted {
-			t.Errorf("expected %v, got %v", refdeleted, deleted)
-		}
-		refkey, refval, refseqno, refdeleted, _ = cur.YNext(false /*fin*/)
-		key, val, seqno, deleted, err = scan(false /*close*/)
-		if err != nil && err != io.EOF {
-			t.Fatal(err)
-		}
-	}
-	if key != nil {
-		t.Errorf("expected nil, %s", key)
-	} else if count != n {
-		t.Errorf("expected %v, got %v", n, count)
-	}
 }
 
 func BenchmarkLLRBCount(b *testing.B) {
