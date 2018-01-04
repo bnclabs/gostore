@@ -10,11 +10,9 @@ import "encoding/binary"
 
 import "github.com/prataprc/gostore/lib"
 import "github.com/prataprc/gostore/api"
-import s "github.com/prataprc/gosettings"
 
 func TestLLRBEmpty(t *testing.T) {
-	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
-	llrb := NewLLRB("empty", setts)
+	llrb := NewLLRB("empty", Defaultsettings())
 	defer llrb.Destroy()
 
 	if llrb.ID() != "empty" {
@@ -56,7 +54,8 @@ func TestLLRBEmpty(t *testing.T) {
 func TestLLRBLoad(t *testing.T) {
 	var cas uint64
 
-	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
+	setts := Defaultsettings()
+	setts["memcapacity"] = 1 * 1024 * 1024
 	llrb := NewLLRB("load", setts)
 	defer llrb.Destroy()
 
@@ -172,8 +171,7 @@ func TestLLRBLoad(t *testing.T) {
 }
 
 func TestLoadLLRB(t *testing.T) {
-	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
-	llrb1 := NewLLRB("load", setts)
+	llrb1 := NewLLRB("load", Defaultsettings())
 	defer llrb1.Destroy()
 
 	// load data
@@ -191,7 +189,7 @@ func TestLoadLLRB(t *testing.T) {
 	}
 	llrb1.Delete([]byte("key2"), nil, true /*lsm*/)
 
-	llrb2 := LoadLLRB("warmup", setts, llrb1.Scan())
+	llrb2 := LoadLLRB("warmup", Defaultsettings(), llrb1.Scan())
 	defer llrb2.Destroy()
 	llrb2.Setseqno(llrb1.Getseqno())
 
@@ -220,8 +218,7 @@ func TestLoadLLRB(t *testing.T) {
 }
 
 func TestLLRBDotdump(t *testing.T) {
-	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
-	llrb := NewLLRB("load", setts)
+	llrb := NewLLRB("load", Defaultsettings())
 	defer llrb.Destroy()
 
 	// load data
@@ -253,7 +250,8 @@ func TestLLRBDotdump(t *testing.T) {
 }
 
 func TestLLRBLoadLarge(t *testing.T) {
-	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
+	setts := Defaultsettings()
+	setts["memcapacity"] = 1 * 1024 * 1024
 	llrb := NewLLRB("loadlarge", setts)
 	defer llrb.Destroy()
 
@@ -315,7 +313,8 @@ func TestLLRBLoadLarge(t *testing.T) {
 }
 
 func TestLLRBClone(t *testing.T) {
-	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
+	setts := Defaultsettings()
+	setts["memcapacity"] = 1 * 1024 * 1024
 	llrb := NewLLRB("clone", setts)
 	defer llrb.Destroy()
 
@@ -383,7 +382,8 @@ func TestLLRBSetCAS(t *testing.T) {
 	var err error
 	var cas uint64
 
-	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
+	setts := Defaultsettings()
+	setts["memcapacity"] = 1 * 1024 * 1024
 	llrb := NewLLRB("setcas", setts)
 	defer llrb.Destroy()
 
@@ -539,7 +539,8 @@ func TestLLRBDelete(t *testing.T) {
 	var err error
 	var cas uint64
 
-	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
+	setts := Defaultsettings()
+	setts["memcapacity"] = 1 * 1024 * 1024
 	llrb := NewLLRB("delete", setts)
 	defer llrb.Destroy()
 
@@ -764,8 +765,7 @@ func TestLLRBDelete(t *testing.T) {
 }
 
 func TestLLRBTxn(t *testing.T) {
-	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
-	llrb := NewLLRB("txn", setts)
+	llrb := NewLLRB("txn", Defaultsettings())
 	defer llrb.Destroy()
 
 	// First transaction
@@ -865,8 +865,7 @@ func TestLLRBTxn(t *testing.T) {
 }
 
 func TestLLRBView(t *testing.T) {
-	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
-	llrb := NewLLRB("view", setts)
+	llrb := NewLLRB("view", Defaultsettings())
 	defer llrb.Destroy()
 
 	keys := []string{
@@ -907,8 +906,7 @@ func TestLLRBView(t *testing.T) {
 }
 
 func TestLLRBTxnCursor1(t *testing.T) {
-	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
-	llrb := NewLLRB("view", setts)
+	llrb := NewLLRB("view", Defaultsettings())
 	defer llrb.Destroy()
 
 	keys := []string{
@@ -1001,13 +999,22 @@ func TestLLRBTxnCursor2(t *testing.T) {
 	mview := mi.View(id)
 	mcur, _ := mview.OpenCursor(key)
 	key, value, seqno, del, err := mcur.YNext(false /*fin*/)
-	t.Logf("TODO got %s %s %v %v %v\n", key, value, seqno, del, err)
+	if bytes.Compare(key, []byte("key1174")) != 0 {
+		t.Errorf("expected %q, got %q", "key1174", key)
+	} else if bytes.Compare(value, []byte("val1174")) != 0 {
+		t.Errorf("for %q expected %q, got %q", key, "val1174", value)
+	} else if seqno != 1293 {
+		t.Errorf("expected %q, got %v", 1293, seqno)
+	} else if del != false {
+		t.Errorf("expected %v, got %v", false, del)
+	} else if err != nil {
+		t.Errorf("unexpected %v", err)
+	}
 	mview.Abort()
 }
 
 func TestLLRBViewCursor(t *testing.T) {
-	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
-	llrb := NewLLRB("view", setts)
+	llrb := NewLLRB("view", Defaultsettings())
 	defer llrb.Destroy()
 
 	keys := []string{
@@ -1090,8 +1097,7 @@ func TestLLRBViewCursor(t *testing.T) {
 }
 
 func TestLLRBScan(t *testing.T) {
-	setts := s.Settings{"memcapacity": 100 * 1024 * 1024}
-	llrb := NewLLRB("scan", setts)
+	llrb := NewLLRB("scan", Defaultsettings())
 	defer llrb.Destroy()
 
 	// load data
@@ -1153,8 +1159,7 @@ func BenchmarkLLRBCount(b *testing.B) {
 func BenchmarkLLRBSet(b *testing.B) {
 	var scratch [8]byte
 
-	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
-	llrb := NewLLRB("bench", setts)
+	llrb := NewLLRB("bench", Defaultsettings())
 	defer llrb.Destroy()
 
 	b.ResetTimer()
@@ -1169,8 +1174,7 @@ func BenchmarkLLRBSet(b *testing.B) {
 func BenchmarkLLRBCAS(b *testing.B) {
 	var scratch [8]byte
 
-	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
-	llrb := NewLLRB("bench", setts)
+	llrb := NewLLRB("bench", Defaultsettings())
 	defer llrb.Destroy()
 
 	b.ResetTimer()
@@ -1312,8 +1316,7 @@ func BenchmarkLLRBScan(b *testing.B) {
 func makeBenchLLRB(n int) *LLRB {
 	var scratch [8]byte
 
-	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
-	llrb := NewLLRB("bench", setts)
+	llrb := NewLLRB("bench", Defaultsettings())
 	k, v := []byte("key000000000000"), []byte("val00000000000000")
 	for i := 0; i < n; i++ {
 		binary.BigEndian.PutUint64(scratch[:], uint64(i+1))
@@ -1402,8 +1405,7 @@ func testynext(t *testing.T, cur api.Cursor, from int, keys, vals []string) {
 }
 
 func makeLLRB(n int) (*LLRB, [][]byte) {
-	setts := s.Settings{"memcapacity": 1024 * 1024 * 1024}
-	mi := NewLLRB("buildllrb", setts)
+	mi := NewLLRB("buildllrb", Defaultsettings())
 	k, v := []byte("key000000000000"), []byte("val00000000000000")
 	keys := [][]byte{}
 	for i := 0; i < n; i++ {

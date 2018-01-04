@@ -10,11 +10,9 @@ import "encoding/binary"
 
 import "github.com/prataprc/gostore/lib"
 import "github.com/prataprc/gostore/api"
-import s "github.com/prataprc/gosettings"
 
 func TestMVCCEmpty(t *testing.T) {
-	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
-	mvcc := NewMVCC("empty", setts)
+	mvcc := NewMVCC("empty", Defaultsettings())
 	defer mvcc.Destroy()
 
 	if mvcc.ID() != "empty" {
@@ -56,8 +54,7 @@ func TestMVCCEmpty(t *testing.T) {
 func TestMVCCLoad(t *testing.T) {
 	var cas uint64
 
-	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
-	mvcc := NewMVCC("load", setts)
+	mvcc := NewMVCC("load", Defaultsettings())
 	defer mvcc.Destroy()
 
 	if mvcc.ID() != "load" {
@@ -175,7 +172,7 @@ func TestMVCCLoad(t *testing.T) {
 }
 
 func TestLoadMVCC(t *testing.T) {
-	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
+	setts := Defaultsettings()
 	llrb := NewLLRB("load", setts)
 	defer llrb.Destroy()
 
@@ -196,8 +193,8 @@ func TestLoadMVCC(t *testing.T) {
 
 	mvcc := LoadMVCC("warmup", setts, llrb.Scan())
 	defer mvcc.Destroy()
-	mvcc.Setseqno(llrb.Getseqno())
 
+	mvcc.Setseqno(llrb.Getseqno())
 	iter1, iter2 := llrb.Scan(), mvcc.Scan()
 
 	key1, val1, seqno1, del1, err1 := iter1(false /*close*/)
@@ -223,8 +220,7 @@ func TestLoadMVCC(t *testing.T) {
 }
 
 func TestMVCCDotdump(t *testing.T) {
-	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
-	mvcc := NewMVCC("load", setts)
+	mvcc := NewMVCC("load", Defaultsettings())
 	defer mvcc.Destroy()
 
 	// load data
@@ -256,8 +252,7 @@ func TestMVCCDotdump(t *testing.T) {
 }
 
 func TestMVCCLoadLarge(t *testing.T) {
-	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
-	mvcc := NewMVCC("loadlarge", setts)
+	mvcc := NewMVCC("loadlarge", Defaultsettings())
 	defer mvcc.Destroy()
 
 	// load data
@@ -319,7 +314,8 @@ func TestMVCCLoadLarge(t *testing.T) {
 }
 
 func TestMVCCClone(t *testing.T) {
-	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
+	setts := Defaultsettings()
+	setts["memcapacity"] = 1 * 1024 * 1024
 	mvcc := NewMVCC("clone", setts)
 	defer mvcc.Destroy()
 
@@ -387,8 +383,7 @@ func TestMVCCSetCAS(t *testing.T) {
 	var err error
 	var cas uint64
 
-	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
-	mvcc := NewMVCC("setcas", setts)
+	mvcc := NewMVCC("setcas", Defaultsettings())
 	defer mvcc.Destroy()
 
 	// load data
@@ -548,8 +543,7 @@ func TestMVCCDelete(t *testing.T) {
 	var err error
 	var cas uint64
 
-	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
-	mvcc := NewMVCC("delete", setts)
+	mvcc := NewMVCC("delete", Defaultsettings())
 	defer mvcc.Destroy()
 
 	// load data
@@ -767,8 +761,7 @@ func TestMVCCDelete(t *testing.T) {
 }
 
 func TestMVCCTxn(t *testing.T) {
-	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
-	mvcc := NewMVCC("txn", setts)
+	mvcc := NewMVCC("txn", Defaultsettings())
 	defer mvcc.Destroy()
 	snaptick := time.Duration(Defaultsettings().Int64("snapshottick") * 2)
 	snaptick = snaptick * time.Millisecond
@@ -878,8 +871,7 @@ func TestMVCCTxn(t *testing.T) {
 }
 
 func TestMVCCView(t *testing.T) {
-	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
-	mvcc := NewMVCC("view", setts)
+	mvcc := NewMVCC("view", Defaultsettings())
 	defer mvcc.Destroy()
 	snaptick := time.Duration(Defaultsettings().Int64("snapshottick") * 2)
 	snaptick = snaptick * time.Millisecond
@@ -924,8 +916,7 @@ func TestMVCCView(t *testing.T) {
 }
 
 func TestMVCCTxnCursor(t *testing.T) {
-	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
-	mvcc := NewMVCC("view", setts)
+	mvcc := NewMVCC("view", Defaultsettings())
 	defer mvcc.Destroy()
 
 	snaptick := time.Duration(Defaultsettings().Int64("snapshottick") * 2)
@@ -1002,8 +993,7 @@ func TestMVCCTxnCursor(t *testing.T) {
 }
 
 func TestMVCCViewCursor(t *testing.T) {
-	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
-	mvcc := NewMVCC("view", setts)
+	mvcc := NewMVCC("view", Defaultsettings())
 	defer mvcc.Destroy()
 
 	snaptick := time.Duration(Defaultsettings().Int64("snapshottick") * 2)
@@ -1078,8 +1068,7 @@ func TestMVCCViewCursor(t *testing.T) {
 }
 
 func TestMVCCScan(t *testing.T) {
-	setts := s.Settings{"memcapacity": 1 * 1024 * 1024}
-	llrb := NewMVCC("scan", setts)
+	llrb := NewMVCC("scan", Defaultsettings())
 	defer llrb.Destroy()
 	snaptick := time.Duration(Defaultsettings().Int64("snapshottick") * 2)
 	snaptick = snaptick * time.Millisecond
@@ -1145,8 +1134,7 @@ func BenchmarkMVCCCount(b *testing.B) {
 func BenchmarkMVCCSet(b *testing.B) {
 	var scratch [8]byte
 
-	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
-	mvcc := NewMVCC("bench", setts)
+	mvcc := NewMVCC("bench", Defaultsettings())
 	defer mvcc.Destroy()
 
 	b.ResetTimer()
@@ -1161,8 +1149,7 @@ func BenchmarkMVCCSet(b *testing.B) {
 func BenchmarkMVCCCAS(b *testing.B) {
 	var scratch [8]byte
 
-	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
-	mvcc := NewMVCC("bench", setts)
+	mvcc := NewMVCC("bench", Defaultsettings())
 	defer mvcc.Destroy()
 
 	b.ResetTimer()
@@ -1304,8 +1291,7 @@ func BenchmarkMVCCScan(b *testing.B) {
 func makeBenchMVCC(n int) *MVCC {
 	var scratch [8]byte
 
-	setts := s.Settings{"memcapacity": 10 * 1024 * 1024}
-	mvcc := NewMVCC("bench", setts)
+	mvcc := NewMVCC("bench", Defaultsettings())
 	k, v := []byte("key000000000000"), []byte("val00000000000000")
 	for i := 0; i < n; i++ {
 		binary.BigEndian.PutUint64(scratch[:], uint64(i+1))
