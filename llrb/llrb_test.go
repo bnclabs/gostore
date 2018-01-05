@@ -1146,7 +1146,6 @@ func TestLLRBScan(t *testing.T) {
 		}
 	}
 
-	// load data
 	for i := 0; i < 10000; i++ {
 		llrb := NewLLRB("scan", Defaultsettings())
 		load(i, llrb)
