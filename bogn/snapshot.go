@@ -77,10 +77,13 @@ func (snap *snapshot) mwseqno() uint64 {
 }
 
 func (snap *snapshot) addtopurge(indexes ...api.Index) {
-	if len(snap.purgeindexes) > 0 {
-		snap.purgeindexes = append(snap.purgeindexes, indexes...)
-	} else {
-		snap.purgeindexes = append([]api.Index{}, indexes...)
+	if snap.purgeindexes == nil {
+		snap.purgeindexes = []api.Index{}
+	}
+	for _, index := range snap.purgeindexes {
+		if index != nil {
+			snap.purgeindexes = append(snap.purgeindexes, index)
+		}
 	}
 }
 

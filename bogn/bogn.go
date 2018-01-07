@@ -495,9 +495,17 @@ func (bogn *Bogn) Close() {
 	close(bogn.finch)
 
 	for atomic.LoadInt64(&bogn.nroutines) > 0 {
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// clear up all the snapshots.
+	snap := bogn.currsnapshot()
+	for purgesnapshot(snap) == false {
+		time.Sleep(10 * time.Millisecond)
+		snap = bogn.currsnapshot()
 	}
 	bogn.setheadsnapshot(nil)
+
 	log.Infof("%v closed ...", bogn.logprefix)
 }
 

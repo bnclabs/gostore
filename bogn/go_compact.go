@@ -320,16 +320,18 @@ func dowindup(bogn *Bogn) error {
 
 	snap := bogn.currsnapshot()
 
-	// assume non-dgm to initialize `nlevel` and `nversion`.
-	nlevel, nversion := len(snap.disks)-1, 1
-	disk := snap.disks[nlevel]
-	if disk != nil {
-		_, nversion, _ = bogn.path2level(disk.ID())
-		nversion++
-	}
+	var disk, purgedisk api.Index
+	var nlevel, nversion int
 
-	if bogn.dgm {
+	if bogn.dgm == false { // full set in memory
+		nlevel, nversion = len(snap.disks)-1, 1
+		if purgedisk = snap.disks[nlevel]; purgedisk != nil {
+			_, nversion, _ = bogn.path2level(purgedisk.ID())
+			nversion++
+		}
+	} else {
 		disk, nlevel, nversion = bogn.pickflushdisk(nil)
+		purgedisk = disk
 	}
 
 	iter, uuid := snap.windupiterator(disk), bogn.newuuid()
@@ -351,7 +353,7 @@ func dowindup(bogn *Bogn) error {
 		head.refer()
 		bogn.setheadsnapshot(head)
 
-		snap.addtopurge(snap.mw, snap.mr, snap.mc, disk)
+		snap.addtopurge(snap.mw, snap.mr, snap.mc, purgedisk)
 		snap.release()
 
 		fmsg := "%v new snapshot %s windup on disk %v"
