@@ -49,6 +49,7 @@ import "github.com/prataprc/gostore/llrb"
 func Defaultsettings() s.Settings {
 	setts := s.Settings{
 		"memstore":       "mvcc",
+		"diskstore":      "bubt",
 		"durable":        true,
 		"dgm":            false,
 		"workingset":     false,
@@ -59,7 +60,10 @@ func Defaultsettings() s.Settings {
 		"bubt.zsize":     4096,
 		"bubt.mmap":      true,
 	}
-	llrbsetts := llrb.Defaultsettings().AddPrefix("llrb.")
-	setts = (s.Settings{}).Mixin(setts, llrbsetts)
+	switch setts.String("memstore") {
+	case "mvcc", "llrb":
+		llrbsetts := llrb.Defaultsettings().AddPrefix("llrb.")
+		setts = (s.Settings{}).Mixin(setts, llrbsetts)
+	}
 	return setts
 }
