@@ -145,6 +145,7 @@ func dopersist(bogn *Bogn) (err error) {
 		version++
 	}
 
+	// iterate on snap.mw
 	iter, uuid := snap.persistiterator(), bogn.newuuid()
 	ndisk, err := bogn.builddiskstore(level, version, uuid, iter)
 	if err != nil {
@@ -170,7 +171,7 @@ func dopersist(bogn *Bogn) (err error) {
 		snap.release()
 
 		fmsg := "%v new snapshot %v compact persisted %v"
-		log.Infof(fmsg, snap.bogn.logprefix, head.id, ndisk.ID())
+		log.Infof(fmsg, snap.bogn.logprefix, head.attributes(), ndisk.ID())
 	}()
 
 	return nil
@@ -181,10 +182,7 @@ func doflush(bogn *Bogn, disk0 api.Index) (err error) {
 
 	snap := bogn.currsnapshot()
 
-	disk, nlevel, nversion := bogn.pickflushdisk(disk0)
-	if nlevel < 0 {
-		panic(fmt.Errorf("impossible situation"))
-	}
+	// move mw -> mr
 
 	uuid := bogn.newuuid()
 	func() {
@@ -201,11 +199,19 @@ func doflush(bogn *Bogn, disk0 api.Index) (err error) {
 		bogn.setheadsnapshot(head)
 		snap.release()
 
-		fmsg := "%v new snapshot %v compact flush ..."
-		log.Debugf(fmsg, snap.bogn.logprefix, head.id)
+		fmsg := "%v new snapshot (%v) %v compact flush ..."
+		log.Debugf(fmsg, snap.bogn.logprefix, head.id, head.attributes())
 	}()
 
+	// flush mr [+ mc] [+ disk] -> disk
+
+	disk, nlevel, nversion := bogn.pickflushdisk(disk0)
+	if nlevel < 0 {
+		panic(fmt.Errorf("impossible situation"))
+	}
+
 	snap, uuid = bogn.latestsnapshot(), bogn.newuuid()
+	// iterate on snap.mr [+ snap.mc] [+ disk]
 	iter := snap.flushiterator(disk)
 	ndisk, err := bogn.builddiskstore(nlevel, nversion, uuid, iter)
 	if err != nil {
@@ -243,7 +249,7 @@ func doflush(bogn *Bogn, disk0 api.Index) (err error) {
 		snap.release()
 
 		fmsg := "%v new snapshot %v compact flush to %v"
-		log.Infof(fmsg, snap.bogn.logprefix, head.id, ndisk.ID())
+		log.Infof(fmsg, snap.bogn.logprefix, head.attributes(), ndisk.ID())
 	}()
 
 	return nil
@@ -252,8 +258,6 @@ func doflush(bogn *Bogn, disk0 api.Index) (err error) {
 func startdisk(
 	bogn *Bogn,
 	disk0, disk1 api.Index, nlevel int) (chan api.Index, chan error) {
-
-	log.Infof("%v startdisk ...", bogn.logprefix)
 
 	var version int
 
@@ -268,7 +272,7 @@ func startdisk(
 	iter, uuid := snap.compactiterator(disk0, disk1), bogn.newuuid()
 
 	go func() {
-		fmsg := "%v new snapshot %v compacting %q + %q ..."
+		fmsg := "%v start disk compaction (%v) %q + %q ..."
 		log.Infof(fmsg, bogn.logprefix, snap.id, disk0.ID(), disk1.ID())
 
 		ndisk, err := bogn.builddiskstore(nlevel, version, uuid, iter)
@@ -283,8 +287,6 @@ func startdisk(
 }
 
 func findisk(bogn *Bogn, disk0, disk1, ndisk api.Index) error {
-	log.Infof("%v findisk ...", bogn.logprefix)
-
 	snap := bogn.currsnapshot()
 
 	var disks [16]api.Index
@@ -307,8 +309,8 @@ func findisk(bogn *Bogn, disk0, disk1, ndisk api.Index) error {
 		snap.addtopurge(disk0, disk1)
 		snap.release()
 
-		fmsg := "%v new snapshot %v compact disk"
-		log.Infof(fmsg, snap.bogn.logprefix, head.id, ndisk.ID())
+		fmsg := "%v new snapshot %v compact disk %v"
+		log.Infof(fmsg, snap.bogn.logprefix, head.attributes(), ndisk.ID())
 	}()
 	return nil
 }
@@ -357,7 +359,7 @@ func dowindup(bogn *Bogn) error {
 		snap.release()
 
 		fmsg := "%v new snapshot %s windup on disk %v"
-		log.Infof(fmsg, snap.bogn.logprefix, head.id, ndisk.ID())
+		log.Infof(fmsg, snap.bogn.logprefix, head.attributes(), ndisk.ID())
 	}()
 	return nil
 }

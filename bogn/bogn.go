@@ -163,7 +163,6 @@ func (bogn *Bogn) settingsfromdisk(disk api.Index) s.Settings {
 // bubt-settings - settings from ndisk take priority.
 func (bogn *Bogn) validatesettings(ndisk api.Index, disks []api.Index) {
 	setts, nsetts := bogn.setts, bogn.settingsfromdisk(ndisk)
-	fmt.Println(nsetts)
 	if diskstore := nsetts.String("diskstore"); diskstore != bogn.diskstore {
 		fmsg := "found diskstore:%q on disk, expected %q"
 		panic(fmt.Errorf(fmsg, diskstore, bogn.diskstore))
@@ -588,9 +587,16 @@ func (bogn *Bogn) Close() {
 
 	// clear up all the snapshots.
 	snap := bogn.currsnapshot()
+	snap.addtopurge(snap.mw, snap.mr, snap.mc)
+	disks := snap.disks
 	for purgesnapshot(snap) == false {
 		time.Sleep(10 * time.Millisecond)
 		snap = bogn.currsnapshot()
+	}
+	for _, disk := range disks {
+		if disk != nil {
+			disk.Close()
+		}
 	}
 	bogn.setheadsnapshot(nil)
 

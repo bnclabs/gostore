@@ -2,6 +2,8 @@ package bogn
 
 import "fmt"
 import "unsafe"
+import "strconv"
+import "strings"
 import "sync/atomic"
 
 import "github.com/prataprc/gostore/api"
@@ -44,7 +46,8 @@ func opensnapshot(bogn *Bogn, disks [16]api.Index) (*snapshot, error) {
 		go cacher(bogn, head.mc, head.setch, head.cachech)
 	}
 	head.yget = head.latestyget()
-	log.Infof("%v open-snapshot %s", bogn.logprefix, head.id)
+	fmsg := "%v open-snapshot %s %v"
+	log.Infof(fmsg, bogn.logprefix, head.id, head.attributes())
 	return head, nil
 }
 
@@ -80,7 +83,7 @@ func (snap *snapshot) addtopurge(indexes ...api.Index) {
 	if snap.purgeindexes == nil {
 		snap.purgeindexes = []api.Index{}
 	}
-	for _, index := range snap.purgeindexes {
+	for _, index := range indexes {
 		if index != nil {
 			snap.purgeindexes = append(snap.purgeindexes, index)
 		}
@@ -277,23 +280,10 @@ func (snap *snapshot) iterator() api.Iterator {
 
 // iterate on write store and disk store.
 func (snap *snapshot) persistiterator() api.Iterator {
-	var ref [20]api.Iterator
-	scans := ref[:0]
-
-	if iter := snap.mw.Scan(); iter != nil {
-		scans = append(scans, iter)
+	if snap.mw != nil {
+		return snap.mw.Scan()
 	}
-	disks := snap.disklevels([]api.Index{})
-	if len(disks) > 1 {
-		panic("impossible situation")
-	}
-	for _, disk := range disks {
-		if iter := disk.Scan(); iter != nil {
-			scans = append(scans, iter)
-		}
-	}
-
-	return snap.reduceiter(scans)
+	return nil
 }
 
 // iterate on write store, read store, cache store and a latest disk store.
@@ -308,22 +298,6 @@ func (snap *snapshot) flushiterator(disk api.Index) api.Iterator {
 		if iter := snap.mc.Scan(); iter != nil {
 			scans = append(scans, iter)
 		}
-	}
-	if disk != nil {
-		if iter := disk.Scan(); iter != nil {
-			scans = append(scans, iter)
-		}
-	}
-
-	return snap.reduceiter(scans)
-}
-
-func (snap *snapshot) windupiterator(disk api.Index) api.Iterator {
-	var ref [20]api.Iterator
-	scans := ref[:0]
-
-	if iter := snap.mw.Scan(); iter != nil {
-		scans = append(scans, iter)
 	}
 	if disk != nil {
 		if iter := disk.Scan(); iter != nil {
@@ -354,6 +328,22 @@ func (snap *snapshot) compactiterator(d0, d1 api.Index) api.Iterator {
 	return snap.reduceiter(scans)
 }
 
+func (snap *snapshot) windupiterator(disk api.Index) api.Iterator {
+	var ref [20]api.Iterator
+	scans := ref[:0]
+
+	if iter := snap.mw.Scan(); iter != nil {
+		scans = append(scans, iter)
+	}
+	if disk != nil {
+		if iter := disk.Scan(); iter != nil {
+			scans = append(scans, iter)
+		}
+	}
+
+	return snap.reduceiter(scans)
+}
+
 func (snap *snapshot) set(key, value, oldvalue []byte) ([]byte, uint64) {
 	return snap.mw.Set(key, value, oldvalue)
 }
@@ -371,7 +361,6 @@ func (snap *snapshot) close() {
 	if snap.bogn.workingset {
 		close(snap.setch)
 	}
-
 	snap.bogn = nil
 	snap.mw, snap.mr, snap.mc = nil, nil, nil
 	for i := range snap.disks {
@@ -407,4 +396,26 @@ func (snap *snapshot) istrypurge() bool {
 		return true
 	}
 	return false
+}
+
+func (snap *snapshot) attributes() string {
+	wrc := []byte("---")
+	if snap.mw != nil {
+		wrc[0] = 'w'
+	}
+	if snap.mr != nil {
+		wrc[1] = 'r'
+	}
+	if snap.mc != nil {
+		wrc[2] = 'c'
+	}
+
+	ints := []string{}
+	for i, disk := range snap.disks {
+		if disk != nil {
+			ints = append(ints, strconv.Itoa(i))
+		}
+	}
+	disklevels := strings.Join(ints, ",")
+	return "<" + strings.Join([]string{string(wrc), disklevels}, " ") + ">"
 }
