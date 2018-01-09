@@ -10,6 +10,9 @@ import "github.com/prataprc/gostore/llrb"
 // "memstore" (string, default: "llrb")
 //		Type of index for in memory storage, can be "llrb" or "mvcc".
 //
+// "diskstore" (string, default: "bubt")
+//		Type of index for in disk storage, can be "bubt".
+//
 // "durable" (bool, default:false)
 //		Persist index on disk.
 //
@@ -48,22 +51,28 @@ import "github.com/prataprc/gostore/llrb"
 //
 func Defaultsettings() s.Settings {
 	setts := s.Settings{
-		"memstore":       "mvcc",
-		"diskstore":      "bubt",
-		"durable":        true,
-		"dgm":            false,
-		"workingset":     false,
-		"ratio":          .25,
-		"period":         100,
-		"bubt.diskpaths": "/opt/bogn/",
-		"bubt.msize":     4096,
-		"bubt.zsize":     4096,
-		"bubt.mmap":      true,
+		"memstore":   "mvcc",
+		"diskstore":  "bubt",
+		"durable":    true,
+		"dgm":        false,
+		"workingset": false,
+		"ratio":      .25,
+		"period":     100,
 	}
 	switch setts.String("memstore") {
 	case "mvcc", "llrb":
 		llrbsetts := llrb.Defaultsettings().AddPrefix("llrb.")
 		setts = (s.Settings{}).Mixin(setts, llrbsetts)
+	}
+	switch setts.String("diskstore") {
+	case "bubt":
+		bubtsetts := s.Settings{
+			"bubt.diskpaths": "/opt/bogn/",
+			"bubt.msize":     4096,
+			"bubt.zsize":     4096,
+			"bubt.mmap":      true,
+		}
+		setts = (s.Settings{}).Mixin(setts, bubtsetts)
 	}
 	return setts
 }

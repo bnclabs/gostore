@@ -37,6 +37,10 @@ func TestReload(t *testing.T) {
 	}
 	t.Logf("Loaded %v items", n)
 
+	w := time.Duration(setts.Int64("llrb.snapshottick")) * time.Millisecond
+	w *= 100
+	time.Sleep(w)
+
 	miter := mindex.Scan()
 	iter := index.Scan()
 	key1, val1, seqno1, del1, err1 := miter(false /*fin*/)
