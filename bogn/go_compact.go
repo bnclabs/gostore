@@ -325,12 +325,13 @@ func dowindup(bogn *Bogn) error {
 	var disk, purgedisk api.Index
 	var nlevel, nversion int
 
-	if bogn.dgm == false { // full set in memory
+	if bogn.dgmstate == 0 { // full set in memory
 		nlevel, nversion = len(snap.disks)-1, 1
 		if purgedisk = snap.disks[nlevel]; purgedisk != nil {
 			_, nversion, _ = bogn.path2level(purgedisk.ID())
 			nversion++
 		}
+
 	} else {
 		disk, nlevel, nversion = bogn.pickflushdisk(nil)
 		purgedisk = disk

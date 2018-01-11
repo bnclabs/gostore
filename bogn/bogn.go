@@ -74,9 +74,14 @@ func New(name string, setts s.Settings) (*Bogn, error) {
 		bogn.Close()
 		return nil, err
 	}
+	// NOTE: If settings have changed in between a re-boot from disk,
+	// a migration tool needs to be applied to move disk snapshots
+	// from older settings to new settings.
 	bogn.settingsfromdisks(disks[:])
 
-	head, err := opensnapshot(bogn, disks)
+	mw := bogn.warmupfromdisk(disks[:])
+
+	head, err := opensnapshot(bogn, mw, disks)
 	if err != nil {
 		bogn.Close()
 		return nil, err
@@ -131,6 +136,10 @@ func (bogn *Bogn) settingstodisk() s.Settings {
 	return setts
 }
 
+// priority of settings.
+// bogn-settings - settings from application passed to New() take priority.
+// llrb-settings - settings from application passed to New() take priority.
+// bubt-settings - settings from ndisk take priority.
 func (bogn *Bogn) settingsfromdisks(disks []api.Index) {
 	alldisks := []api.Index{}
 	for i, disk := range disks {
@@ -148,19 +157,6 @@ func (bogn *Bogn) settingsfromdisks(disks []api.Index) {
 	}
 }
 
-func (bogn *Bogn) settingsfromdisk(disk api.Index) s.Settings {
-	switch d := disk.(type) {
-	case *bubt.Snapshot:
-		metadata := s.Settings(bogn.diskmetadata(d))
-		return metadata
-	}
-	panic("unreachable code")
-}
-
-// priority of settings.
-// bogn-settings - settings from application passed to New() take priority.
-// llrb-settings - settings from application passed to New() take priority.
-// bubt-settings - settings from ndisk take priority.
 func (bogn *Bogn) validatesettings(ndisk api.Index, disks []api.Index) {
 	setts, nsetts := bogn.setts, bogn.settingsfromdisk(ndisk)
 	if diskstore := nsetts.String("diskstore"); diskstore != bogn.diskstore {
@@ -191,6 +187,117 @@ func (bogn *Bogn) validatesettings(ndisk api.Index, disks []api.Index) {
 		fmsg := "found mmap:%v on disk, expected %v"
 		panic(fmt.Errorf(fmsg, mmap1, mmap2))
 	}
+}
+
+func (bogn *Bogn) settingsfromdisk(disk api.Index) s.Settings {
+	switch d := disk.(type) {
+	case *bubt.Snapshot:
+		metadata := s.Settings(bogn.diskmetadata(d))
+		return metadata
+	}
+	panic("unreachable code")
+}
+
+// create a new in-memory snapshot from latest disk snapshot, if
+// there is not enough memory to hold the latest disk snapshot
+// return nil.
+func (bogn *Bogn) warmupfromdisk(disks []api.Index) api.Index {
+	checkcapacity := func(memcapacity, count, footprint int64) bool {
+		nodesize := int64(unsafe.Sizeof(llrb.Llrbnode{})) - 8
+		expected := ((footprint / count) + (nodesize * 2)) * count
+		expected = int64(float64(expected) * float64(1.2)) // TODO: no magic
+		if expected < memcapacity {
+			return true
+		}
+		bogn.dgmstate = 1
+		return false
+	}
+
+	var ndisk api.Index
+
+	for _, ndisk = range disks {
+		if ndisk == nil {
+			continue
+		}
+		break
+	}
+	if ndisk == nil {
+		return nil
+	}
+
+	var entries, footprint int64
+
+	switch bogn.diskstore {
+	case "bubt":
+		entries = ndisk.(*bubt.Snapshot).Count()
+		footprint = ndisk.(*bubt.Snapshot).Footprint()
+	}
+
+	switch bogn.memstore {
+	case "llrb":
+		llrbsetts := bogn.setts.Section("llrb.").Trim("llrb.")
+		memcapacity := llrbsetts.Int64("memcapacity")
+		if checkcapacity(memcapacity, entries, footprint) {
+			return bogn.llrbfromdisk(ndisk, entries, footprint)
+		}
+
+	case "mvcc":
+		llrbsetts := bogn.setts.Section("llrb.").Trim("llrb.")
+		memcapacity := llrbsetts.Int64("memcapacity")
+		if checkcapacity(memcapacity, entries, footprint) {
+			return bogn.mvccfromdisk(ndisk, entries, footprint)
+		}
+
+	default:
+		panic("unreachable code")
+	}
+
+	fmsg := "%v memory capacity too small to warmup %v, %v entries"
+	arg1 := humanize.Bytes(uint64(footprint))
+	log.Infof(fmsg, bogn.logprefix, arg1, entries)
+	return nil
+}
+
+func (bogn *Bogn) llrbfromdisk(
+	ndisk api.Index, entries, footprint int64) api.Index {
+
+	now := time.Now()
+
+	iter, seqno := ndisk.Scan(), bogn.diskseqno(ndisk)
+	name := fmt.Sprintf("%v-%v-%v", bogn.name, "mw", bogn.mwver)
+	llrbsetts := bogn.setts.Section("llrb.").Trim("llrb.")
+	mw := llrb.LoadLLRB(name, llrbsetts, iter)
+	mw.Setseqno(seqno)
+
+	fmsg := "%v warmup LLRB %v (%v) %v entries -> %v in %v"
+	arg1 := humanize.Bytes(uint64(footprint))
+	log.Infof(
+		fmsg, bogn.logprefix, ndisk.ID(), arg1, entries, mw.ID(),
+		time.Since(now).Round(time.Second),
+	)
+
+	return mw
+}
+
+func (bogn *Bogn) mvccfromdisk(
+	ndisk api.Index, entries, footprint int64) api.Index {
+
+	now := time.Now()
+
+	iter, seqno := ndisk.Scan(), bogn.diskseqno(ndisk)
+	name := fmt.Sprintf("%v-%v-%v", bogn.name, "mw", bogn.mwver)
+	llrbsetts := bogn.setts.Section("llrb.").Trim("llrb.")
+	mw := llrb.LoadMVCC(name, llrbsetts, iter)
+	mw.Setseqno(seqno)
+
+	fmsg := "%v warmup MVCC %v (%v) %v entries -> %v in %v"
+	arg1 := humanize.Bytes(uint64(footprint))
+	log.Infof(
+		fmsg, bogn.logprefix, ndisk.ID(), arg1, entries, mw.ID(),
+		time.Since(now).Round(time.Second),
+	)
+
+	return mw
 }
 
 // Start bogn service. Typically bogn instances are created and
@@ -475,9 +582,10 @@ func (bogn *Bogn) abortview(view *View) error {
 	return nil
 }
 
-// Compact away oldver version of disk snapshots.
-func (bogn *Bogn) Compact() {
-	bogn.compactdisksnaps(bogn.setts)
+// Compact away oldver version of disk snapshots. If merge is true
+// then merge all levels into one big level.
+func (bogn *Bogn) Compact(merge bool) {
+	bogn.compactdisksnaps(merge, bogn.setts)
 }
 
 // Log vital statistics for all active bogn levels.
@@ -797,6 +905,9 @@ func (bogn *Bogn) opendisksnaps(
 		paths := bubtsetts.Strings("diskpaths")
 		mmap := bubtsetts.Bool("mmap")
 		disks, err = bogn.openbubtsnaps(paths, mmap)
+
+	default:
+		panic("unreachable code")
 	}
 
 	if err != nil {
@@ -804,11 +915,20 @@ func (bogn *Bogn) opendisksnaps(
 	}
 
 	// log information about active disksnapshots.
+	n := 0
 	for _, disk := range disks {
 		if disk == nil {
 			continue
 		}
+		n++
 		log.Infof("%v open-disksnapshot %v", bogn.logprefix, disk.ID())
+	}
+
+	// TODO: As part of boot/re-boot do compaction of disk-levels
+	// or use migration tool to compact-merge multiple levels before
+	// rebooting.
+	if n > 1 {
+		bogn.dgmstate = 1
 	}
 	return disks, nil
 }
@@ -852,7 +972,7 @@ func (bogn *Bogn) openbubtsnaps(
 }
 
 // compact away older versions in disk levels.
-func (bogn *Bogn) compactdisksnaps(setts s.Settings) {
+func (bogn *Bogn) compactdisksnaps(merge bool, setts s.Settings) {
 	var disks [16]api.Index
 
 	bubtsetts := bogn.setts.Section("bubt.").Trim("bubt.")
@@ -888,14 +1008,58 @@ func (bogn *Bogn) compactdisksnaps(setts s.Settings) {
 			}
 		}
 	}
+
+	if merge {
+		bogn.mergedisksnapshots(disks)
+	}
 	bogn.closelevels(disks[:]...)
 	return
 }
 
-func (bogn *Bogn) destroydisksnaps(setts s.Settings) error {
-	bubtsetts := setts.Section("bubt.").Trim("bubt.")
-	paths := bubtsetts.Strings("diskpaths")
+func (bogn *Bogn) mergedisksnapshots(disks [16]api.Index) {
+	var olddisk api.Index
 
+	scans := make([]api.Iterator, 0)
+	for _, disk := range disks[:] {
+		if disk == nil {
+			continue
+		}
+		olddisk = disk
+		if iter := disk.Scan(); iter != nil {
+			scans = append(scans, iter)
+		}
+	}
+
+	if len(scans) > 0 {
+		iter := reduceiter(scans)
+		_, version, _ := bogn.path2level(olddisk.ID())
+		nlevel, nversion, uuid := len(disks)-1, version+1, bogn.newuuid()
+		ndisk, err := bogn.builddiskstore(nlevel, nversion, uuid, iter)
+		if err != nil {
+			panic(err)
+		}
+		ndisk.Close()
+	}
+
+	for _, disk := range disks[:] {
+		if disk != nil {
+			disk.Close()
+			disk.Destroy()
+		}
+	}
+}
+
+func (bogn *Bogn) destroydisksnaps(bognsetts s.Settings) error {
+	switch bognsetts.String("diskstore") {
+	case "bubt":
+		bubtsetts := bognsetts.Section("bubt.").Trim("bubt.")
+		return bogn.destroybubtsnaps(bubtsetts)
+	}
+	panic("unreachable code")
+}
+
+func (bogn *Bogn) destroybubtsnaps(bubtsetts s.Settings) error {
+	paths := bubtsetts.Strings("diskpaths")
 	for _, path := range paths {
 		fis, err := ioutil.ReadDir(path)
 		if err != nil {
@@ -959,11 +1123,17 @@ func (bogn *Bogn) newuuid() string {
 
 func (bogn *Bogn) diskseqno(disk api.Index) uint64 {
 	metadata := bogn.diskmetadata(disk)
-	seqno, err := strconv.ParseUint(metadata["seqno"].(string), 10, 64)
+	sseqno := metadata["seqno"].(string)
+	seqno, err := strconv.ParseUint(strings.Trim(sseqno, `"`), 10, 64)
 	if err != nil {
 		panic(err)
 	}
 	return seqno
+}
+
+func (bogn *Bogn) diskcount(disk api.Index) int64 {
+	metadata := bogn.diskmetadata(disk)
+	return int64(metadata["ncount"].(float64))
 }
 
 func (bogn *Bogn) diskmetadata(disk api.Index) map[string]interface{} {

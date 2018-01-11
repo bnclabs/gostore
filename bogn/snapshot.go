@@ -28,14 +28,19 @@ type snapshot struct {
 	cachech chan *setcache
 }
 
-func opensnapshot(bogn *Bogn, disks [16]api.Index) (*snapshot, error) {
+func opensnapshot(bogn *Bogn, mw api.Index, disks [16]api.Index) (*snapshot, error) {
 	var err error
 
 	uuid := bogn.newuuid()
+	head := &snapshot{id: uuid, bogn: bogn, mw: mw, disks: disks, next: nil}
 
-	head := &snapshot{id: uuid, bogn: bogn, disks: disks, next: nil}
-	if head.mw, err = bogn.newmemstore("mw", 0); err != nil {
-		return nil, err
+	fmsg := "%v open-snapshot %s %v"
+	log.Infof(fmsg, bogn.logprefix, head.id, head.attributes())
+
+	if head.mw == nil {
+		if head.mw, err = bogn.newmemstore("mw", 0); err != nil {
+			return nil, err
+		}
 	}
 	if bogn.workingset {
 		head.setch = make(chan *setcache, 1000)   // TODO: no magic number
@@ -46,8 +51,6 @@ func opensnapshot(bogn *Bogn, disks [16]api.Index) (*snapshot, error) {
 		go cacher(bogn, head.mc, head.setch, head.cachech)
 	}
 	head.yget = head.latestyget()
-	fmsg := "%v open-snapshot %s %v"
-	log.Infof(fmsg, bogn.logprefix, head.id, head.attributes())
 	return head, nil
 }
 
@@ -216,17 +219,6 @@ func (snap *snapshot) txnyget(
 	return get
 }
 
-func (snap *snapshot) reduceiter(scans []api.Iterator) api.Iterator {
-	if len(scans) == 0 {
-		return nil
-	}
-	scan := scans[len(scans)-1]
-	for i := len(scans) - 2; i >= 0; i-- {
-		scan = lsm.YSort(scan, scans[i])
-	}
-	return scan
-}
-
 // try caching the entry from this get operation.
 func (snap *snapshot) cachedget(get api.Getter) api.Getter {
 	return func(key, value []byte) ([]byte, uint64, bool, bool) {
@@ -275,7 +267,7 @@ func (snap *snapshot) iterator() api.Iterator {
 		}
 	}
 
-	return snap.reduceiter(scans)
+	return reduceiter(scans)
 }
 
 // iterate on write store and disk store.
@@ -305,7 +297,7 @@ func (snap *snapshot) flushiterator(disk api.Index) api.Iterator {
 		}
 	}
 
-	return snap.reduceiter(scans)
+	return reduceiter(scans)
 }
 
 func (snap *snapshot) compactiterator(d0, d1 api.Index) api.Iterator {
@@ -325,7 +317,7 @@ func (snap *snapshot) compactiterator(d0, d1 api.Index) api.Iterator {
 		scans = append(scans, iter)
 	}
 
-	return snap.reduceiter(scans)
+	return reduceiter(scans)
 }
 
 func (snap *snapshot) windupiterator(disk api.Index) api.Iterator {
@@ -341,7 +333,7 @@ func (snap *snapshot) windupiterator(disk api.Index) api.Iterator {
 		}
 	}
 
-	return snap.reduceiter(scans)
+	return reduceiter(scans)
 }
 
 func (snap *snapshot) set(key, value, oldvalue []byte) ([]byte, uint64) {
@@ -418,4 +410,15 @@ func (snap *snapshot) attributes() string {
 	}
 	disklevels := strings.Join(ints, ",")
 	return "<" + strings.Join([]string{string(wrc), disklevels}, " ") + ">"
+}
+
+func reduceiter(scans []api.Iterator) api.Iterator {
+	if len(scans) == 0 {
+		return nil
+	}
+	scan := scans[len(scans)-1]
+	for i := len(scans) - 2; i >= 0; i-- {
+		scan = lsm.YSort(scan, scans[i])
+	}
+	return scan
 }
