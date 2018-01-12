@@ -46,6 +46,7 @@ type Bogn struct {
 	// bogn settings
 	memstore    string
 	diskstore   string
+	merge       bool
 	durable     bool
 	dgm         bool
 	workingset  bool
@@ -68,6 +69,8 @@ func New(name string, setts s.Settings) (*Bogn, error) {
 	bogn.logprefix = fmt.Sprintf("BOGN [%v]", name)
 
 	log.Infof("%v starting ...", bogn.logprefix)
+
+	bogn.Compact(bogn.merge)
 
 	disks, err := bogn.opendisksnaps(setts)
 	if err != nil {
@@ -98,6 +101,7 @@ func New(name string, setts s.Settings) (*Bogn, error) {
 func (bogn *Bogn) readsettings(setts s.Settings) *Bogn {
 	bogn.memstore = setts.String("memstore")
 	bogn.diskstore = setts.String("diskstore")
+	bogn.merge = setts.Bool("merge")
 	bogn.durable = setts.Bool("durable")
 	bogn.dgm = setts.Bool("dgm")
 	bogn.workingset = setts.Bool("workingset")
@@ -584,8 +588,8 @@ func (bogn *Bogn) abortview(view *View) error {
 
 // Compact away oldver version of disk snapshots. If merge is true
 // then merge all levels into one big level.
-func (bogn *Bogn) Compact(merge bool) {
-	bogn.compactdisksnaps(merge, bogn.setts)
+func (bogn *Bogn) Compact(merge bool) error {
+	return bogn.compactdisksnaps(merge, bogn.setts)
 }
 
 // Log vital statistics for all active bogn levels.
@@ -924,9 +928,6 @@ func (bogn *Bogn) opendisksnaps(
 		log.Infof("%v open-disksnapshot %v", bogn.logprefix, disk.ID())
 	}
 
-	// TODO: As part of boot/re-boot do compaction of disk-levels
-	// or use migration tool to compact-merge multiple levels before
-	// rebooting.
 	if n > 1 {
 		bogn.dgmstate = 1
 	}
@@ -939,6 +940,7 @@ func (bogn *Bogn) openbubtsnaps(
 
 	var disks [16]api.Index
 
+	dircache := map[string]bool{}
 	for _, path := range paths {
 		fis, err := ioutil.ReadDir(path)
 		if err != nil {
@@ -947,10 +949,14 @@ func (bogn *Bogn) openbubtsnaps(
 		}
 		for _, fi := range fis {
 			dirname := fi.Name()
+			if _, ok := dircache[dirname]; ok {
+				continue
+			}
 			level, version, _ := bogn.path2level(dirname)
 			if level < 0 {
 				continue // not a bogn disk level
 			}
+
 			disk, err := bubt.OpenSnapshot(dirname, paths, mmap)
 			if err != nil {
 				return disks, err
@@ -966,27 +972,32 @@ func (bogn *Bogn) openbubtsnaps(
 			} else {
 				bogn.closelevels(disk)
 			}
+			dircache[dirname] = true
 		}
 	}
 	return disks, nil
 }
 
 // compact away older versions in disk levels.
-func (bogn *Bogn) compactdisksnaps(merge bool, setts s.Settings) {
+func (bogn *Bogn) compactdisksnaps(merge bool, setts s.Settings) (err error) {
 	var disks [16]api.Index
 
 	bubtsetts := bogn.setts.Section("bubt.").Trim("bubt.")
 	paths := bubtsetts.Strings("diskpaths")
 	mmap := bubtsetts.Bool("mmap")
 
+	dircache := map[string]bool{}
 	for _, path := range paths {
 		fis, err := ioutil.ReadDir(path)
 		if err != nil {
 			log.Errorf("%v %v", bogn.logprefix, err)
-			return
+			return err
 		}
 		for _, fi := range fis {
 			dirname := fi.Name()
+			if _, ok := dircache[dirname]; ok {
+				continue
+			}
 			level, version, _ := bogn.path2level(dirname)
 			if level < 0 {
 				continue // not a bogn directory
@@ -1006,21 +1017,23 @@ func (bogn *Bogn) compactdisksnaps(merge bool, setts s.Settings) {
 			} else {
 				bogn.destroylevels(disk)
 			}
+			dircache[dirname] = true
 		}
 	}
 
 	if merge {
-		bogn.mergedisksnapshots(disks)
+		err = bogn.mergedisksnapshots(disks[:])
+	} else {
+		bogn.closelevels(disks[:]...)
 	}
-	bogn.closelevels(disks[:]...)
-	return
+	return err
 }
 
-func (bogn *Bogn) mergedisksnapshots(disks [16]api.Index) {
+func (bogn *Bogn) mergedisksnapshots(disks []api.Index) error {
 	var olddisk api.Index
 
 	scans := make([]api.Iterator, 0)
-	for _, disk := range disks[:] {
+	for _, disk := range disks {
 		if disk == nil {
 			continue
 		}
@@ -1047,6 +1060,7 @@ func (bogn *Bogn) mergedisksnapshots(disks [16]api.Index) {
 			disk.Destroy()
 		}
 	}
+	return nil
 }
 
 func (bogn *Bogn) destroydisksnaps(bognsetts s.Settings) error {
@@ -1080,15 +1094,19 @@ func (bogn *Bogn) destroybubtsnaps(bubtsetts s.Settings) error {
 // release resources held in disk levels.
 func (bogn *Bogn) closelevels(indexes ...api.Index) {
 	for _, index := range indexes {
-		index.Close()
+		if index != nil {
+			index.Close()
+		}
 	}
 }
 
 // destroy disk footprint in disk levels.
 func (bogn *Bogn) destroylevels(indexes ...api.Index) {
 	for _, index := range indexes {
-		index.Close()
-		index.Destroy()
+		if index != nil {
+			index.Close()
+			index.Destroy()
+		}
 	}
 }
 

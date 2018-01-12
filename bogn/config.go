@@ -53,6 +53,7 @@ func Defaultsettings() s.Settings {
 	setts := s.Settings{
 		"memstore":   "mvcc",
 		"diskstore":  "bubt",
+		"merge":      true,
 		"durable":    true,
 		"dgm":        false,
 		"workingset": false,
