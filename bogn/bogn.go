@@ -1035,6 +1035,8 @@ func (bogn *Bogn) compactdisksnaps(merge bool, setts s.Settings) (err error) {
 	}
 
 	if merge {
+		// disks will closed and destroyed, a new disk snapshot will be
+		// created.
 		err = bogn.mergedisksnapshots(disks[:])
 	} else {
 		bogn.closelevels(disks[:]...)
@@ -1046,6 +1048,7 @@ func (bogn *Bogn) mergedisksnapshots(disks []api.Index) error {
 	var olddisk api.Index
 
 	scans := make([]api.Iterator, 0)
+	arg1 := []string{}
 	for _, disk := range disks {
 		if disk == nil {
 			continue
@@ -1054,6 +1057,7 @@ func (bogn *Bogn) mergedisksnapshots(disks []api.Index) error {
 		if iter := disk.Scan(); iter != nil {
 			scans = append(scans, iter)
 		}
+		arg1 = append(arg1, disk.ID())
 	}
 
 	if len(scans) > 0 {
@@ -1064,8 +1068,10 @@ func (bogn *Bogn) mergedisksnapshots(disks []api.Index) error {
 		if err != nil {
 			panic(err)
 		}
-		ndisk.Close()
 		iter(true /*fin*/)
+		fmsg := "%v merging [%v] -> %v"
+		log.Infof(fmsg, bogn.logprefix, strings.Join(arg1, ","), ndisk.ID())
+		ndisk.Close()
 	}
 
 	for _, disk := range disks[:] {
