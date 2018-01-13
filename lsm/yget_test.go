@@ -40,11 +40,13 @@ func TestYGet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = bb.Build(llrb1.Scan(), []byte("this is metadata for llrb1"))
+	iter := llrb1.Scan()
+	err = bb.Build(iter, []byte("this is metadata for llrb1"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	bb.Close()
+	iter(true /*fin*/)
 
 	bubt1, err := bubt.OpenSnapshot(name, paths, mmap)
 	if err != nil {
@@ -56,11 +58,13 @@ func TestYGet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = bb.Build(llrb2.Scan(), []byte("this is metadata for bubt4"))
+	iter = llrb2.Scan()
+	err = bb.Build(iter, []byte("this is metadata for bubt4"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	bb.Close()
+	iter(true /*fin*/)
 
 	bubt2, err := bubt.OpenSnapshot(name, paths, mmap)
 	if err != nil {
@@ -87,6 +91,7 @@ func TestYGet(t *testing.T) {
 		}
 		key, value, seqno, deleted, err = refiter(false)
 	}
+	refiter(true /*fin*/)
 }
 
 func BenchmarkYGet(b *testing.B) {
@@ -112,11 +117,13 @@ func BenchmarkYGet(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	err = bb.Build(llrb1.Scan(), []byte("this is metadata for llrb1"))
+	iter := llrb1.Scan()
+	err = bb.Build(iter, []byte("this is metadata for llrb1"))
 	if err != nil {
 		b.Fatal(err)
 	}
 	bb.Close()
+	iter(true /*fin*/)
 
 	bubt1, err := bubt.OpenSnapshot(name, paths, mmap)
 	if err != nil {
@@ -128,11 +135,13 @@ func BenchmarkYGet(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	err = bb.Build(llrb2.Scan(), []byte("this is metadata for bubt4"))
+	iter = llrb2.Scan()
+	err = bb.Build(iter, []byte("this is metadata for bubt4"))
 	if err != nil {
 		b.Fatal(err)
 	}
 	bb.Close()
+	iter(true /*fin*/)
 
 	bubt2, err := bubt.OpenSnapshot(name, paths, mmap)
 	if err != nil {

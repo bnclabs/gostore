@@ -32,11 +32,13 @@ func TestYSort(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = bb.Build(llrb1.Scan(), []byte("this is metadata for llrb1"))
+	iter := llrb1.Scan()
+	err = bb.Build(iter, []byte("this is metadata for llrb1"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	bb.Close()
+	iter(true /*fin*/)
 
 	bubt1, err := bubt.OpenSnapshot(name, paths, mmap)
 	if err != nil {
@@ -48,11 +50,13 @@ func TestYSort(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = bb.Build(llrb2.Scan(), []byte("this is metadata for bubt4"))
+	iter = llrb2.Scan()
+	err = bb.Build(iter, []byte("this is metadata for bubt4"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	bb.Close()
+	iter(true /*fin*/)
 
 	bubt2, err := bubt.OpenSnapshot(name, paths, mmap)
 	if err != nil {
@@ -66,7 +70,7 @@ func TestYSort(t *testing.T) {
 
 	refiter := ref.Scan()
 	miter := YSort(llrb3.Scan(), llrb4.Scan())
-	iter := YSort(bubt1.Scan(), YSort(bubt2.Scan(), miter))
+	iter = YSort(bubt1.Scan(), YSort(bubt2.Scan(), miter))
 	key, value, seqno, deleted, err := refiter(false)
 	for err == nil {
 		k, v, s, d, e := iter(false)
@@ -88,6 +92,8 @@ func TestYSort(t *testing.T) {
 	if e != err {
 		t.Errorf("unexpected %v", e)
 	}
+	refiter(true /*fin*/)
+	iter(true /*fin*/)
 }
 
 func TestYSort1(t *testing.T) {
@@ -109,11 +115,13 @@ func TestYSort1(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = bb.Build(llrb1.Scan(), []byte("this is metadata for llrb1"))
+	iter := llrb1.Scan()
+	err = bb.Build(iter, []byte("this is metadata for llrb1"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	bb.Close()
+	iter(true /*fin*/)
 
 	bubt1, err := bubt.OpenSnapshot(name, paths, mmap)
 	if err != nil {
@@ -125,7 +133,7 @@ func TestYSort1(t *testing.T) {
 
 	refiter := ref.Scan()
 	miter := YSort(llrb3.Scan(), nil)
-	iter := YSort(bubt1.Scan(), YSort(nil, miter))
+	iter = YSort(bubt1.Scan(), YSort(nil, miter))
 	key, value, seqno, deleted, err := refiter(false)
 	for err == nil {
 		k, v, s, d, e := iter(false)
@@ -147,6 +155,8 @@ func TestYSort1(t *testing.T) {
 	if e != err {
 		t.Errorf("unexpected %v", e)
 	}
+	iter(true /*fin*/)
+	refiter(true /*fin*/)
 }
 
 func BenchmarkYSort(b *testing.B) {
@@ -169,11 +179,13 @@ func BenchmarkYSort(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	err = bb.Build(llrb1.Scan(), []byte("this is metadata for llrb1"))
+	iter := llrb1.Scan()
+	err = bb.Build(iter, []byte("this is metadata for llrb1"))
 	if err != nil {
 		b.Fatal(err)
 	}
 	bb.Close()
+	iter(true /*fin*/)
 
 	bubt1, err := bubt.OpenSnapshot(name, paths, mmap)
 	if err != nil {
@@ -185,11 +197,13 @@ func BenchmarkYSort(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	err = bb.Build(llrb2.Scan(), []byte("this is metadata for bubt4"))
+	iter = llrb2.Scan()
+	err = bb.Build(iter, []byte("this is metadata for bubt4"))
 	if err != nil {
 		b.Fatal(err)
 	}
 	bb.Close()
+	iter(true /*fin*/)
 
 	bubt2, err := bubt.OpenSnapshot(name, paths, mmap)
 	if err != nil {
@@ -203,10 +217,11 @@ func BenchmarkYSort(b *testing.B) {
 
 	b.ResetTimer()
 	miter := YSort(llrb3.Scan(), llrb4.Scan())
-	iter := YSort(bubt1.Scan(), YSort(bubt2.Scan(), miter))
+	iter = YSort(bubt1.Scan(), YSort(bubt2.Scan(), miter))
 	for i := 0; i < b.N; i++ {
 		if _, _, _, _, err := iter(false); err != nil {
 			b.Fatal(err)
 		}
 	}
+	iter(true /*fin*/)
 }
