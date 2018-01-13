@@ -173,6 +173,9 @@ func TestMVCCLoad(t *testing.T) {
 
 func TestLoadMVCC(t *testing.T) {
 	setts := Defaultsettings()
+	snaptick := time.Duration(setts.Int64("snapshottick") * 4)
+	snaptick = snaptick * time.Millisecond
+
 	llrb := NewLLRB("load", setts)
 	defer llrb.Destroy()
 
@@ -191,10 +194,16 @@ func TestLoadMVCC(t *testing.T) {
 	}
 	llrb.Delete([]byte("key2"), nil, true /*lsm*/)
 
-	mvcc := LoadMVCC("warmup", setts, llrb.Scan())
+	time.Sleep(snaptick)
+
+	iter := llrb.Scan()
+	mvcc := LoadMVCC("warmup", setts, iter)
+	mvcc.Setseqno(llrb.Getseqno())
+	iter(true /*fin*/)
 	defer mvcc.Destroy()
 
-	mvcc.Setseqno(llrb.Getseqno())
+	time.Sleep(snaptick)
+
 	iter1, iter2 := llrb.Scan(), mvcc.Scan()
 
 	key1, val1, seqno1, del1, err1 := iter1(false /*close*/)
@@ -214,6 +223,8 @@ func TestLoadMVCC(t *testing.T) {
 		key1, val1, seqno1, del1, err1 = iter1(false /*close*/)
 		key2, val2, seqno2, del2, err2 = iter2(false /*close*/)
 	}
+	iter1(true /*fin*/)
+	iter2(true /*fin*/)
 
 	llrb.Validate()
 	mvcc.Validate()
@@ -1070,8 +1081,8 @@ func TestMVCCViewCursor(t *testing.T) {
 func TestMVCCScan(t *testing.T) {
 	load := func(n int, mvcc *MVCC) {
 		for i := 0; i < n; i++ {
-			k := []byte(fmt.Sprintf("key%v", i))
-			v := []byte(fmt.Sprintf("val%v", i))
+			k := []byte(fmt.Sprintf("key%08v", i))
+			v := []byte(fmt.Sprintf("val%08v", i))
 			mvcc.Set(k, v, nil)
 			mvcc.Validate()
 		}
@@ -1084,18 +1095,18 @@ func TestMVCCScan(t *testing.T) {
 		count := 0
 		cur, _ := view.OpenCursor(nil)
 		iter := mvcc.Scan()
+		defer iter(true /*fin*/)
 
 		refkey, refval, refseqno, refdeleted, referr := cur.YNext(false /*fin*/)
 		key, val, seqno, deleted, err := iter(false /*close*/)
 		for referr == nil && referr == nil {
-			count++
-			orgkey := []byte(fmt.Sprintf("key%v", count))
-			orgval := []byte(fmt.Sprintf("val%v", count))
+			orgkey := []byte(fmt.Sprintf("key%08v", count))
+			orgval := []byte(fmt.Sprintf("val%08v", count))
 			if bytes.Compare(orgkey, key) != 0 {
 				t.Errorf("expected %q, got %q", orgkey, key)
 			} else if bytes.Compare(orgval, val) != 0 {
 				t.Errorf("for %q, expected %q, got %q", key, orgval, val)
-			} else if uint64(count) != seqno {
+			} else if uint64(count+1) != seqno {
 				t.Errorf("for %q, expected %v, got %v", key, count, seqno)
 			}
 
@@ -1111,22 +1122,22 @@ func TestMVCCScan(t *testing.T) {
 			}
 			refkey, refval, refseqno, refdeleted, referr = cur.YNext(false /*fin*/)
 			key, val, seqno, deleted, err = iter(false /*close*/)
+			count++
 		}
 		if err != io.EOF || referr != io.EOF {
 			t.Errorf("expected nil %v, %v", referr, err)
 		}
 	}
 
-	mvcc := NewMVCC("scan", Defaultsettings())
-	defer mvcc.Destroy()
-	snaptick := time.Duration(Defaultsettings().Int64("snapshottick") * 2)
+	mvccsetts := Defaultsettings()
+	snaptick := time.Duration(mvccsetts.Int64("snapshottick") * 2)
 	snaptick = snaptick * time.Millisecond
 
 	// load data
-	for i := 0; i < 10000; i++ {
-		mvcc := NewMVCC("scan", Defaultsettings())
+	for i := 0; i < 1000; i++ {
+		mvcc := NewMVCC("scan", mvccsetts)
 		load(i, mvcc)
-		time.Sleep(snaptick)
+		time.Sleep(snaptick * 4)
 		compare(i, mvcc)
 		mvcc.Destroy()
 	}
@@ -1298,6 +1309,7 @@ func BenchmarkMVCCScan(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		scan(false /*close*/)
 	}
+	scan(true /*fin*/)
 }
 
 func makeBenchMVCC(n int) *MVCC {

@@ -4,10 +4,11 @@ import "io"
 import "fmt"
 import "sync"
 import "time"
+import "math"
 import "bytes"
 import "unsafe"
 import "strings"
-import "math"
+import "runtime"
 import "sync/atomic"
 
 import "github.com/prataprc/gostore/lib"
@@ -73,7 +74,7 @@ func NewMVCC(name string, setts s.Settings) *MVCC {
 
 	mvcc.logarenasettings()
 
-	mvcc.makesnapshot()
+	mvcc.makesnapshot(true /*init*/)
 	go housekeeper(mvcc, mvcc.snaptick, mvcc.finch)
 
 	log.Infof("%v started ...\n", mvcc.logprefix)
@@ -112,20 +113,50 @@ func (mvcc *MVCC) readsettings(setts s.Settings) *MVCC {
 }
 
 func (mvcc *MVCC) getroot() *Llrbnode {
-	return mvcc.currsnapshot().getroot()
+	snapshot := mvcc.acquiresnapshot(nil)
+	node := snapshot.getroot()
+	mvcc.releasesnapshot(snapshot, snapshot)
+	return node
 }
 
 // should be called with the write-lock.
 func (mvcc *MVCC) setroot(root *Llrbnode) {
-	mvcc.currsnapshot().setroot(root)
+	snapshot := mvcc.acquiresnapshot(nil)
+	snapshot.setroot(root)
+	mvcc.releasesnapshot(snapshot, snapshot)
 }
 
-func (mvcc *MVCC) currsnapshot() *mvccsnapshot {
-	return (*mvccsnapshot)(atomic.LoadPointer(&mvcc.snapshot))
+func (mvcc *MVCC) acquiresnapshot(first *mvccsnapshot) *mvccsnapshot {
+	for {
+		old := (uintptr)(atomic.LoadPointer(&mvcc.snapshot))
+		if first != nil && old == (uintptr)(unsafe.Pointer(nil)) {
+			firstptr := unsafe.Pointer((uintptr)(unsafe.Pointer(first)) | 0x1)
+			atomic.StorePointer(&mvcc.snapshot, firstptr)
+			return first
+
+		} else if old == (uintptr)(unsafe.Pointer(nil)) {
+			panic("impossible case")
+
+		} else if (old & 1) == 1 { // latch is already acquired wait for it.
+			runtime.Gosched()
+			continue
+		}
+		oldptr := unsafe.Pointer(old)
+		newptr := unsafe.Pointer(old | 0x1)
+		if atomic.CompareAndSwapPointer(&mvcc.snapshot, oldptr, newptr) {
+			return (*mvccsnapshot)(oldptr)
+		}
+		// some else has acquired the latch.
+		runtime.Gosched()
+	}
 }
 
-func (mvcc *MVCC) setheadsnapshot(snapshot *mvccsnapshot) {
-	atomic.StorePointer(&mvcc.snapshot, unsafe.Pointer(snapshot))
+func (mvcc *MVCC) releasesnapshot(old *mvccsnapshot, new *mvccsnapshot) {
+	oldptr := unsafe.Pointer((uintptr)(unsafe.Pointer(old)) | 1)
+	newptr := unsafe.Pointer(new)
+	if atomic.CompareAndSwapPointer(&mvcc.snapshot, oldptr, newptr) == false {
+		panic(fmt.Errorf("impossible case %p %p", oldptr, newptr))
+	}
 }
 
 func (mvcc *MVCC) newnode(k, v []byte) *Llrbnode {
@@ -203,12 +234,11 @@ func (mvcc *MVCC) delcounts(nd *Llrbnode, lsm bool) {
 	}
 }
 
-func (mvcc *MVCC) appendreclaim(reclaim []*Llrbnode) {
+func (mvcc *MVCC) appendreclaim(wsnap *mvccsnapshot, reclaim []*Llrbnode) {
 	if ln := int64(len(reclaim)); ln > 0 {
 		mvcc.h_reclaims.Add(ln)
 		mvcc.n_reclaims += ln
-		snapshot := mvcc.currsnapshot()
-		snapshot.reclaims = append(snapshot.reclaims, reclaim...)
+		wsnap.reclaims = append(wsnap.reclaims, reclaim...)
 	}
 }
 
@@ -580,6 +610,7 @@ func (mvcc *MVCC) Destroy() {
 	for atomic.LoadInt64(&mvcc.n_routines) > 0 {
 		time.Sleep(mvcc.snaptick)
 	}
+
 	// n_snapshots should match (n_activess + n_purgedss)
 	n_snapshots := atomic.LoadInt64(&mvcc.n_snapshots)
 	n_purgedss := atomic.LoadInt64(&mvcc.n_purgedss)
@@ -601,19 +632,17 @@ func (mvcc *MVCC) destroy() bool {
 	}
 	defer mvcc.unlock()
 
-	snapshot := mvcc.currsnapshot()
-	if snapshot != nil {
-		if snapshot.getref() > 0 {
-			return false
-		} else if mvcc.purgesnapshot(snapshot) == false {
-			return false
-		}
+	snapshot := mvcc.acquiresnapshot(nil)
+	if snapshot.getref() > 0 {
+		return false
+	} else if mvcc.purgesnapshot(snapshot) == false {
+		return false
 	}
 	next := (*mvccsnapshot)(atomic.LoadPointer(&snapshot.next))
-	if next != nil || snapshot.getref() > 0 {
-		panic("impossible situation")
+	if next != nil {
+		panic("impossible case")
 	}
-	mvcc.setheadsnapshot(nil)
+	mvcc.releasesnapshot(snapshot, nil)
 	mvcc.nodearena.Release()
 	mvcc.valarena.Release()
 	mvcc.setts, mvcc.snapcache = nil, nil
@@ -676,7 +705,7 @@ func (mvcc *MVCC) set(
 		copy(oldvalue, val)
 	}
 
-	mvcc.appendreclaim(reclaim)
+	mvcc.appendreclaim(wsnap, reclaim)
 
 	return oldvalue, seqno
 }
@@ -891,7 +920,7 @@ func (mvcc *MVCC) dodelete(
 		mvcc.delcounts(deleted, lsm)
 	}
 
-	mvcc.appendreclaim(reclaim)
+	mvcc.appendreclaim(wsnap, reclaim)
 
 	return oldvalue, seqno
 }
@@ -1139,9 +1168,9 @@ func (mvcc *MVCC) abortview(view *View) {
 func (mvcc *MVCC) Get(
 	key, value []byte) (v []byte, cas uint64, deleted, ok bool) {
 
-	if snapshot := mvcc.writesnapshot(); snapshot != nil {
-		v, cas, deleted, ok = snapshot.get(key, value)
-		snapshot.release()
+	if wsnap := mvcc.writesnapshot(); wsnap != nil {
+		v, cas, deleted, ok = wsnap.get(key, value)
+		wsnap.release()
 	}
 	return
 }
@@ -1159,13 +1188,23 @@ func (mvcc *MVCC) getkey(nd *Llrbnode, k []byte) (*Llrbnode, bool) {
 	return nil, false
 }
 
+// Scan return a full table iterator, if iteration is stopped before
+// reaching end of table (io.EOF), application should call iterator
+// with fin as true. EG: iter(true)
 func (mvcc *MVCC) Scan() api.Iterator {
-	var ckey [1024]byte
-	currkey := ckey[:]
+	currkey := []byte(nil)
 	sb := makescanbuf()
 
+	var err error
 	leseqno := mvcc.startscan(nil, sb, 0)
 	return func(fin bool) ([]byte, []byte, uint64, bool, error) {
+		if err != nil {
+			return nil, nil, 0, false, err
+		} else if fin {
+			err, sb = io.EOF, nil
+			return nil, nil, 0, false, err
+		}
+
 		key, value, seqno, deleted := sb.pop()
 		if key == nil {
 			mvcc.startscan(currkey, sb, leseqno)
@@ -1174,7 +1213,8 @@ func (mvcc *MVCC) Scan() api.Iterator {
 		currkey = lib.Fixbuffer(currkey, int64(len(key)))
 		copy(currkey, key)
 		if key == nil {
-			return key, value, seqno, deleted, io.EOF
+			err, sb = io.EOF, nil
+			return nil, nil, 0, false, err
 		}
 		return key, value, seqno, deleted, nil
 	}
@@ -1351,15 +1391,21 @@ func (mvcc *MVCC) cloneifdirty(nd *Llrbnode) (*Llrbnode, bool) {
 
 //---- snapshot routines.
 
-func (mvcc *MVCC) makesnapshot() {
+func (mvcc *MVCC) makesnapshot(init bool) {
 	mvcc.lock()
 
+	var currsnap *mvccsnapshot
 	seqno := atomic.LoadUint64(&mvcc.seqno)
 	nextsnap := mvcc.getsnapshot(seqno)
-	n_snapshots := atomic.LoadInt64(&mvcc.n_snapshots)
-	currsnap := mvcc.currsnapshot()
-	nextsnap = nextsnap.initsnapshot(n_snapshots+1, mvcc, currsnap)
-	mvcc.setheadsnapshot(nextsnap)
+	n_snapshots := atomic.AddInt64(&mvcc.n_snapshots, 1)
+	if init {
+		currsnap = mvcc.acquiresnapshot(nextsnap)
+		nextsnap = nextsnap.initsnapshot(n_snapshots, mvcc, nil)
+	} else {
+		currsnap = mvcc.acquiresnapshot(nil)
+		nextsnap = nextsnap.initsnapshot(n_snapshots, mvcc, currsnap)
+	}
+	mvcc.releasesnapshot(currsnap, nextsnap)
 
 	mvcc.unlock()
 
@@ -1373,10 +1419,10 @@ func (mvcc *MVCC) makesnapshot() {
 		}
 	}
 	mvcc.tm_lastsnap = tm_newsnap
-	atomic.AddInt64(&mvcc.n_snapshots, 1)
 
-	wsnap := mvcc.currsnapshot()
+	wsnap := mvcc.acquiresnapshot(nil)
 	rsnap := (*mvccsnapshot)(atomic.LoadPointer(&wsnap.next))
+	mvcc.releasesnapshot(wsnap, wsnap)
 	if rsnap != nil {
 		next := (*mvccsnapshot)(atomic.LoadPointer(&rsnap.next))
 		if mvcc.purgesnapshot(next) {
@@ -1390,47 +1436,27 @@ func (mvcc *MVCC) makesnapshot() {
 }
 
 func (mvcc *MVCC) writesnapshot() *mvccsnapshot {
-loop:
 	for {
-		wsnap := mvcc.currsnapshot()
-		if wsnap == nil {
-			time.Sleep(mvcc.snaptick)
-			continue
-		}
-
+		wsnap := mvcc.acquiresnapshot(nil)
 		wsnap.refer()
-		snap := mvcc.currsnapshot()
-		snapid := atomic.LoadInt64(&snap.id)
-		wsnapid := atomic.LoadInt64(&wsnap.id)
-		if snapid != wsnapid {
-			wsnap.release()
-			continue loop
-		}
+		mvcc.releasesnapshot(wsnap, wsnap)
 		return wsnap
 	}
 	panic("unreachable code")
 }
 
 func (mvcc *MVCC) readsnapshot() *mvccsnapshot {
+loop:
 	for {
-		wsnap := mvcc.currsnapshot()
-		if wsnap == nil { // no snapshot available.
-			time.Sleep(mvcc.snaptick)
-			continue
-		}
+		wsnap := mvcc.acquiresnapshot(nil)
 		rsnap := (*mvccsnapshot)(atomic.LoadPointer(&wsnap.next))
 		if rsnap == nil {
+			mvcc.releasesnapshot(wsnap, wsnap)
 			time.Sleep(mvcc.snaptick)
-			continue
+			continue loop
 		}
 		rsnap.refer()
-		snap := mvcc.currsnapshot()
-		snapid := atomic.LoadInt64(&snap.id)
-		wsnapid := atomic.LoadInt64(&wsnap.id)
-		if snapid != wsnapid {
-			rsnap.release()
-			continue
-		}
+		mvcc.releasesnapshot(wsnap, wsnap)
 		return rsnap
 	}
 	panic("unreachable code")

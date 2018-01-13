@@ -20,6 +20,6 @@ loop:
 			break loop
 		default:
 		}
-		mvcc.makesnapshot()
+		mvcc.makesnapshot(false /*init*/)
 	}
 }

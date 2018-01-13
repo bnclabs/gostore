@@ -31,7 +31,10 @@ func (snap *mvccsnapshot) initsnapshot(
 
 	snap.mvcc, snap.root = mvcc, nil
 	atomic.StorePointer(&snap.next, unsafe.Pointer(head))
-	snap.refcount, snap.n_count = 0, 0
+	// IMPORTANT: don't update refcount and n_count atomically here.
+	// it can catch bugs in purging and re-cycling snapshots.
+	snap.refcount = 0
+	snap.n_count = 0
 	if head != nil {
 		snap.root = atomic.LoadPointer(&head.root)
 		snap.n_count = mvcc.Count()

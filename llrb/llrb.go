@@ -633,13 +633,23 @@ func (llrb *LLRB) getkey(nd *Llrbnode, k []byte) (*Llrbnode, bool) {
 	return nil, false
 }
 
-// Scan return a full table iterator.
+// Scan return a full table iterator, if iteration is stopped before
+// reaching end of table (io.EOF), application should call iterator
+// with fin as true. EG: iter(true)
 func (llrb *LLRB) Scan() api.Iterator {
 	currkey := []byte(nil)
 	sb := makescanbuf()
 
+	var err error
 	leseqno := llrb.startscan(nil, sb, 0)
 	return func(fin bool) ([]byte, []byte, uint64, bool, error) {
+		if err != nil {
+			return nil, nil, 0, false, err
+		} else if fin {
+			err, sb = io.EOF, nil
+			return nil, nil, 0, false, err
+		}
+
 		key, value, seqno, deleted := sb.pop()
 		if key == nil {
 			llrb.startscan(currkey, sb, leseqno)
@@ -648,7 +658,8 @@ func (llrb *LLRB) Scan() api.Iterator {
 		currkey = lib.Fixbuffer(currkey, int64(len(key)))
 		copy(currkey, key)
 		if key == nil {
-			return nil, nil, 0, false, io.EOF
+			err, sb = io.EOF, nil
+			return nil, nil, 0, false, err
 		}
 		return key, value, seqno, deleted, nil
 	}

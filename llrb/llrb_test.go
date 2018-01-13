@@ -189,7 +189,9 @@ func TestLoadLLRB(t *testing.T) {
 	}
 	llrb1.Delete([]byte("key2"), nil, true /*lsm*/)
 
-	llrb2 := LoadLLRB("warmup", Defaultsettings(), llrb1.Scan())
+	iter1 := llrb1.Scan()
+	llrb2 := LoadLLRB("warmup", Defaultsettings(), iter1)
+	iter1(true /*fin*/)
 	defer llrb2.Destroy()
 	llrb2.Setseqno(llrb1.Getseqno())
 
@@ -212,6 +214,8 @@ func TestLoadLLRB(t *testing.T) {
 		key1, val1, seqno1, del1, err1 = iter1(false /*close*/)
 		key2, val2, seqno2, del2, err2 = iter2(false /*close*/)
 	}
+	iter1(true /*fin*/)
+	iter2(true /*fin*/)
 
 	llrb1.Validate()
 	llrb2.Validate()
@@ -1099,8 +1103,8 @@ func TestLLRBViewCursor(t *testing.T) {
 func TestLLRBScan(t *testing.T) {
 	load := func(n int, llrb *LLRB) {
 		for i := 0; i < n; i++ {
-			k := []byte(fmt.Sprintf("key%v", i))
-			v := []byte(fmt.Sprintf("val%v", i))
+			k := []byte(fmt.Sprintf("key%08v", i))
+			v := []byte(fmt.Sprintf("val%08v", i))
 			llrb.Set(k, v, nil)
 			llrb.Validate()
 		}
@@ -1117,14 +1121,13 @@ func TestLLRBScan(t *testing.T) {
 		refkey, refval, refseqno, refdeleted, referr := cur.YNext(false /*fin*/)
 		key, val, seqno, deleted, err := iter(false /*close*/)
 		for referr == nil && referr == nil {
-			count++
-			orgkey := []byte(fmt.Sprintf("key%v", count))
-			orgval := []byte(fmt.Sprintf("val%v", count))
+			orgkey := []byte(fmt.Sprintf("key%08v", count))
+			orgval := []byte(fmt.Sprintf("val%08v", count))
 			if bytes.Compare(orgkey, key) != 0 {
 				t.Errorf("expected %q, got %q", orgkey, key)
 			} else if bytes.Compare(orgval, val) != 0 {
 				t.Errorf("for %q, expected %q, got %q", key, orgval, val)
-			} else if uint64(count) != seqno {
+			} else if uint64(count+1) != seqno {
 				t.Errorf("for %q, expected %v, got %v", key, count, seqno)
 			}
 
@@ -1140,19 +1143,20 @@ func TestLLRBScan(t *testing.T) {
 			}
 			refkey, refval, refseqno, refdeleted, referr = cur.YNext(false /*fin*/)
 			key, val, seqno, deleted, err = iter(false /*close*/)
+			count++
 		}
 		if err != io.EOF || referr != io.EOF {
 			t.Errorf("expected nil %v, %v", referr, err)
 		}
+		iter(true /*fin*/)
 	}
 
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < 1000; i++ {
 		llrb := NewLLRB("scan", Defaultsettings())
 		load(i, llrb)
 		compare(i, llrb)
 		llrb.Destroy()
 	}
-
 }
 
 func BenchmarkLLRBCount(b *testing.B) {
@@ -1320,6 +1324,7 @@ func BenchmarkLLRBScan(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		scan(false /*close*/)
 	}
+	scan(true /*fin*/)
 }
 
 func makeBenchLLRB(n int) *LLRB {
