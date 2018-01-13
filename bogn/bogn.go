@@ -272,6 +272,7 @@ func (bogn *Bogn) llrbfromdisk(
 	llrbsetts := bogn.setts.Section("llrb.").Trim("llrb.")
 	mw := llrb.LoadLLRB(name, llrbsetts, iter)
 	mw.Setseqno(seqno)
+	iter(true /*fin*/)
 
 	fmsg := "%v warmup LLRB %v (%v) %v entries -> %v in %v"
 	arg1 := humanize.Bytes(uint64(footprint))
@@ -293,6 +294,7 @@ func (bogn *Bogn) mvccfromdisk(
 	llrbsetts := bogn.setts.Section("llrb.").Trim("llrb.")
 	mw := llrb.LoadMVCC(name, llrbsetts, iter)
 	mw.Setseqno(seqno)
+	iter(true /*fin*/)
 
 	fmsg := "%v warmup MVCC %v (%v) %v entries -> %v in %v"
 	arg1 := humanize.Bytes(uint64(footprint))
@@ -679,6 +681,7 @@ func (bogn *Bogn) validatedisklevel(
 
 		key, val, seqno, _, err = iter(false /*fin*/)
 	}
+	iter(true /*fin*/)
 	if count != idxcount {
 		panic(fmt.Errorf("expected %v entries, found %v", idxcount, count))
 	}
@@ -745,25 +748,35 @@ func (bogn *Bogn) Get(
 	return
 }
 
-// Scan return a full table iterator.
+// Scan return a full table iterator, if iteration is stopped before
+// reaching end of table (io.EOF), application should call iterator
+// with fin as true. EG: iter(true)
 func (bogn *Bogn) Scan() api.Iterator {
+	var key, value []byte
+	var seqno uint64
+	var del bool
 	var err error
+
 	snap := bogn.latestsnapshot()
 	iter := snap.iterator()
-	return func(fin bool) (key, val []byte, seqno uint64, del bool, e error) {
-		if err == io.EOF || iter == nil {
-			return nil, nil, 0, false, io.EOF
+	return func(fin bool) ([]byte, []byte, uint64, bool, error) {
+		if err == io.EOF {
+			return nil, nil, 0, false, err
 
-		} else if fin == false {
-			key, val, seqno, del, e = iter(fin)
-			if err = e; err == io.EOF {
-				snap.release()
-			}
-			return
+		} else if iter == nil {
+			err = io.EOF
+			return nil, nil, 0, false, err
+
+		} else if fin {
+			iter(fin) // close all underlying iterations.
+			err = io.EOF
+			snap.release()
+			return nil, nil, 0, false, err
 		}
-		err = io.EOF
-		snap.release()
-		return
+		if key, value, seqno, del, err = iter(fin); err == io.EOF {
+			snap.release()
+		}
+		return key, value, seqno, del, err
 	}
 }
 
@@ -1052,6 +1065,7 @@ func (bogn *Bogn) mergedisksnapshots(disks []api.Index) error {
 			panic(err)
 		}
 		ndisk.Close()
+		iter(true /*fin*/)
 	}
 
 	for _, disk := range disks[:] {

@@ -44,7 +44,7 @@ func purgesnapshot(snap *snapshot) bool {
 	next := (*snapshot)(atomic.LoadPointer(&snap.next))
 	if purgesnapshot(next) {
 		atomic.StorePointer(&snap.next, nil)
-		snap.setpurge()
+		snap.trypurge()
 		if snap.getref() == 0 {
 			// all older snapshots are purged,
 			// and this snapshot is not referred by anyone.

@@ -133,9 +133,12 @@ func (cur *Cursor) YNext(
 	fin bool) (key, value []byte, cas uint64, deleted bool, err error) {
 
 	key, value, cur.cas, cur.deleted, err = cur.iter(false /*fin*/)
+
 	cur.key = lib.Fixbuffer(cur.key, int64(len(key)))
 	copy(cur.key, key)
+
 	cur.value = lib.Fixbuffer(cur.value, int64(len(value)))
 	copy(cur.value, value)
+
 	return cur.key, cur.value, cur.cas, cur.deleted, err
 }

@@ -168,11 +168,13 @@ func (snap *snapshot) latestyget() (get api.Getter) {
 		gets = append(gets, snap.mc.Get)
 	}
 
-	for _, disk := range snap.disklevels([]api.Index{}) {
-		if snap.mc != nil {
-			gets = append(gets, snap.cachedget(disk.Get))
-		} else {
-			gets = append(gets, disk.Get)
+	if atomic.LoadInt64(&snap.bogn.dgmstate) == 1 {
+		for _, disk := range snap.disklevels([]api.Index{}) {
+			if snap.mc != nil {
+				gets = append(gets, snap.cachedget(disk.Get))
+			} else {
+				gets = append(gets, disk.Get)
+			}
 		}
 	}
 
@@ -201,11 +203,13 @@ func (snap *snapshot) txnyget(
 		gets = append(gets, snap.mc.Get)
 	}
 
-	for _, disk := range snap.disklevels(disks[:0]) {
-		if snap.mc != nil {
-			gets = append(gets, snap.cachedget(disk.Get))
-		} else {
-			gets = append(gets, disk.Get)
+	if atomic.LoadInt64(&snap.bogn.dgmstate) == 1 {
+		for _, disk := range snap.disklevels(disks[:0]) {
+			if snap.mc != nil {
+				gets = append(gets, snap.cachedget(disk.Get))
+			} else {
+				gets = append(gets, disk.Get)
+			}
 		}
 	}
 
@@ -375,7 +379,7 @@ func (snap *snapshot) release() int64 {
 	return refcount
 }
 
-func (snap *snapshot) setpurge() {
+func (snap *snapshot) trypurge() {
 	atomic.StoreInt64(&snap.purgetry, 1)
 }
 

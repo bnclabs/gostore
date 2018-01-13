@@ -1,5 +1,7 @@
 package bogn
 
+import "sync/atomic"
+
 import "github.com/prataprc/gostore/api"
 
 // Txn transaction definition. Transaction gives a gaurantee of isolation and
@@ -46,8 +48,10 @@ func (txn *Txn) inittxn() *Txn {
 	if snap.mc != nil {
 		txn.mcview = snap.mc.View(id)
 	}
-	for _, disk := range snap.disklevels(disks[:0]) {
-		txn.dviews = append(txn.dviews, disk.View(id))
+	if atomic.LoadInt64(&txn.bogn.dgmstate) == 1 {
+		for _, disk := range snap.disklevels(disks[:0]) {
+			txn.dviews = append(txn.dviews, disk.View(id))
+		}
 	}
 	txn.yget = snap.txnyget(txn.mwtxn, txn.gets)
 	return txn
@@ -63,10 +67,6 @@ func (txn *Txn) ID() uint64 {
 // OpenCursor open an active cursor inside the index.
 func (txn *Txn) OpenCursor(key []byte) (api.Cursor, error) {
 	cur, err := txn.getcursor().opencursor(txn, nil, key)
-	if err != nil {
-		txn.putcursor(cur)
-		return nil, err
-	}
 	return cur, err
 }
 
@@ -147,7 +147,11 @@ func (txn *Txn) getcursor() (cur *Cursor) {
 }
 
 func (txn *Txn) putcursor(cur *Cursor) {
-	cur.deleted, cur.iter, cur.iters = false, nil, cur.iters[:0]
+	cur.txn, cur.view = nil, nil
+	cur.key, cur.value, cur.cas = cur.key[:0], cur.value[:0], 0
+	cur.deleted = false
+	cur.iter, cur.iters = nil, cur.iters[:0]
+
 	select {
 	case txn.curchan <- cur:
 	default: // leave it for GC

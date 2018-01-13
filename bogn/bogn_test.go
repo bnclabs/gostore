@@ -61,6 +61,9 @@ func TestReload(t *testing.T) {
 	if err1 != io.EOF || err2 != io.EOF {
 		t.Errorf("unexpected %v %v", err1, err2)
 	}
+	iter(true /*fin*/)
+	miter(true /*fin*/)
+
 	t.Logf("iteration successful")
 
 	index.Close()
@@ -94,6 +97,8 @@ func TestReload(t *testing.T) {
 	if err1 != io.EOF || err2 != io.EOF {
 		t.Errorf("unexpected %v %v", err1, err2)
 	}
+	miter(true /*fin*/)
+	iter(true /*fin*/)
 
 	index.Close()
 	index.Destroy()
@@ -153,6 +158,9 @@ func TestReloadDurable(t *testing.T) {
 	if err1 != io.EOF || err2 != io.EOF {
 		t.Errorf("unexpected %v %v", err1, err2)
 	}
+	miter(true /*fin*/)
+	iter(true /*fin*/)
+
 	t.Logf("iteration successful")
 
 	index.Close()
@@ -186,6 +194,8 @@ func TestReloadDurable(t *testing.T) {
 	if err1 != io.EOF || err2 != io.EOF {
 		t.Errorf("unexpected %v %v", err1, err2)
 	}
+	miter(true /*fin*/)
+	iter(true /*fin*/)
 
 	index.Close()
 
@@ -221,6 +231,8 @@ func TestReloadDurable(t *testing.T) {
 	if err1 != io.EOF || err2 != io.EOF {
 		t.Errorf("unexpected %v %v", err1, err2)
 	}
+	miter(true /*fin*/)
+	iter(true /*fin*/)
 
 	index.Close()
 	index.Destroy()

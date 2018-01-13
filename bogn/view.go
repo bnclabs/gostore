@@ -1,5 +1,7 @@
 package bogn
 
+import "sync/atomic"
+
 import "github.com/prataprc/gostore/api"
 
 // View transaction definition. Read only version of Txn.
@@ -40,8 +42,10 @@ func (view *View) initview() *View {
 	if snap.mc != nil {
 		view.mcview = snap.mc.View(id)
 	}
-	for _, disk := range snap.disklevels(disks[:0]) {
-		view.dviews = append(view.dviews, disk.View(id))
+	if atomic.LoadInt64(&view.bogn.dgmstate) == 1 {
+		for _, disk := range snap.disklevels(disks[:0]) {
+			view.dviews = append(view.dviews, disk.View(id))
+		}
 	}
 	view.yget = snap.txnyget(view.mwview, view.gets)
 	return view
