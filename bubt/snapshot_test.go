@@ -34,6 +34,7 @@ func BenchmarkSnapScan(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		iter(false /*fin*/)
 	}
+	iter(true /*fin*/)
 }
 
 func BenchmarkSnapView(b *testing.B) {
@@ -142,9 +143,11 @@ func makeBubt(n int) (*Snapshot, [][]byte) {
 	if err != nil {
 		panic(err)
 	}
-	if err := bubt.Build(mi.Scan(), []byte("this is metadata")); err != nil {
+	miter := mi.Scan()
+	if err := bubt.Build(miter, []byte("this is metadata")); err != nil {
 		panic(err)
 	}
+	miter(true /*fin*/)
 	bubt.Close()
 
 	snap, err := OpenSnapshot(name, paths, true /*mmap*/)

@@ -308,6 +308,7 @@ func (snap *Snapshot) Validate() {
 		}
 		count, prevkey = count+1, key
 	}
+	iter(true /*fin*/)
 
 	if count != snap.n_count {
 		panic(fmt.Errorf("expected %v entries, found %v", snap.n_count, count))
@@ -453,44 +454,53 @@ func (snap *Snapshot) BeginTxn(id uint64) api.Transactor {
 // View start a read only transaction. Any number of views can be created
 // on this snapshot provided they are not concurrently accessed.
 func (snap *Snapshot) View(id uint64) api.Transactor {
-	var view *View
-
-	select {
-	case view = <-snap.viewcache:
-	default:
-		view = &View{}
-	}
-	if view.cursors == nil {
-		view.cursors = make([]*Cursor, 8)
-	}
-	view.id, view.snap, view.cursors = id, snap, view.cursors[:0]
-	return view
+	return snap.getview(id)
 }
 
 func (snap *Snapshot) abortview(view *View) error {
-	select {
-	case snap.viewcache <- view:
-	default: // Leave it for GC.
-	}
+	snap.putview(view)
 	return nil
 }
 
-// Scan return a full table iterator.
+// Scan return a full table iterator, if iteration is stopped before
+// reaching end of table (io.EOF), application should call iterator
+// with fin as true. EG: iter(true)
 func (snap *Snapshot) Scan() api.Iterator {
-	view := &View{cursors: make([]*Cursor, 8)}
-	view.id, view.snap = 0xC0FFEE, snap
+	view := snap.getview(0xC0FFEE)
 	cur, err := view.OpenCursor(nil)
 	if err != nil {
+		view.Abort()
 		fmsg := "%v view(%v).OpenCursor(nil): %v"
 		log.Errorf(fmsg, snap.logprefix, view.id, err)
 		return nil
 
 	} else if cur == nil {
+		view.Abort()
 		fmsg := "%v view(%v).OpenCursor(nil) cursor is nil"
 		log.Errorf(fmsg, snap.logprefix, view.id)
 		return nil
 	}
-	return cur.YNext
+
+	var key, value []byte
+	var seqno uint64
+	var deleted bool
+	err = nil
+	return func(fin bool) ([]byte, []byte, uint64, bool, error) {
+		if err != nil {
+			return nil, nil, 0, false, err
+
+		} else if fin {
+			_, _, _, _, err = cur.YNext(fin) // should return io.EOF
+			view.Abort()
+			return nil, nil, 0, false, err
+		}
+		key, value, seqno, deleted, err = cur.YNext(fin)
+		if err != nil {
+			view.Abort()
+			return nil, nil, 0, false, err
+		}
+		return key, value, seqno, deleted, err
+	}
 }
 
 //---- Exported Write methods
@@ -530,5 +540,26 @@ func (snap *Snapshot) putreadbuffer(buf *buffers) {
 	select {
 	case snap.readbuffers <- buf:
 	default: // Leave it for GC.
+	}
+}
+
+func (snap *Snapshot) getview(id uint64) (view *View) {
+	select {
+	case view = <-snap.viewcache:
+	default:
+		view = &View{cursors: make([]*Cursor, 8)}
+	}
+	view.id, view.snap, view.cursors = id, snap, view.cursors[:0]
+	return view
+}
+
+func (snap *Snapshot) putview(view *View) {
+	for _, cur := range view.cursors {
+		view.putcursor(cur)
+	}
+	view.cursors = view.cursors[:0]
+	select {
+	case snap.viewcache <- view:
+	default: // Left for GC
 	}
 }

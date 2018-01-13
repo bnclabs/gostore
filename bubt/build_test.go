@@ -112,9 +112,11 @@ func TestSnapshotGet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := bubt.Build(mi.Scan(), []byte("this is metadata")); err != nil {
+	miter := mi.Scan()
+	if err := bubt.Build(miter, []byte("this is metadata")); err != nil {
 		t.Fatal(err)
 	}
+	miter(true /*fin*/)
 	bubt.Close()
 
 	snap, err := OpenSnapshot(name, paths, mmap)
@@ -132,7 +134,7 @@ func TestSnapshotGet(t *testing.T) {
 	} else if snap.ID() != name {
 		t.Errorf("expected %v, got %v", name, snap.ID())
 	}
-	miter := mi.Scan()
+	miter = mi.Scan()
 	for key, value, seqno, deleted, err := miter(false /*fin*/); err == nil; {
 		v, s, d, ok := snap.Get(key, []byte{})
 		if d != deleted {
@@ -146,6 +148,7 @@ func TestSnapshotGet(t *testing.T) {
 		}
 		key, value, seqno, deleted, err = miter(false /*fin*/)
 	}
+	miter(true /*fin*/)
 }
 
 func TestSnapshotScan1(t *testing.T) {
@@ -162,9 +165,11 @@ func TestSnapshotScan1(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := bubt.Build(mi.Scan(), []byte("this is metadata")); err != nil {
+	miter := mi.Scan()
+	if err := bubt.Build(miter, []byte("this is metadata")); err != nil {
 		t.Fatal(err)
 	}
+	miter(true /*fin*/)
 	bubt.Close()
 
 	snap, err := OpenSnapshot(name, paths, mmap)
@@ -204,6 +209,8 @@ func TestSnapshotScan1(t *testing.T) {
 	} else if err != io.EOF {
 		t.Errorf("unexpected %v", err)
 	}
+	miter(true /*fin*/)
+	diter(true /*fin*/)
 }
 
 func TestSnapshotScan2(t *testing.T) {
@@ -220,9 +227,11 @@ func TestSnapshotScan2(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := bubt.Build(mi.Scan(), []byte("this is metadata")); err != nil {
+	miter := mi.Scan()
+	if err := bubt.Build(miter, []byte("this is metadata")); err != nil {
 		t.Fatal(err)
 	}
+	miter(true /*fin*/)
 	bubt.Close()
 
 	snap, err := OpenSnapshot(name, paths, mmap)
@@ -257,6 +266,8 @@ func TestSnapshotScan2(t *testing.T) {
 	} else if err != io.EOF {
 		t.Errorf("unexpected %v", err)
 	}
+	miter(true /*fin*/)
+	diter(true /*fin*/)
 }
 
 func TestSnapshotScan3(t *testing.T) {
@@ -272,9 +283,11 @@ func TestSnapshotScan3(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := bubt.Build(mi.Scan(), []byte("this is metadata")); err != nil {
+	miter := mi.Scan()
+	if err := bubt.Build(miter, []byte("this is metadata")); err != nil {
 		t.Fatal(err)
 	}
+	miter(true /*fin*/)
 	bubt.Close()
 
 	snap, err := OpenSnapshot(name, paths, mmap)
@@ -309,6 +322,8 @@ func TestSnapshotScan3(t *testing.T) {
 	} else if err != io.EOF {
 		t.Errorf("unexpected %v", err)
 	}
+	miter(true /*fin*/)
+	diter(true /*fin*/)
 }
 
 func TestView(t *testing.T) {
@@ -325,9 +340,11 @@ func TestView(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := bubt.Build(mi.Scan(), []byte("this is metadata")); err != nil {
+	miter := mi.Scan()
+	if err := bubt.Build(miter, []byte("this is metadata")); err != nil {
 		t.Fatal(err)
 	}
+	miter(true /*fin*/)
 	bubt.Close()
 
 	snap, err := OpenSnapshot(name, paths, mmap)
@@ -342,7 +359,7 @@ func TestView(t *testing.T) {
 	if view.ID() != id {
 		t.Errorf("expected %v, got %v", id, view.ID())
 	}
-	miter := mi.Scan()
+	miter = mi.Scan()
 	for key, value, cas, deleted, err := miter(false /*fin*/); err == nil; {
 		v, c, d, ok := view.Get(key, []byte{})
 		if d != deleted {
@@ -356,6 +373,7 @@ func TestView(t *testing.T) {
 		}
 		key, value, cas, deleted, err = miter(false /*fin*/)
 	}
+	miter(true /*fin*/)
 }
 
 func TestCursorGetNext(t *testing.T) {
@@ -372,9 +390,11 @@ func TestCursorGetNext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := bubt.Build(mi.Scan(), []byte("this is metadata")); err != nil {
+	miter := mi.Scan()
+	if err := bubt.Build(miter, []byte("this is metadata")); err != nil {
 		t.Fatal(err)
 	}
+	miter(false /*fin*/)
 	bubt.Close()
 
 	snap, err := OpenSnapshot(name, paths, mmap)
@@ -385,7 +405,7 @@ func TestCursorGetNext(t *testing.T) {
 	defer snap.Close()
 
 	id := uint64(0x12345699)
-	miter := mi.Scan()
+	miter = mi.Scan()
 	for key, _, _, _, err := miter(false /*fin*/); err == nil; {
 		dview, mview := snap.View(id), mi.View(id)
 		mcur, _ := mview.OpenCursor(key)
@@ -424,6 +444,7 @@ func TestCursorGetNext(t *testing.T) {
 		dview.Abort()
 		key, _, _, _, err = miter(false /*fin*/)
 	}
+	miter(true /*fin*/)
 
 	// corner cases, open cursor after the end of the index.
 	dview := snap.View(id)
@@ -466,9 +487,11 @@ func TestCursorYNext1(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := bubt.Build(mi.Scan(), []byte("this is metadata")); err != nil {
+	miter := mi.Scan()
+	if err := bubt.Build(miter, []byte("this is metadata")); err != nil {
 		t.Fatal(err)
 	}
+	miter(true /*fin*/)
 	bubt.Close()
 
 	snap, err := OpenSnapshot(name, paths, mmap)
@@ -479,7 +502,7 @@ func TestCursorYNext1(t *testing.T) {
 	defer snap.Close()
 
 	id := uint64(0x12345699)
-	miter := mi.Scan()
+	miter = mi.Scan()
 	for key, _, _, _, err := miter(false /*fin*/); err == nil; {
 		dview, mview := snap.View(id), mi.View(id)
 		mcur, _ := mview.OpenCursor(key)
@@ -509,6 +532,7 @@ func TestCursorYNext1(t *testing.T) {
 		dview.Abort()
 		key, _, _, _, err = miter(false /*fin*/)
 	}
+	miter(true /*fin*/)
 }
 
 func TestCursorYNext2(t *testing.T) {
@@ -524,9 +548,11 @@ func TestCursorYNext2(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := bubt.Build(mi.Scan(), []byte("this is metadata")); err != nil {
+	miter := mi.Scan()
+	if err := bubt.Build(miter, []byte("this is metadata")); err != nil {
 		t.Fatal(err)
 	}
+	miter(true /*fin*/)
 	bubt.Close()
 
 	snap, err := OpenSnapshot(name, paths, mmap)
@@ -584,9 +610,11 @@ func TestOddEvenGet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := bubt.Build(mi.Scan(), []byte("this is metadata")); err != nil {
+	miter := mi.Scan()
+	if err := bubt.Build(miter, []byte("this is metadata")); err != nil {
 		t.Fatal(err)
 	}
+	miter(true /*fin*/)
 	bubt.Close()
 
 	snap, err := OpenSnapshot(name, paths, mmap)

@@ -127,6 +127,7 @@ func (cur *Cursor) getnext() ([]byte, []byte, uint64, bool, error) {
 func (cur *Cursor) YNext(fin bool) (key,
 	value []byte, seqno uint64, deleted bool, err error) {
 
+	cur.finished = fin
 	if cur.ynext == false {
 		z := zsnap(cur.buf.zblock)
 		cur.ynext = true

@@ -20,12 +20,7 @@ func (view *View) ID() uint64 {
 func (view *View) OpenCursor(key []byte) (api.Cursor, error) {
 	buf := view.snap.getreadbuffer()
 	cur, err := view.getcursor().opencursor(view.snap, key, buf)
-	if err != nil {
-		view.snap.putreadbuffer(buf)
-		view.putcursor(cur)
-		return nil, err
-	}
-	return cur, nil
+	return cur, err
 }
 
 // Set not allowed.
@@ -45,9 +40,6 @@ func (view *View) Commit() error {
 
 // Abort view, must be called once done with the view.
 func (view *View) Abort() {
-	for _, cur := range view.cursors {
-		view.putcursor(cur)
-	}
 	view.snap.abortview(view)
 }
 
