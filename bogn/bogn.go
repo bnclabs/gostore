@@ -799,10 +799,27 @@ func (bogn *Bogn) Set(key, value, oldvalue []byte) (ov []byte, cas uint64) {
 func (bogn *Bogn) SetCAS(
 	key, value, oldvalue []byte, cas uint64) ([]byte, uint64, error) {
 
+	var ov []byte
+	var rccas uint64
+	var err error
+
 	bogn.snaprlock()
-	ov, cas, err := bogn.currsnapshot().setCAS(key, value, oldvalue, cas)
+	if atomic.LoadInt64(&bogn.dgmstate) == 0 {
+		ov, rccas, err = bogn.currsnapshot().setCAS(key, value, oldvalue, cas)
+
+	} else {
+		txn := bogn.BeginTxn(0xABBA)
+		_, gcas, deleted, ok := txn.Get(key, nil)
+		ok1 := (ok && deleted == false) && gcas != cas
+		ok2 := (ok == false || deleted) && cas != 0
+		if ok1 || ok2 {
+			return oldvalue, 0, api.ErrorInvalidCAS
+		}
+		ov = txn.Set(key, value, oldvalue)
+		err = txn.Commit()
+	}
 	bogn.snaprunlock()
-	return ov, cas, err
+	return ov, rccas, err
 }
 
 // Delete key from index. Key should not be nil, if key found return its

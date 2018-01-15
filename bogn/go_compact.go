@@ -199,8 +199,8 @@ func doflush(bogn *Bogn, disk0 api.Index) (err error) {
 		bogn.setheadsnapshot(head)
 		snap.release()
 
-		fmsg := "%v new snapshot (%v) %v compact flush ..."
-		log.Debugf(fmsg, snap.bogn.logprefix, head.id, head.attributes())
+		fmsg := "%v new snapshot %v compact flush (%v) ..."
+		log.Infof(fmsg, snap.bogn.logprefix, head.attributes(), head.id)
 	}()
 
 	// flush mr [+ mc] [+ disk] -> disk
