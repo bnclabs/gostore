@@ -4,7 +4,7 @@ import "os"
 import "fmt"
 import "path/filepath"
 
-import "github.com/prataprc/golog"
+import "github.com/bnclabs/golog"
 
 type bubtflusher struct {
 	idx    int64

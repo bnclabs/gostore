@@ -5,7 +5,7 @@ import "testing"
 
 import "github.com/prataprc/gostore/llrb"
 import "github.com/prataprc/gostore/bubt"
-import s "github.com/prataprc/gosettings"
+import s "github.com/bnclabs/gosettings"
 
 func TestYSort(t *testing.T) {
 	setts := s.Settings{"memcapacity": 1024 * 1024 * 1024}

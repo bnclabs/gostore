@@ -3,7 +3,7 @@ package malloc
 import "fmt"
 import "net/http"
 
-import "github.com/prataprc/golog"
+import "github.com/bnclabs/golog"
 import _ "net/http/pprof"
 
 var _ = fmt.Sprintf("dummy")

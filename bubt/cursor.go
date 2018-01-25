@@ -3,7 +3,7 @@ package bubt
 import "io"
 import "fmt"
 
-import "github.com/prataprc/golog"
+import "github.com/bnclabs/golog"
 
 var _ = fmt.Sprintf("")
 

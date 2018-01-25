@@ -6,8 +6,8 @@ import "strings"
 import "net/http"
 import "path/filepath"
 
-import "github.com/prataprc/golog"
-import s "github.com/prataprc/gosettings"
+import "github.com/bnclabs/golog"
+import s "github.com/bnclabs/gosettings"
 import _ "net/http/pprof"
 
 var _ = fmt.Sprintf("dummy")

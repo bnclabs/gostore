@@ -16,8 +16,8 @@ import "encoding/binary"
 import "github.com/prataprc/gostore/api"
 import "github.com/prataprc/gostore/lib"
 import "github.com/prataprc/gostore/flock"
-import "github.com/prataprc/golog"
-import s "github.com/prataprc/gosettings"
+import "github.com/bnclabs/golog"
+import s "github.com/bnclabs/gosettings"
 
 // Snapshot to read index entries persisted using Bubt builder. Since
 // no writes are allowed on the btree, any number of snapshots can be

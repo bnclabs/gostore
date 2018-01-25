@@ -1,6 +1,6 @@
 package bogn
 
-import s "github.com/prataprc/gosettings"
+import s "github.com/bnclabs/gosettings"
 import "github.com/prataprc/gostore/llrb"
 
 // Defaultsettings for bogn instances. Applications can get the default

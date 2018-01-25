@@ -4,7 +4,7 @@ import "time"
 import "sync/atomic"
 import "runtime/debug"
 
-import "github.com/prataprc/golog"
+import "github.com/bnclabs/golog"
 import "github.com/prataprc/gostore/lib"
 
 func purger(bogn *Bogn) {

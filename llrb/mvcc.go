@@ -14,8 +14,8 @@ import "sync/atomic"
 import "github.com/prataprc/gostore/lib"
 import "github.com/prataprc/gostore/api"
 import "github.com/prataprc/gostore/malloc"
-import "github.com/prataprc/golog"
-import s "github.com/prataprc/gosettings"
+import "github.com/bnclabs/golog"
+import s "github.com/bnclabs/gosettings"
 import humanize "github.com/dustin/go-humanize"
 
 // MVCC manages a single instance of LLRB tree in MVCC mode.

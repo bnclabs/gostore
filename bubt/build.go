@@ -8,8 +8,8 @@ import "path/filepath"
 import "encoding/binary"
 
 import "github.com/prataprc/gostore/api"
-import "github.com/prataprc/golog"
-import s "github.com/prataprc/gosettings"
+import "github.com/bnclabs/golog"
+import s "github.com/bnclabs/gosettings"
 
 // MarkerBlocksize to close snapshot file.
 const MarkerBlocksize = 4096

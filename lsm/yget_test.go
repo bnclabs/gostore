@@ -9,7 +9,7 @@ import "path/filepath"
 
 import "github.com/prataprc/gostore/llrb"
 import "github.com/prataprc/gostore/bubt"
-import s "github.com/prataprc/gosettings"
+import s "github.com/bnclabs/gosettings"
 
 func TestYGet(t *testing.T) {
 	//SetYGetpool(10)

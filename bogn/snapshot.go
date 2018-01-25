@@ -10,7 +10,7 @@ import "github.com/prataprc/gostore/api"
 import "github.com/prataprc/gostore/lib"
 import "github.com/prataprc/gostore/lsm"
 import "github.com/prataprc/gostore/llrb"
-import "github.com/prataprc/golog"
+import "github.com/bnclabs/golog"
 
 type snapshot struct {
 	refcount int64

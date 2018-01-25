@@ -10,7 +10,7 @@ import "math/rand"
 import "path/filepath"
 
 import "github.com/prataprc/gostore/llrb"
-import s "github.com/prataprc/gosettings"
+import s "github.com/bnclabs/gosettings"
 
 func TestDestroy(t *testing.T) {
 	paths := makepaths3()

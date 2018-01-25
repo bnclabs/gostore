@@ -12,8 +12,8 @@ import "sync/atomic"
 import "github.com/prataprc/gostore/lib"
 import "github.com/prataprc/gostore/api"
 import "github.com/prataprc/gostore/malloc"
-import "github.com/prataprc/golog"
-import s "github.com/prataprc/gosettings"
+import "github.com/bnclabs/golog"
+import s "github.com/bnclabs/gosettings"
 import humanize "github.com/dustin/go-humanize"
 
 // LLRB to manage a single instance of in-memory sorted index using
