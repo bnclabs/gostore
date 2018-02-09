@@ -13,9 +13,9 @@ import "path/filepath"
 import "encoding/json"
 import "encoding/binary"
 
-import "github.com/prataprc/gostore/api"
-import "github.com/prataprc/gostore/lib"
-import "github.com/prataprc/gostore/flock"
+import "github.com/bnclabs/gostore/api"
+import "github.com/bnclabs/gostore/lib"
+import "github.com/bnclabs/gostore/flock"
 import "github.com/bnclabs/golog"
 import s "github.com/bnclabs/gosettings"
 

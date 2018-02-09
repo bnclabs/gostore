@@ -2,7 +2,7 @@ package bubt
 
 import "encoding/binary"
 
-import "github.com/prataprc/gostore/lib"
+import "github.com/bnclabs/gostore/lib"
 
 type mblock struct {
 	blocksize int64

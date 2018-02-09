@@ -9,7 +9,7 @@ import "reflect"
 import "sort"
 import "fmt"
 
-import "github.com/prataprc/gostore/api"
+import "github.com/bnclabs/gostore/api"
 
 var _ = fmt.Sprintf("dummy")
 

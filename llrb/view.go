@@ -1,6 +1,6 @@
 package llrb
 
-import "github.com/prataprc/gostore/api"
+import "github.com/bnclabs/gostore/api"
 
 // View transaction definition. Read only version of Txn.
 type View struct {

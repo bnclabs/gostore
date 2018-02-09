@@ -3,8 +3,8 @@ package llrb
 import "bytes"
 import "hash/crc32"
 
-import "github.com/prataprc/gostore/lib"
-import "github.com/prataprc/gostore/api"
+import "github.com/bnclabs/gostore/lib"
+import "github.com/bnclabs/gostore/api"
 
 // Txn transaction definition. Transaction gives a gaurantee of isolation and
 // atomicity on the latest snapshot.

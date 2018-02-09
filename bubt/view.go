@@ -1,6 +1,6 @@
 package bubt
 
-import "github.com/prataprc/gostore/api"
+import "github.com/bnclabs/gostore/api"
 
 // View read only transaction instance.
 type View struct {

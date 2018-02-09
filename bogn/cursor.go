@@ -2,9 +2,9 @@ package bogn
 
 import "fmt"
 
-import "github.com/prataprc/gostore/api"
-import "github.com/prataprc/gostore/lib"
-import "github.com/prataprc/gostore/lsm"
+import "github.com/bnclabs/gostore/api"
+import "github.com/bnclabs/gostore/lib"
+import "github.com/bnclabs/gostore/lsm"
 
 // Cursor object maintains an active pointer into index. Use OpenCursor
 // on Txn object to create a new cursor.

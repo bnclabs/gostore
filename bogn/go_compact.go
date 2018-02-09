@@ -7,8 +7,8 @@ import "sync/atomic"
 import "runtime/debug"
 
 import "github.com/bnclabs/golog"
-import "github.com/prataprc/gostore/api"
-import "github.com/prataprc/gostore/lib"
+import "github.com/bnclabs/gostore/api"
+import "github.com/bnclabs/gostore/lib"
 
 // Compacttick timer tick to check for memory overflow, persisting
 // flushing, compacting memory store and disk store.

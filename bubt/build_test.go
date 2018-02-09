@@ -9,7 +9,7 @@ import "testing"
 import "math/rand"
 import "path/filepath"
 
-import "github.com/prataprc/gostore/llrb"
+import "github.com/bnclabs/gostore/llrb"
 import s "github.com/bnclabs/gosettings"
 
 func TestDestroy(t *testing.T) {

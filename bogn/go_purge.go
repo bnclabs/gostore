@@ -5,7 +5,7 @@ import "sync/atomic"
 import "runtime/debug"
 
 import "github.com/bnclabs/golog"
-import "github.com/prataprc/gostore/lib"
+import "github.com/bnclabs/gostore/lib"
 
 func purger(bogn *Bogn) {
 	log.Infof("%v starting purger ...", bogn.logprefix)

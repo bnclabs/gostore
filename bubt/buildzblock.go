@@ -3,7 +3,7 @@ package bubt
 //import "fmt"
 import "encoding/binary"
 
-import "github.com/prataprc/gostore/lib"
+import "github.com/bnclabs/gostore/lib"
 
 type zblock struct {
 	blocksize int64

@@ -7,7 +7,7 @@ import "reflect"
 import "strings"
 import "sync/atomic"
 
-import "github.com/prataprc/gostore/api"
+import "github.com/bnclabs/gostore/api"
 
 const nodesize = int(unsafe.Sizeof(Llrbnode{})) - 8 // + keylen
 

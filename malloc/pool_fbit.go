@@ -9,7 +9,7 @@ import "C"
 import "fmt"
 import "unsafe"
 
-import "github.com/prataprc/gostore/api"
+import "github.com/bnclabs/gostore/api"
 
 //import "fmt"
 

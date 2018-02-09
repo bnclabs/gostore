@@ -27,5 +27,7 @@ How to contribute
 * Gostore is written in [golang](https://golang.org/), hence expected to follow the
   global guidelines for writing go programs.
 * If the changeset is more than few lines, please generate a
-  [report card](https://goreportcard.com/report/github.com/prataprc/gostore).
+  [report card][report-link].
 * As of now, branch ``master`` is the development branch.
+
+[report-link]: https://goreportcard.com/report/github.com/bnclabs/gostore.

@@ -7,7 +7,7 @@ import "errors"
 import "unsafe"
 
 import "github.com/bnclabs/golog"
-import "github.com/prataprc/gostore/lib"
+import "github.com/bnclabs/gostore/lib"
 
 type llrbstats struct { // TODO: add json tags.
 	n_count   int64 // number of nodes in the tree

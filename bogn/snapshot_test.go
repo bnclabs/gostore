@@ -2,7 +2,7 @@ package bogn
 
 import "testing"
 
-import "github.com/prataprc/gostore/api"
+import "github.com/bnclabs/gostore/api"
 
 func BenchmarkNewsnapshot(b *testing.B) {
 	var disks [16]api.Index

@@ -2,7 +2,7 @@ package bogn
 
 import "sync/atomic"
 
-import "github.com/prataprc/gostore/api"
+import "github.com/bnclabs/gostore/api"
 
 // Txn transaction definition. Transaction gives a gaurantee of isolation and
 // atomicity on the latest snapshot.

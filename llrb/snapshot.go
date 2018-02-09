@@ -6,7 +6,7 @@ import "unsafe"
 import "strings"
 import "sync/atomic"
 
-import "github.com/prataprc/gostore/lib"
+import "github.com/bnclabs/gostore/lib"
 
 // mvccsnapshot refers to MVCC snapshot of LLRB tree. Snapshots
 // can be used for concurrent reads.

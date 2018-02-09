@@ -1,6 +1,6 @@
 package lsm
 
-import "github.com/prataprc/gostore/api"
+import "github.com/bnclabs/gostore/api"
 
 //var yGetpool = make(chan *yGet, 1000)
 //

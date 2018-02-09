@@ -1,6 +1,6 @@
 package bogn
 
-import "github.com/prataprc/gostore/api"
+import "github.com/bnclabs/gostore/api"
 
 func init() {
 	// check whether bogn confirms to api.Index{} interface.

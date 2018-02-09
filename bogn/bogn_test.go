@@ -8,7 +8,7 @@ import "sync"
 import "sync/atomic"
 import "math/rand"
 
-import "github.com/prataprc/gostore/llrb"
+import "github.com/bnclabs/gostore/llrb"
 
 func TestReload(t *testing.T) {
 	destoryindex("index", makepaths())

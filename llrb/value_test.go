@@ -4,7 +4,7 @@ import "testing"
 import "bytes"
 import "fmt"
 
-import "github.com/prataprc/gostore/malloc"
+import "github.com/bnclabs/gostore/malloc"
 
 var _ = fmt.Sprintf("dummy")
 

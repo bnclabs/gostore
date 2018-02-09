@@ -6,10 +6,10 @@ import "strconv"
 import "strings"
 import "sync/atomic"
 
-import "github.com/prataprc/gostore/api"
-import "github.com/prataprc/gostore/lib"
-import "github.com/prataprc/gostore/lsm"
-import "github.com/prataprc/gostore/llrb"
+import "github.com/bnclabs/gostore/api"
+import "github.com/bnclabs/gostore/lib"
+import "github.com/bnclabs/gostore/lsm"
+import "github.com/bnclabs/gostore/llrb"
 import "github.com/bnclabs/golog"
 
 type snapshot struct {

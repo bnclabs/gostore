@@ -7,7 +7,7 @@ import "sync/atomic"
 import "path/filepath"
 import "encoding/binary"
 
-import "github.com/prataprc/gostore/api"
+import "github.com/bnclabs/gostore/api"
 import "github.com/bnclabs/golog"
 import s "github.com/bnclabs/gosettings"
 

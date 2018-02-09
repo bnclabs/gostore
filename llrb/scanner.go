@@ -1,6 +1,6 @@
 package llrb
 
-import "github.com/prataprc/gostore/lib"
+import "github.com/bnclabs/gostore/lib"
 
 var scanlimit = 100
 

@@ -7,8 +7,8 @@ import "bytes"
 import "testing"
 import "path/filepath"
 
-import "github.com/prataprc/gostore/llrb"
-import "github.com/prataprc/gostore/bubt"
+import "github.com/bnclabs/gostore/llrb"
+import "github.com/bnclabs/gostore/bubt"
 import s "github.com/bnclabs/gosettings"
 
 func TestYGet(t *testing.T) {

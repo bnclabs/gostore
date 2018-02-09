@@ -3,8 +3,8 @@ package lsm
 import "bytes"
 import "testing"
 
-import "github.com/prataprc/gostore/llrb"
-import "github.com/prataprc/gostore/bubt"
+import "github.com/bnclabs/gostore/llrb"
+import "github.com/bnclabs/gostore/bubt"
 import s "github.com/bnclabs/gosettings"
 
 func TestYSort(t *testing.T) {

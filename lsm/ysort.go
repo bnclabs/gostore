@@ -3,8 +3,8 @@ package lsm
 import "io"
 import "bytes"
 
-import "github.com/prataprc/gostore/api"
-import "github.com/prataprc/gostore/lib"
+import "github.com/bnclabs/gostore/api"
+import "github.com/bnclabs/gostore/lib"
 
 func cp(dst, src []byte) []byte {
 	dst = lib.Fixbuffer(dst, int64(len(src)))

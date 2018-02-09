@@ -8,8 +8,8 @@ import "io/ioutil"
 import "encoding/json"
 import "encoding/binary"
 
-import "github.com/prataprc/gostore/lib"
-import "github.com/prataprc/gostore/api"
+import "github.com/bnclabs/gostore/lib"
+import "github.com/bnclabs/gostore/api"
 
 func TestLLRBEmpty(t *testing.T) {
 	llrb := NewLLRB("empty", Defaultsettings())

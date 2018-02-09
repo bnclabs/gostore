@@ -3,9 +3,9 @@ package bogn
 import "sync/atomic"
 import "runtime/debug"
 
-import "github.com/prataprc/gostore/api"
-import "github.com/prataprc/gostore/lib"
-import "github.com/prataprc/gostore/llrb"
+import "github.com/bnclabs/gostore/api"
+import "github.com/bnclabs/gostore/lib"
+import "github.com/bnclabs/gostore/llrb"
 import "github.com/bnclabs/golog"
 
 // setcache commands to cacher routine.

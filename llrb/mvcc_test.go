@@ -8,8 +8,8 @@ import "testing"
 import "io/ioutil"
 import "encoding/binary"
 
-import "github.com/prataprc/gostore/lib"
-import "github.com/prataprc/gostore/api"
+import "github.com/bnclabs/gostore/lib"
+import "github.com/bnclabs/gostore/api"
 
 func TestMVCCEmpty(t *testing.T) {
 	mvcc := NewMVCC("empty", Defaultsettings())

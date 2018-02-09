@@ -5,7 +5,7 @@ import "sort"
 import "unsafe"
 import "errors"
 
-import "github.com/prataprc/gostore/api"
+import "github.com/bnclabs/gostore/api"
 
 //#include <stdlib.h>
 import "C"
