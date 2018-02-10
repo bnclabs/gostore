@@ -146,8 +146,6 @@ func (pool *poolflist) release() {
 	pool.capacity, pool.base, pool.pools, pool.freeoff = 0, nil, nil, -1
 }
 
-//---- local functions
-
 // Not for production purpose only for testing.
 func (pool *poolflist) checkallocated() int64 {
 	allocated := (pool.freeoff + 1) * pool.size

@@ -31,7 +31,7 @@ func SuitableSlab(slabs []int64, size int64) int64 {
 }
 
 // Computeslabs generate suitable block-sizes between 0 bytes to 1TB.
-// This is to achieve optimal memory-utilization.
+// This is to achieve optimal MEMUtilization.
 func Computeslabs() []int64 {
 	nextsize := func(from int64) int64 {
 		addby := int64(float64(from) * (1.0 - MEMUtilization))
@@ -54,14 +54,10 @@ func Computeslabs() []int64 {
 	return sizes
 }
 
-var poolblkinit = make([]byte, 1024)
 var zeroblkinit = make([]byte, 1024)
 
 func init() {
-	for i := 0; i < len(poolblkinit); i++ {
-		poolblkinit[i] = 0xff
-	}
-	for i := 0; i < len(zeroblkinit); i++ {
+	for i := range zeroblkinit {
 		zeroblkinit[i] = 0x00
 	}
 }
@@ -73,4 +69,14 @@ func zeropoolblock(block uintptr, size int64) {
 	for i := range dst {
 		dst[i] = 0
 	}
+}
+
+func initblock(block uintptr, size int64) {
+	var dst []byte
+	sl := (*reflect.SliceHeader)(unsafe.Pointer(&dst))
+	if size > 64 { // TODO: make sure that it is alteast metadata size.
+		size = 64
+	}
+	sl.Data, sl.Len = block, int(size)
+	copy(dst, zeroblkinit)
 }

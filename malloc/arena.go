@@ -20,7 +20,7 @@ var ErrorOutofMemory = errors.New("malloc.outofmemory")
 type Arena struct {
 	slabs     []int64               // sorted list of slabs in this arena
 	maxchunks [6]int64              // 0-512,1-1K,16K,128K,1M,16M
-	mpools    map[int64]memoryPools // size -> list of api.MemoryPool
+	mpools    map[int64]*flistPools // size -> list of api.MemoryPool
 	slabindex [3925]uint16
 	freefn    func(unsafe.Pointer)
 
@@ -35,7 +35,7 @@ func NewArena(capacity int64, allocator string) *Arena {
 	arena := (&Arena{capacity: capacity, allocator: allocator})
 	arena.slabs = Computeslabs()
 	arena.maxslab = arena.slabs[len(arena.slabs)-1]
-	arena.mpools = make(map[int64]memoryPools)
+	arena.mpools = make(map[int64]*flistPools)
 	// validate inputs
 	if int64(len(arena.slabs)) > Maxpools {
 		panic(fmt.Errorf("number of pools in arena exeeds %v", Maxpools))
@@ -127,7 +127,7 @@ func (arena *Arena) flistFree(ptr unsafe.Pointer) {
 	pool.free(ptr)
 }
 
-// Release implement Mallocer{} interface.
+// Release implement api.Mallocer{} interface.
 func (arena *Arena) Release() {
 	for _, mpools := range arena.mpools {
 		mpools.release()
@@ -137,12 +137,12 @@ func (arena *Arena) Release() {
 
 //---- statistics and maintenance
 
-// Slabs implement Mallocer{} interface.
+// Slabs implement api.Mallocer{} interface.
 func (arena *Arena) Slabs() []int64 {
 	return arena.slabs
 }
 
-// Info implement Mallocer{} interface.
+// Info implement api.Mallocer{} interface.
 func (arena *Arena) Info() (capacity, heap, alloc, overhead int64) {
 	self := int64(unsafe.Sizeof(*arena))
 	slicesz := int64(cap(arena.slabs) * int(unsafe.Sizeof(int64(1))))
@@ -154,7 +154,7 @@ func (arena *Arena) Info() (capacity, heap, alloc, overhead int64) {
 	return
 }
 
-// Utilization implement Mallocer{} interface.
+// Utilization implement api.Mallocer{} interface.
 func (arena *Arena) Utilization() ([]int, []float64) {
 	var sizes []int
 	for _, size := range arena.slabs {
