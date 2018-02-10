@@ -8,7 +8,7 @@ type Iterator func(fin bool) (key, val []byte, seqno uint64, del bool, e error)
 
 // Index defines basic set of index operations that are mandated.
 type Index interface {
-	// ID is same as the name supplied while creating the LLRB instance.
+	// ID is same as the name supplied while creating the index instance.
 	ID() string
 
 	// Set a key, value pair in the index, if key is already present, its value
@@ -28,9 +28,9 @@ type Index interface {
 	// entry will inserted.
 	Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64)
 
-	// Get value for key, if value argument points to valid buffer it will, be
-	// used to copy the entry's value. Also returns entry's cas, whether entry
-	// is marked as deleted by LSM. If ok is false, then key is not found.
+	// Get value for key, if value argument points to valid buffer it will be
+	// used to copy the entry's value. Also return entry's cas and whether entry
+	// is marked deleted. If ok is false, then key is not found.
 	Get(key, value []byte) (v []byte, cas uint64, deleted, ok bool)
 
 	// Scan return a full table iterator.
@@ -38,15 +38,16 @@ type Index interface {
 
 	// BeginTxn starts a read-write transaction. All transactions should either
 	// be commited or aborted. Transactions must satisfy ACID properties.
-	// Returned transactor must be Aborted or Committed.
+	// Finally all transactor objects must be Aborted or Committed.
 	BeginTxn(id uint64) Transactor
 
-	// View start a read only transaction, all read operations will be stable
-	// on this snapshot until it is Aborted.
+	// View start a read only transaction, all read operations will be on
+	// a stable snapshot until it is Aborted. Finally all view objects must
+	// be Aborted.
 	View(id uint64) Transactor
 
-	// Close releases all temporary resources held by the index. No other
-	// method call are allowed after Close.
+	// Close will release all temporary resources held by the index. No other
+	// method call, except Destroy, are allowed after Close.
 	Close()
 
 	// Destroy releases all temporary and permanent resources held by the
@@ -54,20 +55,21 @@ type Index interface {
 	Destroy()
 }
 
-// Txn transaction definition. Transaction gives a gaurantee of isolation
-// and atomicity on the latest snapshot.
+// Transaction definition. Transactions give a gaurantee of isolation
+// and atomicity on the latest snapshot. For iteration, use OpenCursor().
+// If Transactor is created using View() API, it is treated as read-only
+// transaction hence write methods like Set, Delete, Delcursor, Commit
+// are not allowed.
 type Transactor interface {
 	// ID return transaction id.
 	ID() uint64
 
 	// Set an entry of key, value pair. The set operation will be remembered as
-	// a log entry and applied on the underlying structure during Commit. Not
-	// allowed in read-only transactions.
+	// a log entry and applied on the underlying structure during Commit.
 	Set(key, value, oldvalue []byte) []byte
 
 	// Delete key from index. The Delete operation will be remembered as a log
-	// entry and applied on the underlying structure during commit. Not
-	// allowed in read-only transactions.
+	// entry and applied on the underlying structure during commit.
 	Delete(key, oldvalue []byte, lsm bool) []byte
 
 	// Get value for key from snapshot.
@@ -105,9 +107,9 @@ type Cursor interface {
 	// commited or aborted.
 	Key() (key []byte, deleted bool)
 
-	// Value return current value under the cursor. Returned byte slice will be
-	// a reference to value in index, hence must not be used after transaction
-	// is commited or aborted.
+	// Value return current value under the cursor. Returned byte slice will
+	// be a reference to value in index, hence must not be used after
+	// transaction is commited or aborted.
 	Value() []byte
 
 	// GetNext move cursor to next entry in snapshot and return its key and
@@ -115,6 +117,6 @@ type Cursor interface {
 	// must not be used after transaction is committed or aborted.
 	GetNext() (key, value []byte, deleted bool, err error)
 
-	// YNext implements Iterator api.
-	YNext(fin bool) (key, value []byte, seqno uint64, deleted bool, err error)
+	// YNext implements Iterator api, to iterate over the index.
+	YNext(fin bool) (key, val []byte, seqno uint64, deleted bool, err error)
 }

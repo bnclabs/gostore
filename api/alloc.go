@@ -4,11 +4,11 @@ import "unsafe"
 
 // Mallocer interface for custom memory management.
 type Mallocer interface {
-	// Slabs allocatable slab of sizes.
+	// Slabs return a list of allocatable slab-sizes.
 	Slabs() (sizes []int64)
 
 	// Alloc allocate a chunk of `n` bytes from `pool`. Allocated
-	// memory is always 64-bit aligned.
+	// memory is always 8-byte aligned.
 	Alloc(n int64) unsafe.Pointer
 
 	// Allocslab allocate a chunk from slab. Use this only if slab size
