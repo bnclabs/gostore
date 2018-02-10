@@ -1,3 +1,3 @@
 // Package flock provides read-write mutex locks across process for
-// linux, mac and windows.
+// Linux, Mac and Windows.
 package flock

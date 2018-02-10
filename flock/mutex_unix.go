@@ -38,10 +38,8 @@ func (rw *RWMutex) Unlock() {
 	rw.mu.Unlock()
 }
 
-// RLock locks rw for reading.
-//
-// It should not be used for recursive read locking; a blocked Lock call
-// excludes new readers from acquiring the lock.
+// RLock locks rw for reading. It should not be used for recursive read
+// locking; a blocked Lock call excludes new readers from acquiring the lock.
 func (rw *RWMutex) RLock() {
 	rw.mu.RLock()
 	if err := syscall.Flock(rw.fd, syscall.LOCK_SH); err != nil {
@@ -49,9 +47,8 @@ func (rw *RWMutex) RLock() {
 	}
 }
 
-// RUnlock undoes a single RLock call; it does not affect other
-// simultaneous readers. It is a run-time error if rw is not locked for
-// reading on entry to RUnlock.
+// RUnlock undo a single RLock call; it does not affect other
+// simultaneous readers.
 func (rw *RWMutex) RUnlock() {
 	if err := syscall.Flock(rw.fd, syscall.LOCK_UN); err != nil {
 		panic(err)

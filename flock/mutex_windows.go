@@ -67,6 +67,8 @@ func New(filename string) (*RWMutex, error) {
 	return &RWMutex{fd: fd}, nil
 }
 
+// Lock locks rw. If the lock is already in use, the calling goroutine
+// blocks until the mutex is available.
 func (rw *RWMutex) Lock() {
 	rw.mu.Lock()
 	var ol syscall.Overlapped
@@ -76,6 +78,8 @@ func (rw *RWMutex) Lock() {
 	}
 }
 
+// Unlock unlocks rw. It is a run-time error if rw is not locked on entry to
+// Unlock.
 func (rw *RWMutex) Unlock() {
 	var ol syscall.Overlapped
 	if err := unlockFileEx(rw.fd, 0, 1, 0, &ol); err != nil {
@@ -84,6 +88,8 @@ func (rw *RWMutex) Unlock() {
 	rw.mu.Unlock()
 }
 
+// RLock locks rw for reading. It should not be used for recursive read
+// locking; a blocked Lock call excludes new readers from acquiring the lock.
 func (rw *RWMutex) RLock() {
 	rw.mu.RLock()
 	var ol syscall.Overlapped
@@ -92,6 +98,8 @@ func (rw *RWMutex) RLock() {
 	}
 }
 
+// RUnlock undo a single RLock call; it does not affect other
+// simultaneous readers.
 func (rw *RWMutex) RUnlock() {
 	var ol syscall.Overlapped
 	if err := unlockFileEx(rw.fd, 0, 1, 0, &ol); err != nil {
