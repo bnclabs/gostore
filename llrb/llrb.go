@@ -17,7 +17,9 @@ import s "github.com/bnclabs/gosettings"
 import humanize "github.com/dustin/go-humanize"
 
 // LLRB to manage a single instance of in-memory sorted index using
-// left-leaning-red-black tree.
+// left-leaning-red-black tree. LLRB instance shall implement
+// api.Index interface, and compliant with api.Getter and api.Iterator
+// APIs.
 type LLRB struct { // tree container
 	llrbstats           // 64-bit aligned snapshot statistics.
 	activetxns    int64 // there can be more than on ro-txns
@@ -61,8 +63,8 @@ func NewLLRB(name string, setts s.Settings) *LLRB {
 }
 
 // LoadLLRB creates an LLRB instance and populate it with initial set
-// of data (key, value) from iterator. After loading the data
-// applications can use Setseqno() to update the latest sequence number.
+// of data (key, value) from iterator. After loading the data,
+// applications shall use Setseqno() to update the latest sequence number.
 func LoadLLRB(name string, setts s.Settings, iter api.Iterator) *LLRB {
 	llrb := NewLLRB(name, setts)
 	if iter == nil {
@@ -515,9 +517,10 @@ func (llrb *LLRB) deletemin(nd *Llrbnode) (newnd, deleted *Llrbnode) {
 	return llrb.fixup(nd), deleted
 }
 
-// BeginTxn starts a read-write transaction. All transactions should either
-// be commited or aborted. Structure will be locked, no other read or write
-// operation can be performed, until transaction is committed or aborted.
+// BeginTxn starts a read-write transaction. Transactions must
+// satisfy ACID properties. Structure will be locked, no other
+// read or write operation can be performed, until transaction is
+// committed or aborted.
 func (llrb *LLRB) BeginTxn(id uint64) api.Transactor {
 	if !llrb.lock() {
 		return nil

@@ -7,5 +7,4 @@
 //   * In single-threaded settings, reads and writes are serialized.
 //
 // MVCC instances support serialized writes and concurrent reads.
-//
 package llrb

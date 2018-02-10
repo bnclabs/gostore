@@ -18,7 +18,11 @@ import "github.com/bnclabs/golog"
 import s "github.com/bnclabs/gosettings"
 import humanize "github.com/dustin/go-humanize"
 
-// MVCC manages a single instance of LLRB tree in MVCC mode.
+// MVCC manages a single instance of in-memory sorted index using
+// left-leaning-red-black tree. This implementations supports copy
+// on write for all write operations and enables concurrent read
+// operations. MVCC instance implement api.Index interface, and
+// compliant with api.Getter and api.Iterator.
 type MVCC struct {
 	llrbstats    // 64-bit aligned snapshot statistics.
 	n_routines   int64

@@ -5,7 +5,7 @@ import "github.com/cloudfoundry/gosigar"
 
 // Defaultsettings for llrb instance.
 //
-// "memcapacity" (int64)
+// "memcapacity" (int64, default: available free-ram)
 //		Memory capacity required for keys / values. Default will be ramsize.
 //
 // "snapshottick" (int64, default: 4)

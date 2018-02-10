@@ -6,7 +6,7 @@ import "unsafe"
 
 var _ = fmt.Sprintf("")
 
-// Cursor object maintains an active pointer into index. Use OpenCursor
+// Cursor object maintains an active pointer into the index. Use OpenCursor
 // on Txn object to create a new cursor.
 type Cursor struct {
 	txn   *Txn
@@ -96,7 +96,8 @@ func (cur *Cursor) Delcursor(lsm bool) {
 	cur.txn.Delete(key, nil, lsm)
 }
 
-// YNext can be used for lsm-sort.
+// YNext implements Iterator api, to iterate over the index. Typically
+// used for lsm-sort.
 func (cur *Cursor) YNext(
 	fin bool) (key, value []byte, seqno uint64, deleted bool, err error) {
 
