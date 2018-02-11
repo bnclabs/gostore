@@ -2,9 +2,9 @@
 
 [![GoDoc](https://godoc.org/github.com/bnclabs/gostore/api?status.png)](https://godoc.org/github.com/bnclabs/gostore/api)
 
-Package api/ define the common interface points with gostore library.
-Except for creating a new storage instance, applications should use methods
-defined under this package.
+Package api/ define common interface points with gostore library. Except
+for creating a new storage instance, applications should use methods defined
+under this package.
 
 **Memory APIs**
 

@@ -1,19 +1,19 @@
-Bottoms up Btree
-================
+# Bottoms up Btree
+
+[![GoDoc](https://godoc.org/github.com/bnclabs/gostore/bubt?status.png)](https://godoc.org/github.com/bnclabs/gostore/bubt)
 
 The short version `bubt` means Bottoms-up-Btree. It simply says how the
 btree was built, which is bottoms up. The idea behind this implementation
 is that sorted index of key,value entries are built once, marked as
 immutable and available for concurrent readers.
 
-Bottoms up construction
-=======================
+## Bottoms up construction
 
 * Building a bottoms-up tree starts with an iterator object that supply
-  a stream of key,value entries, and associated fields.
+  a stream of key,value entries, and associated fields for each entry.
 * Incoming key,value entries are populated in a leaf node, called `z-node`.
 * z-nodes can be stored in a separate file.
-* Once z-node is fully utilized a new entry, called `m-entry` is
+* Once an z-node is fully utilized, a new entry, called `m-entry`, is
   composed with:
   * Key element which is the `z-node` first entry's key element.
   * Value element which is the file position of the `z-node`.
@@ -33,15 +33,14 @@ Bottoms up construction
 * Finally the root node is flushed.
 * After the root node, a single block (blocksize same as m-node) of tree
   settings is flushed.
-* After tree settings, one of more blocks of index metadata (blocksize same
+* After tree settings, one or more blocks of index metadata (blocksize same
   as m-node) is flushed.
 * After metadata, a single block, (blocksize is MarkerBlocksize) of
   marker-block is flushed.
 
 ** TODO: block diagram of disk format**
 
-Metadata, Settings
-------------------
+## Metadata, Settings
 
 * Applications can attach an opaque blob of **metadata** with every bubt
   index. This can be supplied as argument to the Build() API. It is upto
@@ -51,20 +50,21 @@ Metadata, Settings
 
 ** TODO: shape of settings map**
 
-Background routines
--------------------
+## Background routines
 
 While building the btree, separate go-routines are spawned to flush data
 into file. There will be one go-routine for each index file.
 
 A fully formed bubt instance can be opened using `OpenSnapshot` for read
-only access. Any number of snapshots can opened by a single instance from
-`OpenSnapshot` cannot be shared across go-routines. None of the snapshots
-spawn go-routines. Only when all snapshots are released, index file can
-be closed.
+only access and can be shared between go-routines. Snapshots can be opened
+across multiple process without the danger of any race conditions.
+None of the snapshots spawn go-routines. Everytime a snapshot is shared
+with another go-routine, its reference count should be bumped. Only when
+all snapshot references are released, snapshot can be closed. Likewise,
+only when all snapshots are closed, the last reference can destory the
+snapshot.
 
-Panic and Recovery
-------------------
+## Panic and Recovery
 
 Panics are to expected when APIs are misused. Programmers might choose
 to ignore the errors, but not panics. For example:

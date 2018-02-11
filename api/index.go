@@ -36,9 +36,9 @@ type Index interface {
 	// Scan return a full table iterator.
 	Scan() Iterator
 
-	// BeginTxn starts a read-write transaction. All transactions should either
-	// be commited or aborted. Transactions must satisfy ACID properties.
-	// Finally all transactor objects must be Aborted or Committed.
+	// BeginTxn starts a read-write transaction. Transactions must
+	// satisfy ACID properties. Finally all transactor objects must
+	// be Aborted or Committed.
 	BeginTxn(id uint64) Transactor
 
 	// View start a read only transaction, all read operations will be on
@@ -91,8 +91,8 @@ type Transactor interface {
 // Cursor object maintains an active pointer into index. Use OpenCursor on
 // Transactor object to create a new cursor.
 type Cursor interface {
-	// Set is an alias to txn.Set call. The current position of the cursor does
-	// not affect the set operation.
+	// Set is an alias to txn.Set call. The current position of the cursor
+	// does not affect the set operation.
 	Set(key, value, oldvalue []byte) []byte
 
 	// Delete is an alias to Transactor.Delete call. The current position of
@@ -117,6 +117,7 @@ type Cursor interface {
 	// must not be used after transaction is committed or aborted.
 	GetNext() (key, value []byte, deleted bool, err error)
 
-	// YNext implements Iterator api, to iterate over the index.
+	// YNext implements Iterator api, to iterate over the index. Typically
+	// used for lsm-sort.
 	YNext(fin bool) (key, val []byte, seqno uint64, deleted bool, err error)
 }
