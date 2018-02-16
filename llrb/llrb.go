@@ -420,6 +420,9 @@ func (llrb *LLRB) dodelete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 
 		} else {
 			root, newnd, oldnd := llrb.upsert(root, 1 /*depth*/, key, nil)
+			if oldnd != nil {
+				panic("impossible situation")
+			}
 			root.setblack()
 			newnd.setdeleted()
 			newnd.cleardirty()
