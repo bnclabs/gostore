@@ -1201,6 +1201,9 @@ func (mvcc *MVCC) Scan() api.Iterator {
 
 	var err error
 	leseqno := mvcc.startscan(nil, sb, 0)
+	tip := mvcc.Getseqno()
+	fmsg := "%s scan started (%v-%v) = %v behind the tip"
+	log.Infof(fmsg, mvcc.logprefix, tip, leseqno, tip-leseqno)
 	return func(fin bool) ([]byte, []byte, uint64, bool, error) {
 		if err != nil {
 			return nil, nil, 0, false, err
