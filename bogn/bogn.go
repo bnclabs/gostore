@@ -737,12 +737,10 @@ func PurgeIndex(name string, setts s.Settings) {
 // Get value for key, if value argument points to valid buffer it will, be
 // used to copy the entry's value. Also returns entry's cas, whether entry
 // is marked as deleted by LSM. If ok is false, then key is not found.
-func (bogn *Bogn) Get(
-	key, value []byte) (v []byte, cas uint64, deleted, ok bool) {
-
+func (bogn *Bogn) Get(key, value []byte) (v []byte, cas uint64, del, ok bool) {
 	snap := bogn.latestsnapshot()
 	if snap.yget != nil {
-		v, cas, deleted, ok = snap.yget(key, value)
+		v, cas, del, ok = snap.yget(key, value)
 	}
 	snap.release()
 	return

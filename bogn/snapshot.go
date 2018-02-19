@@ -28,7 +28,9 @@ type snapshot struct {
 	cachech chan *setcache
 }
 
-func opensnapshot(bogn *Bogn, mw api.Index, disks [16]api.Index) (*snapshot, error) {
+func opensnapshot(
+	bogn *Bogn, mw api.Index, disks [16]api.Index) (*snapshot, error) {
+
 	var err error
 
 	uuid := bogn.newuuid()
@@ -132,6 +134,7 @@ func (snap *snapshot) oldestlevel() (int, api.Index) {
 	return -1, nil
 }
 
+// return a valid set of disk levels with newest level in the beginning.
 func (snap *snapshot) disklevels(disks []api.Index) []api.Index {
 	for _, disk := range snap.disks {
 		if disk != nil {
@@ -232,7 +235,7 @@ func (snap *snapshot) cachedget(get api.Getter) api.Getter {
 		}
 
 		// TODO: if `mc` is skip list with concurrent writes, could
-		// be an optimized solution.
+		// perform better.
 		select {
 		case cmd := <-snap.cachech:
 			cmd.key = lib.Fixbuffer(cmd.key, int64(len(key)))

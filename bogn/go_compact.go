@@ -10,8 +10,10 @@ import "github.com/bnclabs/golog"
 import "github.com/bnclabs/gostore/api"
 import "github.com/bnclabs/gostore/lib"
 
-// Compacttick timer tick to check for memory overflow, persisting
-// flushing, compacting memory store and disk store.
+// Compacttick timer tick to check for memory overflow, persistance,
+// flushing, compacting memory stores and/or disk stores. Purger
+// routines uses this tick to periodically check for storage instances
+// to be purged.
 var Compacttick = time.Duration(1 * time.Second)
 
 func compactor(bogn *Bogn) {
