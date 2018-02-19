@@ -3,6 +3,7 @@ package bogn
 import "sync/atomic"
 
 import "github.com/bnclabs/gostore/api"
+import "github.com/bnclabs/gostore/lib"
 
 // Txn transaction definition. Transaction gives a gaurantee of isolation and
 // atomicity on the latest snapshot.
@@ -16,15 +17,11 @@ type Txn struct {
 	dviews []api.Transactor
 	yget   api.Getter
 
+	// working memory.
 	cursors []*Cursor
 	curchan chan *Cursor
 	gets    []api.Getter
 }
-
-const (
-	cmdSet byte = iota + 1
-	cmdDelete
-)
 
 func newtxn(id uint64, bogn *Bogn, snap *snapshot, cch chan *Cursor) *Txn {
 	txn := &Txn{
@@ -41,7 +38,7 @@ func (txn *Txn) inittxn() *Txn {
 	var disks [256]api.Index
 
 	id, snap := txn.id, txn.snap
-	txn.mwtxn = snap.mw.BeginTxn(txn.id)
+	txn.mwtxn = snap.mw.BeginTxn(id)
 	if snap.mr != nil {
 		txn.mrview = snap.mr.View(id)
 	}
@@ -67,7 +64,11 @@ func (txn *Txn) ID() uint64 {
 // OpenCursor open an active cursor inside the index.
 func (txn *Txn) OpenCursor(key []byte) (api.Cursor, error) {
 	cur, err := txn.getcursor().opencursor(txn, nil, key)
-	return cur, err
+	if err != nil {
+		txn.putcursor(cur)
+		return nil, err
+	}
+	return cur, nil
 }
 
 // Commit transaction, commit will block until all write operations
@@ -148,8 +149,9 @@ func (txn *Txn) getcursor() (cur *Cursor) {
 
 func (txn *Txn) putcursor(cur *Cursor) {
 	cur.txn, cur.view = nil, nil
-	cur.key, cur.value, cur.cas = cur.key[:0], cur.value[:0], 0
-	cur.deleted = false
+	cur.key = lib.Fixbuffer(cur.key, 0)
+	cur.value = lib.Fixbuffer(cur.value, 0)
+	cur.cas, cur.deleted = 0, false
 	cur.iter, cur.iters = nil, cur.iters[:0]
 
 	select {

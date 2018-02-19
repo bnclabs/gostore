@@ -3,6 +3,7 @@ package bogn
 import "sync/atomic"
 
 import "github.com/bnclabs/gostore/api"
+import "github.com/bnclabs/gostore/lib"
 
 // View transaction definition. Read only version of Txn.
 type View struct {
@@ -15,6 +16,7 @@ type View struct {
 	dviews []api.Transactor
 	yget   api.Getter
 
+	// working memory.
 	cursors []*Cursor
 	curchan chan *Cursor
 	gets    []api.Getter
@@ -22,7 +24,7 @@ type View struct {
 
 func newview(id uint64, bogn *Bogn, snap *snapshot, cch chan *Cursor) *View {
 	view := &View{
-		id: id, snap: snap,
+		id: id, bogn: bogn, snap: snap,
 		dviews:  make([]api.Transactor, 0, 32),
 		cursors: make([]*Cursor, 0, 8),
 		curchan: cch,
@@ -65,7 +67,7 @@ func (view *View) OpenCursor(key []byte) (api.Cursor, error) {
 		view.putcursor(cur)
 		return nil, err
 	}
-	return cur, err
+	return cur, nil
 }
 
 // Commit not allowed.
@@ -89,6 +91,17 @@ func (view *View) Abort() {
 	view.bogn.abortview(view)
 }
 
+//---- Exported Read methods
+
+// Get value for key from snapshot.
+func (view *View) Get(
+	key, value []byte) (v []byte, cas uint64, deleted, ok bool) {
+
+	return view.yget(key, value)
+}
+
+//---- Exported Write methods, for interface compatibility !
+
 // Set is not allowed
 func (view *View) Set(key, value, oldvalue []byte) []byte {
 	panic("Set not allowed on view")
@@ -99,29 +112,25 @@ func (view *View) Delete(key, oldvalue []byte, lsm bool) []byte {
 	panic("Delete not allowed on view")
 }
 
-//---- Exported Read methods
-
-// Get value for key from snapshot.
-func (view *View) Get(
-	key, value []byte) (v []byte, cas uint64, deleted, ok bool) {
-
-	return view.yget(key, value)
-}
-
 //---- local methods
 
 func (view *View) getcursor() (cur *Cursor) {
 	select {
 	case cur = <-view.curchan:
 	default:
-		cur = &Cursor{}
+		cur = &Cursor{iters: make([]api.Iterator, 0, 32)}
 	}
 	view.cursors = append(view.cursors, cur)
 	return
 }
 
 func (view *View) putcursor(cur *Cursor) {
-	cur.deleted, cur.iter, cur.iters = false, nil, cur.iters[:0]
+	cur.txn, cur.view = nil, nil
+	cur.key = lib.Fixbuffer(cur.key, 0)
+	cur.value = lib.Fixbuffer(cur.value, 0)
+	cur.cas, cur.deleted = 0, false
+	cur.iter, cur.iters = nil, cur.iters[:0]
+
 	select {
 	case view.curchan <- cur:
 	default: // leave it for GC
