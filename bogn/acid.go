@@ -10,10 +10,10 @@ type txnmeta struct {
 }
 
 func (meta *txnmeta) inittxns() {
-	maxtxns := runtime.GOMAXPROCS(-1) * 10
-	meta.txncache = make(chan *Txn, maxtxns)
-	meta.viewcache = make(chan *View, maxtxns)
-	meta.cursors = make(chan *Cursor, maxtxns*4)
+	numcpu := runtime.GOMAXPROCS(-1) * 10
+	meta.txncache = make(chan *Txn, numcpu)
+	meta.viewcache = make(chan *View, numcpu)
+	meta.cursors = make(chan *Cursor, numcpu*4)
 }
 
 func (meta *txnmeta) gettxn(id uint64, bogn *Bogn, snap *snapshot) (txn *Txn) {

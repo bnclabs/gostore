@@ -9,11 +9,12 @@ import "runtime/debug"
 import "github.com/bnclabs/golog"
 import "github.com/bnclabs/gostore/api"
 import "github.com/bnclabs/gostore/lib"
+import humanize "github.com/dustin/go-humanize"
 
 // Compacttick timer tick to check for memory overflow, persistance,
 // flushing, compacting memory stores and/or disk stores. Purger
-// routines uses this tick to periodically check for storage instances
-// to be purged.
+// routine uses this tick to periodically purge un-referenced storage
+// instance.
 var Compacttick = time.Duration(1 * time.Second)
 
 func compactor(bogn *Bogn) {
@@ -36,12 +37,13 @@ func compactor(bogn *Bogn) {
 	atomic.AddInt64(&bogn.nroutines, 1)
 	ticker := time.NewTicker(Compacttick)
 	docompact := makecompactor(bogn)
+
 	var respch chan api.Index
 	var errch chan error
 
 	// atmost two concurrent compaction can run.
-	// a. compacting data in memory with latest level on disk (aka flush).
-	// b. compacting data betwen two disk levels.
+	// a. compacting data in memory with latest level on disk, doflush().
+	// b. compacting data betwen two disk levels, docompact().
 
 	// disk  - latest level on disk
 	// disk0 - newer disk among compacted disks.
@@ -72,13 +74,16 @@ loop:
 				if err := findisk(bogn, disk0, disk1, ndisk); err != nil {
 					panic(err)
 				}
-				disk0, respch, errch = nil, nil, nil
+				disk0, disk1, respch, errch = nil, nil, nil, nil
 				if bogn.isclosed() {
 					break loop
 				}
 
-			case err := <-errch:
-				panic(err)
+			case <-errch:
+				disk0, disk1, respch, errch = nil, nil, nil, nil
+				if bogn.isclosed() {
+					break loop
+				}
 
 			default:
 			}
@@ -104,6 +109,10 @@ func makecompactor(bogn *Bogn) func(api.Index) error {
 		mwthreshold = int64(memcap * .5)
 	}
 
+	stra := humanize.Bytes(uint64(bogn.memcapacity))
+	strb := humanize.Bytes(uint64(mwthreshold))
+	log.Infof("%v memory threshold at %v of %v\n", bogn.logprefix, strb, stra)
+
 	return func(disk0 api.Index) error {
 		snap, overflow := bogn.currsnapshot(), false
 		if snap != nil {
@@ -123,11 +132,14 @@ func makecompactor(bogn *Bogn) func(api.Index) error {
 			}
 		}
 
-		if overflow {
+		if overflow || bogn.flushelapsed() {
 			err := doflush(bogn, disk0)
 			// adaptive threshold
 			bgheap := float64(snap.memheap())
 			mwthreshold += int64((memcap - float64(mwthreshold)) - bgheap)
+			strb = humanize.Bytes(uint64(mwthreshold))
+			fmsg := "%v memory threshold at %v of %v\n"
+			log.Infof(fmsg, bogn.logprefix, strb, stra)
 			return err
 		}
 		return nil
@@ -261,12 +273,10 @@ func startdisk(
 	bogn *Bogn,
 	disk0, disk1 api.Index, nlevel int) (chan api.Index, chan error) {
 
-	var version int
-
 	snap := bogn.currsnapshot()
-	ndisk, version := snap.disks[nlevel], 1
-	if ndisk != nil {
-		_, version, _ = bogn.path2level(ndisk.ID())
+	disk, version := snap.disks[nlevel], 1
+	if disk != nil {
+		_, version, _ = bogn.path2level(disk.ID())
 		version++
 	}
 

@@ -114,6 +114,18 @@ func (bogn *Bogn) readsettings(setts s.Settings) *Bogn {
 		atomic.StoreInt64(&bogn.dgmstate, 1)
 	}
 
+	// validate
+	switch bogn.memstore {
+	case "llrb", "mvcc":
+	default:
+		panic(fmt.Errorf("invalid memstore %q", bogn.memstore))
+	}
+	switch bogn.diskstore {
+	case "bubt":
+	default:
+		panic(fmt.Errorf("invalid diskstore %q", bogn.diskstore))
+	}
+
 	return bogn.readmemsettings(setts)
 }
 
@@ -489,13 +501,10 @@ func (bogn *Bogn) pickcompactdisks() (disk0, disk1 api.Index, nextlevel int) {
 			continue
 		}
 		level1, _, _ := bogn.path2level(disk1.ID())
-		if nextlevel = snap.nextemptylevel(level1); nextlevel < 0 {
-			level0, _, _ := bogn.path2level(disk0.ID())
-			if nextlevel = snap.nextemptylevel(level0); nextlevel < 0 {
-				nextlevel = level1
-			}
+		if nextlevel = snap.nextemptylevel(level1); nextlevel >= 0 {
+			return disk0, disk1, nextlevel
 		}
-		return disk0, disk1, nextlevel
+		return disk0, disk1, level1
 	}
 	return nil, nil, -1
 }
@@ -868,10 +877,21 @@ func (bogn *Bogn) builddiskstore(
 	level, version int, sha string,
 	iter api.Iterator) (index api.Index, err error) {
 
-	// TODO: use diskstore for configurable persistance algorithm.
+	switch bogn.diskstore {
+	case "bubt":
+		return bogn.builddiskbubt(level, version, sha, iter)
+	}
+	panic("impossible situation")
+}
+
+func (bogn *Bogn) builddiskbubt(
+	level, version int, sha string,
+	iter api.Iterator) (index api.Index, err error) {
 
 	// book-keep largest seqno for this snapshot.
 	var diskseqno, count uint64
+
+	snap := bogn.currsnapshot()
 
 	wrap := func(fin bool) ([]byte, []byte, uint64, bool, error) {
 		if iter != nil {
@@ -911,8 +931,16 @@ func (bogn *Bogn) builddiskstore(
 	}
 	bt.Close()
 
-	// open disk
+	// open disk, if the newly built level is the latest level in a
+	// multi-level situation, enable mmap for leaf nodes.
 	mmap := bubtsetts.Bool("mmap")
+	if snap != nil {
+		llevel, _ := snap.latestlevel()
+		olevel, _ := snap.oldestlevel()
+		if llevel < 0 || ((llevel < olevel) && (level <= llevel)) {
+			mmap = true
+		}
+	}
 	ndisk, err := bubt.OpenSnapshot(dirname, paths, mmap)
 	if err != nil {
 		log.Errorf("%v OpenSnapshot(): %v", bogn.logprefix, err)
@@ -921,7 +949,7 @@ func (bogn *Bogn) builddiskstore(
 
 	footprint := humanize.Bytes(uint64(ndisk.Footprint()))
 	elapsed := time.Since(now)
-	fmsg := "%v took %v to build %v with %v entries, %v\n"
+	fmsg := "%v took %v to build bubt %v with %v entries, %v\n"
 	log.Infof(fmsg, bogn.logprefix, elapsed, ndisk.ID(), count, footprint)
 
 	return ndisk, nil

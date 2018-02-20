@@ -4,6 +4,7 @@ import "fmt"
 import "unsafe"
 import "strconv"
 import "strings"
+import "runtime"
 import "sync/atomic"
 
 import "github.com/bnclabs/gostore/api"
@@ -13,8 +14,9 @@ import "github.com/bnclabs/gostore/llrb"
 import "github.com/bnclabs/golog"
 
 type snapshot struct {
+	// must be 8-byte aligned.
 	refcount int64
-	purgetry int64          // must be 8-byte aligned
+	purgetry int64
 	next     unsafe.Pointer // *snapshot
 
 	id           string
@@ -24,6 +26,7 @@ type snapshot struct {
 	yget         api.Getter
 	purgeindexes []api.Index
 
+	// working memory
 	setch   chan *setcache
 	cachech chan *setcache
 }
@@ -45,8 +48,9 @@ func opensnapshot(
 		}
 	}
 	if bogn.workingset {
-		head.setch = make(chan *setcache, 1000)   // TODO: no magic number
-		head.cachech = make(chan *setcache, 1000) // TODO: no magic number
+		numcpu := runtime.GOMAXPROCS(-1) * 100
+		head.setch = make(chan *setcache, numcpu)
+		head.cachech = make(chan *setcache, numcpu)
 		if head.mc, err = bogn.newmemstore("mc", 0); err != nil {
 			return nil, err
 		}
@@ -66,8 +70,9 @@ func newsnapshot(
 	head := &snapshot{id: uuid, bogn: bogn, mw: mw, mr: mr, mc: mc}
 	copy(head.disks[:], disks[:])
 	if head.mc != nil {
-		head.setch = make(chan *setcache, 1000)   // TODO: no magic number
-		head.cachech = make(chan *setcache, 1000) // TODO: no magic number
+		numcpu := runtime.GOMAXPROCS(-1) * 100
+		head.setch = make(chan *setcache, numcpu)
+		head.cachech = make(chan *setcache, numcpu)
 		go cacher(bogn, head.mc, head.setch, head.cachech)
 	}
 	head.yget = head.latestyget()
@@ -108,7 +113,8 @@ func (snap *snapshot) latestlevel() (int, api.Index) {
 }
 
 func (snap *snapshot) nextemptylevel(level int) (nextlevel int) {
-	if level >= (len(snap.disks) - 1) {
+	if level >= len(snap.disks) {
+	} else if level == (len(snap.disks) - 1) {
 		return -1
 	}
 	nextlevel = -1
@@ -123,13 +129,8 @@ func (snap *snapshot) nextemptylevel(level int) (nextlevel int) {
 }
 
 func (snap *snapshot) oldestlevel() (int, api.Index) {
-	for level := len(snap.disks) - 1; level >= 0; level-- {
-		if disk := snap.disks[level]; disk != nil {
-			if lvl, _, _ := snap.bogn.path2level(disk.ID()); level != lvl {
-				panic(fmt.Errorf("mismatch in level %v != %v", level, lvl))
-			}
-			return level, disk
-		}
+	if oldest := len(snap.disks) - 1; snap.disks[oldest] != nil {
+		return oldest, snap.disks[oldest]
 	}
 	return -1, nil
 }
@@ -277,7 +278,7 @@ func (snap *snapshot) iterator() api.Iterator {
 	return reduceiter(scans)
 }
 
-// iterate on write store and disk store.
+// iterate on write store.
 func (snap *snapshot) persistiterator() api.Iterator {
 	if snap.mw != nil {
 		return snap.mw.Scan()
@@ -398,16 +399,17 @@ func (snap *snapshot) istrypurge() bool {
 }
 
 func (snap *snapshot) attributes() string {
-	wrc := []byte("---")
+	flags := []string{}
 	if snap.mw != nil {
-		wrc[0] = 'w'
+		flags = append(flags, "w")
 	}
 	if snap.mr != nil {
-		wrc[1] = 'r'
+		flags = append(flags, "r")
 	}
 	if snap.mc != nil {
-		wrc[2] = 'c'
+		flags = append(flags, "c")
 	}
+	flags = append(flags, " ")
 
 	ints := []string{}
 	for i, disk := range snap.disks {
@@ -415,8 +417,9 @@ func (snap *snapshot) attributes() string {
 			ints = append(ints, strconv.Itoa(i))
 		}
 	}
+	memlevels := strings.Join(flags, "")
 	disklevels := strings.Join(ints, ",")
-	return "<" + strings.Join([]string{string(wrc), disklevels}, " ") + ">"
+	return "<" + memlevels + " " + disklevels + ">"
 }
 
 func reduceiter(scans []api.Iterator) api.Iterator {
