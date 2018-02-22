@@ -302,18 +302,21 @@ func (snap *Snapshot) Validate() {
 		key, val, _, _, err = iter(false /*fin*/)
 		if prevkey != nil {
 			if bytes.Compare(prevkey, key) >= 0 {
-				panic(fmt.Errorf("key %v comes before %v", prevkey, key))
+				panic(fmt.Errorf("key %q comes before %q", prevkey, key))
 			}
 		}
-		count, prevkey = count+1, key
+		count = count + 1
+		lib.Fixbuffer(prevkey, int64(len(key)))
+		copy(prevkey, key)
 	}
 	iter(true /*fin*/)
 
 	if count != snap.n_count {
 		panic(fmt.Errorf("expected %v entries, found %v", snap.n_count, count))
 	}
-	footprint := (float64(keymem) * 1.5) + (float64(valmem) * 1.5)
-	if snap.footprint != int64(footprint) {
+	footprint := (float64(keymem) * 2) + (float64(valmem) * 2)
+	footprint += float64(snap.n_count * (mentrysize + zentrysize))
+	if snap.footprint > int64(footprint) {
 		panic(fmt.Errorf("footprint %v exceeds %v", snap.footprint, footprint))
 	}
 }
