@@ -6,7 +6,6 @@ import "runtime/debug"
 import "github.com/bnclabs/gostore/api"
 import "github.com/bnclabs/gostore/lib"
 import "github.com/bnclabs/gostore/llrb"
-import "github.com/bnclabs/golog"
 
 // setcache commands to cacher routine.
 type setcache struct {
@@ -17,15 +16,15 @@ type setcache struct {
 }
 
 func cacher(bogn *Bogn, mc api.Index, setch, cachech chan *setcache) {
-	log.Infof("%v starting cacher for %s ...", bogn.logprefix, mc.ID())
+	infof("%v starting cacher for %s ...", bogn.logprefix, mc.ID())
 
 	defer func() {
 		mc.Destroy()
 		if r := recover(); r != nil {
-			log.Errorf("%v cacher crashed %v", bogn.logprefix, r)
-			log.Errorf("\n%s", lib.GetStacktrace(2, debug.Stack()))
+			errorf("%v cacher crashed %v", bogn.logprefix, r)
+			errorf("\n%s", lib.GetStacktrace(2, debug.Stack()))
 		} else {
-			log.Infof("%v stopped cacher %s", bogn.logprefix, mc.ID())
+			infof("%v stopped cacher %s", bogn.logprefix, mc.ID())
 		}
 		atomic.AddInt64(&bogn.nroutines, -1)
 	}()

@@ -4,8 +4,6 @@ import "os"
 import "fmt"
 import "path/filepath"
 
-import "github.com/bnclabs/golog"
-
 type bubtflusher struct {
 	idx    int64
 	fpos   int64
@@ -27,7 +25,7 @@ func startflusher(idx int, file string) (*bubtflusher, error) {
 	}
 	path := filepath.Dir(file)
 	if err := os.MkdirAll(path, 0770); err != nil {
-		log.Errorf("os.MkdirAll(%q): %v", path, err)
+		errorf("os.MkdirAll(%q): %v", path, err)
 		return nil, err
 	} else {
 		flusher.fd = createfile(flusher.file)
@@ -62,10 +60,10 @@ func (flusher *bubtflusher) run() {
 
 	write := func(block []byte) (rc bool) {
 		if n, err := flusher.fd.Write(block); err != nil {
-			log.Fatalf("flusher(%q): %v", flusher.file, err)
+			fatalf("flusher(%q): %v", flusher.file, err)
 		} else if n != len(block) {
 			fmsg := "flusher(%q) partial write %v<%v"
-			log.Fatalf(fmsg, flusher.file, n, len(block))
+			fatalf(fmsg, flusher.file, n, len(block))
 		} else {
 			rc = true
 		}

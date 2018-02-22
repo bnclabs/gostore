@@ -6,7 +6,6 @@ import "bytes"
 import "errors"
 import "unsafe"
 
-import "github.com/bnclabs/golog"
 import "github.com/bnclabs/gostore/lib"
 
 type llrbstats struct { // TODO: add json tags.
@@ -65,7 +64,7 @@ func validatetree(root *Llrbnode, logprefix string, n, kmem, vmem int64) {
 		fmsg := "expected h_height.samples:%v to be same as Count():%v"
 		panic(fmt.Errorf(fmsg, samples, n_count))
 	}
-	log.Infof("%v found %v blacks on both sides\n", logprefix, nblacks)
+	infof("%v found %v blacks on both sides\n", logprefix, nblacks)
 	// `h_height`.max should not exceed certain limit, maxheight
 	// gives some breathing room.
 	if h.Samples() > 8 {

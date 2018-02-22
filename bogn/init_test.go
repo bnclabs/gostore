@@ -23,6 +23,7 @@ func init() {
 		"log.prefix":     "",
 	}
 	log.SetLogger(nil, setts)
+	LogComponents("all")
 
 	go func() {
 		log.Infof("%v", http.ListenAndServe("localhost:6060", nil))

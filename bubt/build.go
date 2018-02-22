@@ -8,7 +8,6 @@ import "path/filepath"
 import "encoding/binary"
 
 import "github.com/bnclabs/gostore/api"
-import "github.com/bnclabs/golog"
 import s "github.com/bnclabs/gosettings"
 
 // MarkerBlocksize to close snapshot file.
@@ -64,7 +63,7 @@ func NewBubt(
 // Build starts building the tree from iterator, iterator is expected
 // to be a full-table scan over another data-store.
 func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
-	log.Debugf("%v starting bottoms up build ...\n", tree.logprefix)
+	debugf("%v starting bottoms up build ...\n", tree.logprefix)
 
 	n_count := int64(0)
 	z := newz(tree.zblocksize)
@@ -196,7 +195,7 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 			root = flushmblock(m)
 
 		} else {
-			log.Infof("%v empty iteration", tree.logprefix)
+			infof("%v empty iteration", tree.logprefix)
 		}
 	}
 
@@ -228,7 +227,7 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 	}
 
 	fmsg := "%v built with root@%v %v bytes setts %v bytes metadata"
-	log.Infof(fmsg, tree.logprefix, root, lenSettings, lenMetadata)
+	infof(fmsg, tree.logprefix, root, lenSettings, lenMetadata)
 	return nil
 }
 
@@ -241,7 +240,7 @@ func (tree *Bubt) Writemetadata(metadata []byte) (int, error) {
 	if err := tree.mflusher.writedata(block); err != nil {
 		panic(err)
 	}
-	log.Infof("%v wrote %v bytes metadata", tree.logprefix, len(metadata))
+	infof("%v wrote %v bytes metadata", tree.logprefix, len(metadata))
 	return len(block), nil
 }
 

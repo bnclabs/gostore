@@ -14,6 +14,7 @@ func init() {
 		"log.file":  "",
 	}
 	log.SetLogger(nil, setts)
+	LogComponents("self")
 	go func() {
 		log.Infof("%v", http.ListenAndServe("localhost:6060", nil))
 	}()

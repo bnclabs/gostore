@@ -3,8 +3,6 @@ package bubt
 import "io"
 import "fmt"
 
-import "github.com/bnclabs/golog"
-
 var _ = fmt.Sprintf("")
 
 // Cursor object maintains an active pointer into index. Use OpenCursor
@@ -147,11 +145,11 @@ func (cur *Cursor) nextblock(snap *Snapshot) error {
 			readz := snap.readzs[cur.shardidx]
 			n, err := readz.ReadAt(cur.buf.zblock, fpos)
 			if err != nil {
-				log.Infof("%v %v", cur.snap.logprefix, err)
+				errorf("%v %v", cur.snap.logprefix, err)
 				return err
 			} else if x := len(cur.buf.zblock); n < x {
 				err := fmt.Errorf("read %v bytes for zblock %v", n, x)
-				log.Infof("%v %v", cur.snap.logprefix, err)
+				errorf("%v %v", cur.snap.logprefix, err)
 				return err
 			}
 			cur.index = 0

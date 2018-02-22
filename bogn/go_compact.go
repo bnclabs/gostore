@@ -6,7 +6,6 @@ import "unsafe"
 import "sync/atomic"
 import "runtime/debug"
 
-import "github.com/bnclabs/golog"
 import "github.com/bnclabs/gostore/api"
 import "github.com/bnclabs/gostore/lib"
 import humanize "github.com/dustin/go-humanize"
@@ -18,14 +17,14 @@ import humanize "github.com/dustin/go-humanize"
 var Compacttick = time.Duration(1 * time.Second)
 
 func compactor(bogn *Bogn) {
-	log.Infof("%v starting compactor ...", bogn.logprefix)
+	infof("%v starting compactor ...", bogn.logprefix)
 
 	defer func() {
 		if r := recover(); r != nil {
-			log.Errorf("%v compactor crashed %v", bogn.logprefix, r)
-			log.Errorf("\n%s", lib.GetStacktrace(2, debug.Stack()))
+			errorf("%v compactor crashed %v", bogn.logprefix, r)
+			errorf("\n%s", lib.GetStacktrace(2, debug.Stack()))
 		} else {
-			log.Infof("%v stopped compactor", bogn.logprefix)
+			infof("%v stopped compactor", bogn.logprefix)
 		}
 
 		atomic.AddInt64(&bogn.nroutines, -1)
@@ -111,7 +110,7 @@ func makecompactor(bogn *Bogn) func(api.Index) error {
 
 	stra := humanize.Bytes(uint64(bogn.memcapacity))
 	strb := humanize.Bytes(uint64(mwthreshold))
-	log.Infof("%v memory threshold at %v of %v\n", bogn.logprefix, strb, stra)
+	infof("%v memory threshold at %v of %v\n", bogn.logprefix, strb, stra)
 
 	return func(disk0 api.Index) error {
 		snap, overflow := bogn.currsnapshot(), false
@@ -139,7 +138,7 @@ func makecompactor(bogn *Bogn) func(api.Index) error {
 			mwthreshold += int64((memcap - float64(mwthreshold)) - bgheap)
 			strb = humanize.Bytes(uint64(mwthreshold))
 			fmsg := "%v memory threshold at %v of %v\n"
-			log.Infof(fmsg, bogn.logprefix, strb, stra)
+			infof(fmsg, bogn.logprefix, strb, stra)
 			return err
 		}
 		return nil
@@ -149,7 +148,7 @@ func makecompactor(bogn *Bogn) func(api.Index) error {
 // called only when full data set in memory.
 // TODO: support `workingset` even when `dgm` is false.
 func dopersist(bogn *Bogn) (err error) {
-	log.Infof("%v dopersist ...", bogn.logprefix)
+	infof("%v dopersist ...", bogn.logprefix)
 
 	snap := bogn.currsnapshot()
 
@@ -185,14 +184,14 @@ func dopersist(bogn *Bogn) (err error) {
 		snap.release()
 
 		fmsg := "%v new snapshot %v compact persisted %v"
-		log.Infof(fmsg, snap.bogn.logprefix, head.attributes(), ndisk.ID())
+		infof(fmsg, snap.bogn.logprefix, head.attributes(), ndisk.ID())
 	}()
 
 	return nil
 }
 
 func doflush(bogn *Bogn, disk0 api.Index) (err error) {
-	log.Infof("%v doflush ...", bogn.logprefix)
+	infof("%v doflush ...", bogn.logprefix)
 
 	snap := bogn.currsnapshot()
 
@@ -214,7 +213,7 @@ func doflush(bogn *Bogn, disk0 api.Index) (err error) {
 		snap.release()
 
 		fmsg := "%v new snapshot %v compact flush (%v) ..."
-		log.Infof(fmsg, snap.bogn.logprefix, head.attributes(), head.id)
+		infof(fmsg, snap.bogn.logprefix, head.attributes(), head.id)
 	}()
 
 	// flush mr [+ mc] [+ disk] -> disk
@@ -263,7 +262,7 @@ func doflush(bogn *Bogn, disk0 api.Index) (err error) {
 		snap.release()
 
 		fmsg := "%v new snapshot %v compact flush to %v"
-		log.Infof(fmsg, snap.bogn.logprefix, head.attributes(), ndisk.ID())
+		infof(fmsg, snap.bogn.logprefix, head.attributes(), ndisk.ID())
 	}()
 
 	return nil
@@ -285,7 +284,7 @@ func startdisk(
 
 	go func() {
 		fmsg := "%v start disk compaction (%v) %q + %q ..."
-		log.Infof(fmsg, bogn.logprefix, snap.id, disk0.ID(), disk1.ID())
+		infof(fmsg, bogn.logprefix, snap.id, disk0.ID(), disk1.ID())
 
 		ndisk, err := bogn.builddiskstore(nlevel, version, uuid, iter)
 		if err != nil {
@@ -322,7 +321,7 @@ func findisk(bogn *Bogn, disk0, disk1, ndisk api.Index) error {
 		snap.release()
 
 		fmsg := "%v new snapshot %v compact disk %v"
-		log.Infof(fmsg, snap.bogn.logprefix, head.attributes(), ndisk.ID())
+		infof(fmsg, snap.bogn.logprefix, head.attributes(), ndisk.ID())
 	}()
 	return nil
 }
@@ -372,7 +371,7 @@ func dowindup(bogn *Bogn) error {
 		snap.release()
 
 		fmsg := "%v new snapshot %s windup on disk %v"
-		log.Infof(fmsg, snap.bogn.logprefix, head.attributes(), ndisk.ID())
+		infof(fmsg, snap.bogn.logprefix, head.attributes(), ndisk.ID())
 	}()
 	return nil
 }

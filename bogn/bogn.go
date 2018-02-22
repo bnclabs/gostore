@@ -20,7 +20,6 @@ import "github.com/bnclabs/gostore/api"
 import "github.com/bnclabs/gostore/lib"
 import "github.com/bnclabs/gostore/llrb"
 import "github.com/bnclabs/gostore/bubt"
-import "github.com/bnclabs/golog"
 import s "github.com/bnclabs/gosettings"
 import humanize "github.com/dustin/go-humanize"
 
@@ -68,7 +67,7 @@ func New(name string, setts s.Settings) (*Bogn, error) {
 	bogn.finch = make(chan struct{})
 	bogn.logprefix = fmt.Sprintf("BOGN [%v]", name)
 
-	log.Infof("%v starting ...", bogn.logprefix)
+	infof("%v starting ...", bogn.logprefix)
 
 	bogn.Compact(bogn.merge)
 
@@ -270,7 +269,7 @@ func (bogn *Bogn) warmupfromdisk(disks []api.Index) api.Index {
 
 	fmsg := "%v memory capacity too small to warmup %v, %v entries"
 	arg1 := humanize.Bytes(uint64(footprint))
-	log.Infof(fmsg, bogn.logprefix, arg1, entries)
+	infof(fmsg, bogn.logprefix, arg1, entries)
 	return nil
 }
 
@@ -288,7 +287,7 @@ func (bogn *Bogn) llrbfromdisk(
 
 	fmsg := "%v warmup LLRB %v (%v) %v entries -> %v in %v"
 	arg1 := humanize.Bytes(uint64(footprint))
-	log.Infof(
+	infof(
 		fmsg, bogn.logprefix, ndisk.ID(), arg1, entries, mw.ID(),
 		time.Since(now).Round(time.Second),
 	)
@@ -310,7 +309,7 @@ func (bogn *Bogn) mvccfromdisk(
 
 	fmsg := "%v warmup MVCC %v (%v) %v entries -> %v in %v"
 	arg1 := humanize.Bytes(uint64(footprint))
-	log.Infof(
+	infof(
 		fmsg, bogn.logprefix, ndisk.ID(), arg1, entries, mw.ID(),
 		time.Since(now).Round(time.Second),
 	)
@@ -335,7 +334,7 @@ func (bogn *Bogn) makepaths(setts s.Settings) error {
 	bubtsetts := setts.Section("bubt.").Trim("bubt.")
 	for _, path := range bubtsetts.Strings("diskpaths") {
 		if err := os.MkdirAll(path, 0775); err != nil {
-			log.Errorf("%v %v", bogn.logprefix, err)
+			errorf("%v %v", bogn.logprefix, err)
 			return err
 		}
 	}
@@ -724,7 +723,7 @@ func (bogn *Bogn) Close() {
 	}
 	bogn.setheadsnapshot(nil)
 
-	log.Infof("%v closed ...", bogn.logprefix)
+	infof("%v closed ...", bogn.logprefix)
 }
 
 // Destroy the disk footprint of this instance, no calls allowed
@@ -916,17 +915,17 @@ func (bogn *Bogn) builddiskbubt(
 	zsize := bubtsetts.Int64("zsize")
 	bt, err := bubt.NewBubt(dirname, paths, msize, zsize)
 	if err != nil {
-		log.Errorf("%v NewBubt(): %v", bogn.logprefix, err)
+		errorf("%v NewBubt(): %v", bogn.logprefix, err)
 		return nil, err
 	}
 
 	// build
 	if err = bt.Build(wrap, nil); err != nil {
-		log.Errorf("%v Build(): %v", bogn.logprefix, err)
+		errorf("%v Build(): %v", bogn.logprefix, err)
 		return nil, err
 	}
 	if _, err = bt.Writemetadata(bogn.mwmetadata(diskseqno)); err != nil {
-		log.Errorf("%v Writemetadata(): %v", bogn.logprefix, err)
+		errorf("%v Writemetadata(): %v", bogn.logprefix, err)
 		return nil, err
 	}
 	bt.Close()
@@ -943,14 +942,14 @@ func (bogn *Bogn) builddiskbubt(
 	}
 	ndisk, err := bubt.OpenSnapshot(dirname, paths, mmap)
 	if err != nil {
-		log.Errorf("%v OpenSnapshot(): %v", bogn.logprefix, err)
+		errorf("%v OpenSnapshot(): %v", bogn.logprefix, err)
 		return nil, err
 	}
 
 	footprint := humanize.Bytes(uint64(ndisk.Footprint()))
 	elapsed := time.Since(now)
 	fmsg := "%v took %v to build bubt %v with %v entries, %v\n"
-	log.Infof(fmsg, bogn.logprefix, elapsed, ndisk.ID(), count, footprint)
+	infof(fmsg, bogn.logprefix, elapsed, ndisk.ID(), count, footprint)
 
 	return ndisk, nil
 }
@@ -981,7 +980,7 @@ func (bogn *Bogn) opendisksnaps(
 			continue
 		}
 		n++
-		log.Infof("%v open-disksnapshot %v", bogn.logprefix, disk.ID())
+		infof("%v open-disksnapshot %v", bogn.logprefix, disk.ID())
 	}
 
 	if n > 1 {
@@ -1000,7 +999,7 @@ func (bogn *Bogn) openbubtsnaps(
 	for _, path := range paths {
 		fis, err := ioutil.ReadDir(path)
 		if err != nil {
-			log.Errorf("%v %v", bogn.logprefix, err)
+			errorf("%v %v", bogn.logprefix, err)
 			return disks, err
 		}
 		for _, fi := range fis {
@@ -1046,7 +1045,7 @@ func (bogn *Bogn) compactdisksnaps(merge bool, setts s.Settings) (err error) {
 	for _, path := range paths {
 		fis, err := ioutil.ReadDir(path)
 		if err != nil {
-			log.Errorf("%v %v", bogn.logprefix, err)
+			errorf("%v %v", bogn.logprefix, err)
 			return err
 		}
 		for _, fi := range fis {
@@ -1113,7 +1112,7 @@ func (bogn *Bogn) mergedisksnapshots(disks []api.Index) error {
 		}
 		iter(true /*fin*/)
 		fmsg := "%v merging [%v] -> %v"
-		log.Infof(fmsg, bogn.logprefix, strings.Join(arg1, ","), ndisk.ID())
+		infof(fmsg, bogn.logprefix, strings.Join(arg1, ","), ndisk.ID())
 		ndisk.Close()
 	}
 
@@ -1140,7 +1139,7 @@ func (bogn *Bogn) destroybubtsnaps(bubtsetts s.Settings) error {
 	for _, path := range paths {
 		fis, err := ioutil.ReadDir(path)
 		if err != nil {
-			log.Errorf("%v %v", bogn.logprefix, err)
+			errorf("%v %v", bogn.logprefix, err)
 			return err
 		}
 		for _, fi := range fis {

@@ -12,7 +12,6 @@ import "sync/atomic"
 import "github.com/bnclabs/gostore/lib"
 import "github.com/bnclabs/gostore/api"
 import "github.com/bnclabs/gostore/malloc"
-import "github.com/bnclabs/golog"
 import s "github.com/bnclabs/gosettings"
 import humanize "github.com/dustin/go-humanize"
 
@@ -57,7 +56,7 @@ func NewLLRB(name string, setts s.Settings) *LLRB {
 	// statistics
 	llrb.h_upsertdepth = lib.NewhistorgramInt64(10, 100, 10)
 
-	log.Infof("%v started ...\n", llrb.logprefix)
+	infof("%v started ...\n", llrb.logprefix)
 	llrb.logarenasettings()
 	return llrb
 }
@@ -860,27 +859,27 @@ func (llrb *LLRB) Log() {
 	// log information about key memory arena
 	kmem := humanize.Bytes(uint64(stats["keymemory"].(int64)))
 	as := []string{"node.capacity", "node.heap", "node.alloc", "node.overhead"}
-	log.Infof("%v keymem(%v): %v\n", llrb.logprefix, kmem, summary(as...))
+	infof("%v keymem(%v): %v\n", llrb.logprefix, kmem, summary(as...))
 	// log information about key memory utilization
 	sizes, zs := llrb.nodearena.Utilization()
-	log.Infof("%v key %v", llrb.logprefix, loguz(sizes, zs, "node"))
+	infof("%v key %v", llrb.logprefix, loguz(sizes, zs, "node"))
 	// log information about value memory arena
 	vmem := humanize.Bytes(uint64(stats["valmemory"].(int64)))
 	as = []string{
 		"value.capacity", "value.heap", "value.alloc", "value.overhead",
 	}
-	log.Infof("%v valmem(%v): %v\n", llrb.logprefix, vmem, summary(as...))
+	infof("%v valmem(%v): %v\n", llrb.logprefix, vmem, summary(as...))
 	// log information about key memory utilization
 	sizes, zs = llrb.valarena.Utilization()
-	log.Infof("%v val %v", llrb.logprefix, loguz(sizes, zs, "node"))
+	infof("%v val %v", llrb.logprefix, loguz(sizes, zs, "node"))
 
-	log.Infof("%v count: %10d\n", llrb.logprefix, stats["n_count"])
+	infof("%v count: %10d\n", llrb.logprefix, stats["n_count"])
 	a, b, c := stats["n_inserts"], stats["n_updates"], stats["n_deletes"]
-	log.Infof("%v write: %10d(ins) %10d(ups) %10d(del)\n", lprefix, a, b, c)
+	infof("%v write: %10d(ins) %10d(ups) %10d(del)\n", lprefix, a, b, c)
 	a, b, c = stats["n_nodes"], stats["n_frees"], stats["n_clones"]
-	log.Infof("%v nodes: %10d(nds) %10d(fre) %10d(cln)\n", lprefix, a, b, c)
+	infof("%v nodes: %10d(nds) %10d(fre) %10d(cln)\n", lprefix, a, b, c)
 	a, b, c = stats["n_txns"], stats["n_commits"], stats["n_aborts"]
-	log.Infof("%v txns : %10d(txn) %10d(com) %10d(abr)\n", lprefix, a, b, c)
+	infof("%v txns : %10d(txn) %10d(com) %10d(abr)\n", lprefix, a, b, c)
 
 	llrb.runlock()
 }
@@ -933,7 +932,7 @@ func (llrb *LLRB) Destroy() {
 	for llrb.dodestory() == false {
 		time.Sleep(100 * time.Millisecond)
 	}
-	log.Infof("%v destroyed\n", llrb.logprefix)
+	infof("%v destroyed\n", llrb.logprefix)
 }
 
 func (llrb *LLRB) dodestory() bool {
@@ -1051,11 +1050,11 @@ func (llrb *LLRB) logarenasettings() {
 	kblocks := len(stats["node.blocks"].([]int64))
 	cp := humanize.Bytes(uint64(stats["node.capacity"].(int64)))
 	fmsg := "%v key arena %v blocks with capacity %v\n"
-	log.Infof(fmsg, llrb.logprefix, kblocks, cp)
+	infof(fmsg, llrb.logprefix, kblocks, cp)
 
 	// value arena
 	vblocks := len(stats["value.blocks"].([]int64))
 	cp = humanize.Bytes(uint64(stats["value.capacity"].(int64)))
 	fmsg = "%v val arena %v blocks with capacity %v\n"
-	log.Infof(fmsg, llrb.logprefix, vblocks, cp)
+	infof(fmsg, llrb.logprefix, vblocks, cp)
 }

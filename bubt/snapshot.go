@@ -16,7 +16,6 @@ import "encoding/binary"
 import "github.com/bnclabs/gostore/api"
 import "github.com/bnclabs/gostore/lib"
 import "github.com/bnclabs/gostore/flock"
-import "github.com/bnclabs/golog"
 import s "github.com/bnclabs/gosettings"
 
 // Snapshot to read index entries persisted using Bubt builder. Since
@@ -80,7 +79,7 @@ func OpenSnapshot(
 	snap.lockfile = filepath.Join(filepath.Dir(snap.mfile), "bubt.lock")
 	if snap.rw, err = flock.New(snap.lockfile); err != nil {
 		snap.rw = nil
-		log.Errorf("%v flock.New(): %v", snap.logprefix, err)
+		errorf("%v flock.New(): %v", snap.logprefix, err)
 		return
 	}
 	snap.rw.RLock()
@@ -98,11 +97,11 @@ func OpenSnapshot(
 
 // PurgeSnapshot remove disk footprint of this snapshot.
 func PurgeSnapshot(name string, paths []string) {
-	log.Infof("force purging snapshot %v", name)
+	infof("force purging snapshot %v", name)
 	for _, path := range paths {
 		dirpath := filepath.Join(path, name)
 		if err := os.RemoveAll(dirpath); err != nil {
-			log.Errorf("%v", err)
+			errorf("%v", err)
 		}
 	}
 }
@@ -120,7 +119,7 @@ func (snap *Snapshot) loadreaders(
 				npaths = append(npaths, filepath.Join(path, name))
 			}
 		} else {
-			log.Errorf("%v ReadDir(): %v", snap.logprefix, err)
+			errorf("%v ReadDir(): %v", snap.logprefix, err)
 			return err
 		}
 	}
@@ -135,14 +134,14 @@ func (snap *Snapshot) loadreaders(
 				}
 			}
 		} else {
-			log.Errorf("%v ReadDir(): %v", snap.logprefix, err)
+			errorf("%v ReadDir(): %v", snap.logprefix, err)
 			return err
 		}
 	}
 
 	if snap.mfile == "" {
 		err := fmt.Errorf("bubt.snap.nomindex")
-		log.Errorf("%v %v", snap.logprefix, err)
+		errorf("%v %v", snap.logprefix, err)
 		return err
 	}
 	snap.readm = openfile(snap.mfile, true)
@@ -163,7 +162,7 @@ func (snap *Snapshot) readheader(r io.ReaderAt) (*Snapshot, error) {
 	fsize := filesize(r)
 	if fsize < 0 {
 		err := fmt.Errorf("bubt.snap.nomarker")
-		log.Errorf("%v %v", snap.logprefix, err)
+		errorf("%v %v", snap.logprefix, err)
 		return snap, err
 	}
 
@@ -172,17 +171,17 @@ func (snap *Snapshot) readheader(r io.ReaderAt) (*Snapshot, error) {
 	buffer := lib.Fixbuffer(nil, MarkerBlocksize)
 	n, err := r.ReadAt(buffer, fpos)
 	if err != nil {
-		log.Errorf("%v Read Markerblocksize: %v", snap.logprefix, err)
+		errorf("%v Read Markerblocksize: %v", snap.logprefix, err)
 		return snap, err
 	} else if n < len(buffer) {
 		err := fmt.Errorf("bubt.snap.partialmarker")
-		log.Errorf("%v Read Markerblocksize: %v", snap.logprefix, err)
+		errorf("%v Read Markerblocksize: %v", snap.logprefix, err)
 		return snap, err
 	}
 	for _, c := range buffer {
 		if c != MarkerByte {
 			err = fmt.Errorf("bubt.snap.invalidmarker")
-			log.Errorf("%v Read Markerblock: %v", snap.logprefix, err)
+			errorf("%v Read Markerblock: %v", snap.logprefix, err)
 			return snap, err
 		}
 	}
@@ -190,36 +189,36 @@ func (snap *Snapshot) readheader(r io.ReaderAt) (*Snapshot, error) {
 	// read metadata blocks
 	if fpos -= 8; fpos < 0 {
 		err := fmt.Errorf("bubt.snap.nomdlen")
-		log.Errorf("%v Read metadatablock: %v", snap.logprefix, err)
+		errorf("%v Read metadatablock: %v", snap.logprefix, err)
 		return snap, err
 	}
 
 	var scratch [8]byte
 	n, err = r.ReadAt(scratch[:], fpos)
 	if err != nil {
-		log.Errorf("%v Read metadatablock: %v", snap.logprefix, err)
+		errorf("%v Read metadatablock: %v", snap.logprefix, err)
 		return snap, err
 	} else if n < len(scratch) {
 		err := fmt.Errorf("bubt.snap.partialmdlen")
-		log.Errorf("%v Read metadatablock: %v", snap.logprefix, err)
+		errorf("%v Read metadatablock: %v", snap.logprefix, err)
 		return snap, err
 	}
 	mdlen := binary.BigEndian.Uint64(scratch[:])
 
 	if fpos -= int64(mdlen) - 8; fpos < 0 {
 		err := fmt.Errorf("bubt.snap.nometadata")
-		log.Errorf("%v Read metadatablock: %v", snap.logprefix, err)
+		errorf("%v Read metadatablock: %v", snap.logprefix, err)
 		return snap, err
 	}
 
 	snap.metadata = lib.Fixbuffer(nil, int64(mdlen))
 	n, err = r.ReadAt(snap.metadata, fpos)
 	if err != nil {
-		log.Errorf("%v Read metadatablock: %v", snap.logprefix, err)
+		errorf("%v Read metadatablock: %v", snap.logprefix, err)
 		return snap, err
 	} else if n < len(snap.metadata) {
 		err := fmt.Errorf("bubt.snap.partialmetadata")
-		log.Errorf("%v Read metadatablock: %v", snap.logprefix, err)
+		errorf("%v Read metadatablock: %v", snap.logprefix, err)
 		return snap, err
 	}
 	ln := binary.BigEndian.Uint64(snap.metadata)
@@ -228,7 +227,7 @@ func (snap *Snapshot) readheader(r io.ReaderAt) (*Snapshot, error) {
 	// read settings
 	if fpos -= MarkerBlocksize; fpos < 0 {
 		err := fmt.Errorf("bubt.snap.nosettings")
-		log.Errorf("%v Read settings: %v", snap.logprefix, err)
+		errorf("%v Read settings: %v", snap.logprefix, err)
 		return snap, err
 	}
 
@@ -237,18 +236,18 @@ func (snap *Snapshot) readheader(r io.ReaderAt) (*Snapshot, error) {
 	buffer = lib.Fixbuffer(buffer, MarkerBlocksize)
 	n, err = r.ReadAt(buffer, fpos)
 	if err != nil {
-		log.Errorf("%v Read settings: %v", snap.logprefix, err)
+		errorf("%v Read settings: %v", snap.logprefix, err)
 		return snap, err
 	} else if n < len(buffer) {
 		err := fmt.Errorf("bubt.snap.partialsettings")
-		log.Errorf("%v Read settings: %v", snap.logprefix, err)
+		errorf("%v Read settings: %v", snap.logprefix, err)
 		return snap, err
 	}
 	ln = binary.BigEndian.Uint64(buffer)
 	json.Unmarshal(buffer[8:8+ln], &setts)
 	if snap.name != setts.String("name") {
 		err := fmt.Errorf("bubt.snap.invalidsettings")
-		log.Errorf("%v Read settings: %v", snap.logprefix, err)
+		errorf("%v Read settings: %v", snap.logprefix, err)
 		return snap, err
 	}
 	snap.zblocksize = setts.Int64("zblocksize")
@@ -287,7 +286,7 @@ func (snap *Snapshot) Log() {
 	fmsg := "%v zblock:%v mblock:%v footprint: %v n_count: %v"
 	zsize, msize := snap.zblocksize, snap.mblocksize
 	footprint, n_count := snap.footprint, snap.n_count
-	log.Infof(fmsg, snap.logprefix, zsize, msize, footprint, n_count)
+	infof(fmsg, snap.logprefix, zsize, msize, footprint, n_count)
 }
 
 // Validate snapshot on disk. This is a costly call, use it only
@@ -324,12 +323,12 @@ func (snap *Snapshot) Validate() {
 // be destoryed.
 func (snap *Snapshot) Close() {
 	if err := closereadat(snap.readm); err != nil {
-		log.Errorf("%v close %q: %v", snap.logprefix, snap.mfile, err)
+		errorf("%v close %q: %v", snap.logprefix, snap.mfile, err)
 	}
 	for i, rd := range snap.readzs {
 		err := closereadat(rd)
 		if err != nil {
-			log.Errorf("%v close %q: %v", snap.logprefix, snap.zfiles[i], err)
+			errorf("%v close %q: %v", snap.logprefix, snap.zfiles[i], err)
 		}
 	}
 	if snap.rw != nil {
@@ -343,18 +342,18 @@ func (snap *Snapshot) Destroy() {
 	if snap == nil {
 		return
 	}
-	log.Infof("%v purging disk snapshot", snap.logprefix)
+	infof("%v purging disk snapshot", snap.logprefix)
 	dirs := map[string]bool{}
 	if snap.rw != nil {
 		snap.rw.Lock()
 		// lock and remove m-file and one or more z-files.
 		if err := os.Remove(snap.mfile); err != nil {
-			log.Errorf("%v %v", snap.logprefix, err)
+			errorf("%v %v", snap.logprefix, err)
 		}
 		dirs[filepath.Dir(snap.mfile)] = true
 		for _, zfile := range snap.zfiles {
 			if err := os.Remove(zfile); err != nil {
-				log.Errorf("%v %v", snap.logprefix, err)
+				errorf("%v %v", snap.logprefix, err)
 			}
 			dirs[filepath.Dir(zfile)] = true
 		}
@@ -362,12 +361,12 @@ func (snap *Snapshot) Destroy() {
 	}
 	// remove lock file
 	if err := os.Remove(snap.lockfile); err != nil {
-		log.Errorf("%v %v", snap.logprefix, err)
+		errorf("%v %v", snap.logprefix, err)
 	}
 	// remove directories path/name for each path in paths
 	for dir := range dirs {
 		if err := os.Remove(dir); err != nil {
-			log.Errorf("%v %v", snap.logprefix, err)
+			errorf("%v %v", snap.logprefix, err)
 		}
 	}
 }
@@ -471,13 +470,13 @@ func (snap *Snapshot) Scan() api.Iterator {
 	if err != nil {
 		view.Abort()
 		fmsg := "%v view(%v).OpenCursor(nil): %v"
-		log.Errorf(fmsg, snap.logprefix, view.id, err)
+		errorf(fmsg, snap.logprefix, view.id, err)
 		return nil
 
 	} else if cur == nil {
 		view.Abort()
 		fmsg := "%v view(%v).OpenCursor(nil) cursor is nil"
-		log.Errorf(fmsg, snap.logprefix, view.id)
+		errorf(fmsg, snap.logprefix, view.id)
 		return nil
 	}
 

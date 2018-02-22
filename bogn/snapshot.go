@@ -11,7 +11,6 @@ import "github.com/bnclabs/gostore/api"
 import "github.com/bnclabs/gostore/lib"
 import "github.com/bnclabs/gostore/lsm"
 import "github.com/bnclabs/gostore/llrb"
-import "github.com/bnclabs/golog"
 
 type snapshot struct {
 	// must be 8-byte aligned.
@@ -40,7 +39,7 @@ func opensnapshot(
 	head := &snapshot{id: uuid, bogn: bogn, mw: mw, disks: disks, next: nil}
 
 	fmsg := "%v open-snapshot %s %v"
-	log.Infof(fmsg, bogn.logprefix, head.id, head.attributes())
+	infof(fmsg, bogn.logprefix, head.id, head.attributes())
 
 	if head.mw == nil {
 		if head.mw, err = bogn.newmemstore("mw", 0); err != nil {
