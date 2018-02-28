@@ -45,6 +45,6 @@ func makesettings() s.Settings {
 
 func destoryindex(name, paths string) {
 	setts := Defaultsettings()
-	setts["bubt.diskpaths"] = paths
-	PurgeIndex(name, setts)
+	logpath, diskstore := setts.String("logpath"), setts.String("diskstore")
+	PurgeIndex(name, logpath, diskstore, strings.Split(paths, ","))
 }

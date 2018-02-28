@@ -7,6 +7,10 @@ import "github.com/bnclabs/gostore/llrb"
 // settings and tune settings parameter for desired behaviour. Default
 // settings include llrb.Defaultsettings().
 //
+// "logpath" (string, default: "")
+//		Directory path to store log files. If not supplied, and durable
+//		is true, then one of the diskpath from diskstore will be used.
+//
 // "memstore" (string, default: "llrb")
 //		Type of index for in memory storage, can be "llrb" or "mvcc".
 //
@@ -51,9 +55,9 @@ import "github.com/bnclabs/gostore/llrb"
 //
 func Defaultsettings() s.Settings {
 	setts := s.Settings{
+		"logpath":    "",
 		"memstore":   "mvcc",
 		"diskstore":  "bubt",
-		"merge":      true,
 		"durable":    true,
 		"dgm":        false,
 		"workingset": false,

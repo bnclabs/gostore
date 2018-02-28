@@ -20,6 +20,7 @@ type snapshot struct {
 
 	id           string
 	bogn         *Bogn
+	beginseqno   uint64
 	mw, mr, mc   api.Index
 	disks        [16]api.Index
 	yget         api.Getter
@@ -31,12 +32,16 @@ type snapshot struct {
 }
 
 func opensnapshot(
-	bogn *Bogn, mw api.Index, disks [16]api.Index) (*snapshot, error) {
+	bogn *Bogn, mw api.Index, disks [16]api.Index,
+	beginseqno uint64) (*snapshot, error) {
 
 	var err error
 
 	uuid := bogn.newuuid()
-	head := &snapshot{id: uuid, bogn: bogn, mw: mw, disks: disks, next: nil}
+	head := &snapshot{
+		id: uuid, bogn: bogn, beginseqno: beginseqno,
+		mw: mw, disks: disks, next: nil,
+	}
 
 	fmsg := "%v open-snapshot %s %v"
 	infof(fmsg, bogn.logprefix, head.id, head.attributes())
@@ -61,12 +66,15 @@ func opensnapshot(
 
 func newsnapshot(
 	bogn *Bogn, mw, mr, mc api.Index, disks [16]api.Index,
-	uuid string) *snapshot {
+	uuid string, beginseqno uint64) *snapshot {
 
 	if uuid == "" {
 		uuid = bogn.newuuid()
 	}
-	head := &snapshot{id: uuid, bogn: bogn, mw: mw, mr: mr, mc: mc}
+	head := &snapshot{
+		id: uuid, bogn: bogn, beginseqno: beginseqno,
+		mw: mw, mr: mr, mc: mc,
+	}
 	copy(head.disks[:], disks[:])
 	if head.mc != nil {
 		numcpu := runtime.GOMAXPROCS(-1) * 100
@@ -97,6 +105,16 @@ func (snap *snapshot) addtopurge(indexes ...api.Index) {
 			snap.purgeindexes = append(snap.purgeindexes, index)
 		}
 	}
+}
+
+func (snap *snapshot) isdirty() bool {
+	mwseqno := snap.mwseqno()
+	if mwseqno < snap.beginseqno {
+		panic("impossible case")
+	} else if mwseqno == snap.beginseqno {
+		return false
+	}
+	return true
 }
 
 func (snap *snapshot) latestlevel() (int, api.Index) {

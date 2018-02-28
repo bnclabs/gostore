@@ -9,6 +9,6 @@ func BenchmarkNewsnapshot(b *testing.B) {
 
 	bogn := &Bogn{}
 	for i := 0; i < b.N; i++ {
-		newsnapshot(bogn, nil, nil, nil, disks, "")
+		newsnapshot(bogn, nil, nil, nil, disks, "", 0)
 	}
 }
