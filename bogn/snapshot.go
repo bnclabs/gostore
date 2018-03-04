@@ -129,8 +129,9 @@ func (snap *snapshot) latestlevel() (int, api.Index) {
 	return -1, nil
 }
 
-func (snap *snapshot) nextemptylevel(level int) (nextlevel int) {
+func (snap *snapshot) nextbutlevel(level int) (nextlevel int) {
 	if level >= len(snap.disks) {
+		panic("impossible situation")
 	} else if level == (len(snap.disks) - 1) {
 		return -1
 	}
@@ -325,26 +326,6 @@ func (snap *snapshot) flushiterator(disk api.Index) api.Iterator {
 	return reduceiter(scans)
 }
 
-func (snap *snapshot) compactiterator(d0, d1 api.Index) api.Iterator {
-	var ref [20]api.Iterator
-	scans := ref[:0]
-
-	if d0 == nil {
-		return d1.Scan()
-	} else if d1 == nil {
-		return d0.Scan()
-	}
-
-	if iter := d0.Scan(); iter != nil {
-		scans = append(scans, iter)
-	}
-	if iter := d1.Scan(); iter != nil {
-		scans = append(scans, iter)
-	}
-
-	return reduceiter(scans)
-}
-
 func (snap *snapshot) windupiterator(disk api.Index) api.Iterator {
 	var ref [20]api.Iterator
 	scans := ref[:0]
@@ -437,6 +418,26 @@ func (snap *snapshot) attributes() string {
 	memlevels := strings.Join(flags, "")
 	disklevels := strings.Join(ints, ",")
 	return "<" + memlevels + " " + disklevels + ">"
+}
+
+func compactiterator(d0, d1 api.Index) api.Iterator {
+	var ref [20]api.Iterator
+	scans := ref[:0]
+
+	if d0 == nil {
+		return d1.Scan()
+	} else if d1 == nil {
+		return d0.Scan()
+	}
+
+	if iter := d0.Scan(); iter != nil {
+		scans = append(scans, iter)
+	}
+	if iter := d1.Scan(); iter != nil {
+		scans = append(scans, iter)
+	}
+
+	return reduceiter(scans)
 }
 
 func reduceiter(scans []api.Iterator) api.Iterator {

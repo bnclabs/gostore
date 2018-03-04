@@ -1,13 +1,13 @@
 package bogn
 
 import "time"
-import "fmt"
 import "unsafe"
 import "sync/atomic"
 import "runtime/debug"
 
 import "github.com/bnclabs/gostore/api"
 import "github.com/bnclabs/gostore/lib"
+import s "github.com/bnclabs/gosettings"
 import humanize "github.com/dustin/go-humanize"
 
 // Compacttick timer tick to check for memory overflow, persistance,
@@ -15,6 +15,13 @@ import humanize "github.com/dustin/go-humanize"
 // routine uses this tick to periodically purge un-referenced storage
 // instance.
 var Compacttick = time.Duration(1 * time.Second)
+
+// list worker functions
+// dopersist(bogn *Bogn) (err error)
+// doflush(bogn *Bogn, disk0 api.Index) (err error)
+//   startdisk( bogn *Bogn, disk0, disk1 api.Index, nlevel int)
+//   findisk(bogn *Bogn, disk0, disk1, ndisk api.Index) error
+// dowindup(bogn *Bogn) error
 
 func compactor(bogn *Bogn) {
 	infof("%v starting compactor ...", bogn.logprefix)
@@ -35,14 +42,14 @@ func compactor(bogn *Bogn) {
 
 	atomic.AddInt64(&bogn.nroutines, 1)
 	ticker := time.NewTicker(Compacttick)
-	docompact := makecompactor(bogn)
+	doflushing := makeflusher(bogn)
 
 	var respch chan api.Index
 	var errch chan error
 
 	// atmost two concurrent compaction can run.
 	// a. compacting data in memory with latest level on disk, doflush().
-	// b. compacting data betwen two disk levels, docompact().
+	// b. compacting data betwen two disk levels, doflushing().
 
 	// disk  - latest level on disk
 	// disk0 - newer disk among compacted disks.
@@ -57,7 +64,7 @@ loop:
 			break loop
 
 		} else if bogn.durable == false { // disk is not involved.
-			continue
+			continue loop
 		}
 
 		if respch == nil { // try to start disk compaction.
@@ -85,10 +92,13 @@ loop:
 				}
 
 			default:
+				if bogn.isclosed() {
+					continue loop
+				}
 			}
 		}
 
-		if err := docompact(disk0); err != nil {
+		if err := doflushing(disk0); err != nil {
 			panic(err)
 		}
 	}
@@ -98,7 +108,7 @@ loop:
 	}
 }
 
-func makecompactor(bogn *Bogn) func(api.Index) error {
+func makeflusher(bogn *Bogn) func(api.Index) error {
 	memcap := float64(bogn.memcapacity)
 	// adaptive threshold.
 	mwthreshold := int64(memcap * .9) // start with 90% of configured capacity
@@ -134,18 +144,13 @@ func makecompactor(bogn *Bogn) func(api.Index) error {
 			}
 		}
 
-		if overflow || bogn.flushelapsed() {
-			fmsg := "%v snapshot %v moved ahead from %v to %v"
-			from, to := snap.beginseqno, snap.mwseqno()
-			infof(fmsg, bogn.logprefix, snap.id, from, to)
-
-			err := doflush(bogn, disk0)
+		if flushelapsed := bogn.flushelapsed(); overflow || flushelapsed {
+			err := doflush(bogn, disk0, overflow, flushelapsed)
 
 			// adaptive threshold
-			bgheap := float64(snap.memheap())
-			mwthreshold += int64((memcap - float64(mwthreshold)) - bgheap)
+			mwthreshold = int64(memcap - float64(snap.memheap()))
 			strb = humanize.Bytes(uint64(mwthreshold))
-			fmsg = "%v new memory threshold at %v of %v\n"
+			fmsg := "%v new memory threshold at %v of %v\n"
 			infof(fmsg, bogn.logprefix, strb, stra)
 			return err
 		}
@@ -161,10 +166,12 @@ func dopersist(bogn *Bogn) (err error) {
 	snap := bogn.currsnapshot()
 
 	level := len(snap.disks) - 1
+	nversion := bogn.nextdiskversion(level)
+	disksetts := bogn.settingstodisk()
 
 	// iterate on snap.mw
 	iter, uuid := snap.persistiterator(), bogn.newuuid()
-	ndisk, err := bogn.builddiskstore(level, uuid, iter)
+	ndisk, err := bogn.builddiskstore(level, nversion, uuid, disksetts, iter)
 	if err != nil {
 		return err
 	}
@@ -196,24 +203,41 @@ func dopersist(bogn *Bogn) (err error) {
 	return nil
 }
 
-func doflush(bogn *Bogn, disk0 api.Index) (err error) {
-	infof("%v doflush ...", bogn.logprefix)
+func doflush(bogn *Bogn, disk0 api.Index, overflow, elapsed bool) (err error) {
+	cause := "overflow"
+	if overflow && elapsed {
+		panic("impossible situation")
+	} else if (!overflow) && (!elapsed) {
+		panic("impossible situation")
+	} else if overflow == false && elapsed == true {
+		cause = "elapsed"
+	}
+	infof("%v doflush (%v) ...", bogn.logprefix, cause)
 
 	snap := bogn.currsnapshot()
 
 	// move mw -> mr
+
+	var mwseqno uint64
 
 	uuid := bogn.newuuid()
 	func() {
 		bogn.snaplock()
 		defer bogn.snapunlock()
 
+		fmsg := "%v snapshot %v moved ahead from %v to %v (heap: %v)"
+		from, bgheap := snap.beginseqno, snap.memheap()
+		mwseqno = snap.mwseqno()
+		arg1 := humanize.Bytes(uint64(bgheap))
+		infof(fmsg, bogn.logprefix, snap.id, from, mwseqno, arg1)
+
 		var mw api.Index
-		if mw, err = bogn.newmemstore("mw", snap.mwseqno()); err != nil {
+		if mw, err = bogn.newmemstore("mw", mwseqno); err != nil {
 			panic(err) // should never happen
 		}
-		seqno := bogn.Getseqno()
-		head := newsnapshot(bogn, mw, snap.mw, snap.mc, snap.disks, uuid, seqno)
+		head := newsnapshot(
+			bogn, mw, snap.mw, snap.mc, snap.disks, uuid, mwseqno,
+		)
 		atomic.StorePointer(&head.next, unsafe.Pointer(snap))
 		head.refer()
 		bogn.setheadsnapshot(head)
@@ -221,21 +245,19 @@ func doflush(bogn *Bogn, disk0 api.Index) (err error) {
 		snap.release()
 		snap = head
 
-		fmsg := "%v new snapshot %v preparing for flush %v ..."
+		fmsg = "%v new snapshot %v preparing for flush %v ..."
 		infof(fmsg, head.bogn.logprefix, head.attributes(), head.id)
 	}()
 	// flush mr [+ mc] [+ disk] -> disk
 
-	nlevel := bogn.pickflushdisk(disk0)
-	if nlevel < 0 {
-		panic(fmt.Errorf("impossible situation"))
-	}
-	disk := snap.disks[nlevel]
+	disk, nlevel := bogn.pickflushdisk(disk0)
+	nversion := bogn.nextdiskversion(nlevel)
+	disksetts := bogn.settingstodisk()
 
 	// iterate on snap.mr [+ snap.mc] [+ disk]
 	uuid = bogn.newuuid()
 	iter := snap.flushiterator(disk)
-	ndisk, err := bogn.builddiskstore(nlevel, uuid, iter)
+	ndisk, err := bogn.builddiskstore(nlevel, nversion, uuid, disksetts, iter)
 	if err != nil {
 		return err
 	}
@@ -263,8 +285,7 @@ func doflush(bogn *Bogn, disk0 api.Index) (err error) {
 
 		// TODO: between head1 and head newly cached entries would be
 		// lost.
-		seqno := bogn.Getseqno()
-		head := newsnapshot(bogn, snap.mw, nil, mc, disks, uuid, seqno)
+		head := newsnapshot(bogn, snap.mw, nil, mc, disks, uuid, mwseqno)
 		atomic.StorePointer(&head.next, unsafe.Pointer(snap))
 		head.refer()
 		bogn.setheadsnapshot(head)
@@ -285,16 +306,18 @@ func startdisk(
 
 	infof("%v startdisk ...", bogn.logprefix)
 
-	snap := bogn.currsnapshot()
-
 	respch, errch := make(chan api.Index, 1), make(chan error, 1)
-	iter, uuid := snap.compactiterator(disk0, disk1), bogn.newuuid()
+	iter, uuid := compactiterator(disk0, disk1), bogn.newuuid()
+	nversion := bogn.nextdiskversion(nlevel)
+	disksetts := (s.Settings{}).Mixin(bogn.settingsfromdisk(disk0))
 
 	go func() {
-		fmsg := "%v start disk compaction (%v) %q + %q ..."
-		infof(fmsg, bogn.logprefix, snap.id, disk0.ID(), disk1.ID())
+		fmsg := "%v start disk compaction %q + %q ..."
+		infof(fmsg, bogn.logprefix, disk0.ID(), disk1.ID())
 
-		ndisk, err := bogn.builddiskstore(nlevel, uuid, iter)
+		ndisk, err := bogn.builddiskstore(
+			nlevel, nversion, uuid, disksetts, iter,
+		)
 		if err != nil {
 			errch <- err
 			return
@@ -347,22 +370,24 @@ func dowindup(bogn *Bogn) error {
 
 	snap := bogn.currsnapshot()
 	if !snap.isdirty() {
-		debugf("%v no new mutations on snapshot %v", bogn.logprefix, snap.id)
+		infof("%v no new mutations on snapshot %v", bogn.logprefix, snap.id)
 		return nil
 	}
 	fmsg := "%v snapshot %v moved ahead from %v to %v"
 	infof(fmsg, bogn.logprefix, snap.id, snap.beginseqno, snap.mwseqno())
 
+	var purgedisk api.Index
 	var nlevel int
 	if bogn.dgmstate == 0 { // full set in memory
-		nlevel = len(snap.disks) - 1
+		purgedisk, nlevel = snap.disks[len(snap.disks)-1], len(snap.disks)-1
 	} else {
-		nlevel = bogn.pickflushdisk(nil)
+		purgedisk, nlevel = bogn.pickflushdisk(nil)
 	}
-	purgedisk := snap.disks[nlevel]
+	nversion := bogn.nextdiskversion(nlevel)
+	disksetts := bogn.settingstodisk()
 
 	iter, uuid := snap.windupiterator(purgedisk), bogn.newuuid()
-	ndisk, err := bogn.builddiskstore(nlevel, uuid, iter)
+	ndisk, err := bogn.builddiskstore(nlevel, nversion, uuid, disksetts, iter)
 	if err != nil {
 		return err
 	}
