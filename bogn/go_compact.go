@@ -373,8 +373,9 @@ func dowindup(bogn *Bogn) error {
 		infof("%v no new mutations on snapshot %v", bogn.logprefix, snap.id)
 		return nil
 	}
-	fmsg := "%v snapshot %v moved ahead from %v to %v"
-	infof(fmsg, bogn.logprefix, snap.id, snap.beginseqno, snap.mwseqno())
+	fmsg := "%v snapshot %v moved ahead from %v to %v (heap: %v)"
+	mwseqno, bgheap := snap.mwseqno(), snap.memheap()
+	infof(fmsg, bogn.logprefix, snap.id, snap.beginseqno, mwseqno, bgheap)
 
 	var purgedisk api.Index
 	var nlevel int

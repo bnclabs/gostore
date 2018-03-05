@@ -1031,17 +1031,15 @@ func (bogn *Bogn) builddiskbubt(
 	}
 	bt.Close()
 
-	// NOTE: open disk, if the newly built level is the latest level in a
-	// multi-level situation, enable mmap for leaf nodes.
+	// TODO: make this as separate function and let it be called
+	// with more customization in dopersist, doflush, findisk, dowindup.
 	mmap := bubtsetts.Bool("mmap")
-	//snap := bogn.currsnapshot()
-	//if snap != nil {
-	//	llevel, _ := snap.latestlevel()
-	//	olevel, _ := snap.oldestlevel()
-	//	if llevel < 0 || ((llevel < olevel) && (level <= llevel)) {
-	//		mmap = true
-	//	}
-	//}
+	snap := bogn.currsnapshot()
+	if mmap == false && snap != nil {
+		if latestlevel, _ := snap.latestlevel(); level <= latestlevel {
+			mmap = true
+		}
+	}
 	ndisk, err := bubt.OpenSnapshot(dirname, paths, mmap)
 	if err != nil {
 		errorf("%v OpenSnapshot(): %v", bogn.logprefix, err)
