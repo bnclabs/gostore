@@ -29,15 +29,24 @@ import "github.com/bnclabs/gostore/llrb"
 //      Set this as true only when a subset of keys in bogn-index will
 //      be actived accessed, either for read or write.
 //
-// "ratio" (floating, default: .25)
+// "flushratio" (floating, default: .25)
 //      This configuration is valid only when `dgm` is set to true.
-//      Should be a value between 0.5 to 0.1, when the ratio between
-//      newer level's memory footprint (or disk footprint) and older
-//      level's disk footprint exceeds bogn-ratio, then the two levels
-//		shall be compacted.
+//      When ratio between memory footprint, for the latest batch of
+//		mutations, and latest level's disk-footprint falls below flushratio,
+//		then a newer level will be created to flush the latest batch of
+//		mutations in memory.
 //
-// "period" (int64, default: 100)
+// "flushperiod" (int64, default: 100)
 //		Time is seconds to periodically persist transient writes onto disk.
+//
+// "compactratio" (floating, default: .50)
+//      This configuration is valid only when `dgm` is set to true.
+//		Two succesive disk levels will be merged together into a single
+//		snapshot if their ratio exceed compactratio.
+//
+// "compactperiod" (int64, default: 3600)
+//      If the lifetime, measured in seconds, of a disk snapshot exceeds
+//		compactperiod, then it will be merged with next disk level snapshot.
 //
 // "bubt.msize" (int64, default: 4096)
 //		BottomsUpBTree, size of intermediate node on disk.
@@ -55,14 +64,16 @@ import "github.com/bnclabs/gostore/llrb"
 //
 func Defaultsettings() s.Settings {
 	setts := s.Settings{
-		"logpath":    "",
-		"memstore":   "mvcc",
-		"diskstore":  "bubt",
-		"durable":    true,
-		"dgm":        false,
-		"workingset": false,
-		"ratio":      .25,
-		"period":     100,
+		"logpath":       "",
+		"memstore":      "mvcc",
+		"diskstore":     "bubt",
+		"durable":       true,
+		"dgm":           false,
+		"workingset":    false,
+		"flushratio":    0.25,
+		"flushperiod":   100,
+		"compactratio":  0.50,
+		"compactperiod": 3600,
 	}
 	switch setts.String("memstore") {
 	case "mvcc", "llrb":

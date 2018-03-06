@@ -45,17 +45,19 @@ type Bogn struct {
 	txnmeta
 
 	// bogn settings
-	logpath     string
-	memstore    string
-	diskstore   string
-	durable     bool
-	dgm         bool
-	workingset  bool
-	ratio       float64
-	period      time.Duration
-	memcapacity int64
-	setts       s.Settings
-	logprefix   string
+	logpath       string
+	memstore      string
+	diskstore     string
+	durable       bool
+	dgm           bool
+	workingset    bool
+	flushratio    float64
+	compactratio  float64
+	flushperiod   time.Duration
+	compactperiod time.Duration
+	memcapacity   int64
+	setts         s.Settings
+	logprefix     string
 }
 
 // PurgeIndex will purge all the disk level snapshots for index `name`
@@ -128,8 +130,12 @@ func (bogn *Bogn) readsettings(setts s.Settings) *Bogn {
 	bogn.durable = setts.Bool("durable")
 	bogn.dgm = setts.Bool("dgm")
 	bogn.workingset = setts.Bool("workingset")
-	bogn.ratio = setts.Float64("ratio")
-	bogn.period = time.Duration(setts.Int64("period")) * time.Second
+	bogn.flushratio = setts.Float64("flushratio")
+	bogn.compactratio = setts.Float64("compactratio")
+	bogn.flushperiod = time.Duration(setts.Int64("flushperiod"))
+	bogn.flushperiod *= time.Second
+	bogn.compactperiod = time.Duration(setts.Int64("compactperiod"))
+	bogn.compactperiod *= time.Second
 	bogn.setts = setts
 
 	atomic.StoreInt64(&bogn.dgmstate, 0)
@@ -186,14 +192,16 @@ func (bogn *Bogn) settingstodisk() s.Settings {
 	memversions := bogn.memversions
 	diskversions := bogn.diskversions
 	setts := s.Settings{
-		"logpath":      bogn.logpath,
-		"memstore":     bogn.memstore,
-		"diskstore":    bogn.diskstore,
-		"workingset":   bogn.workingset,
-		"ratio":        bogn.ratio,
-		"period":       bogn.period,
-		"memversions":  memversions,
-		"diskversions": diskversions,
+		"logpath":       bogn.logpath,
+		"memstore":      bogn.memstore,
+		"diskstore":     bogn.diskstore,
+		"workingset":    bogn.workingset,
+		"flushratio":    bogn.flushratio,
+		"compactratio":  bogn.compactratio,
+		"flushperiod":   bogn.flushperiod,
+		"compactperiod": bogn.compactperiod,
+		"memversions":   memversions,
+		"diskversions":  diskversions,
 	}
 	llrbsetts := bogn.setts.Section("llrb.")
 	bubtsetts := bogn.setts.Section("bubt.")
@@ -499,10 +507,15 @@ func (bogn *Bogn) snapunlock() {
 	}
 }
 
-func (bogn *Bogn) mwmetadata(seqno uint64, settstodisk s.Settings) []byte {
+func (bogn *Bogn) mwmetadata(
+	seqno uint64, flushunix string, settstodisk s.Settings) []byte {
+
+	if len(flushunix) == 0 {
+		flushunix = fmt.Sprintf(`"%v"`, uint64(time.Now().Unix()))
+	}
 	metadata := map[string]interface{}{
 		"seqno":     fmt.Sprintf(`"%v"`, seqno),
-		"flushunix": fmt.Sprintf(`"%v"`, time.Now().Unix()),
+		"flushunix": flushunix,
 	}
 	setts := (s.Settings{}).Mixin(settstodisk, metadata)
 	setts = setts.AddPrefix("bogn.")
@@ -520,19 +533,11 @@ func (bogn *Bogn) flushelapsed() bool {
 	}
 	_, disk := snap.latestlevel()
 	if disk == nil {
-		return int64(time.Since(bogn.epoch)) > int64(bogn.period)
+		return int64(time.Since(bogn.epoch)) > int64(bogn.flushperiod)
 	}
-
-	var metadata map[string]interface{}
-	switch d := disk.(type) {
-	case *bubt.Snapshot:
-		metadata = bogn.diskmetadata(d)
-
-	default:
-		panic("impossible situation")
-	}
+	metadata := bogn.diskmetadata(disk)
 	x, _ := strconv.Atoi(strings.Trim(metadata["flushunix"].(string), `"`))
-	return time.Now().Sub(time.Unix(int64(x), 0)) > bogn.period
+	return time.Now().Sub(time.Unix(int64(x), 0)) > bogn.flushperiod
 }
 
 // should not overlap with disk0.
@@ -561,7 +566,7 @@ func (bogn *Bogn) pickflushdisk(disk0 api.Index) (disk api.Index, nlevel int) {
 		}
 	}
 	footprint := float64(latestdisk.(*bubt.Snapshot).Footprint())
-	if (float64(snap.memheap()) / footprint) > bogn.ratio {
+	if (float64(snap.memheap()) / footprint) > bogn.flushratio {
 		if nlevel := snap.nextbutlevel(latestlevel); nlevel >= 0 {
 			return latestdisk, nlevel
 		}
@@ -578,16 +583,23 @@ func (bogn *Bogn) pickcompactdisks() (disk0, disk1 api.Index, nextlevel int) {
 	disks := snap.disklevels([]api.Index{})
 	for i := 0; i < len(disks)-1; i++ {
 		disk0, disk1 = disks[i], disks[i+1]
+		// check whether ratio between disk0 footprint and disk1 footprint
+		// exceeds compactratio.
 		footprint0 := float64(disk0.(*bubt.Snapshot).Footprint())
 		footprint1 := float64(disk1.(*bubt.Snapshot).Footprint())
-		if (footprint0 / footprint1) < bogn.ratio {
-			continue
+		ok1 := (footprint0 / footprint1) > bogn.compactratio
+		// check whether disk0 lifetime exceeds compact period.
+		metadata := bogn.diskmetadata(disk0)
+		x, _ := strconv.Atoi(strings.Trim(metadata["flushunix"].(string), `"`))
+		ok2 := time.Now().Sub(time.Unix(int64(x), 0)) > bogn.compactperiod
+		// either of that is true, then
+		if ok1 || ok2 {
+			level1, _, _ := bogn.path2level(disk1.ID())
+			if nextlevel = snap.nextbutlevel(level1); nextlevel >= 0 {
+				return disk0, disk1, nextlevel
+			}
+			return disk0, disk1, level1
 		}
-		level1, _, _ := bogn.path2level(disk1.ID())
-		if nextlevel = snap.nextbutlevel(level1); nextlevel >= 0 {
-			return disk0, disk1, nextlevel
-		}
-		return disk0, disk1, level1
 	}
 	return nil, nil, -1
 }
@@ -973,12 +985,14 @@ func (bogn *Bogn) newmemstore(level string, seqno uint64) (api.Index, error) {
 }
 
 func (bogn *Bogn) builddiskstore(
-	level, version int, sha string, settstodisk s.Settings,
+	level, version int, sha, flushunix string, settstodisk s.Settings,
 	iter api.Iterator) (index api.Index, err error) {
 
 	switch bogn.diskstore {
 	case "bubt":
-		index, err = bogn.builddiskbubt(level, version, sha, settstodisk, iter)
+		index, err = bogn.builddiskbubt(
+			level, version, sha, flushunix, settstodisk, iter,
+		)
 		infof("%v new bubt snapshot %q", bogn.logprefix, index.ID())
 		return
 	}
@@ -986,7 +1000,7 @@ func (bogn *Bogn) builddiskstore(
 }
 
 func (bogn *Bogn) builddiskbubt(
-	level, version int, sha string, settstodisk s.Settings,
+	level, version int, sha, flushunix string, settstodisk s.Settings,
 	iter api.Iterator) (index api.Index, err error) {
 
 	// book-keep largest seqno for this snapshot.
@@ -1024,7 +1038,7 @@ func (bogn *Bogn) builddiskbubt(
 		errorf("%v Build(): %v", bogn.logprefix, err)
 		return nil, err
 	}
-	mwmetadata := bogn.mwmetadata(diskseqno, settstodisk)
+	mwmetadata := bogn.mwmetadata(diskseqno, flushunix, settstodisk)
 	if _, err = bt.Writemetadata(mwmetadata); err != nil {
 		errorf("%v Writemetadata(): %v", bogn.logprefix, err)
 		return nil, err
@@ -1203,13 +1217,16 @@ func (bogn *Bogn) mergedisksnapshots(disks []api.Index) error {
 	// get latest settings, from latest disk, including memversions and
 	// diskversions and use them when building the merged snapshot.
 	disksetts := bogn.settingsfromdisk(disks[0])
+	flushunix := bogn.getflushunix(disks[0])
 
 	infof("%v merging [%v] %v", bogn.logprefix, strings.Join(sourceids, ","))
 
 	iter := reduceiter(scans)
 	level, uuid := 15, bogn.newuuid()
 	version := bogn.nextdiskversion(level)
-	ndisk, err := bogn.builddiskstore(level, version, uuid, disksetts, iter)
+	ndisk, err := bogn.builddiskstore(
+		level, version, uuid, flushunix, disksetts, iter,
+	)
 	if err != nil {
 		return err
 	}
@@ -1363,6 +1380,11 @@ func (bogn *Bogn) newuuid() string {
 func (bogn *Bogn) getdiskseqno(disk api.Index) uint64 {
 	metadata := bogn.diskmetadata(disk)
 	return metadata["seqno"].(uint64)
+}
+
+func (bogn *Bogn) getflushunix(disk api.Index) string {
+	metadata := bogn.diskmetadata(disk)
+	return metadata["flushunix"].(string)
 }
 
 func (bogn *Bogn) diskmetadata(disk api.Index) map[string]interface{} {
