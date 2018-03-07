@@ -72,7 +72,7 @@ func PurgeIndex(name, logpath, diskstore string, diskpaths []string) {
 // CompactIndex will remove older versions of disk level snapshots and
 // if merge is true, will merge all disk-levels into single level.
 func CompactIndex(name, diskstore string, diskpaths []string, merge bool) {
-	bogn := &Bogn{name: name}
+	bogn := &Bogn{name: name, diskstore: diskstore, snapshot: nil}
 	bogn.logprefix = fmt.Sprintf("BOGN [%v]", name)
 	bogn.compactdisksnaps(diskstore, diskpaths, merge)
 	return
@@ -242,7 +242,8 @@ func (bogn *Bogn) validatesettings(disksetts s.Settings) {
 		fmsg := "found memstore:%q on disk, expected %q"
 		panic(fmt.Errorf(fmsg, memstore, bogn.memstore))
 	}
-	if diskstore := disksetts.String("diskstore"); diskstore != bogn.diskstore {
+	diskstore := disksetts.String("diskstore")
+	if diskstore != bogn.diskstore {
 		fmsg := "found diskstore:%q on disk, expected %q"
 		panic(fmt.Errorf(fmsg, diskstore, bogn.diskstore))
 	}
@@ -578,11 +579,25 @@ func (bogn *Bogn) pickflushdisk(disk0 api.Index) (disk api.Index, nlevel int) {
 	return nil, latestlevel - 1
 }
 
-func (bogn *Bogn) pickcompactdisks() (disk0, disk1 api.Index, nextlevel int) {
+func (bogn *Bogn) pickcompactdisks() (disks []api.Index, nextlevel int) {
 	snap := bogn.currsnapshot()
-	disks := snap.disklevels([]api.Index{})
+	disks = snap.disklevels([]api.Index{})
+	switch {
+	case len(disks) == 1:
+		// no compaction: there is only one disk level
+		return nil, -1
+
+	case len(disks) > 3:
+		// aggressive compaction:
+		// if number of levels is more than 3 then compact without
+		// checking for compactratio or compactperiod.
+		// leave the first level for flusher logic.
+		return disks[1:], len(snap.disks) - 1
+	}
+
+	// normal compaction: use compactratio and compactperiod to two levels.
 	for i := 0; i < len(disks)-1; i++ {
-		disk0, disk1 = disks[i], disks[i+1]
+		disk0, disk1 := disks[i], disks[i+1]
 		// check whether ratio between disk0 footprint and disk1 footprint
 		// exceeds compactratio.
 		footprint0 := float64(disk0.(*bubt.Snapshot).Footprint())
@@ -596,12 +611,12 @@ func (bogn *Bogn) pickcompactdisks() (disk0, disk1 api.Index, nextlevel int) {
 		if ok1 || ok2 {
 			level1, _, _ := bogn.path2level(disk1.ID())
 			if nextlevel = snap.nextbutlevel(level1); nextlevel >= 0 {
-				return disk0, disk1, nextlevel
+				return []api.Index{disk0, disk1}, nextlevel
 			}
-			return disk0, disk1, level1
+			return []api.Index{disk0, disk1}, level1
 		}
 	}
-	return nil, nil, -1
+	return nil, -1
 }
 
 func (bogn *Bogn) levelname(level, version int, sha string) string {
@@ -1145,6 +1160,14 @@ func (bogn *Bogn) openbubtsnaps(
 func (bogn *Bogn) compactdisksnaps(
 	diskstore string, diskpaths []string, merge bool) error {
 
+	switch diskstore {
+	case "bubt":
+		return bogn.compactbubtsnaps(diskpaths, merge)
+	}
+	panic(fmt.Errorf("invalid diskstore %v", diskstore))
+}
+
+func (bogn *Bogn) compactbubtsnaps(diskpaths []string, merge bool) error {
 	var disks [16]api.Index
 
 	mmap, dircache := false, map[string]bool{}
@@ -1218,12 +1241,14 @@ func (bogn *Bogn) mergedisksnapshots(disks []api.Index) error {
 	// diskversions and use them when building the merged snapshot.
 	disksetts := bogn.settingsfromdisk(disks[0])
 	flushunix := bogn.getflushunix(disks[0])
+	bogn.setts = disksetts
 
-	infof("%v merging [%v] %v", bogn.logprefix, strings.Join(sourceids, ","))
+	infof("%v merging [%v]", bogn.logprefix, strings.Join(sourceids, ","))
 
 	iter := reduceiter(scans)
 	level, uuid := 15, bogn.newuuid()
-	version := bogn.nextdiskversion(level)
+	diskversions := bogn.getdiskversions(disks[0])
+	version := diskversions[level] + 1
 	ndisk, err := bogn.builddiskstore(
 		level, version, uuid, flushunix, disksetts, iter,
 	)
@@ -1385,6 +1410,11 @@ func (bogn *Bogn) getdiskseqno(disk api.Index) uint64 {
 func (bogn *Bogn) getflushunix(disk api.Index) string {
 	metadata := bogn.diskmetadata(disk)
 	return metadata["flushunix"].(string)
+}
+
+func (bogn *Bogn) getdiskversions(disk api.Index) [16]int {
+	metadata := bogn.diskmetadata(disk)
+	return metadata["diskversions"].([16]int)
 }
 
 func (bogn *Bogn) diskmetadata(disk api.Index) map[string]interface{} {

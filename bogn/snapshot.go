@@ -420,23 +420,15 @@ func (snap *snapshot) attributes() string {
 	return "<" + memlevels + " " + disklevels + ">"
 }
 
-func compactiterator(d0, d1 api.Index) api.Iterator {
+func compactiterator(disks []api.Index) api.Iterator {
 	var ref [20]api.Iterator
 	scans := ref[:0]
 
-	if d0 == nil {
-		return d1.Scan()
-	} else if d1 == nil {
-		return d0.Scan()
+	for _, disk := range disks {
+		if iter := disk.Scan(); iter != nil {
+			scans = append(scans, iter)
+		}
 	}
-
-	if iter := d0.Scan(); iter != nil {
-		scans = append(scans, iter)
-	}
-	if iter := d1.Scan(); iter != nil {
-		scans = append(scans, iter)
-	}
-
 	return reduceiter(scans)
 }
 
