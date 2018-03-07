@@ -47,11 +47,14 @@ func purgesnapshot(snap *snapshot) bool {
 		if snap.getref() == 0 {
 			// all older snapshots are purged,
 			// and this snapshot is not referred by anyone.
+
+			// first close the disk snapshot, this shall dereference the
+			// snapshot.
 			for _, index := range snap.purgeindexes {
-				if index == nil {
-					continue
-				}
 				index.Close()
+			}
+			// then destroy
+			for _, index := range snap.purgeindexes {
 				index.Destroy()
 				fmsg := "%v purged %q in snapshot %v"
 				infof(fmsg, snap.bogn.logprefix, index.ID(), snap.id)
