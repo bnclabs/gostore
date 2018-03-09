@@ -1,5 +1,6 @@
 package bogn
 
+import "fmt"
 import "time"
 import "unsafe"
 import "strings"
@@ -121,7 +122,7 @@ func makeflusher(bogn *Bogn) func([]api.Index) error {
 
 	stra := humanize.Bytes(uint64(bogn.memcapacity))
 	strb := humanize.Bytes(uint64(mwthreshold))
-	infof("%v memory threshold at %v of %v\n", bogn.logprefix, strb, stra)
+	infof("%v start memory threshold at %v of %v\n", bogn.logprefix, strb, stra)
 
 	return func(disks []api.Index) error {
 		snap := bogn.currsnapshot()
@@ -147,13 +148,13 @@ func makeflusher(bogn *Bogn) func([]api.Index) error {
 		}
 
 		if flushelapsed := bogn.flushelapsed(); overflow || flushelapsed {
-			err := doflush(bogn, disks, overflow, flushelapsed)
-
 			// adaptive threshold
 			mwthreshold = int64(memcap - float64(snap.memheap()))
 			strb = humanize.Bytes(uint64(mwthreshold))
 			fmsg := "%v new memory threshold at %v of %v\n"
 			infof(fmsg, bogn.logprefix, strb, stra)
+
+			err := doflush(bogn, disks, overflow, flushelapsed)
 			return err
 		}
 		return nil
@@ -210,9 +211,9 @@ func dopersist(bogn *Bogn) (err error) {
 func doflush(bogn *Bogn, disks []api.Index, overf, elapsed bool) (err error) {
 	cause := "overflow"
 	if overf && elapsed {
-		panic("impossible situation")
+		panic(fmt.Errorf("impossible situation"))
 	} else if (!overf) && (!elapsed) {
-		panic("impossible situation")
+		panic(fmt.Errorf("impossible situation"))
 	} else if overf == false && elapsed == true {
 		cause = "elapsed"
 	}
