@@ -133,15 +133,14 @@ func (snap *snapshot) nextbutlevel(level int) (nextlevel int) {
 	if level >= len(snap.disks) {
 		panic("impossible situation")
 	} else if level == (len(snap.disks) - 1) {
-		return -1
+		return level
 	}
-	nextlevel = -1
+	nextlevel = level
 	for l, disk := range snap.disks[level+1:] {
-		if disk == nil {
-			nextlevel = level + 1 + l
-			continue
+		if disk != nil {
+			break
 		}
-		return nextlevel
+		nextlevel = level + 1 + l
 	}
 	return nextlevel
 }
@@ -305,7 +304,7 @@ func (snap *snapshot) persistiterator() api.Iterator {
 }
 
 // iterate on write store, read store, cache store and a latest disk store.
-func (snap *snapshot) flushiterator(disk api.Index) api.Iterator {
+func (snap *snapshot) flushiterator(disks []api.Index) api.Iterator {
 	var ref [20]api.Iterator
 	scans := ref[:0]
 
@@ -317,12 +316,11 @@ func (snap *snapshot) flushiterator(disk api.Index) api.Iterator {
 			scans = append(scans, iter)
 		}
 	}
-	if disk != nil {
+	for _, disk := range disks {
 		if iter := disk.Scan(); iter != nil {
 			scans = append(scans, iter)
 		}
 	}
-
 	return reduceiter(scans)
 }
 

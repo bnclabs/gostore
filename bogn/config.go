@@ -73,7 +73,7 @@ func Defaultsettings() s.Settings {
 		"flushratio":    0.25,
 		"flushperiod":   100,
 		"compactratio":  0.50,
-		"compactperiod": 3600,
+		"compactperiod": 300,
 	}
 	switch setts.String("memstore") {
 	case "mvcc", "llrb":

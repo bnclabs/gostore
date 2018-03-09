@@ -541,58 +541,86 @@ func (bogn *Bogn) flushelapsed() bool {
 	return time.Now().Sub(time.Unix(int64(x), 0)) > bogn.flushperiod
 }
 
-// should not overlap with disk0.
-func (bogn *Bogn) pickflushdisk(disk0 api.Index) (disk api.Index, nlevel int) {
+func (bogn *Bogn) pickflushdisk(
+	cdisks []api.Index) (fdisks []api.Index, nlevel int, what string) {
+
 	snap := bogn.currsnapshot()
 
 	latestlevel, latestdisk := snap.latestlevel()
-	if latestlevel < 0 && disk0 != nil {
+	if latestlevel < 0 && len(cdisks) > 0 {
 		panic("impossible situation")
 
 	} else if latestlevel < 0 { // first time flush.
-		nlevel := len(snap.disks) - 1
-		disk := snap.disks[nlevel]
-		return disk, nlevel
+		return nil, len(snap.disks) - 1, "fresh"
+	}
 
-	} else if latestdisk != nil && disk0 != nil {
-		level0, _, _ := bogn.path2level(disk0.ID())
+	// if more than half the number of allowed-snapshot levels are
+	// exhausted then flush/merge as many lower level snapshot as possible
+	disks := snap.disklevels([]api.Index{})
+	if len(disks) > len(snap.disks)/2 {
+		till := 16
+		if len(cdisks) > 0 {
+			till, _, _ = bogn.path2level(cdisks[0].ID())
+		}
+		fdisks := []api.Index{}
+		for _, disk := range disks {
+			if level, _, _ := bogn.path2level(disk.ID()); level >= till {
+				break
+			}
+			fdisks = append(fdisks, disk)
+		}
+		if len(fdisks) == 0 { // all of them are being compacted
+			if latestlevel < 0 {
+				panic("all levels are exhausted")
+			}
+			return nil, latestlevel - 1, "fallback" // fall back by one level.
+		}
+		level, _, _ := bogn.path2level(fdisks[len(fdisks)-1].ID())
+		return fdisks, snap.nextbutlevel(level), "aggressive"
+	}
+
+	// just pick the latest disk level and flush, without merge.
+	if latestdisk != nil && len(cdisks) > 0 {
+		level0, _, _ := bogn.path2level(cdisks[0].ID())
 		if latestlevel > level0 {
 			panic("impossible situation")
 
-		} else if latestlevel == level0 { // fall back by one level.
+		} else if latestlevel == level0 {
 			if latestlevel == 0 {
 				panic("all levels are exhausted")
 			}
-			return nil, latestlevel - 1
+			return nil, latestlevel - 1, "fallback" // fall back by one level.
 		}
 	}
 	footprint := float64(latestdisk.(*bubt.Snapshot).Footprint())
 	if (float64(snap.memheap()) / footprint) > bogn.flushratio {
-		if nlevel := snap.nextbutlevel(latestlevel); nlevel >= 0 {
-			return latestdisk, nlevel
-		}
-		return latestdisk, latestlevel
+		return []api.Index{latestdisk}, snap.nextbutlevel(latestlevel), "merge"
 	}
 	if latestlevel == 0 {
 		panic("all levels are exhausted")
 	}
-	return nil, latestlevel - 1
+	return nil, latestlevel - 1, "fallback" // fall back by one level
 }
 
-func (bogn *Bogn) pickcompactdisks() (disks []api.Index, nextlevel int) {
+func (bogn *Bogn) pickcompactdisks() (
+	disks []api.Index, nextlevel int, what string) {
+
 	snap := bogn.currsnapshot()
 	disks = snap.disklevels([]api.Index{})
 	switch {
 	case len(disks) == 1:
 		// no compaction: there is only one disk level
-		return nil, -1
+		return nil, -1, "none"
 
 	case len(disks) > 3:
 		// aggressive compaction:
 		// if number of levels is more than 3 then compact without
 		// checking for compactratio or compactperiod.
-		// leave the first level for flusher logic.
-		return disks[1:], len(snap.disks) - 1
+		// leave the first level for flusher logic, and leave the
+		// last level since it might be too big !!
+		disks := disks[1 : len(disks)-1]
+		level, _, _ := bogn.path2level(disks[len(disks)-1].ID())
+		return disks, snap.nextbutlevel(level), "aggressive"
 	}
 
 	// normal compaction: use compactratio and compactperiod to two levels.
@@ -608,15 +636,34 @@ func (bogn *Bogn) pickcompactdisks() (disks []api.Index, nextlevel int) {
 		x, _ := strconv.Atoi(strings.Trim(metadata["flushunix"].(string), `"`))
 		ok2 := time.Now().Sub(time.Unix(int64(x), 0)) > bogn.compactperiod
 		// either of that is true, then
-		if ok1 || ok2 {
+		if ok1 {
 			level1, _, _ := bogn.path2level(disk1.ID())
-			if nextlevel = snap.nextbutlevel(level1); nextlevel >= 0 {
-				return []api.Index{disk0, disk1}, nextlevel
-			}
-			return []api.Index{disk0, disk1}, level1
+			return []api.Index{disk0, disk1}, snap.nextbutlevel(level1), "ratio"
+		} else if ok2 {
+			level1, _, _ := bogn.path2level(disk1.ID())
+			return []api.Index{disk0, disk1}, snap.nextbutlevel(level1), "elapsed"
 		}
 	}
-	return nil, -1
+	return nil, -1, "none"
+}
+
+func (bogn *Bogn) pickwindupdisk() (disk api.Index, nlevel int) {
+	snap := bogn.currsnapshot()
+
+	latestlevel, latestdisk := snap.latestlevel()
+	if latestlevel < 0 { // first time flush.
+		return nil, len(snap.disks) - 1
+	}
+
+	// just pick the latest disk level and flush, without merge.
+	footprint := float64(latestdisk.(*bubt.Snapshot).Footprint())
+	if (float64(snap.memheap()) / footprint) > bogn.flushratio {
+		return latestdisk, snap.nextbutlevel(latestlevel)
+	}
+	if latestlevel == 0 {
+		panic("all levels are exhausted")
+	}
+	return nil, latestlevel - 1 // fall back by one level
 }
 
 func (bogn *Bogn) levelname(level, version int, sha string) string {
@@ -756,7 +803,7 @@ func (bogn *Bogn) Validate() {
 		disk := disks[i]
 		if disk != nil {
 			endseqno = bogn.validatedisklevel(disk, seqno)
-			fmsg := "%v validate disk %v (seqno %v to %v) ... ok"
+			fmsg := "%v validate disk %v (after seqno %v to %v) ... ok"
 			infof(fmsg, bogn.logprefix, disk.ID(), seqno, endseqno)
 			seqno = endseqno
 		}
@@ -1077,8 +1124,8 @@ func (bogn *Bogn) builddiskbubt(
 
 	footprint := humanize.Bytes(uint64(ndisk.Footprint()))
 	elapsed := time.Since(now)
-	fmsg := "%v took %v to build bubt %v with %v entries, %v\n"
-	infof(fmsg, bogn.logprefix, elapsed, ndisk.ID(), count, footprint)
+	fmsg := "%v took %v build bubt %v with %v entries, %v & mmap:%v\n"
+	infof(fmsg, bogn.logprefix, elapsed, ndisk.ID(), count, footprint, mmap)
 
 	return ndisk, nil
 }
