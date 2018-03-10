@@ -11,6 +11,12 @@ type mblock struct {
 	buffer    []byte
 	entries   []byte // points into buffer
 	block     []byte // points into buffer
+	next      *mblock
+}
+
+func putm(tree *Bubt, m *mblock) {
+	m.next = tree.headmblock
+	tree.headmblock = m
 }
 
 // mblock represents the intermediate node in bubt tree,
@@ -19,13 +25,27 @@ type mblock struct {
 // n_entries uint32   - 4-byte count of number entries in this mblock.
 // blkindex  []uint32 - 4 byte offset into mblock for each entry.
 // mentries           - array of mentries.
-func newm(blocksize int64) (m *mblock) {
-	m = &mblock{
-		blocksize: blocksize,
-		firstkey:  make([]byte, 0, 256),
-		index:     make([]uint32, 0, 64),
-		buffer:    make([]byte, 2*blocksize),
+func newm(tree *Bubt, blocksize int64) (m *mblock) {
+	if tree.headmblock == nil {
+		m = &mblock{
+			firstkey: make([]byte, 0, 256),
+			index:    make([]uint32, 0, 64),
+			buffer:   make([]byte, 2*blocksize),
+		}
+	} else {
+		m = tree.headmblock
+		tree.headmblock = m.next
+		cp := cap(tree.zeromblock.firstkey)
+		copy(m.firstkey[:cp], tree.zeromblock.firstkey[:cp])
+		m.firstkey = m.firstkey[:0]
+		cp = cap(tree.zeromblock.index)
+		copy(m.index[:cp], tree.zeromblock.index[:cp])
+		m.index = m.index[:0]
+		cp = cap(tree.zeromblock.buffer)
+		copy(m.buffer[:cp], tree.zeromblock.buffer[:cp])
+		m.buffer = m.buffer[:cp]
 	}
+	m.blocksize = blocksize
 	m.entries = m.buffer[blocksize:blocksize]
 	return m
 }

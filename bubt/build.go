@@ -19,13 +19,15 @@ const MarkerByte = 0xAB
 // Bubt instance can be used to persist sorted {key,value} entries in
 // immutable btree, built bottoms up and not updated there after.
 type Bubt struct {
-	name      string
-	mflusher  *bubtflusher
-	zflushers []*bubtflusher
+	name       string
+	mflusher   *bubtflusher
+	zflushers  []*bubtflusher
+	headmblock *mblock
 
 	// settings, will be flushed to the tip of indexfile.
 	mblocksize int64
 	zblocksize int64
+	zeromblock *mblock
 	logprefix  string
 }
 
@@ -36,6 +38,7 @@ func NewBubt(
 	tree = &Bubt{name: name, mblocksize: msize, zblocksize: zsize}
 	mpath, zpaths := tree.pickmzpath(paths)
 	tree.logprefix = fmt.Sprintf("BUBT [%s]", name)
+	tree.zeromblock = newm(tree, tree.mblocksize)
 
 	defer func() {
 		if err != nil {
@@ -123,16 +126,13 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 		}
 	}
 
-	var buildm func(m *mblock, level int) (*mblock, *mblock)
+	var buildm func(m1 *mblock, level int) (*mblock, *mblock)
 
 	// vpos 8 bit MSB meaning.
 	// 0   - points to mblock fpos.
 	// 1   - points to zblock's first shard.
 	// 255 - points to zblock's 255th shard.
-	buildm = func(m *mblock, level int) (m1, m2 *mblock) {
-		var vpos int64
-		m1 = m
-
+	buildm = func(m1 *mblock, level int) (*mblock, *mblock) {
 		if m1 == nil {
 			return nil, nil
 
@@ -140,6 +140,7 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 			return m1, nil
 
 		} else if level == 0 { // build leaf node.
+			var vpos int64
 			ok := true
 			for ok {
 				buildz()
@@ -149,23 +150,24 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 				}
 				ok = m1.insert(z.firstkey, vpos)
 			}
-			m2 = newm(tree.mblocksize)
+			m2 := newm(tree, tree.mblocksize)
 			m2.insert(z.firstkey, vpos)
 			//fmt.Printf("buildm next %s\n", m2.firstkey)
 			return m1, m2
 		}
 
-		m1, m2 = buildm(m1, level-1)
+		m1, m2 := buildm(m1, level-1)
 		if m2 == nil { // done
 			return m1, nil
 		}
 		// m1 can't be nil !!
 		var mm *mblock
 
-		m = newm(tree.mblocksize)
-		vpos = flushmblock(m1)
+		m := newm(tree, tree.mblocksize)
+		vpos := flushmblock(m1)
 		ok := m.insert(m1.firstkey, vpos) // ok is true
 		for ok {
+			putm(tree, m1)
 			if m1, m2 = buildm(m2, level-1); m1 != nil {
 				vpos = flushmblock(m1)
 				ok = m.insert(m1.firstkey, vpos)
@@ -174,7 +176,7 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 			}
 		}
 		if ok == false {
-			mm = newm(tree.mblocksize)
+			mm = newm(tree, tree.mblocksize)
 			mm.insert(m1.firstkey, vpos)
 			if m2 != nil {
 				mm.insert(m2.firstkey, flushmblock(m2))
@@ -190,7 +192,7 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 			panic(err)
 
 		} else if key != nil {
-			m := newm(tree.mblocksize)
+			m := newm(tree, tree.mblocksize)
 			m, _ = buildm(m, 20 /*levels can't go more than 20*/)
 			root = flushmblock(m)
 
