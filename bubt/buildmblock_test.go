@@ -6,7 +6,7 @@ import "testing"
 func TestMBlock(t *testing.T) {
 	mblocksize := int64(4 * 1024)
 
-	m := newm(mblocksize)
+	m := newm(nil, mblocksize)
 	if m.finalize() == true {
 		t.Errorf("unexpected true")
 	}
@@ -53,7 +53,7 @@ func TestMBlock(t *testing.T) {
 func BenchmarkMInsert(b *testing.B) {
 	blocksize := int64(4096)
 	k, vpos := []byte("aaaaaaaaaaaaaaaaaaaaaaa"), int64(1023)
-	m := newm(blocksize)
+	m := newm(nil, blocksize)
 	for i := 0; i < b.N; i++ {
 		if m.insert(k, vpos) == false {
 			m.firstkey = m.firstkey[:0]

@@ -27,7 +27,7 @@ func BenchmarkMFindkey(b *testing.B) {
 func makemsnap(tb testing.TB) (msnap, [][]byte) {
 	mblocksize := int64(4 * 1024)
 
-	m, keys := newm(mblocksize), [][]byte{}
+	m, keys := newm(nil, mblocksize), [][]byte{}
 	i := 0
 	k, vpos := fmt.Sprintf("%16d", i), (((i % 4) << 56) | i)
 	for m.insert([]byte(k), int64(vpos)) {

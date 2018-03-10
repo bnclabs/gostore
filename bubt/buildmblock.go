@@ -15,8 +15,10 @@ type mblock struct {
 }
 
 func putm(tree *Bubt, m *mblock) {
-	m.next = tree.headmblock
-	tree.headmblock = m
+	if tree != nil {
+		m.next = tree.headmblock
+		tree.headmblock = m
+	}
 }
 
 // mblock represents the intermediate node in bubt tree,
@@ -26,7 +28,7 @@ func putm(tree *Bubt, m *mblock) {
 // blkindex  []uint32 - 4 byte offset into mblock for each entry.
 // mentries           - array of mentries.
 func newm(tree *Bubt, blocksize int64) (m *mblock) {
-	if tree.headmblock == nil {
+	if tree == nil || tree.headmblock == nil {
 		m = &mblock{
 			firstkey: make([]byte, 0, 256),
 			index:    make([]uint32, 0, 64),
