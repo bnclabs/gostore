@@ -273,6 +273,15 @@ func (snap *snapshot) cachedget(get api.Getter) api.Getter {
 	}
 }
 
+func (snap *snapshot) finalizeindex(index api.Index) {
+	if index != nil {
+		switch idx := index.(type) {
+		case *llrb.MVCC:
+			idx.Finalize()
+		}
+	}
+}
+
 // full table scan.
 func (snap *snapshot) iterator() api.Iterator {
 	var ref [20]api.Iterator

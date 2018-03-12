@@ -260,6 +260,9 @@ func doflush(bogn *Bogn, disks []api.Index, overf, elapsed bool) (err error) {
 	nversion := bogn.nextdiskversion(nlevel)
 	disksetts := bogn.settingstodisk()
 
+	// Finalize mr level, wait for read snapshot to catch up with tip.
+	snap.finalizeindex(snap.mr)
+
 	// iterate on snap.mr [+ snap.mc] [+ fdisks]
 	uuid = bogn.newuuid()
 	iter := snap.flushiterator(fdisks)
@@ -404,6 +407,9 @@ func dowindup(bogn *Bogn) error {
 	}
 	nversion := bogn.nextdiskversion(nlevel)
 	disksetts := bogn.settingstodisk()
+
+	// Finalize mw level, to catch up with tip.
+	snap.finalizeindex(snap.mw)
 
 	iter, uuid := snap.windupiterator(purgedisk), bogn.newuuid()
 	ndisk, err := bogn.builddiskstore(
