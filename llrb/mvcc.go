@@ -1191,6 +1191,20 @@ func (mvcc *MVCC) getkey(nd *Llrbnode, k []byte) (*Llrbnode, bool) {
 	return nil, false
 }
 
+// Finalize will wait for read snapshot to catchup with the tip. To be
+// careful when calling with background mutations, call may never return.
+func (mvcc *MVCC) Finalize() {
+	for {
+		rsnap := mvcc.readsnapshot()
+		tip, seqno := mvcc.Getseqno(), rsnap.seqno
+		rsnap.release()
+		if seqno == tip {
+			return
+		}
+		runtime.Gosched()
+	}
+}
+
 // Scan return a full table iterator, if iteration is stopped before
 // reaching end of table (io.EOF), application should call iterator
 // with fin as true. EG: iter(true)
