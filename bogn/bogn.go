@@ -1267,6 +1267,8 @@ func (bogn *Bogn) compactbubtsnaps(diskpaths []string, merge bool) error {
 	}
 	if len(validdisks) == 0 {
 		infof("%v no disk levels found for compaction", bogn.logprefix)
+	} else if len(validdisks) == 1 {
+		infof("%v no compaction, single disk snapshot found", bogn.logprefix)
 	} else if merge {
 		return bogn.mergedisksnapshots(validdisks)
 	}
