@@ -298,7 +298,8 @@ func doflush(bogn *Bogn, disks []api.Index, overf, elapsed bool) (err error) {
 
 		// TODO: between head1 and head newly cached entries would be
 		// lost.
-		head := newsnapshot(bogn, snap.mw, nil, mc, ndisks, uuid, mwseqno)
+		seqno := snap.beginseqno
+		head := newsnapshot(bogn, snap.mw, nil, mc, ndisks, uuid, seqno)
 		atomic.StorePointer(&head.next, unsafe.Pointer(snap))
 		head.refer()
 		bogn.setheadsnapshot(head)
@@ -371,7 +372,7 @@ func findisk(bogn *Bogn, disks []api.Index, ndisk api.Index) error {
 		fdisks[nlevel] = ndisk
 		_, _, uuid := bogn.path2level(ndisk.ID())
 
-		seqno, mw, mr, mc := bogn.Getseqno(), snap.mw, snap.mr, snap.mc
+		seqno, mw, mr, mc := snap.beginseqno, snap.mw, snap.mr, snap.mc
 		head := newsnapshot(bogn, mw, mr, mc, fdisks, uuid, seqno)
 		atomic.StorePointer(&head.next, unsafe.Pointer(snap))
 		head.refer()
