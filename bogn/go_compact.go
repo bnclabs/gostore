@@ -274,6 +274,8 @@ func doflush(bogn *Bogn, disks []api.Index, overf, elapsed bool) (err error) {
 	}
 	iter(true /*fin*/)
 
+	bogn.addamplification(fdisks, ndisk)
+
 	var ndisks [16]api.Index
 	copy(ndisks[:], snap.disks[:])
 	for _, disk := range fdisks {
@@ -342,6 +344,8 @@ func startdisk(
 			return
 		}
 		iter(true /*fin*/)
+
+		bogn.addamplification(disks, ndisk)
 
 		respch <- ndisk
 	}()
@@ -419,6 +423,8 @@ func dowindup(bogn *Bogn) error {
 		return err
 	}
 	iter(true /*fin*/)
+
+	bogn.addamplification([]api.Index{purgedisk}, ndisk)
 
 	var disks [16]api.Index
 	copy(disks[:], snap.disks[:])

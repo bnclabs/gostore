@@ -34,6 +34,9 @@ type Bogn struct {
 	nroutines int64
 	dgmstate  int64
 	snapspin  uint64
+	// statistics
+	rdbytes int64
+	wrbytes int64
 
 	name         string
 	epoch        time.Time
@@ -304,13 +307,8 @@ func (bogn *Bogn) warmupfromdisk(disks []api.Index) api.Index {
 		return nil
 	}
 
-	var entries, memcapacity, footprint int64
-
-	switch bogn.diskstore {
-	case "bubt":
-		entries = ndisk.(*bubt.Snapshot).Count()
-		footprint = ndisk.(*bubt.Snapshot).Footprint()
-	}
+	var entries, memcapacity int64
+	footprint := bogn.indexfootprint(ndisk)
 
 	switch bogn.memstore {
 	case "llrb":
@@ -592,7 +590,7 @@ func (bogn *Bogn) pickflushdisk(
 			return nil, latestlevel - 1, "fallback" // fall back by one level.
 		}
 	}
-	footprint := float64(latestdisk.(*bubt.Snapshot).Footprint())
+	footprint := float64(bogn.indexfootprint(latestdisk))
 	if (float64(snap.memheap()) / footprint) > bogn.flushratio {
 		return []api.Index{latestdisk}, snap.nextbutlevel(latestlevel), "merge"
 	}
@@ -628,8 +626,8 @@ func (bogn *Bogn) pickcompactdisks() (
 		disk0, disk1 := disks[i], disks[i+1]
 		// check whether ratio between disk0 footprint and disk1 footprint
 		// exceeds compactratio.
-		footprint0 := float64(disk0.(*bubt.Snapshot).Footprint())
-		footprint1 := float64(disk1.(*bubt.Snapshot).Footprint())
+		footprint0 := float64(bogn.indexfootprint(disk0))
+		footprint1 := float64(bogn.indexfootprint(disk1))
 		ok1 := (footprint0 / footprint1) > bogn.compactratio
 		// check whether disk0 lifetime exceeds compact period.
 		metadata := bogn.diskmetadata(disk0)
@@ -656,7 +654,7 @@ func (bogn *Bogn) pickwindupdisk() (disk api.Index, nlevel int) {
 	}
 
 	// just pick the latest disk level and flush, without merge.
-	footprint := float64(latestdisk.(*bubt.Snapshot).Footprint())
+	footprint := float64(bogn.indexfootprint(latestdisk))
 	if (float64(snap.memheap()) / footprint) > bogn.flushratio {
 		return latestdisk, snap.nextbutlevel(latestlevel)
 	}
@@ -877,6 +875,8 @@ func (bogn *Bogn) validatedisklevel(
 
 // Close this instance, no calls allowed after Close.
 func (bogn *Bogn) Close() {
+	bogn.logstatistics()
+
 	close(bogn.finch)
 
 	for atomic.LoadInt64(&bogn.nroutines) > 0 {
@@ -1442,15 +1442,6 @@ func (bogn *Bogn) getdiskpaths() []string {
 	panic("impossible situation")
 }
 
-func (bogn *Bogn) newuuid() string {
-	uuid, err := lib.Newuuid(make([]byte, 8))
-	if err != nil {
-		panic(err)
-	}
-	uuidb := make([]byte, 16)
-	return string(uuidb[:uuid.Format(uuidb)])
-}
-
 func (bogn *Bogn) getdiskseqno(disk api.Index) uint64 {
 	metadata := bogn.diskmetadata(disk)
 	return metadata["seqno"].(uint64)
@@ -1464,6 +1455,30 @@ func (bogn *Bogn) getflushunix(disk api.Index) string {
 func (bogn *Bogn) getdiskversions(disk api.Index) [16]int {
 	metadata := bogn.diskmetadata(disk)
 	return metadata["diskversions"].([16]int)
+}
+
+func (bogn *Bogn) indexfootprint(index api.Index) int64 {
+	if index == nil {
+		return 0
+	}
+	switch idx := index.(type) {
+	case *llrb.LLRB:
+		if idx == nil {
+			return 0
+		}
+		return idx.Footprint()
+	case *llrb.MVCC:
+		if idx == nil {
+			return 0
+		}
+		return idx.Footprint()
+	case *bubt.Snapshot:
+		if idx == nil {
+			return 0
+		}
+		return idx.Footprint()
+	}
+	panic("impossible case")
 }
 
 func (bogn *Bogn) diskmetadata(disk api.Index) map[string]interface{} {
@@ -1505,4 +1520,33 @@ func (bogn *Bogn) diskmetadata(disk api.Index) map[string]interface{} {
 		return metadata
 	}
 	panic("unreachable code")
+}
+
+func (bogn *Bogn) addamplification(disks []api.Index, ndisk api.Index) {
+	wrbytes, rdbytes := int64(0), int64(0)
+	for _, disk := range disks {
+		if disk != nil {
+			rdbytes += bogn.indexfootprint(disk)
+		}
+	}
+	if ndisk != nil {
+		wrbytes += bogn.indexfootprint(ndisk)
+	}
+	atomic.AddInt64(&bogn.rdbytes, rdbytes)
+	atomic.AddInt64(&bogn.wrbytes, wrbytes)
+}
+
+func (bogn *Bogn) newuuid() string {
+	uuid, err := lib.Newuuid(make([]byte, 8))
+	if err != nil {
+		panic(err)
+	}
+	uuidb := make([]byte, 16)
+	return string(uuidb[:uuid.Format(uuidb)])
+}
+
+func (bogn *Bogn) logstatistics() {
+	x := humanize.Bytes(uint64(atomic.LoadInt64(&bogn.rdbytes)))
+	y := humanize.Bytes(uint64(atomic.LoadInt64(&bogn.wrbytes)))
+	infof("%v amplifications read: %v, write: %v", bogn.logprefix, x, y)
 }

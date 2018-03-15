@@ -166,12 +166,7 @@ func (snap *snapshot) memheap() int64 {
 	memindexes, heap := []api.Index{snap.mw, snap.mr, snap.mc}, int64(0)
 	for _, memindex := range memindexes {
 		if memindex != nil {
-			switch v := memindex.(type) {
-			case *llrb.LLRB:
-				heap += v.Footprint()
-			case *llrb.MVCC:
-				heap += v.Footprint()
-			}
+			heap += snap.bogn.indexfootprint(memindex)
 		}
 	}
 	return heap
