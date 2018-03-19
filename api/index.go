@@ -105,6 +105,7 @@ type Cursor interface {
 	// Key return current key under the cursor. Returned byte slice will be a
 	// reference to index-key, hence must not be used after transaction is
 	// commited or aborted.
+	// TODO: should we add `cas uint64` as part of return values ?
 	Key() (key []byte, deleted bool)
 
 	// Value return current value under the cursor. Returned byte slice will
