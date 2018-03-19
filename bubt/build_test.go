@@ -17,7 +17,7 @@ func TestDestroy(t *testing.T) {
 	t.Log(paths)
 
 	name, msize, zsize := "testbuild", int64(4096), int64(4096)
-	bubt, err := NewBubt(name, paths, msize, zsize)
+	bubt, err := NewBubt(name, paths, msize, zsize, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestBuildMetadata(t *testing.T) {
 	paths := makepaths3()
 
 	name, msize, zsize := "testbuild", int64(4096), int64(8192)
-	bubt, err := NewBubt(name, paths, msize, zsize)
+	bubt, err := NewBubt(name, paths, msize, zsize, -1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestSnapshotGet(t *testing.T) {
 	zsize := []int64{msize, msize * 2}[rand.Intn(100000)%2]
 	mmap := []bool{false, true}[rand.Intn(10000)%2]
 	t.Logf("zsize: %v, mmap: %v", zsize, mmap)
-	bubt, err := NewBubt(name, paths, msize, zsize)
+	bubt, err := NewBubt(name, paths, msize, zsize, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +161,7 @@ func TestSnapshotScan1(t *testing.T) {
 	zsize := []int64{msize, msize * 2}[rand.Intn(100000)%2]
 	mmap := []bool{false, true}[rand.Intn(10000)%2]
 	t.Logf("zsize: %v, mmap: %v", zsize, mmap)
-	bubt, err := NewBubt(name, paths, msize, zsize)
+	bubt, err := NewBubt(name, paths, msize, zsize, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,7 +223,7 @@ func TestSnapshotScan2(t *testing.T) {
 	zsize := []int64{msize, msize * 2}[rand.Intn(100000)%2]
 	mmap := []bool{false, true}[rand.Intn(10000)%2]
 	t.Logf("zsize: %v, mmap: %v", zsize, mmap)
-	bubt, err := NewBubt(name, paths, msize, zsize)
+	bubt, err := NewBubt(name, paths, msize, zsize, -1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -279,7 +279,7 @@ func TestSnapshotScan3(t *testing.T) {
 	name, msize, zsize := "testbuild", int64(2048), int64(2048)
 	mmap := []bool{false, true}[rand.Intn(10000)%2]
 	t.Logf("zsize: %v, mmap: %v", zsize, mmap)
-	bubt, err := NewBubt(name, paths, msize, zsize)
+	bubt, err := NewBubt(name, paths, msize, zsize, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -336,7 +336,7 @@ func TestView(t *testing.T) {
 	zsize := []int64{msize, msize * 2}[rand.Intn(100000)%2]
 	mmap := []bool{false, true}[rand.Intn(10000)%2]
 	t.Logf("zsize: %v, mmap: %v", zsize, mmap)
-	bubt, err := NewBubt(name, paths, msize, zsize)
+	bubt, err := NewBubt(name, paths, msize, zsize, -1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -386,7 +386,7 @@ func TestCursorGetNext(t *testing.T) {
 	zsize := []int64{msize, msize * 2}[rand.Intn(100000)%2]
 	mmap := []bool{false, true}[rand.Intn(10000)%2]
 	t.Logf("zsize: %v, mmap: %v", zsize, mmap)
-	bubt, err := NewBubt(name, paths, msize, zsize)
+	bubt, err := NewBubt(name, paths, msize, zsize, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -483,7 +483,7 @@ func TestCursorYNext1(t *testing.T) {
 	zsize := []int64{msize, msize * 2}[rand.Intn(100000)%2]
 	mmap := []bool{false, true}[rand.Intn(10000)%2]
 	t.Logf("zsize: %v, mmap: %v", zsize, mmap)
-	bubt, err := NewBubt(name, paths, msize, zsize)
+	bubt, err := NewBubt(name, paths, msize, zsize, -1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -544,7 +544,7 @@ func TestCursorYNext2(t *testing.T) {
 	name, msize, zsize := "testbuild", int64(4096), int64(4096)
 	mmap := []bool{false, true}[rand.Intn(10000)%2]
 	t.Logf("zsize: %v, mmap: %v", zsize, mmap)
-	bubt, err := NewBubt(name, paths, msize, zsize)
+	bubt, err := NewBubt(name, paths, msize, zsize, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -606,7 +606,7 @@ func TestOddEvenGet(t *testing.T) {
 	mmap := []bool{false, true}[rand.Intn(10000)%2]
 
 	t.Logf("msize: %v, zsize: %v, mmap: %v", msize, zsize, mmap)
-	bubt, err := NewBubt(name, paths, msize, zsize)
+	bubt, err := NewBubt(name, paths, msize, zsize, -1)
 	if err != nil {
 		t.Fatal(err)
 	}

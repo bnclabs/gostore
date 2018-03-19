@@ -7,7 +7,8 @@ func TestZGetNext(t *testing.T) {
 	z, keys := makezsnap(t)
 	for i := range keys {
 		for j := i + 1; j < len(keys); j++ {
-			key, value, seqno, deleted := z.getnext(j - 1)
+			key, lv, seqno, deleted := z.getnext(j - 1)
+			value, _ := lv.getactual(nil, nil)
 			if string(key) != string(keys[j]) {
 				t.Errorf("expected %q, got %q", keys[j], key)
 			} else if string(value) != string(keys[j]) {
@@ -60,7 +61,7 @@ func BenchmarkZGetNext(b *testing.B) {
 func makezsnap(tb testing.TB) (zsnap, [][]byte) {
 	zblocksize := int64(4 * 1024)
 
-	z, keys := newz(zblocksize), [][]byte{}
+	z, keys := newz(zblocksize, -1, 0, nil), [][]byte{}
 	i := uint64(0)
 	k := fmt.Sprintf("%16d", i)
 	v, seqno, deleted := k, i, true

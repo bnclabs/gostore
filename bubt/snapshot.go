@@ -27,9 +27,11 @@ type Snapshot struct {
 	metadata []byte
 	mfile    string
 	zfiles   []string
+	vfiles   []string
 	lockfile string
 	readm    io.ReaderAt   // block reader for m-index
 	readzs   []io.ReaderAt // block reader for zero or more z-index.
+	readvs   []io.ReaderAt
 	rw       *flock.RWMutex
 	zsizes   []int64
 
@@ -37,6 +39,7 @@ type Snapshot struct {
 	footprint  int64
 	zblocksize int64
 	mblocksize int64
+	vblocksize int64
 	logprefix  string
 
 	viewcache   chan *View
@@ -48,6 +51,7 @@ type buffers struct {
 	index  blkindex
 	zblock []byte
 	mblock []byte
+	vblock []byte
 }
 
 // OpenSnapshot from paths.
@@ -90,6 +94,9 @@ func OpenSnapshot(
 	for i := range snap.zfiles {
 		zsize := filesize(snap.readzs[i])
 		snap.footprint += zsize
+		if len(snap.readvs) > 0 {
+			snap.footprint += filesize(snap.readvs[i])
+		}
 		snap.zsizes[i] = zsize
 	}
 	return
@@ -123,7 +130,7 @@ func (snap *Snapshot) loadreaders(
 			return err
 		}
 	}
-	zfiles := []string{}
+	zfiles, vfiles := []string{}, []string{}
 	for _, path := range npaths {
 		if fis, err := ioutil.ReadDir(path); err == nil {
 			for _, fi := range fis {
@@ -131,12 +138,18 @@ func (snap *Snapshot) loadreaders(
 					snap.mfile = filepath.Join(path, fi.Name())
 				} else if strings.Contains(fi.Name(), "bubt-zindex") {
 					zfiles = append(zfiles, filepath.Join(path, fi.Name()))
+				} else if strings.Contains(fi.Name(), "bubt-vlog") {
+					vfiles = append(vfiles, filepath.Join(path, fi.Name()))
 				}
 			}
 		} else {
 			errorf("%v ReadDir(): %v", snap.logprefix, err)
 			return err
 		}
+	}
+	if len(vfiles) > 0 && len(vfiles) != len(zfiles) {
+		arg1, arg2 := strings.Join(zfiles, ","), strings.Join(vfiles, ",")
+		panic(fmt.Errorf("mismatch zfiles: %v, vfiles: %v", arg1, arg2))
 	}
 
 	if snap.mfile == "" {
@@ -147,13 +160,28 @@ func (snap *Snapshot) loadreaders(
 	snap.readm = openfile(snap.mfile, true)
 
 	snap.readzs = make([]io.ReaderAt, len(zfiles))
+	snap.readvs = make([]io.ReaderAt, len(vfiles))
 	snap.zfiles = make([]string, len(zfiles))
-	for _, zfile := range zfiles {
+	snap.vfiles = make([]string, len(vfiles))
+	for i, zfile := range zfiles {
+		// open zindex file
 		re, _ := regexp.Compile("bubt-zindex-([0-9]+).data")
 		matches := re.FindStringSubmatch(filepath.Base(zfile))
-		shard, _ := strconv.Atoi(matches[1])
-		snap.readzs[shard-1] = openfile(zfile, mmap)
-		snap.zfiles[shard-1] = zfile
+		zshard, _ := strconv.Atoi(matches[1])
+		snap.readzs[zshard-1] = openfile(zfile, mmap)
+		// open vlog file if any
+		if len(vfiles) > 0 {
+			vfile := vfiles[i]
+			re, _ = regexp.Compile("bubt-vlog-([0-9]+).data")
+			matches = re.FindStringSubmatch(filepath.Base(vfile))
+			vshard, _ := strconv.Atoi(matches[1])
+			if zshard != vshard {
+				panic(fmt.Errorf("mismatch zfile: %v, vfile: %v", zfile, vfile))
+			}
+			snap.readvs[vshard-1] = openfile(vfile, mmap)
+			snap.vfiles[vshard-1] = vfile
+		}
+		snap.zfiles[zshard-1] = zfile
 	}
 	return nil
 }
@@ -252,6 +280,7 @@ func (snap *Snapshot) readheader(r io.ReaderAt) (*Snapshot, error) {
 	}
 	snap.zblocksize = setts.Int64("zblocksize")
 	snap.mblocksize = setts.Int64("mblocksize")
+	snap.vblocksize = setts.Int64("vblocksize")
 	snap.n_count = setts.Int64("n_count")
 
 	// root block
@@ -334,6 +363,12 @@ func (snap *Snapshot) Close() {
 			errorf("%v close %q: %v", snap.logprefix, snap.zfiles[i], err)
 		}
 	}
+	for i, rd := range snap.readvs {
+		err := closereadat(rd)
+		if err != nil {
+			errorf("%v close: %q: %v", snap.logprefix, snap.vfiles[i], err)
+		}
+	}
 	if snap.rw != nil {
 		snap.rw.RUnlock()
 	}
@@ -351,14 +386,20 @@ func (snap *Snapshot) Destroy() {
 		snap.rw.Lock()
 		// lock and remove m-file and one or more z-files.
 		if err := os.Remove(snap.mfile); err != nil {
-			errorf("%v %v", snap.logprefix, err)
+			errorf("%v os.Remove(%q): %v", snap.logprefix, snap.mfile, err)
 		}
 		dirs[filepath.Dir(snap.mfile)] = true
 		for _, zfile := range snap.zfiles {
 			if err := os.Remove(zfile); err != nil {
-				errorf("%v %v", snap.logprefix, err)
+				errorf("%v os.Remove(%q): %v", snap.logprefix, zfile, err)
 			}
 			dirs[filepath.Dir(zfile)] = true
+		}
+		for _, vfile := range snap.vfiles {
+			if err := os.Remove(vfile); err != nil {
+				errorf("%v os.Remove(%q): %v", snap.logprefix, vfile, err)
+			}
+			dirs[filepath.Dir(vfile)] = true
 		}
 		snap.rw.Unlock()
 	}
@@ -380,21 +421,26 @@ func (snap *Snapshot) Destroy() {
 // copy the entry's value. Also returns entry's cas, whether entry is
 // marked as deleted by LSM. If ok is false, then key is not found.
 func (snap *Snapshot) Get(
-	key, value []byte) (v []byte, cas uint64, deleted, ok bool) {
+	key, value []byte) (actualvalue []byte, cas uint64, deleted, ok bool) {
 
-	var foundkey []byte
+	var wkey []byte
+	var lv lazyvalue
+	var v []byte
 
 	buf := snap.getreadbuffer()
-	shardidx, fpos := snap.findinmblock(key, buf)
-	_, foundkey, v, cas, deleted, ok =
-		snap.findinzblock(shardidx, fpos, key, value, buf)
 
-	cmp := bytes.Compare(foundkey, key)
-	snap.putreadbuffer(buf)
-	if cmp == 0 {
-		return v, cas, deleted, ok
+	shardidx, fpos := snap.findinmblock(key, buf)
+	_, wkey, lv, cas, deleted, ok = snap.findinzblock(shardidx, fpos, key, buf)
+
+	cmp := bytes.Compare(wkey, key)
+	if cmp == 0 && value != nil {
+		v, buf.vblock = lv.getactual(snap, buf.vblock)
+		actualvalue = lib.Fixbuffer(value, int64(len(v)))
+		copy(actualvalue, v)
 	}
-	return v, 0, false, false
+
+	snap.putreadbuffer(buf)
+	return actualvalue, cas, deleted, ok
 }
 
 func (snap *Snapshot) findinmblock(
@@ -424,10 +470,9 @@ func (snap *Snapshot) findinmblock(
 }
 
 func (snap *Snapshot) findinzblock(
-	shardidx byte, fpos int64, key, v []byte,
-	buf *buffers) (index int, k, value []byte, cas uint64, deleted, ok bool) {
-
-	var val []byte
+	shardidx byte, fpos int64,
+	key []byte, buf *buffers) (
+	index int, k []byte, lv lazyvalue, cas uint64, deleted, ok bool) {
 
 	zblock := buf.zblock
 	readz := snap.readzs[shardidx]
@@ -439,12 +484,8 @@ func (snap *Snapshot) findinzblock(
 	}
 	z, zbindex := zsnap(zblock), buf.index[:0]
 	zbindex = z.getindex(zbindex[:0])
-	index, k, val, cas, deleted, ok = z.findkey(0, zbindex, key)
+	index, k, lv, cas, deleted, ok = z.findkey(0, zbindex, key)
 
-	if v != nil {
-		value = lib.Fixbuffer(v, int64(len(val)))
-		copy(value, val)
-	}
 	return
 }
 
@@ -533,6 +574,7 @@ func (snap *Snapshot) getreadbuffer() (buf *buffers) {
 			index:  make(blkindex, 0, 256),
 			mblock: make([]byte, snap.mblocksize),
 			zblock: make([]byte, snap.zblocksize),
+			vblock: make([]byte, snap.vblocksize),
 		}
 	}
 	return buf

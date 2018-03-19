@@ -7,6 +7,7 @@ import "path/filepath"
 type bubtflusher struct {
 	idx    int64
 	fpos   int64
+	vlog   []byte
 	file   string
 	fd     *os.File
 	ch     chan []byte
@@ -14,7 +15,7 @@ type bubtflusher struct {
 	blocks chan []byte
 }
 
-func startflusher(idx int, file string) (*bubtflusher, error) {
+func startflusher(idx int, vsize int64, file string) (*bubtflusher, error) {
 	flusher := &bubtflusher{
 		idx:    int64(idx),
 		fpos:   0,
@@ -22,6 +23,10 @@ func startflusher(idx int, file string) (*bubtflusher, error) {
 		ch:     make(chan []byte, 100),
 		quitch: make(chan struct{}),
 		blocks: make(chan []byte, 100),
+	}
+	if vsize > 0 {
+		flusher.vlog = make([]byte, 0, vsize)
+		flusher.fpos = int64(flusher.idx << 56)
 	}
 	path := filepath.Dir(file)
 	if err := os.MkdirAll(path, 0770); err != nil {
@@ -34,7 +39,16 @@ func startflusher(idx int, file string) (*bubtflusher, error) {
 	return flusher, nil
 }
 
+func (flusher *bubtflusher) setvlog(vlog []byte) {
+	if flusher != nil {
+		flusher.vlog = vlog
+	}
+}
+
 func (flusher *bubtflusher) writedata(data []byte) error {
+	if len(data) == 0 {
+		return nil
+	}
 	block := flusher.getblock(len(data))
 	copy(block, data)
 	select {
@@ -76,6 +90,11 @@ func (flusher *bubtflusher) run() {
 		if rc := write(block); rc == false {
 			return
 		}
+	}
+
+	// if vlog contains some data, flush them first.
+	if len(flusher.vlog) > 0 {
+		write(flusher.vlog)
 	}
 
 	// flush marker block

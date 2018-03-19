@@ -7,7 +7,7 @@ import "testing"
 func TestZBlock(t *testing.T) {
 	zblocksize := int64(4 * 1024)
 
-	z := newz(zblocksize)
+	z := newz(zblocksize, -1, 0, nil)
 	if z.finalize() == true {
 		t.Errorf("unexpected true")
 	}
@@ -37,7 +37,8 @@ func TestZBlock(t *testing.T) {
 		index := zs.getindex(blkindex{})
 		j, k := uint64(0), fmt.Sprintf("%16d", 0)
 		for j < i {
-			_, _, value, seqno, deleted, ok := zs.findkey(0, index, []byte(k))
+			_, _, lv, seqno, deleted, ok := zs.findkey(0, index, []byte(k))
+			value, _ := lv.getactual(nil, nil)
 			if ok == false {
 				t.Errorf("unexpected false")
 			} else if deleted != ((j % 4) == 0) {
@@ -51,7 +52,8 @@ func TestZBlock(t *testing.T) {
 			k = fmt.Sprintf("%16d", j)
 		}
 		k = fmt.Sprintf("%17d", 100)
-		idx, _, value, seqno, deleted, ok := zs.findkey(0, index, []byte(k))
+		idx, _, lv, seqno, deleted, ok := zs.findkey(0, index, []byte(k))
+		value, _ := lv.getactual(nil, nil)
 		out := []interface{}{idx, value, seqno, deleted, ok}
 		ref := []interface{}{11, []byte(nil), uint64(0), false, false}
 		if reflect.DeepEqual(ref, out) == false {
@@ -60,17 +62,17 @@ func TestZBlock(t *testing.T) {
 	}
 
 	doverify(doinsert())
-	z.reset()
+	z.reset(0, nil)
 	doverify(doinsert())
 }
 
 func BenchmarkZInsert(b *testing.B) {
 	blocksize := int64(4096)
 	k, value := []byte("aaaaaaaaaaaaaaaaaaaaaaa"), []byte("bbbbbbbbbbbbb")
-	z := newz(blocksize)
+	z := newz(blocksize, -1, 0, nil)
 	for i := 0; i < b.N; i++ {
 		if z.insert(k, value, 0, false) == false {
-			z.reset()
+			z.reset(0, nil)
 		}
 	}
 }

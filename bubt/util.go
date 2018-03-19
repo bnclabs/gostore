@@ -43,6 +43,9 @@ func closereadat(rd io.ReaderAt) error {
 }
 
 func filesize(r io.ReaderAt) int64 {
+	if r == nil {
+		return 0
+	}
 	switch x := r.(type) {
 	case *mmap.ReaderAt:
 		return int64(x.Len())

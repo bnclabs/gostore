@@ -10,7 +10,8 @@ type zsnap []byte
 
 func (z zsnap) findkey(
 	adjust int, index blkindex,
-	key []byte) (idx int, actualkey, value []byte, seqno uint64, del, ok bool) {
+	key []byte) (
+	idx int, actualkey []byte, lv lazyvalue, seqno uint64, del, ok bool) {
 
 	//fmt.Printf("zfindkey %v %v %q\n", adjust, len(index), key)
 
@@ -20,21 +21,22 @@ func (z zsnap) findkey(
 		panic(fmt.Errorf("impossible situation"))
 
 	case 1:
-		cmp, actualkey, value, seqno, del = z.compareat(adjust, key)
+		cmp, actualkey, lv, seqno, del = z.compareat(adjust, key)
 		if cmp == 0 { // adjust+half >= key
 			//fmt.Printf("zfindkey-1 %v %v %q\n", adjust, 0, actualkey)
-			return adjust, actualkey, value, seqno, del, true
+			return adjust, actualkey, lv, seqno, del, true
 		}
 		// cmp < 0
 		//fmt.Printf("zfindkey-2 %v %v %q\n", adjust, -1, actualkey)
-		return adjust + 1, actualkey, nil, 0, false, false
+		return adjust + 1, actualkey, lv, 0, false, false
 
 	default:
 		half := len(index) / 2
-		cmp, actualkey, value, seqno, del = z.compareat(adjust+half, key)
+		arg1 := adjust + half
+		cmp, actualkey, lv, seqno, del = z.compareat(arg1, key)
 		if cmp == 0 {
 			//fmt.Println("zfindkey", adjust+half, 0)
-			return adjust + half, actualkey, value, seqno, del, true
+			return adjust + half, actualkey, lv, seqno, del, true
 
 		} else if cmp < 0 { // adjust+half < key
 			return z.findkey(adjust+half, index[half:], key)
@@ -45,21 +47,29 @@ func (z zsnap) findkey(
 }
 
 func (z zsnap) compareat(
-	i int, key []byte) (int, []byte, []byte, uint64, bool) {
+	i int, key []byte) (
+	cmp int, currkey []byte, lv lazyvalue, cas uint64, deleted bool) {
 
 	offset := 4 + (i * 4)
 	x := int(binary.BigEndian.Uint32(z[offset : offset+4]))
 	ze := zentry(z[x : x+zentrysize])
 	ln := int(ze.keylen())
 	x += zentrysize
-	currkey := z[x : x+ln]
-	cmp := bytes.Compare(currkey, key)
+	currkey, cas, deleted = z[x:x+ln], 0, false
+	cmp = bytes.Compare(currkey, key)
 	//fmt.Printf("z.compareat %v %s %s %v\n", i, key, z[x:x+ln], cmp)
+	lv.setfields(0, 0, nil)
 	if cmp >= 0 {
 		x, ln = x+ln, int(ze.valuelen())
-		return cmp, currkey, z[x : x+ln], ze.seqno(), ze.isdeleted()
+		cas, deleted = ze.seqno(), ze.isdeleted()
+		if ze.isvlog() {
+			vlogpos := int64(binary.BigEndian.Uint64(ze[x : x+8]))
+			lv.setfields(int64(ln), vlogpos, nil)
+		} else if ln > 0 {
+			lv.setfields(int64(ln), 0, z[x:x+ln])
+		}
 	}
-	return cmp, currkey, nil, 0, false
+	return cmp, currkey, lv, cas, deleted
 }
 
 func (z zsnap) getindex(index blkindex) blkindex {
@@ -72,28 +82,36 @@ func (z zsnap) getindex(index blkindex) blkindex {
 }
 
 func (z zsnap) entryat(
-	index int) (key, value []byte, seqno uint64, deleted bool) {
+	index int) (key []byte, lv lazyvalue, seqno uint64, deleted bool) {
 
 	x := int((index * 4) + 4)
 	x = int(binary.BigEndian.Uint32(z[x : x+4]))
 	ze := zentry(z[x : x+zentrysize])
 	seqno, deleted = ze.seqno(), ze.isdeleted()
+	vlogok := ze.isvlog()
 	keylen, valuelen := int(ze.keylen()), int(ze.valuelen())
 	x += zentrysize
 	//fmt.Printf("z-entryat %v %v %v\n", index, x, keylen)
 	key = z[x : x+keylen]
 	x += keylen
-	value = z[x : x+valuelen]
+	if vlogok {
+		vlogpos := int64(binary.BigEndian.Uint64(z[x : x+8]))
+		lv.setfields(int64(valuelen), vlogpos, nil)
+	} else if valuelen > 0 {
+		lv.setfields(int64(valuelen), 0, z[x:x+valuelen])
+	} else {
+		lv.setfields(0, 0, nil)
+	}
 	return
 }
 
 func (z zsnap) getnext(
-	index int) (key, value []byte, seqno uint64, deleted bool) {
+	index int) (key []byte, lv lazyvalue, seqno uint64, deleted bool) {
 
 	if index >= 0 && z.isbounded(index+1) {
 		return z.entryat(index + 1)
 	}
-	return nil, nil, 0, false
+	return key, lv, 0, false
 }
 
 func (z zsnap) isbounded(index int) bool {

@@ -3,8 +3,6 @@ package bubt
 import "io"
 import "fmt"
 
-var _ = fmt.Sprintf("")
-
 // Cursor object maintains an active pointer into index. Use OpenCursor
 // on Txn object to create a new cursor.
 type Cursor struct {
@@ -40,7 +38,7 @@ func (cur *Cursor) opencursor(
 	}
 
 	shardidx, fpos := snap.findinmblock(key, buf)
-	cur.index, _, _, _, _, _ = snap.findinzblock(shardidx, fpos, key, nil, buf)
+	cur.index, _, _, _, _, _ = snap.findinzblock(shardidx, fpos, key, buf)
 	cur.shardidx = shardidx
 	for i := byte(0); i < cur.shardidx; i++ {
 		cur.fposs[i] = fpos + snap.zblocksize
@@ -79,11 +77,16 @@ func (cur *Cursor) Value() (value []byte) {
 		return nil
 	}
 
+	var lv lazyvalue
+
 	z := zsnap(cur.buf.zblock)
 	if z.isbounded(cur.index) {
-		_, value, _, _ = z.entryat(cur.index)
+		_, lv, _, _ = z.entryat(cur.index)
+		value, cur.buf.vblock = lv.getactual(cur.snap, cur.buf.vblock)
+
 	} else {
-		_, value, _, _, _ = cur.getnext()
+		_, lv, _, _, _ = cur.getnext()
+		value, cur.buf.vblock = lv.getactual(cur.snap, cur.buf.vblock)
 	}
 	return
 }
@@ -91,33 +94,39 @@ func (cur *Cursor) Value() (value []byte) {
 // GetNext move cursor to next entry and return its key, value, whether
 // it is deleted, err will be io.EOF or any other disk error.
 func (cur *Cursor) GetNext() (key, value []byte, deleted bool, err error) {
-	key, value, _, deleted, err = cur.getnext()
+	var lv lazyvalue
+
+	key, lv, _, deleted, err = cur.getnext()
+	value, cur.buf.vblock = lv.getactual(cur.snap, cur.buf.vblock)
 	return
 }
 
-func (cur *Cursor) getnext() ([]byte, []byte, uint64, bool, error) {
+func (cur *Cursor) getnext() (
+	key []byte, lv lazyvalue, seqno uint64, deleted bool, err error) {
+
 	if cur.finished {
-		return nil, nil, 0, false, io.EOF
+		return nil, lv, 0, false, io.EOF
 	}
 
-	key, value, seqno, deleted := zsnap(cur.buf.zblock).getnext(cur.index)
+	key, lv, seqno, deleted = zsnap(cur.buf.zblock).getnext(cur.index)
 	//fmt.Printf("getnext %q\n", key)
 	if key != nil {
 		cur.index++
-		return key, value, seqno, deleted, nil
+		return key, lv, seqno, deleted, nil
 	}
+
 	cur.fposs[cur.shardidx] += cur.snap.zblocksize
 	cur.shardidx = (cur.shardidx + 1) % byte(len(cur.fposs))
-	err := cur.nextblock(cur.snap)
+	err = cur.nextblock(cur.snap)
 	if err == nil {
-		key, value, seqno, deleted = zsnap(cur.buf.zblock).entryat(cur.index)
+		key, lv, seqno, deleted = zsnap(cur.buf.zblock).entryat(cur.index)
 		//fmt.Printf("getnext-next %s\n", key)
 		if key != nil {
-			return key, value, seqno, deleted, nil
+			return key, lv, seqno, deleted, nil
 		}
 		panic("impossible situation")
 	}
-	return nil, nil, 0, false, err
+	return nil, lv, 0, false, err
 }
 
 // YNext can be used for lsm-sort. Similar to GetNext, but includes the
@@ -125,16 +134,21 @@ func (cur *Cursor) getnext() ([]byte, []byte, uint64, bool, error) {
 func (cur *Cursor) YNext(fin bool) (key,
 	value []byte, seqno uint64, deleted bool, err error) {
 
+	var lv lazyvalue
+
 	cur.finished = fin
 	if cur.ynext == false {
 		z := zsnap(cur.buf.zblock)
 		cur.ynext = true
 		if z.isbounded(cur.index) {
-			key, value, seqno, deleted = z.entryat(cur.index)
+			key, lv, seqno, deleted = z.entryat(cur.index)
+			value, cur.buf.vblock = lv.getactual(cur.snap, cur.buf.vblock)
 			return
 		}
 	}
-	return cur.getnext()
+	key, lv, seqno, deleted, err = cur.getnext()
+	value, cur.buf.vblock = lv.getactual(cur.snap, cur.buf.vblock)
+	return
 }
 
 func (cur *Cursor) nextblock(snap *Snapshot) error {

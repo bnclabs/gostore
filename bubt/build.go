@@ -3,7 +3,6 @@ package bubt
 import "io"
 import "fmt"
 import "encoding/json"
-import "sync/atomic"
 import "path/filepath"
 import "encoding/binary"
 
@@ -22,20 +21,33 @@ type Bubt struct {
 	name       string
 	mflusher   *bubtflusher
 	zflushers  []*bubtflusher
+	vflushers  []*bubtflusher
 	headmblock *mblock
 
 	// settings, will be flushed to the tip of indexfile.
 	mblocksize int64
 	zblocksize int64
+	vblocksize int64
 	zeromblock *mblock
 	logprefix  string
 }
 
 // NewBubt create a Bubt instance to build a new bottoms-up btree.
+// If zsize == 0, then zblocks and mblocks will be stored in same file.
+// if vsize == 0, then values will be stored in zblocks.
 func NewBubt(
-	name string, paths []string, msize, zsize int64) (tree *Bubt, err error) {
+	name string, paths []string,
+	msize, zsize, vsize int64) (tree *Bubt, err error) {
 
-	tree = &Bubt{name: name, mblocksize: msize, zblocksize: zsize}
+	if zsize < 0 {
+		zsize = 0
+	}
+	if vsize < 0 {
+		vsize = 0
+	}
+	tree = &Bubt{
+		name: name, mblocksize: msize, zblocksize: zsize, vblocksize: vsize,
+	}
 	mpath, zpaths := tree.pickmzpath(paths)
 	tree.logprefix = fmt.Sprintf("BUBT [%s]", name)
 	tree.zeromblock = newm(tree, tree.mblocksize)
@@ -47,18 +59,33 @@ func NewBubt(
 	}()
 
 	mfile := filepath.Join(mpath, name, "bubt-mindex.data")
-	if tree.mflusher, err = startflusher(0, mfile); err != nil {
+	if tree.mflusher, err = startflusher(0, -1, mfile); err != nil {
 		panic(err)
 	}
+	// if zsize <= 0 then zpaths will be empty
 	tree.zflushers = make([]*bubtflusher, 0)
+	tree.vflushers = make([]*bubtflusher, 0)
 	for idx, zpath := range zpaths {
+		// boot zindex files.
 		fname := fmt.Sprintf("bubt-zindex-%d.data", idx+1)
 		zfile := filepath.Join(zpath, name, fname)
-		zflusher, err := startflusher(idx+1, zfile)
+		zflusher, err := startflusher(idx+1, -1, zfile)
 		if err != nil {
 			panic(err)
 		}
 		tree.zflushers = append(tree.zflushers, zflusher)
+		if tree.vblocksize > 0 {
+			// boot value log files.
+			fname := fmt.Sprintf("bubt-vlog-%d.data", idx+1)
+			vfile := filepath.Join(zpath, name, fname)
+			vflusher, err := startflusher(idx+1, tree.vblocksize, vfile)
+			if err != nil {
+				panic(err)
+			}
+			tree.vflushers = append(tree.vflushers, vflusher)
+		} else {
+			tree.vflushers = append(tree.vflushers, nil)
+		}
 	}
 	return tree, nil
 }
@@ -68,32 +95,50 @@ func NewBubt(
 func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 	debugf("%v starting bottoms up build ...\n", tree.logprefix)
 
+	scratchvlog := make([]byte, tree.vblocksize)
 	n_count := int64(0)
-	z := newz(tree.zblocksize)
+	z := newz(tree.zblocksize, tree.vblocksize, 0, nil)
 
 	shardidx := 0
-	pickzflusher := func() *bubtflusher {
-		zflusher := tree.zflushers[shardidx]
+	pickzflusher := func() (zflusher, vflusher *bubtflusher) {
+		zflusher = tree.zflushers[shardidx]
+		vflusher = tree.vflushers[shardidx]
 		shardidx = (shardidx + 1) % len(tree.zflushers)
-		return zflusher
+		return
 	}
 
-	flushzblock := func(flusher *bubtflusher) int64 {
+	flushzblock := func(zflusher *bubtflusher) int64 {
 		if z.finalize() {
-			fpos := atomic.LoadInt64(&flusher.fpos)
-			if err := flusher.writedata(z.block); err != nil {
+			fpos := zflusher.fpos
+			if err := zflusher.writedata(z.block); err != nil {
 				panic(err)
 			}
-			vpos := int64(flusher.idx<<56) | fpos
+			vpos := int64(zflusher.idx<<56) | fpos
 			//fmt.Printf("flushzblock %s %x\n", z.firstkey, vpos)
 			return vpos
 		}
 		return -1 // no entries in the block
 	}
 
+	flushvblock := func(vflusher *bubtflusher) {
+		if vflusher == nil { // value is in zblocks.
+			return
+		}
+		vlog := vflusher.vlog
+		// take till vblocksize boundary and return the remaining.
+		till := (int64(len(vlog)) / tree.vblocksize) * tree.vblocksize
+		remn := int64(len(vlog)) % tree.vblocksize
+		if err := vflusher.writedata(vlog[:till]); err != nil {
+			panic(err)
+		}
+		copy(scratchvlog[:remn], vlog[till:till+remn])
+		vflusher.vlog = append(vlog[:0], scratchvlog[:remn]...)
+		return
+	}
+
 	flushmblock := func(m *mblock) int64 {
 		if m != nil && m.finalize() {
-			vpos := atomic.LoadInt64(&tree.mflusher.fpos)
+			vpos := tree.mflusher.fpos
 			if err := tree.mflusher.writedata(m.block); err != nil {
 				panic(err)
 			}
@@ -107,8 +152,6 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 	var deleted bool
 
 	buildz := func() {
-		z.reset()
-
 		if key == nil {
 			return
 		}
@@ -143,9 +186,20 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 			var vpos int64
 			ok := true
 			for ok {
+				zflusher, vflusher := pickzflusher()
+				vlogpos, vlog := int64(0), []byte(nil)
+				if vflusher != nil {
+					vlogpos, vlog = vflusher.fpos, vflusher.vlog
+					vlogpos += int64(len(vlog))
+				}
+				z.reset(vlogpos, vlog)
+
 				buildz()
-				flusher := pickzflusher()
-				if vpos = flushzblock(flusher); vpos == -1 {
+
+				if vflusher != nil {
+					flushvblock(vflusher)
+				}
+				if vpos = flushzblock(zflusher); vpos == -1 {
 					return m1, nil
 				}
 				ok = m1.insert(z.firstkey, vpos)
@@ -207,6 +261,7 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 		"name":       tree.name,
 		"zblocksize": tree.zblocksize,
 		"mblocksize": tree.mblocksize,
+		"vblocksize": tree.vblocksize,
 		"n_count":    n_count,
 	}
 	data, _ := json.Marshal(setts)
@@ -259,5 +314,10 @@ func (tree *Bubt) Close() {
 
 func (tree *Bubt) pickmzpath(paths []string) (string, []string) {
 	// TODO: Intelligently pick mpath.
-	return paths[0], paths
+	mpath, zpaths := paths[0], []string{}
+	if tree.zblocksize > 0 {
+		zpaths = append(zpaths, paths...)
+		return mpath, zpaths
+	}
+	return mpath, zpaths
 }
