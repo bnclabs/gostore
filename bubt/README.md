@@ -70,5 +70,16 @@ Panics are to expected when APIs are misused. Programmers might choose
 to ignore the errors, but not panics. For example:
 
 - For disk errors while building the tree or reading from snapshots.
-- Panics that happend during Build() or OpenSnapshot() call will recover
-  otherwise they will have be caught by the caller.
+- If input iterator returns error other than io.EOF.
+- If bytes required to encode a key,value entry is more than the
+  zblock's size.
+- Using mutation APIs, like Set, Delete, Commit, on View object.
+- Using mutation APIs like BeginTxn, Set, SetCAS, Delete, on Snapshot.
+- Using mutation APIs, like Set, Delete, Delcursor, on Cursor object.
+- Validate() API will panic, if:
+  - keys in the bubt instance are not in sort order.
+  - number of entries in the bubt instance does not match with header.
+  - disk footprint is unreasonably larger.
+
+None of the panics will automatically recover. It is upto the caller
+to recover or fail-quick as the case may be.
