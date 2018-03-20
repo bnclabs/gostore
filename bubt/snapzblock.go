@@ -63,7 +63,7 @@ func (z zsnap) compareat(
 		x, ln = x+ln, int(ze.valuelen())
 		cas, deleted = ze.seqno(), ze.isdeleted()
 		if ze.isvlog() {
-			vlogpos := int64(binary.BigEndian.Uint64(ze[x : x+8]))
+			vlogpos := int64(binary.BigEndian.Uint64(z[x : x+8]))
 			lv.setfields(int64(ln), vlogpos, nil)
 		} else if ln > 0 {
 			lv.setfields(int64(ln), 0, z[x:x+ln])

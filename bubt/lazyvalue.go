@@ -19,7 +19,7 @@ func (lv *lazyvalue) setfields(valuelen, vlogpos int64, value []byte) {
 	}
 	lv.valuelen = valuelen
 	lv.shardidx = int(uint64(vlogpos) >> 56)
-	lv.fpos = int64(uint64(vlogpos) & 0xFF00000000000000)
+	lv.fpos = int64(uint64(vlogpos) & 0x00FFFFFFFFFFFFFF)
 }
 
 func (lv *lazyvalue) getactual(snap *Snapshot, vblock []byte) ([]byte, []byte) {

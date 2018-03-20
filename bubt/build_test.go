@@ -98,9 +98,67 @@ func TestBuildMetadata(t *testing.T) {
 	}
 }
 
-func TestSnapshotGet(t *testing.T) {
+func TestSnapshotGetM(t *testing.T) {
+	n := 10000000
 	paths := makepaths3()
-	mi, _ := makeLLRB(10000000)
+	mi, _ := makeLLRB(n)
+	defer mi.Destroy()
+
+	t.Logf("Created LLRB with %d\n", n)
+
+	rand.Seed(time.Now().UnixNano())
+	name, msize := "testbuild", int64(4096)
+	mmap := []bool{false, true}[rand.Intn(10000)%2]
+	t.Logf("zsize: %v, mmap: %v", msize, mmap)
+	bubt, err := NewBubt(name, paths, msize, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	miter := mi.Scan()
+	if err := bubt.Build(miter, []byte("this is metadata")); err != nil {
+		t.Fatal(err)
+	}
+	miter(true /*fin*/)
+	bubt.Close()
+
+	t.Logf("Built Bubt ....")
+
+	snap, err := OpenSnapshot(name, paths, mmap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer snap.Destroy()
+	defer snap.Close()
+
+	//value, seqno, deleted, ok := snap.Get([]byte("key9998"), []byte{})
+	//t.Logf("%s %v %v %v", value, seqno, deleted, ok)
+
+	if snap.Count() != mi.Count() {
+		t.Errorf("expected %v, got %v", mi.Count(), snap.Count())
+	} else if snap.ID() != name {
+		t.Errorf("expected %v, got %v", name, snap.ID())
+	}
+	miter = mi.Scan()
+	for key, value, seqno, deleted, err := miter(false /*fin*/); err == nil; {
+		v, s, d, ok := snap.Get(key, []byte{})
+		if d != deleted {
+			t.Errorf("%s expected %v, got %v", key, deleted, d)
+		} else if deleted == false && ok == false {
+			t.Errorf("%s unexpected false", key)
+		} else if s != seqno {
+			t.Errorf("%s expected %v, got %v", key, seqno, s)
+		} else if bytes.Compare(v, value) != 0 {
+			t.Errorf("%s expected %q, got %q", key, value, v)
+		}
+		key, value, seqno, deleted, err = miter(false /*fin*/)
+	}
+	miter(true /*fin*/)
+}
+
+func TestSnapshotGetZ(t *testing.T) {
+	n := 10000000
+	paths := makepaths3()
+	mi, _ := makeLLRB(n)
 	defer mi.Destroy()
 
 	rand.Seed(time.Now().UnixNano())
@@ -109,6 +167,62 @@ func TestSnapshotGet(t *testing.T) {
 	mmap := []bool{false, true}[rand.Intn(10000)%2]
 	t.Logf("zsize: %v, mmap: %v", zsize, mmap)
 	bubt, err := NewBubt(name, paths, msize, zsize, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	miter := mi.Scan()
+	if err := bubt.Build(miter, []byte("this is metadata")); err != nil {
+		t.Fatal(err)
+	}
+	miter(true /*fin*/)
+	bubt.Close()
+
+	snap, err := OpenSnapshot(name, paths, mmap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer snap.Destroy()
+	defer snap.Close()
+
+	//value, seqno, deleted, ok := snap.Get([]byte("key9998"), []byte{})
+	//t.Logf("%s %v %v %v", value, seqno, deleted, ok)
+
+	if snap.Count() != mi.Count() {
+		t.Errorf("expected %v, got %v", mi.Count(), snap.Count())
+	} else if snap.ID() != name {
+		t.Errorf("expected %v, got %v", name, snap.ID())
+	}
+	miter = mi.Scan()
+	for key, value, seqno, deleted, err := miter(false /*fin*/); err == nil; {
+		v, s, d, ok := snap.Get(key, []byte{})
+		if d != deleted {
+			t.Errorf("%s expected %v, got %v", key, deleted, d)
+		} else if deleted == false && ok == false {
+			t.Errorf("%s unexpected false", key)
+		} else if s != seqno {
+			t.Errorf("%s expected %v, got %v", key, seqno, s)
+		} else if bytes.Compare(v, value) != 0 {
+			t.Errorf("%s expected %q, got %q", key, value, v)
+		}
+		key, value, seqno, deleted, err = miter(false /*fin*/)
+	}
+	miter(true /*fin*/)
+}
+
+func TestSnapshotGetV(t *testing.T) {
+	n := 1000 // 10000000
+	paths := makepaths3()
+	mi, _ := makeLLRB(n)
+	t.Logf("%v", paths)
+	defer mi.Destroy()
+
+	rand.Seed(time.Now().UnixNano())
+	name, msize := "testbuild", int64(4096)
+	zsize := []int64{msize, msize * 2}[rand.Intn(100000)%2]
+	vsize := []int64{zsize, zsize * 2}[rand.Intn(100000)%2]
+	mmap := []bool{false, true}[rand.Intn(10000)%2]
+	t.Logf("zsize: %v, vsize: %v, mmap: %v", zsize, vsize, mmap)
+	bubt, err := NewBubt(name, paths, msize, zsize, vsize)
 	if err != nil {
 		t.Fatal(err)
 	}

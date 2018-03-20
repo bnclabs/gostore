@@ -61,7 +61,7 @@ func BenchmarkZGetNext(b *testing.B) {
 func makezsnap(tb testing.TB) (zsnap, [][]byte) {
 	zblocksize := int64(4 * 1024)
 
-	z, keys := newz(zblocksize, -1, 0, nil), [][]byte{}
+	z, keys := newz(zblocksize, -1), [][]byte{}
 	i := uint64(0)
 	k := fmt.Sprintf("%16d", i)
 	v, seqno, deleted := k, i, true

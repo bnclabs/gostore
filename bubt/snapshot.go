@@ -159,30 +159,28 @@ func (snap *Snapshot) loadreaders(
 	}
 	snap.readm = openfile(snap.mfile, true)
 
+	// open zindex file
 	snap.readzs = make([]io.ReaderAt, len(zfiles))
-	snap.readvs = make([]io.ReaderAt, len(vfiles))
 	snap.zfiles = make([]string, len(zfiles))
-	snap.vfiles = make([]string, len(vfiles))
-	for i, zfile := range zfiles {
-		// open zindex file
+	for _, zfile := range zfiles {
 		re, _ := regexp.Compile("bubt-zindex-([0-9]+).data")
 		matches := re.FindStringSubmatch(filepath.Base(zfile))
 		zshard, _ := strconv.Atoi(matches[1])
 		snap.readzs[zshard-1] = openfile(zfile, mmap)
-		// open vlog file if any
-		if len(vfiles) > 0 {
-			vfile := vfiles[i]
-			re, _ = regexp.Compile("bubt-vlog-([0-9]+).data")
-			matches = re.FindStringSubmatch(filepath.Base(vfile))
-			vshard, _ := strconv.Atoi(matches[1])
-			if zshard != vshard {
-				panic(fmt.Errorf("mismatch zfile: %v, vfile: %v", zfile, vfile))
-			}
-			snap.readvs[vshard-1] = openfile(vfile, mmap)
-			snap.vfiles[vshard-1] = vfile
-		}
 		snap.zfiles[zshard-1] = zfile
 	}
+
+	// open vlog file, if any
+	snap.readvs = make([]io.ReaderAt, len(vfiles))
+	snap.vfiles = make([]string, len(vfiles))
+	for _, vfile := range vfiles {
+		re, _ := regexp.Compile("bubt-vlog-([0-9]+).data")
+		matches := re.FindStringSubmatch(filepath.Base(vfile))
+		vshard, _ := strconv.Atoi(matches[1])
+		snap.readvs[vshard-1] = openfile(vfile, mmap)
+		snap.vfiles[vshard-1] = vfile
+	}
+
 	return nil
 }
 

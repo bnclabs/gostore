@@ -67,6 +67,7 @@ func (flusher *bubtflusher) run() {
 	}()
 
 	write := func(block []byte) (rc bool) {
+		//fmt.Println("loop", flusher.idx, len(block))
 		if n, err := flusher.fd.Write(block); err != nil {
 			fatalf("flusher(%q): %v", flusher.file, err)
 		} else if n != len(block) {
@@ -75,7 +76,6 @@ func (flusher *bubtflusher) run() {
 		} else {
 			rc = true
 		}
-		flusher.putblock(block)
 		return
 	}
 
@@ -84,6 +84,7 @@ func (flusher *bubtflusher) run() {
 		if rc := write(block); rc == false {
 			return
 		}
+		flusher.putblock(block)
 	}
 
 	// if vlog contains some data, flush them first.

@@ -7,7 +7,7 @@ import "testing"
 func TestZBlock(t *testing.T) {
 	zblocksize := int64(4 * 1024)
 
-	z := newz(zblocksize, -1, 0, nil)
+	z := newz(zblocksize, -1)
 	if z.finalize() == true {
 		t.Errorf("unexpected true")
 	}
@@ -69,7 +69,7 @@ func TestZBlock(t *testing.T) {
 func BenchmarkZInsert(b *testing.B) {
 	blocksize := int64(4096)
 	k, value := []byte("aaaaaaaaaaaaaaaaaaaaaaa"), []byte("bbbbbbbbbbbbb")
-	z := newz(blocksize, -1, 0, nil)
+	z := newz(blocksize, -1)
 	for i := 0; i < b.N; i++ {
 		if z.insert(k, value, 0, false) == false {
 			z.reset(0, nil)

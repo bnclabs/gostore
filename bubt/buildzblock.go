@@ -1,9 +1,11 @@
 package bubt
 
-//import "fmt"
+import "fmt"
 import "encoding/binary"
 
 import "github.com/bnclabs/gostore/lib"
+
+var _ = fmt.Sprintf("")
 
 type zblock struct {
 	zblocksize int64
@@ -26,15 +28,13 @@ type zblock struct {
 // n_entries uint32   - 4-byte count of number entries in this zblock.
 // blkindex  []uint32 - 4 byte offset into zblock for each entry.
 // zentries           - array of zentries.
-func newz(zblocksize, vblocksize, vlogpos int64, vlog []byte) (z *zblock) {
+func newz(zblocksize, vblocksize int64) (z *zblock) {
 	z = &zblock{
 		zblocksize: zblocksize,
 		vblocksize: vblocksize,
 		firstkey:   make([]byte, 0, 256),
 		index:      make(blkindex, 0, 64),
 		buffer:     make([]byte, zblocksize*2),
-		vlog:       vlog,
-		vlogpos:    vlogpos,
 	}
 	if z.vblocksize > 0 {
 		z.zerovbuff = make([]byte, vblocksize)
@@ -54,6 +54,7 @@ func (z *zblock) reset(vlogpos int64, vlog []byte) *zblock {
 }
 
 func (z *zblock) insert(key, value []byte, seqno uint64, deleted bool) bool {
+	//fmt.Println(len(key), len(value), z.zblocksize)
 	if key == nil {
 		return false
 	} else if z.isoverflow(key, value) {
@@ -159,6 +160,7 @@ func (z *zblock) addtovalueblock(value []byte) (bool, int64) {
 		z.vlog = append(z.vlog, scratch[:]...)
 		z.vlog = append(z.vlog, value...)
 		z.vlogpos += int64(len(scratch) + len(value))
+		//fmt.Println("addtovalueblock", len(z.vlog))
 		return true, vlogpos
 	}
 	return true, -1
