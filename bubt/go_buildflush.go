@@ -39,12 +39,6 @@ func startflusher(idx int, vsize int64, file string) (*bubtflusher, error) {
 	return flusher, nil
 }
 
-func (flusher *bubtflusher) setvlog(vlog []byte) {
-	if flusher != nil {
-		flusher.vlog = vlog
-	}
-}
-
 func (flusher *bubtflusher) writedata(data []byte) error {
 	if len(data) == 0 {
 		return nil
