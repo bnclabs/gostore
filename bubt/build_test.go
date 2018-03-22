@@ -147,8 +147,8 @@ func TestSnapshotGetM(t *testing.T) {
 			t.Errorf("%s unexpected false", key)
 		} else if s != seqno {
 			t.Errorf("%s expected %v, got %v", key, seqno, s)
-		} else if bytes.Compare(v, value) != 0 {
-			t.Errorf("%s expected %q, got %q", key, value, v)
+		} else if deleted == false && bytes.Compare(v, value) != 0 {
+			t.Errorf("%s %v expected %q, got %q", key, deleted, value, v)
 		}
 		key, value, seqno, deleted, err = miter(false /*fin*/)
 	}
@@ -203,7 +203,7 @@ func TestSnapshotGetZ(t *testing.T) {
 			t.Errorf("%s unexpected false", key)
 		} else if s != seqno {
 			t.Errorf("%s expected %v, got %v", key, seqno, s)
-		} else if bytes.Compare(v, value) != 0 {
+		} else if deleted == false && bytes.Compare(v, value) != 0 {
 			t.Errorf("%s expected %q, got %q", key, value, v)
 		}
 		key, value, seqno, deleted, err = miter(false /*fin*/)
@@ -260,7 +260,7 @@ func TestSnapshotGetV(t *testing.T) {
 			t.Errorf("%s unexpected false", key)
 		} else if s != seqno {
 			t.Errorf("%s expected %v, got %v", key, seqno, s)
-		} else if bytes.Compare(v, value) != 0 {
+		} else if deleted == false && bytes.Compare(v, value) != 0 {
 			t.Errorf("%s expected %q, got %q", key, value, v)
 		}
 		key, value, seqno, deleted, err = miter(false /*fin*/)
@@ -310,14 +310,14 @@ func TestSnapshotScanM1(t *testing.T) {
 		} else if bytes.Compare(k, key) != 0 {
 			t.Errorf("expected %q, got %q", key, k)
 			break
-		} else if bytes.Compare(v, value) != 0 {
-			t.Errorf("%s expected %q, got %q", key, value, v)
-			break
 		} else if d != deleted {
 			t.Errorf("%s expected %v, got %v", key, deleted, d)
 			break
 		} else if s != seqno {
 			t.Errorf("%s expected %v, got %v", key, seqno, s)
+			break
+		} else if deleted == false && bytes.Compare(v, value) != 0 {
+			t.Errorf("%s expected %q, got %q", key, value, v)
 			break
 		}
 		key, value, seqno, deleted, err = miter(false /*fin*/)
@@ -372,12 +372,12 @@ func TestSnapshotScanM2(t *testing.T) {
 			t.Errorf("unexpected %v", err1)
 		} else if bytes.Compare(k, key) != 0 {
 			t.Errorf("expected %q, got %q", key, k)
-		} else if bytes.Compare(v, value) != 0 {
-			t.Errorf("%s expected %q, got %q", key, value, v)
 		} else if d != deleted {
 			t.Errorf("%s expected %v, got %v", key, deleted, d)
 		} else if s != seqno {
 			t.Errorf("%s expected %v, got %v", key, seqno, s)
+		} else if deleted == false && bytes.Compare(v, value) != 0 {
+			t.Errorf("%s expected %q, got %q", key, value, v)
 		}
 		key, value, seqno, deleted, err = miter(false /*fin*/)
 	}
@@ -431,12 +431,12 @@ func TestSnapshotScanM3(t *testing.T) {
 			t.Errorf("unexpected %v", err1)
 		} else if bytes.Compare(k, key) != 0 {
 			t.Errorf("expected %q, got %q", key, k)
-		} else if bytes.Compare(v, value) != 0 {
-			t.Errorf("%s expected %q, got %q", key, value, v)
 		} else if d != deleted {
 			t.Errorf("%s expected %v, got %v", key, deleted, d)
 		} else if s != seqno {
 			t.Errorf("%s expected %v, got %v", key, seqno, s)
+		} else if deleted == false && bytes.Compare(v, value) != 0 {
+			t.Errorf("%s expected %q, got %q", key, value, v)
 		}
 		key, value, seqno, deleted, err = miter(false /*fin*/)
 	}
@@ -493,14 +493,14 @@ func TestSnapshotScanZ1(t *testing.T) {
 		} else if bytes.Compare(k, key) != 0 {
 			t.Errorf("expected %q, got %q", key, k)
 			break
-		} else if bytes.Compare(v, value) != 0 {
-			t.Errorf("%s expected %q, got %q", key, value, v)
-			break
 		} else if d != deleted {
 			t.Errorf("%s expected %v, got %v", key, deleted, d)
 			break
 		} else if s != seqno {
 			t.Errorf("%s expected %v, got %v", key, seqno, s)
+			break
+		} else if deleted == false && bytes.Compare(v, value) != 0 {
+			t.Errorf("%s expected %q, got %q", key, value, v)
 			break
 		}
 		key, value, seqno, deleted, err = miter(false /*fin*/)
@@ -556,12 +556,12 @@ func TestSnapshotScanZ2(t *testing.T) {
 			t.Errorf("unexpected %v", err1)
 		} else if bytes.Compare(k, key) != 0 {
 			t.Errorf("expected %q, got %q", key, k)
-		} else if bytes.Compare(v, value) != 0 {
-			t.Errorf("%s expected %q, got %q", key, value, v)
 		} else if d != deleted {
 			t.Errorf("%s expected %v, got %v", key, deleted, d)
 		} else if s != seqno {
 			t.Errorf("%s expected %v, got %v", key, seqno, s)
+		} else if deleted == false && bytes.Compare(v, value) != 0 {
+			t.Errorf("%s expected %q, got %q", key, value, v)
 		}
 		key, value, seqno, deleted, err = miter(false /*fin*/)
 	}
@@ -615,12 +615,12 @@ func TestSnapshotScanZ3(t *testing.T) {
 			t.Errorf("unexpected %v", err1)
 		} else if bytes.Compare(k, key) != 0 {
 			t.Errorf("expected %q, got %q", key, k)
-		} else if bytes.Compare(v, value) != 0 {
-			t.Errorf("%s expected %q, got %q", key, value, v)
 		} else if d != deleted {
 			t.Errorf("%s expected %v, got %v", key, deleted, d)
 		} else if s != seqno {
 			t.Errorf("%s expected %v, got %v", key, seqno, s)
+		} else if deleted == false && bytes.Compare(v, value) != 0 {
+			t.Errorf("%s expected %q, got %q", key, value, v)
 		}
 		key, value, seqno, deleted, err = miter(false /*fin*/)
 	}
@@ -678,14 +678,14 @@ func TestSnapshotScanV1(t *testing.T) {
 		} else if bytes.Compare(k, key) != 0 {
 			t.Errorf("expected %q, got %q", key, k)
 			break
-		} else if bytes.Compare(v, value) != 0 {
-			t.Errorf("%s expected %q, got %q", key, value, v)
-			break
 		} else if d != deleted {
 			t.Errorf("%s expected %v, got %v", key, deleted, d)
 			break
 		} else if s != seqno {
 			t.Errorf("%s expected %v, got %v", key, seqno, s)
+			break
+		} else if deleted == false && bytes.Compare(v, value) != 0 {
+			t.Errorf("%s expected %q, got %q", key, value, v)
 			break
 		}
 		key, value, seqno, deleted, err = miter(false /*fin*/)
@@ -742,12 +742,12 @@ func TestSnapshotScanV2(t *testing.T) {
 			t.Errorf("unexpected %v", err1)
 		} else if bytes.Compare(k, key) != 0 {
 			t.Errorf("expected %q, got %q", key, k)
-		} else if bytes.Compare(v, value) != 0 {
-			t.Errorf("%s expected %q, got %q", key, value, v)
 		} else if d != deleted {
 			t.Errorf("%s expected %v, got %v", key, deleted, d)
 		} else if s != seqno {
 			t.Errorf("%s expected %v, got %v", key, seqno, s)
+		} else if deleted == false && bytes.Compare(v, value) != 0 {
+			t.Errorf("%s expected %q, got %q", key, value, v)
 		}
 		key, value, seqno, deleted, err = miter(false /*fin*/)
 	}
@@ -802,12 +802,12 @@ func TestSnapshotScanV3(t *testing.T) {
 			t.Errorf("unexpected %v", err1)
 		} else if bytes.Compare(k, key) != 0 {
 			t.Errorf("expected %q, got %q", key, k)
-		} else if bytes.Compare(v, value) != 0 {
-			t.Errorf("%s expected %q, got %q", key, value, v)
 		} else if d != deleted {
 			t.Errorf("%s expected %v, got %v", key, deleted, d)
 		} else if s != seqno {
 			t.Errorf("%s expected %v, got %v", key, seqno, s)
+		} else if deleted == false && bytes.Compare(v, value) != 0 {
+			t.Errorf("%s expected %q, got %q", key, value, v)
 		}
 		key, value, seqno, deleted, err = miter(false /*fin*/)
 	}
@@ -864,7 +864,7 @@ func TestView(t *testing.T) {
 			t.Errorf("%s expected %v, got %v", key, deleted, d)
 		} else if deleted == false && ok == false {
 			t.Errorf("%s unexpected false", key)
-		} else if bytes.Compare(v, value) != 0 {
+		} else if deleted == false && bytes.Compare(v, value) != 0 {
 			t.Errorf("%s expected %q, got %q", key, value, v)
 		} else if cas != c {
 			t.Errorf("%s expected %v, got %v", key, cas, c)
@@ -918,10 +918,10 @@ func TestCursorGetNext(t *testing.T) {
 			v2 := dcur.Value()
 			if bytes.Compare(k1, k2) != 0 {
 				t.Errorf("expected %q, got %q", k1, k2)
-			} else if bytes.Compare(v1, v2) != 0 {
-				t.Errorf("%s expected %q, got %q", key, v1, v2)
 			} else if d1 != d2 {
 				t.Errorf("%s expected %v, got %v", key, d1, d2)
+			} else if d1 == false && bytes.Compare(v1, v2) != 0 {
+				t.Errorf("%s expected %q, got %q", key, v1, v2)
 			}
 			k3, v3, d3, err3 := mcur.GetNext()
 			k4, v4, d4, err4 := dcur.GetNext()
@@ -929,10 +929,10 @@ func TestCursorGetNext(t *testing.T) {
 				t.Errorf("%s expected %v, got %v", key, err3, err4)
 			} else if bytes.Compare(k3, k4) != 0 {
 				t.Errorf("expected %q, got %q", k3, k4)
-			} else if bytes.Compare(v3, v4) != 0 {
-				t.Errorf("%s expected %q, got %q", key, v3, v4)
 			} else if d3 != d4 {
 				t.Errorf("%s expected %v, got %v", key, d3, d4)
+			} else if d3 == false && bytes.Compare(v3, v4) != 0 {
+				t.Errorf("%s expected %q, got %q", key, v3, v4)
 			}
 			if err3 != nil {
 				break
@@ -1015,12 +1015,12 @@ func TestCursorYNext1(t *testing.T) {
 				t.Errorf("%s expected %v, got %v", key, err3, err4)
 			} else if bytes.Compare(k1, k2) != 0 {
 				t.Errorf("expected %q, got %q", k1, k2)
-			} else if bytes.Compare(v1, v2) != 0 {
-				t.Errorf("%s expected %q, got %q", key, v1, v2)
 			} else if s1 != s2 {
 				t.Errorf("%s expected %v, got %v", key, s1, s2)
 			} else if d1 != d2 {
 				t.Errorf("%s expected %v, got %v", key, d1, d2)
+			} else if d1 == false && bytes.Compare(v1, v2) != 0 {
+				t.Errorf("%s expected %q, got %q", key, v1, v2)
 			}
 			if err3 != nil {
 				break
@@ -1075,14 +1075,14 @@ func TestCursorYNext2(t *testing.T) {
 		} else if bytes.Compare(k1, k2) != 0 {
 			t.Errorf("expected %q, got %q", k1, k2)
 			break
-		} else if bytes.Compare(v1, v2) != 0 {
-			t.Errorf("%s expected %q, got %q", key, v1, v2)
-			break
 		} else if s1 != s2 {
 			t.Errorf("%s expected %v, got %v", key, s1, s2)
 			break
 		} else if d1 != d2 {
 			t.Errorf("%s expected %v, got %v", key, d1, d2)
+			break
+		} else if d1 == false && bytes.Compare(v1, v2) != 0 {
+			t.Errorf("%s expected %q, got %q", key, v1, v2)
 			break
 		}
 		if err3 != nil {

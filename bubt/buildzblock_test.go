@@ -45,7 +45,7 @@ func TestZBlock(t *testing.T) {
 				t.Errorf("%q expected %v, got %v", k, ((j % 4) == 0), deleted)
 			} else if seqno != j {
 				t.Errorf("%q expected %v, got %v", k, j, seqno)
-			} else if string(value) != k {
+			} else if deleted == false && string(value) != k {
 				t.Errorf("expected %s, got %s", k, value)
 			}
 			j++

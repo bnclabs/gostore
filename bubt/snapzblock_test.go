@@ -11,12 +11,12 @@ func TestZGetNext(t *testing.T) {
 			value, _ := lv.getactual(nil, nil)
 			if string(key) != string(keys[j]) {
 				t.Errorf("expected %q, got %q", keys[j], key)
-			} else if string(value) != string(keys[j]) {
-				t.Errorf("expected %q, got %q", keys[j], value)
-			} else if seqno != uint64(j) {
-				t.Errorf("expected %v, got %v", j, seqno)
 			} else if deleted != ((j % 4) == 0) {
 				t.Errorf("expected %v, got %v", (j%4) == 0, deleted)
+			} else if seqno != uint64(j) {
+				t.Errorf("expected %v, got %v", j, seqno)
+			} else if deleted == false && string(value) != string(keys[j]) {
+				t.Errorf("expected %q, got %q", keys[j], value)
 			}
 		}
 	}
