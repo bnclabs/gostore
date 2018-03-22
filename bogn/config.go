@@ -48,11 +48,11 @@ import "github.com/bnclabs/gostore/llrb"
 //      If the lifetime, measured in seconds, of a disk snapshot exceeds
 //		compactperiod, then it will be merged with next disk level snapshot.
 //
-// "bubt.msize" (int64, default: 4096)
-//		BottomsUpBTree, size of intermediate node on disk.
+// "bubt.mblocksize" (int64, default: 4096)
+//		BottomsUpBTree, size of intermediate node, m-nodes, on disk.
 //
-// "bubt.zsize" (int64, default: 4096)
-//		BottomsUpBTree, size of leaf node on disk.
+// "bubt.zblocksize" (int64, default: same as mblocksize)
+//		BottomsUpBTree, size of leaf node, z-nodes, on disk.
 //
 // "bubt.mmap" (bool, default: true)
 //		BottomsUpBTree, whether to memory-map leaf node, intermediate
@@ -83,10 +83,10 @@ func Defaultsettings() s.Settings {
 	switch setts.String("diskstore") {
 	case "bubt":
 		bubtsetts := s.Settings{
-			"bubt.diskpaths": "/opt/bogn/",
-			"bubt.msize":     4096,
-			"bubt.zsize":     4096,
-			"bubt.mmap":      true,
+			"bubt.diskpaths":  "/opt/bogn/",
+			"bubt.mblocksize": 4096,
+			"bubt.zblocksize": 4096,
+			"bubt.mmap":       true,
 		}
 		setts = (s.Settings{}).Mixin(setts, bubtsetts)
 	}
