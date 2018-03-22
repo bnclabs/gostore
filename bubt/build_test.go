@@ -99,12 +99,12 @@ func TestBuildMetadata(t *testing.T) {
 }
 
 func TestSnapshotGetM(t *testing.T) {
-	n := 10000000
+	n := 1000000
 	paths := makepaths3()
 	mi, _ := makeLLRB(n)
 	defer mi.Destroy()
 
-	t.Logf("Created LLRB with %d\n", n)
+	t.Logf("paths %v, entries: %v", paths, n)
 
 	rand.Seed(time.Now().UnixNano())
 	name, msize := "testbuild", int64(4096)
@@ -156,10 +156,12 @@ func TestSnapshotGetM(t *testing.T) {
 }
 
 func TestSnapshotGetZ(t *testing.T) {
-	n := 10000000
+	n := 1000000
 	paths := makepaths3()
 	mi, _ := makeLLRB(n)
 	defer mi.Destroy()
+
+	t.Logf("paths %v, entries: %v", paths, n)
 
 	rand.Seed(time.Now().UnixNano())
 	name, msize := "testbuild", int64(4096)
@@ -210,11 +212,12 @@ func TestSnapshotGetZ(t *testing.T) {
 }
 
 func TestSnapshotGetV(t *testing.T) {
-	n := 1000 // 10000000
+	n := 1000000
 	paths := makepaths3()
 	mi, _ := makeLLRB(n)
-	t.Logf("%v", paths)
 	defer mi.Destroy()
+
+	t.Logf("paths %v, entries: %v", paths, n)
 
 	rand.Seed(time.Now().UnixNano())
 	name, msize := "testbuild", int64(4096)
@@ -270,6 +273,8 @@ func TestSnapshotScanM1(t *testing.T) {
 	paths := makepaths1()
 	mi, _ := makeLLRB(n)
 	defer mi.Destroy()
+
+	t.Logf("paths %v, entries: %v", paths, n)
 
 	rand.Seed(time.Now().UnixNano())
 	name, msize := "testbuild", int64(4096)
@@ -328,10 +333,12 @@ func TestSnapshotScanM1(t *testing.T) {
 }
 
 func TestSnapshotScanM2(t *testing.T) {
-	n := 10000000
+	n := 1000000
 	paths := makepaths3()
 	mi, _ := makeLLRB(n)
 	defer mi.Destroy()
+
+	t.Logf("paths %v, entries: %v", paths, n)
 
 	rand.Seed(time.Now().UnixNano())
 	name, msize := "testbuild", int64(4096)
@@ -385,10 +392,12 @@ func TestSnapshotScanM2(t *testing.T) {
 }
 
 func TestSnapshotScanM3(t *testing.T) {
-	n := 10000000
+	n := 1000000
 	paths := makepaths3()
 	mi, _ := makeLLRB(n)
 	defer mi.Destroy()
+
+	t.Logf("paths %v, entries: %v", paths, n)
 
 	rand.Seed(time.Now().UnixNano())
 	name, msize := "testbuild", int64(2048)
@@ -446,6 +455,8 @@ func TestSnapshotScanZ1(t *testing.T) {
 	paths := makepaths1()
 	mi, _ := makeLLRB(n)
 	defer mi.Destroy()
+
+	t.Logf("paths %v, entries: %v", paths, n)
 
 	rand.Seed(time.Now().UnixNano())
 	name, msize := "testbuild", int64(4096)
@@ -510,6 +521,8 @@ func TestSnapshotScanZ2(t *testing.T) {
 	mi, _ := makeLLRB(n)
 	defer mi.Destroy()
 
+	t.Logf("paths %v, entries: %v", paths, n)
+
 	rand.Seed(time.Now().UnixNano())
 	name, msize := "testbuild", int64(4096)
 	zsize := []int64{msize, msize * 2}[rand.Intn(100000)%2]
@@ -563,10 +576,12 @@ func TestSnapshotScanZ2(t *testing.T) {
 }
 
 func TestSnapshotScanZ3(t *testing.T) {
-	n := 10000000
+	n := 1000000
 	paths := makepaths3()
 	mi, _ := makeLLRB(n)
 	defer mi.Destroy()
+
+	t.Logf("paths %v, entries: %v", paths, n)
 
 	rand.Seed(time.Now().UnixNano())
 	name, msize, zsize := "testbuild", int64(2048), int64(2048)
@@ -624,6 +639,8 @@ func TestSnapshotScanV1(t *testing.T) {
 	paths := makepaths1()
 	mi, _ := makeLLRB(n)
 	defer mi.Destroy()
+
+	t.Logf("paths %v, entries: %v", paths, n)
 
 	rand.Seed(time.Now().UnixNano())
 	name, msize := "testbuild", int64(4096)
@@ -684,10 +701,12 @@ func TestSnapshotScanV1(t *testing.T) {
 }
 
 func TestSnapshotScanV2(t *testing.T) {
-	n := 10000000
+	n := 1000000
 	paths := makepaths3()
 	mi, _ := makeLLRB(n)
 	defer mi.Destroy()
+
+	t.Logf("paths %v, entries: %v", paths, n)
 
 	rand.Seed(time.Now().UnixNano())
 	name, msize := "testbuild", int64(4096)
@@ -743,10 +762,12 @@ func TestSnapshotScanV2(t *testing.T) {
 }
 
 func TestSnapshotScanV3(t *testing.T) {
-	n := 10000000
+	n := 1000000
 	paths := makepaths3()
 	mi, _ := makeLLRB(n)
 	defer mi.Destroy()
+
+	t.Logf("paths %v, entries: %v", paths, n)
 
 	rand.Seed(time.Now().UnixNano())
 	name := "testbuild"
@@ -801,9 +822,12 @@ func TestSnapshotScanV3(t *testing.T) {
 }
 
 func TestView(t *testing.T) {
+	n := 1000000
 	paths := makepaths3()
-	mi, _ := makeLLRB(1000000)
+	mi, _ := makeLLRB(n)
 	defer mi.Destroy()
+
+	t.Logf("paths %v, entries: %v", paths, n)
 
 	rand.Seed(time.Now().UnixNano())
 	name, msize := "testbuild", int64(4096)
@@ -851,8 +875,8 @@ func TestView(t *testing.T) {
 }
 
 func TestCursorGetNext(t *testing.T) {
-	paths := makepaths3()
-	mi, _ := makeLLRB(10)
+	n, paths := 10, makepaths3()
+	mi, _ := makeLLRB(n)
 	defer mi.Destroy()
 
 	rand.Seed(time.Now().UnixNano())
@@ -948,8 +972,8 @@ func TestCursorGetNext(t *testing.T) {
 }
 
 func TestCursorYNext1(t *testing.T) {
-	paths := makepaths3()
-	mi, _ := makeLLRB(10000)
+	n, paths := 10000, makepaths3()
+	mi, _ := makeLLRB(n)
 	defer mi.Destroy()
 
 	rand.Seed(time.Now().UnixNano())
@@ -1010,8 +1034,8 @@ func TestCursorYNext1(t *testing.T) {
 }
 
 func TestCursorYNext2(t *testing.T) {
-	paths := makepaths3()
-	mi, _ := makeLLRB(10000)
+	n, paths := 10000, makepaths3()
+	mi, _ := makeLLRB(n)
 	defer mi.Destroy()
 
 	rand.Seed(time.Now().UnixNano())
@@ -1136,8 +1160,13 @@ func makeLLRB(n int) (*llrb.LLRB, [][]byte) {
 	mi := llrb.NewLLRB("buildllrb", setts)
 	keys := [][]byte{}
 	for i := 0; i < n; i++ {
-		key := []byte(fmt.Sprintf("key%015d", i))
-		val := []byte(fmt.Sprintf("val%015d", i))
+		ksize := 8 + rand.Intn(256)
+		fmsg := fmt.Sprintf("key%%0%vd", ksize)
+		key := []byte(fmt.Sprintf(fmsg, i*2))
+
+		vsize := ksize + rand.Intn(1024)
+		fmsg = fmt.Sprintf("val%%0%vd", vsize)
+		val := []byte(fmt.Sprintf(fmsg, i*2))
 		mi.Set(key, val, nil)
 		if i%10 == 0 {
 			mi.Delete(key, nil, true /*lsm*/)
@@ -1174,7 +1203,9 @@ func makepaths1() []string {
 
 func makepaths3() []string {
 	path, paths := os.TempDir(), []string{}
-	for _, base := range []string{"1", "2", "3"} {
+	dirs := []string{"1", "2", "3"}
+	n := 1 + (rand.Intn(len(dirs)*1000) % (len(dirs) - 1))
+	for _, base := range dirs[:n+1] {
 		paths = append(paths, filepath.Join(path, base))
 	}
 	return paths
