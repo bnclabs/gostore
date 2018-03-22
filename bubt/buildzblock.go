@@ -65,24 +65,34 @@ func (z *zblock) insert(key, value []byte, seqno uint64, deleted bool) bool {
 
 	var scratch [24]byte
 	ze := zentry(scratch[:])
-	ze = ze.setseqno(seqno).cleardeleted()
-	ze = ze.setkeylen(uint64(len(key))).setvaluelen(uint64(len(value)))
-	if deleted {
-		ze.setdeleted()
-	}
-	ok, vlogpos := z.addtovalueblock(value)
-	if ok {
-		ze.setvaluelen(uint64(len(value)) + 8)
-		ze.setvlog()
-	}
+	ze = ze.setseqno(seqno).setkeylen(uint64(len(key)))
 
-	z.entries = append(z.entries, scratch[:]...)
-	z.entries = append(z.entries, key...)
-	if ok == false { // value in zblock.
-		z.entries = append(z.entries, value...)
-	} else if vlogpos > 0 { // value in vlog
-		binary.BigEndian.PutUint64(scratch[:8], uint64(vlogpos))
-		z.entries = append(z.entries, scratch[:8]...)
+	if deleted {
+		ze.setdeleted().setvaluelen(0)
+		z.entries = append(z.entries, scratch[:]...)
+		z.entries = append(z.entries, key...)
+
+	} else if len(value) == 0 {
+		ze.cleardeleted().setvaluelen(0)
+		z.entries = append(z.entries, scratch[:]...)
+		z.entries = append(z.entries, key...)
+
+	} else {
+		valuelen := uint64(len(value))
+		ok, vlogpos := z.addtovalueblock(value)
+		if ok { // value in vlog file
+			valuelen += 8
+			ze.setvlog()
+		}
+		ze.cleardeleted().setvaluelen(valuelen)
+		z.entries = append(z.entries, scratch[:]...)
+		z.entries = append(z.entries, key...)
+		if ok == false { // value in zblock.
+			z.entries = append(z.entries, value...)
+		} else if vlogpos > 0 { // value in vlog
+			binary.BigEndian.PutUint64(scratch[:8], uint64(vlogpos))
+			z.entries = append(z.entries, scratch[:8]...)
+		}
 	}
 
 	z.setfirstkey(key)
@@ -141,10 +151,6 @@ func (z *zblock) addtovalueblock(value []byte) (bool, int64) {
 
 	if z.vblocksize <= 0 {
 		return false, 0
-
-	} else if len(value) == 0 {
-		return true, 0
-
 	}
 
 	if int64(len(value)) < z.vblocksize {
@@ -155,13 +161,10 @@ func (z *zblock) addtovalueblock(value []byte) (bool, int64) {
 		}
 	}
 	vlogpos := z.vlogpos
-	if len(value) > 0 {
-		binary.BigEndian.PutUint64(scratch[:], uint64(len(value)))
-		z.vlog = append(z.vlog, scratch[:]...)
-		z.vlog = append(z.vlog, value...)
-		z.vlogpos += int64(len(scratch) + len(value))
-		//fmt.Println("addtovalueblock", len(z.vlog))
-		return true, vlogpos
-	}
-	return true, -1
+	binary.BigEndian.PutUint64(scratch[:], uint64(len(value)))
+	z.vlog = append(z.vlog, scratch[:]...)
+	z.vlog = append(z.vlog, value...)
+	z.vlogpos += int64(len(scratch) + len(value))
+	//fmt.Println("addtovalueblock", len(z.vlog))
+	return true, vlogpos
 }
