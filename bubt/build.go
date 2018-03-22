@@ -33,20 +33,23 @@ type Bubt struct {
 }
 
 // NewBubt create a Bubt instance to build a new bottoms-up btree.
-// If zsize == 0, then zblocks and mblocks will be stored in same file.
-// if vsize == 0, then values will be stored in zblocks.
+// If zblocksize == 0, then zblocks and mblocks will be stored in same file.
+// if vblocksize == 0, then values will be stored in zblocks.
 func NewBubt(
 	name string, paths []string,
-	msize, zsize, vsize int64) (tree *Bubt, err error) {
+	mblocksize, zblocksize, vblocksize int64) (tree *Bubt, err error) {
 
-	if zsize <= 0 {
-		zsize = msize
+	if zblocksize <= 0 {
+		zblocksize = mblocksize
 	}
-	if vsize < 0 {
-		vsize = 0
+	if vblocksize < 0 {
+		vblocksize = 0
 	}
 	tree = &Bubt{
-		name: name, mblocksize: msize, zblocksize: zsize, vblocksize: vsize,
+		name:       name,
+		mblocksize: mblocksize,
+		zblocksize: zblocksize,
+		vblocksize: vblocksize,
 	}
 	mpath, zpaths := tree.pickmzpath(paths)
 	tree.logprefix = fmt.Sprintf("BUBT [%s]", name)
@@ -62,7 +65,7 @@ func NewBubt(
 	if tree.mflusher, err = startflusher(0, -1, mfile); err != nil {
 		panic(err)
 	}
-	// if zsize <= 0 then zpaths will be empty
+	// if zblocksize <= 0 then zpaths will be empty
 	tree.zflushers = tree.makezflushers(zpaths)
 	tree.vflushers = tree.makevflushers(zpaths)
 	return tree, nil
