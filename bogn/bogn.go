@@ -278,6 +278,12 @@ func (bogn *Bogn) validatesettings(disksetts s.Settings) {
 		fmsg := "found zsize:%v on disk, expected %v"
 		panic(fmt.Errorf(fmsg, zsize1, zsize2))
 	}
+	vsize1 := disksetts.Int64("bubt.vblocksize")
+	vsize2 := setts.Int64("bubt.vblocksize")
+	if vsize1 != vsize2 {
+		fmsg := "found vsize:%v on disk, expected %v"
+		panic(fmt.Errorf(fmsg, vsize1, vsize2))
+	}
 	mmap1, mmap2 := disksetts.Bool("bubt.mmap"), disksetts.Bool("bubt.mmap")
 	if mmap1 != mmap2 {
 		fmsg := "found mmap:%v on disk, expected %v"
@@ -1091,7 +1097,8 @@ func (bogn *Bogn) builddiskbubt(
 	paths := bubtsetts.Strings("diskpaths")
 	msize := bubtsetts.Int64("mblocksize")
 	zsize := bubtsetts.Int64("zblocksize")
-	bt, err := bubt.NewBubt(dirname, paths, msize, zsize)
+	vsize := bubtsetts.Int64("vblocksize")
+	bt, err := bubt.NewBubt(dirname, paths, msize, zsize, vsize)
 	if err != nil {
 		errorf("%v NewBubt(): %v", bogn.logprefix, err)
 		return nil, err

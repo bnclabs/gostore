@@ -84,12 +84,12 @@ func TestReload(t *testing.T) {
 	for err1 == nil && err2 == nil {
 		if string(key1) != string(key2) {
 			t.Errorf("expected %q, got %q", key1, key2)
-		} else if string(val1) != string(val2) {
-			t.Errorf("%q expected %q, got %q", key1, val1, val2)
 		} else if seqno1 != seqno2 {
 			t.Errorf("%q expected %q, got %q", key1, seqno1, seqno2)
 		} else if del1 != del2 {
 			t.Errorf("%q expected %q, got %q", key1, del1, del2)
+		} else if del1 == false && string(val1) != string(val2) {
+			t.Errorf("%q expected %q, got %q", key1, val1, val2)
 		}
 		key1, val1, seqno1, del1, err1 = miter(false /*fin*/)
 		key2, val2, seqno2, del2, err2 = iter(false /*fin*/)
@@ -181,12 +181,12 @@ func TestReloadDurable(t *testing.T) {
 	for err1 == nil && err2 == nil {
 		if string(key1) != string(key2) {
 			t.Errorf("expected %q, got %q", key1, key2)
-		} else if string(val1) != string(val2) {
-			t.Errorf("%q expected %q, got %q", key1, val1, val2)
 		} else if seqno1 != seqno2 {
 			t.Errorf("%q expected %q, got %q", key1, seqno1, seqno2)
 		} else if del1 != del2 {
 			t.Errorf("%q expected %q, got %q", key1, del1, del2)
+		} else if del1 == false && string(val1) != string(val2) {
+			t.Errorf("%q expected %q, got %q", key1, val1, val2)
 		}
 		key1, val1, seqno1, del1, err1 = miter(false /*fin*/)
 		key2, val2, seqno2, del2, err2 = iter(false /*fin*/)
@@ -306,4 +306,3 @@ func TestSnaplock(t *testing.T) {
 
 // TODO: unit test case
 // Open a bogn instance with one level of disk snapshots,
-//

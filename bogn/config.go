@@ -54,6 +54,9 @@ import "github.com/bnclabs/gostore/llrb"
 // "bubt.zblocksize" (int64, default: same as mblocksize)
 //		BottomsUpBTree, size of leaf node, z-nodes, on disk.
 //
+// "bubt.vblocksize" (int64, default: same as mblocksize)
+//		BottomsUpBTree, size of value log blocsk, on disk.
+//
 // "bubt.mmap" (bool, default: true)
 //		BottomsUpBTree, whether to memory-map leaf node, intermediate
 //		nodes are always memory-mapped.
@@ -86,6 +89,7 @@ func Defaultsettings() s.Settings {
 			"bubt.diskpaths":  "/opt/bogn/",
 			"bubt.mblocksize": 4096,
 			"bubt.zblocksize": 4096,
+			"bubt.vblocksize": 4096 * 4,
 			"bubt.mmap":       true,
 		}
 		setts = (s.Settings{}).Mixin(setts, bubtsetts)
