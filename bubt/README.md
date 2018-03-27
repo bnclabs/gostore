@@ -31,24 +31,34 @@ immutable and available for concurrent readers.
 * Size of m-node is same across the tree and configurable with each
   build.
 * Finally the root node is flushed.
-* After the root node, a single block (blocksize same as m-node) of tree
-  settings is flushed.
-* After tree settings, one or more blocks of index metadata (blocksize same
+* After the root node, a single info-block of MarkerBlocksize is flushed.
+  Infoblock contains arguments used to build the snapshot and also some
+  statistics about the snapshot.
+* After info-block, one or more blocks of index metadata (blocksize same
   as m-node) is flushed.
 * After metadata, a single block, (blocksize is MarkerBlocksize) of
   marker-block is flushed.
 
 ** TODO: block diagram of disk format**
 
-## Metadata, Settings
+## Value log
 
-* Applications can attach an opaque blob of **metadata** with every bubt
-  index. This can be supplied as argument to the Build() API. It is upto
-  the application to interpret this metadata.
-* Similarly settings argument supplied as argument to the Build() API
-  is persisted as **settings** field after the root block.
+To optimize on the `write-amplification`, Bubt instances can be constructed
+with values (from each key,value entry) can be stored in separate file.
+Note that this might have some negative impact on `disk-amplication` and in
+come cases can decrease the throughput of random Get operations.
 
-** TODO: shape of settings map**
+## Metadata, info-block
+
+Applications can attach an opaque blob of **metadata** with every bubt
+index. This can be supplied as argument to the Build() API. It is upto
+the application to interpret this metadata.
+
+Similarly info-block saves all the arguments / parameters supplied to
+the Build() API, along with useful statistics about the snapshit as JSON
+property. The size of info-block cannot exceed MarkerBlocksize.
+
+** TODO: shape of info-block property**
 
 ## Background routines
 
