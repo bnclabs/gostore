@@ -110,6 +110,7 @@ func (tree *Bubt) makevflushers(zpaths []string) []*bubtflusher {
 func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 	debugf("%v starting bottoms up build ...\n", tree.logprefix)
 
+	start := time.Now()
 	maxseqno, keymem, valmem := uint64(0), uint64(0), uint64(0)
 	n_count, n_deleted, paddingmem := int64(0), int64(0), int64(0)
 	n_zblocks, n_mblocks, n_vblocks := int64(0), uint64(0), uint64(0)
@@ -363,6 +364,7 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 		"zblocksize": tree.zblocksize,
 		"mblocksize": tree.mblocksize,
 		"vblocksize": tree.vblocksize,
+		"buildtime":  fmt.Sprintf("%d", time.Since(start)),
 		"epoch":      fmt.Sprintf("%d", time.Now().Unix()),
 		"seqno":      fmt.Sprintf("%d", maxseqno),
 		"keymem":     fmt.Sprintf("%d", keymem),
