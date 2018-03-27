@@ -100,9 +100,9 @@ func (z *zblock) insert(key, value []byte, seqno uint64, deleted bool) bool {
 	return true
 }
 
-func (z *zblock) finalize() bool {
+func (z *zblock) finalize() (int64, bool) {
 	if len(z.index) == 0 {
-		return false
+		return 0, false
 	}
 	indexlen := z.index.footprint()
 	block := z.buffer[z.zblocksize-indexlen : int64(len(z.buffer))-indexlen]
@@ -116,11 +116,12 @@ func (z *zblock) finalize() bool {
 	}
 	// ZERO padding
 	n += len(z.entries)
+	padded := len(block[n:])
 	for i := range block[n:] {
 		block[n+i] = 0
 	}
 	z.block = block
-	return true
+	return int64(padded), true
 }
 
 //---- local methods

@@ -2,6 +2,7 @@ package bubt
 
 import "io"
 import "fmt"
+import "time"
 import "encoding/json"
 import "path/filepath"
 import "encoding/binary"
@@ -109,8 +110,27 @@ func (tree *Bubt) makevflushers(zpaths []string) []*bubtflusher {
 func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 	debugf("%v starting bottoms up build ...\n", tree.logprefix)
 
+	maxseqno, keymem, valmem := uint64(0), uint64(0), uint64(0)
+	n_count, n_deleted, paddingmem := int64(0), int64(0), int64(0)
+	n_zblocks, n_mblocks, n_vblocks := int64(0), uint64(0), uint64(0)
+	compiter := func(
+		fin bool) (key, val []byte, seqno uint64, del bool, e error) {
+
+		key, val, seqno, del, e = iter(fin)
+		if e == nil {
+			if maxseqno < seqno {
+				maxseqno = seqno
+			}
+			keymem, valmem = keymem+uint64(len(key)), valmem+uint64(len(val))
+			if del {
+				n_deleted++
+			}
+			n_count++
+		}
+		return key, val, seqno, del, e
+	}
+
 	scratchvlog := make([]byte, tree.vblocksize)
-	n_count := int64(0)
 	z := newz(tree.zblocksize, tree.vblocksize)
 
 	shardidx := 0
@@ -126,8 +146,19 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 	flushzblock := func(zflusher *bubtflusher) ([]byte, int64) {
 		var vpos int64
 
-		if z.finalize() {
+		if padded, ok := z.finalize(); ok {
+			paddingmem += padded
 			fpos := zflusher.fpos
+
+			// accounting and validating
+			if ln := len(z.block); ln > 0 {
+				if int64(ln) != tree.zblocksize {
+					fmsg := "zblock expected %v got %v"
+					panic(fmt.Errorf(fmsg, tree.zblocksize, ln))
+				}
+				n_zblocks++
+			}
+
 			if err := zflusher.writedata(z.block); err != nil {
 				panic(err)
 			}
@@ -147,6 +178,17 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 		till := (int64(len(vlog)) / tree.vblocksize) * tree.vblocksize
 		remn := int64(len(vlog)) % tree.vblocksize
 		//fmt.Println(till, remn, len(vlog), cap(vlog))
+		block := vlog[:till]
+
+		// accounting and validating
+		if ln := int64(len(block)); ln > 0 {
+			if (ln % tree.vblocksize) != 0 {
+				fmsg := "vblock %v expected in multiples of %v"
+				panic(fmt.Errorf(fmsg, ln, tree.vblocksize))
+			}
+			n_vblocks += uint64(ln / tree.vblocksize)
+		}
+
 		if err := vflusher.writedata(vlog[:till]); err != nil {
 			panic(err)
 		}
@@ -157,8 +199,22 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 	}
 
 	flushmblock := func(m *mblock) int64 {
-		if m != nil && m.finalize() {
+		if m == nil {
+			return -1 // no entries
+		}
+		if padded, ok := m.finalize(); ok {
+			paddingmem += padded
 			vpos := tree.mflusher.fpos
+
+			// accounting and validating
+			if ln := int64(len(m.block)); ln > 0 {
+				if ln != tree.mblocksize {
+					fmsg := "mblock expected %v, got %v"
+					panic(fmt.Errorf(fmsg, tree.vblocksize, ln))
+				}
+				n_mblocks++
+			}
+
 			if err := tree.mflusher.writedata(m.block); err != nil {
 				panic(err)
 			}
@@ -180,8 +236,7 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 			panic("first insert to zblock, check whether key > zblocksize")
 		}
 		for ok {
-			n_count++
-			key, value, seqno, deleted, err = iter(false /*close*/)
+			key, value, seqno, deleted, err = compiter(false /*close*/)
 			if err != nil && err.Error() != io.EOF.Error() {
 				panic(err)
 			}
@@ -262,9 +317,10 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 		return m, mm
 	}
 
+	// start building the tree, with maximum fill possible rate.
 	var root int64
 	if iter != nil {
-		key, value, seqno, deleted, err = iter(false /*close*/)
+		key, value, seqno, deleted, err = compiter(false /*close*/)
 		if err != nil && err.Error() != io.EOF.Error() {
 			panic(err)
 
@@ -278,6 +334,28 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 		}
 	}
 
+	// flush away partial value logs
+	flushvlog := make([]byte, tree.vblocksize)
+	for _, vflusher := range tree.vflushers {
+		if len(vflusher.vlog) == 0 {
+			continue
+		}
+		if int64(len(vflusher.vlog)) > tree.vblocksize {
+			fmsg := "partial value log %v cannot be more than %v"
+			panic(fmt.Errorf(fmsg, len(vflusher.vlog), tree.vblocksize))
+		}
+		copy(flushvlog, vflusher.vlog)
+		if err := vflusher.writedata(flushvlog); err != nil {
+			panic(err)
+		}
+		paddingmem += (tree.vblocksize - int64(len(vflusher.vlog)))
+		n_vblocks++
+		for i := range flushvlog {
+			flushvlog[i] = 0
+		}
+		vflusher.vlog = vflusher.vlog[:0]
+	}
+
 	// flush 1 MarkerBlocksize of infoblock
 	block := make([]byte, MarkerBlocksize)
 	infoblock := s.Settings{
@@ -285,7 +363,16 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 		"zblocksize": tree.zblocksize,
 		"mblocksize": tree.mblocksize,
 		"vblocksize": tree.vblocksize,
-		"n_count":    n_count,
+		"epoch":      fmt.Sprintf("%d", time.Now().Unix()),
+		"seqno":      fmt.Sprintf("%d", maxseqno),
+		"keymem":     fmt.Sprintf("%d", keymem),
+		"valmem":     fmt.Sprintf("%d", valmem),
+		"paddingmem": fmt.Sprintf("%d", paddingmem),
+		"n_zblocks":  fmt.Sprintf("%d", n_zblocks),
+		"n_mblocks":  fmt.Sprintf("%d", n_mblocks),
+		"n_vblocks":  fmt.Sprintf("%d", n_vblocks),
+		"n_count":    fmt.Sprintf("%d", n_count),
+		"n_deleted":  fmt.Sprintf("%d", n_deleted),
 	}
 	data, _ := json.Marshal(infoblock)
 	if x, y := len(data)+8, len(block); x > y {

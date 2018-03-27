@@ -70,9 +70,9 @@ func (m *mblock) insert(key []byte, vpos int64) (ok bool) {
 	return true
 }
 
-func (m *mblock) finalize() bool {
+func (m *mblock) finalize() (int64, bool) {
 	if len(m.index) == 0 {
-		return false
+		return 0, false
 	}
 	indexlen := m.index.footprint()
 	block := m.buffer[m.blocksize-indexlen : int64(len(m.buffer))-indexlen]
@@ -86,11 +86,12 @@ func (m *mblock) finalize() bool {
 	}
 	// ZERO padding
 	n += len(m.entries)
+	padded := len(block[n:])
 	for i := range block[n:] {
 		block[n+i] = 0
 	}
 	m.block = block
-	return true
+	return int64(padded), true
 }
 
 //---- local methods

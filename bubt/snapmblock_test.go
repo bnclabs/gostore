@@ -36,8 +36,10 @@ func makemsnap(tb testing.TB) (msnap, [][]byte) {
 		i++
 		k, vpos = fmt.Sprintf("%16d", i), (((i % 4) << 56) | i)
 	}
-	if m.finalize() == false {
+	if padded, ok := m.finalize(); ok == false {
 		tb.Errorf("unexpected false")
+	} else if padded != 24 {
+		tb.Errorf("expected %v, got %v", 24, padded)
 	}
 	return msnap(m.block), keys
 }

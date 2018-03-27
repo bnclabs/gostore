@@ -8,7 +8,7 @@ func TestZBlock(t *testing.T) {
 	zblocksize := int64(4 * 1024)
 
 	z := newz(zblocksize, -1)
-	if z.finalize() == true {
+	if _, ok := z.finalize(); ok == true {
 		t.Errorf("unexpected true")
 	}
 
@@ -23,8 +23,10 @@ func TestZBlock(t *testing.T) {
 			v, seqno, deleted = k, i, (i%4) == 0
 		}
 		t.Logf("Inserted %v items", i)
-		if z.finalize() == false {
+		if padded, ok := z.finalize(); ok == false {
 			t.Errorf("unexpected false")
+		} else if padded != 16 {
+			t.Errorf("expected %v, got %v", 16, padded)
 		}
 		if int64(len(z.block)) != zblocksize {
 			t.Errorf("expected %v, got %v", len(z.block), zblocksize)

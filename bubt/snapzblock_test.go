@@ -71,8 +71,10 @@ func makezsnap(tb testing.TB) (zsnap, [][]byte) {
 		k = fmt.Sprintf("%16d", i)
 		v, seqno, deleted = k, i, (i%4) == 0
 	}
-	if z.finalize() == false {
+	if padded, ok := z.finalize(); ok == false {
 		tb.Errorf("unexpected false")
+	} else if padded != 16 {
+		tb.Errorf("expected %v, got %v", 16, padded)
 	}
 	return zsnap(z.block), keys
 }

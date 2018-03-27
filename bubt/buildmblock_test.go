@@ -7,7 +7,7 @@ func TestMBlock(t *testing.T) {
 	mblocksize := int64(4 * 1024)
 
 	m := newm(nil, mblocksize)
-	if m.finalize() == true {
+	if _, ok := m.finalize(); ok {
 		t.Errorf("unexpected true")
 	}
 
@@ -20,8 +20,10 @@ func TestMBlock(t *testing.T) {
 	}
 	t.Logf("Inserted %v items", i)
 
-	if m.finalize() == false {
+	if padded, ok := m.finalize(); ok == false {
 		t.Errorf("unexpected false")
+	} else if padded != 24 {
+		t.Errorf("expected %v, got %v", 24, padded)
 	}
 	if int64(len(m.block)) != mblocksize {
 		t.Errorf("expected %v, got %v", len(m.block), mblocksize)
