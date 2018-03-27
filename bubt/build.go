@@ -278,25 +278,25 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 		}
 	}
 
-	// flush 1 MarkerBlocksize of settings
+	// flush 1 MarkerBlocksize of infoblock
 	block := make([]byte, MarkerBlocksize)
-	setts := s.Settings{
+	infoblock := s.Settings{
 		"name":       tree.name,
 		"zblocksize": tree.zblocksize,
 		"mblocksize": tree.mblocksize,
 		"vblocksize": tree.vblocksize,
 		"n_count":    n_count,
 	}
-	data, _ := json.Marshal(setts)
+	data, _ := json.Marshal(infoblock)
 	if x, y := len(data)+8, len(block); x > y {
-		panic(fmt.Errorf("settings(%v) > mblocksize(%v)", x, y))
+		panic(fmt.Errorf("infoblock(%v) > MarkerBlocksize", x, y))
 	}
 	binary.BigEndian.PutUint64(block, uint64(len(data)))
 	copy(block[8:], data)
 	if err := tree.mflusher.writedata(block); err != nil {
 		panic(err)
 	}
-	lenSettings := len(block)
+	infoblkn := len(block)
 
 	// flush 1 or more m-blocks of metadata
 	lenMetadata := len(metadata)
@@ -306,8 +306,8 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 		}
 	}
 
-	fmsg := "%v built with root@%v %v bytes setts %v bytes metadata"
-	infof(fmsg, tree.logprefix, root, lenSettings, lenMetadata)
+	fmsg := "%v built with root@%v %v bytes infoblock %v bytes metadata"
+	infof(fmsg, tree.logprefix, root, infoblkn, lenMetadata)
 	return nil
 }
 

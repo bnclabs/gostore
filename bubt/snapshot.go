@@ -250,36 +250,36 @@ func (snap *Snapshot) readheader(r io.ReaderAt) (*Snapshot, error) {
 	ln := binary.BigEndian.Uint64(snap.metadata)
 	snap.metadata = snap.metadata[8 : 8+ln]
 
-	// read settings
+	// read infoblock
 	if fpos -= MarkerBlocksize; fpos < 0 {
-		err := fmt.Errorf("bubt.snap.nosettings")
-		errorf("%v Read settings: %v", snap.logprefix, err)
+		err := fmt.Errorf("bubt.snap.noinfoblock")
+		errorf("%v Read infoblock: %v", snap.logprefix, err)
 		return snap, err
 	}
 
-	setts := s.Settings{}
+	infoblock := s.Settings{}
 
 	buffer = lib.Fixbuffer(buffer, MarkerBlocksize)
 	n, err = r.ReadAt(buffer, fpos)
 	if err != nil {
-		errorf("%v Read settings: %v", snap.logprefix, err)
+		errorf("%v Read infoblock: %v", snap.logprefix, err)
 		return snap, err
 	} else if n < len(buffer) {
-		err := fmt.Errorf("bubt.snap.partialsettings")
-		errorf("%v Read settings: %v", snap.logprefix, err)
+		err := fmt.Errorf("bubt.snap.partialinfoblock")
+		errorf("%v Read infoblock: %v", snap.logprefix, err)
 		return snap, err
 	}
 	ln = binary.BigEndian.Uint64(buffer)
-	json.Unmarshal(buffer[8:8+ln], &setts)
-	if snap.name != setts.String("name") {
-		err := fmt.Errorf("bubt.snap.invalidsettings")
-		errorf("%v Read settings: %v", snap.logprefix, err)
+	json.Unmarshal(buffer[8:8+ln], &infoblock)
+	if snap.name != infoblock.String("name") {
+		err := fmt.Errorf("bubt.snap.invalidinfoblock")
+		errorf("%v Read infoblock: %v", snap.logprefix, err)
 		return snap, err
 	}
-	snap.zblocksize = setts.Int64("zblocksize")
-	snap.mblocksize = setts.Int64("mblocksize")
-	snap.vblocksize = setts.Int64("vblocksize")
-	snap.n_count = setts.Int64("n_count")
+	snap.zblocksize = infoblock.Int64("zblocksize")
+	snap.mblocksize = infoblock.Int64("mblocksize")
+	snap.vblocksize = infoblock.Int64("vblocksize")
+	snap.n_count = infoblock.Int64("n_count")
 
 	// root block
 	snap.root = fpos - snap.mblocksize
