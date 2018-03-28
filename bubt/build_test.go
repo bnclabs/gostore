@@ -875,7 +875,7 @@ func TestView(t *testing.T) {
 }
 
 func TestCursorGetNext(t *testing.T) {
-	n, paths := 10, makepaths3()
+	n, paths := 1000, makepaths3()
 	mi, _ := makeLLRB(n)
 	defer mi.Destroy()
 

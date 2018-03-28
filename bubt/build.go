@@ -122,9 +122,11 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 			if maxseqno < seqno {
 				maxseqno = seqno
 			}
-			keymem, valmem = keymem+uint64(len(key)), valmem+uint64(len(val))
+			keymem = keymem + uint64(len(key))
 			if del {
 				n_deleted++
+			} else {
+				valmem += uint64(len(val))
 			}
 			n_count++
 		}

@@ -3,6 +3,7 @@ package bubt
 import "os"
 import "io"
 import "fmt"
+import "time"
 import "bytes"
 import "regexp"
 import "strings"
@@ -10,13 +11,10 @@ import "strconv"
 import "runtime"
 import "io/ioutil"
 import "path/filepath"
-import "encoding/json"
-import "encoding/binary"
 
 import "github.com/bnclabs/gostore/api"
 import "github.com/bnclabs/gostore/lib"
 import "github.com/bnclabs/gostore/flock"
-import s "github.com/bnclabs/gosettings"
 
 // Snapshot to read index entries persisted using Bubt builder. Since
 // no writes are allowed on the btree, any number of snapshots can be
@@ -35,11 +33,22 @@ type Snapshot struct {
 	rw       *flock.RWMutex
 	zsizes   []int64
 
-	n_count    int64
-	footprint  int64
+	// from info block
 	zblocksize int64
 	mblocksize int64
 	vblocksize int64
+	buildtime  int64
+	epoch      int64
+	seqno      int64
+	keymem     int64
+	valmem     int64
+	paddingmem int64
+	n_zblocks  int64
+	n_mblocks  int64
+	n_vblocks  int64
+	n_count    int64
+	n_deleted  int64
+	footprint  int64
 	logprefix  string
 
 	viewcache   chan *View
@@ -99,6 +108,7 @@ func OpenSnapshot(
 		}
 		snap.zsizes[i] = zsize
 	}
+	snap.validatequick()
 	return
 }
 
@@ -185,103 +195,41 @@ func (snap *Snapshot) loadreaders(
 }
 
 func (snap *Snapshot) readheader(r io.ReaderAt) (*Snapshot, error) {
-	fsize := filesize(r)
-	if fsize < 0 {
-		err := fmt.Errorf("bubt.snap.nomarker")
+	err := readmarker(r)
+	if err != nil {
 		errorf("%v %v", snap.logprefix, err)
 		return snap, err
 	}
-
-	// validate marker block
-	fpos := fsize - MarkerBlocksize
-	buffer := lib.Fixbuffer(nil, MarkerBlocksize)
-	n, err := r.ReadAt(buffer, fpos)
+	snap.metadata, err = readmetadata(r)
 	if err != nil {
-		errorf("%v Read Markerblocksize: %v", snap.logprefix, err)
-		return snap, err
-	} else if n < len(buffer) {
-		err := fmt.Errorf("bubt.snap.partialmarker")
-		errorf("%v Read Markerblocksize: %v", snap.logprefix, err)
+		errorf("%v %v", snap.logprefix, err)
 		return snap, err
 	}
-	for _, c := range buffer {
-		if c != MarkerByte {
-			err = fmt.Errorf("bubt.snap.invalidmarker")
-			errorf("%v Read Markerblock: %v", snap.logprefix, err)
-			return snap, err
-		}
-	}
-
-	// read metadata blocks
-	if fpos -= 8; fpos < 0 {
-		err := fmt.Errorf("bubt.snap.nomdlen")
-		errorf("%v Read metadatablock: %v", snap.logprefix, err)
-		return snap, err
-	}
-
-	var scratch [8]byte
-	n, err = r.ReadAt(scratch[:], fpos)
+	fpos, info, err := readinfoblock(r)
 	if err != nil {
-		errorf("%v Read metadatablock: %v", snap.logprefix, err)
-		return snap, err
-	} else if n < len(scratch) {
-		err := fmt.Errorf("bubt.snap.partialmdlen")
-		errorf("%v Read metadatablock: %v", snap.logprefix, err)
+		errorf("%v %v", snap.logprefix, err)
 		return snap, err
 	}
-	mdlen := binary.BigEndian.Uint64(scratch[:])
-
-	if fpos -= int64(mdlen) - 8; fpos < 0 {
-		err := fmt.Errorf("bubt.snap.nometadata")
-		errorf("%v Read metadatablock: %v", snap.logprefix, err)
-		return snap, err
-	}
-
-	snap.metadata = lib.Fixbuffer(nil, int64(mdlen))
-	n, err = r.ReadAt(snap.metadata, fpos)
-	if err != nil {
-		errorf("%v Read metadatablock: %v", snap.logprefix, err)
-		return snap, err
-	} else if n < len(snap.metadata) {
-		err := fmt.Errorf("bubt.snap.partialmetadata")
-		errorf("%v Read metadatablock: %v", snap.logprefix, err)
-		return snap, err
-	}
-	ln := binary.BigEndian.Uint64(snap.metadata)
-	snap.metadata = snap.metadata[8 : 8+ln]
-
-	// read infoblock
-	if fpos -= MarkerBlocksize; fpos < 0 {
-		err := fmt.Errorf("bubt.snap.noinfoblock")
-		errorf("%v Read infoblock: %v", snap.logprefix, err)
-		return snap, err
-	}
-
-	infoblock := s.Settings{}
-
-	buffer = lib.Fixbuffer(buffer, MarkerBlocksize)
-	n, err = r.ReadAt(buffer, fpos)
-	if err != nil {
-		errorf("%v Read infoblock: %v", snap.logprefix, err)
-		return snap, err
-	} else if n < len(buffer) {
-		err := fmt.Errorf("bubt.snap.partialinfoblock")
-		errorf("%v Read infoblock: %v", snap.logprefix, err)
-		return snap, err
-	}
-	ln = binary.BigEndian.Uint64(buffer)
-	json.Unmarshal(buffer[8:8+ln], &infoblock)
-	if snap.name != infoblock.String("name") {
+	if snap.name != info.String("name") {
 		err := fmt.Errorf("bubt.snap.invalidinfoblock")
 		errorf("%v Read infoblock: %v", snap.logprefix, err)
 		return snap, err
 	}
-	snap.zblocksize = infoblock.Int64("zblocksize")
-	snap.mblocksize = infoblock.Int64("mblocksize")
-	snap.vblocksize = infoblock.Int64("vblocksize")
-	snap.n_count = infoblock.Int64("n_count")
+	snap.zblocksize = info.Int64("zblocksize")
+	snap.mblocksize = info.Int64("mblocksize")
+	snap.vblocksize = info.Int64("vblocksize")
+	snap.buildtime = info.Int64("buildtime")
+	snap.epoch = info.Int64("epoch")
+	snap.seqno = info.Int64("seqno")
+	snap.keymem = info.Int64("keymem")
+	snap.valmem = info.Int64("valmem")
+	snap.paddingmem = info.Int64("paddingmem")
+	snap.n_zblocks = info.Int64("n_zblocks")
+	snap.n_mblocks = info.Int64("n_mblocks")
+	snap.n_vblocks = info.Int64("n_vblocks")
+	snap.n_count = info.Int64("n_count")
+	snap.n_deleted = info.Int64("n_deleted")
 
-	// root block
 	snap.root = fpos - snap.mblocksize
 	return snap, nil
 }
@@ -319,32 +267,80 @@ func (snap *Snapshot) Log() {
 // Validate snapshot on disk. This is a costly call, use it only
 // for testing and administration purpose.
 func (snap *Snapshot) Validate() {
-	var keymem, valmem, count int64
+	var keymem, valmem, n_count, n_deleted int64
+	var maxseqno uint64
 	var prevkey []byte
 
 	iter := snap.Scan()
-	key, val, _, _, err := iter(false /*fin*/)
+	key, val, seqno, del, err := iter(false /*fin*/)
 	for err == nil {
-		keymem, valmem = keymem+int64(len(key)), valmem+int64(len(val))
-		key, val, _, _, err = iter(false /*fin*/)
-		if prevkey != nil {
+		keymem = keymem + int64(len(key))
+		if seqno > maxseqno {
+			maxseqno = seqno
+		}
+		if del {
+			n_deleted++
+		} else {
+			valmem += int64(len(val))
+		}
+		if len(prevkey) > 0 {
 			if bytes.Compare(prevkey, key) >= 0 {
 				panic(fmt.Errorf("key %q comes before %q", prevkey, key))
 			}
 		}
-		count = count + 1
-		lib.Fixbuffer(prevkey, int64(len(key)))
+		n_count++
+		prevkey = lib.Fixbuffer(prevkey, int64(len(key)))
 		copy(prevkey, key)
+		key, val, seqno, del, err = iter(false /*fin*/)
 	}
 	iter(true /*fin*/)
 
-	if count != snap.n_count {
-		panic(fmt.Errorf("expected %v entries, found %v", snap.n_count, count))
+	// validate count
+	if n_count != snap.n_count {
+		fmsg := "expected %v entries, found %v"
+		panic(fmt.Errorf(fmsg, snap.n_count, n_count))
 	}
-	footprint := (float64(keymem) * 2) + (float64(valmem) * 2)
-	footprint += float64(snap.n_count * (mentrysize + zentrysize))
-	if snap.footprint > int64(footprint) {
-		panic(fmt.Errorf("footprint %v exceeds %v", snap.footprint, footprint))
+	// validate keymem, valmem
+	if keymem != snap.keymem {
+		fmsg := "build time keymem %v != actual %v"
+		panic(fmt.Errorf(fmsg, snap.keymem, keymem))
+	}
+	if valmem != snap.valmem {
+		fmsg := "build time valmem %v != actual %v"
+		panic(fmt.Errorf(fmsg, snap.valmem, valmem))
+	}
+
+	snap.validatequick()
+}
+
+func (snap *Snapshot) validatequick() {
+	// validate epoch
+	epochtm, now := time.Unix(0, snap.epoch), time.Now()
+	if epochtm.After(now) {
+		fmsg := "snapshot time %v comes after now: %v"
+		panic(fmt.Errorf(fmsg, epochtm, now))
+	}
+	// validate footprint
+	computed := (snap.n_zblocks * snap.zblocksize)
+	computed += (snap.n_mblocks * snap.mblocksize)
+	computed += (snap.n_vblocks * snap.vblocksize)
+	computed += MarkerBlocksize + MarkerBlocksize
+	if ln := int64(len(snap.metadata)); ln > 0 {
+		computed += (((ln - 1) / snap.mblocksize) + 1) * snap.mblocksize
+	}
+	computed += MarkerBlocksize * int64(len(snap.readzs))
+	computed += MarkerBlocksize * int64(len(snap.readvs))
+	if computed != snap.footprint {
+		fmsg := "computer footprint %v != actual %v"
+		panic(fmt.Errorf(fmsg, computed, snap.footprint))
+	}
+	// validate footprint ratio to payload
+	if snap.keymem > 0 {
+		payload := float64(snap.keymem) + float64(snap.n_count*zentrysize)
+		payload += float64(snap.valmem) + float64(snap.n_count*mentrysize)
+		if ratio := payload / float64(snap.footprint); ratio < 0.5 {
+			panic(fmt.Errorf("payload/footprint %v exceeds %v", ratio, 0.5))
+		}
 	}
 }
 
