@@ -21,7 +21,7 @@ func TestDestroy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	metadata := "metadata"
+	metadata := ""
 	if err := bubt.Build(nil, []byte(metadata)); err != nil {
 		t.Fatal(err)
 	}

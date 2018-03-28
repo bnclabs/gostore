@@ -401,10 +401,9 @@ func (snap *Snapshot) validatequick() {
 	computed := (snap.n_zblocks * snap.zblocksize)
 	computed += (snap.n_mblocks * snap.mblocksize)
 	computed += (snap.n_vblocks * snap.vblocksize)
-	computed += MarkerBlocksize + MarkerBlocksize
-	if ln := int64(len(snap.metadata)); ln > 0 {
-		computed += (((ln - 1) / snap.mblocksize) + 1) * snap.mblocksize
-	}
+	computed += MarkerBlocksize + MarkerBlocksize /*infoblock*/
+	ln := int64(len(snap.metadata))
+	computed += (((ln - 1) / snap.mblocksize) + 1) * snap.mblocksize
 	computed += MarkerBlocksize * int64(len(snap.readzs))
 	computed += MarkerBlocksize * int64(len(snap.readvs))
 	if computed != snap.footprint {

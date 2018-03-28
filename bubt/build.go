@@ -390,11 +390,9 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 	infoblkn := len(block)
 
 	// flush 1 or more m-blocks of metadata
-	lenMetadata := len(metadata)
-	if lenMetadata > 0 {
-		if lenMetadata, err = tree.Writemetadata(metadata); err != nil {
-			return err
-		}
+	lenMetadata, err := tree.Writemetadata(metadata)
+	if err != nil {
+		return err
 	}
 
 	fmsg := "%v built with root@%v %v bytes infoblock %v bytes metadata"
