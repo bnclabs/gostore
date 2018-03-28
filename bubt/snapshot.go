@@ -15,6 +15,7 @@ import "path/filepath"
 import "github.com/bnclabs/gostore/api"
 import "github.com/bnclabs/gostore/lib"
 import "github.com/bnclabs/gostore/flock"
+import s "github.com/bnclabs/gosettings"
 
 // Snapshot to read index entries persisted using Bubt builder. Since
 // no writes are allowed on the btree, any number of snapshots can be
@@ -259,6 +260,9 @@ func (snap *Snapshot) Metadata() []byte {
 // Info return parameters used to build the snapshot and statistical
 // information.
 //
+//   mfile		: m-index file name.
+//   zfiles		: list of z-index file name.
+//   vfiles      : list of value log files for each each z-index, if present.
 //   zblocksize : block size used for z-index file.
 //   mblocksize : block size used for m-index file.
 //   vblocksize : block size used for value log.
@@ -276,6 +280,9 @@ func (snap *Snapshot) Metadata() []byte {
 //   footprint  : disk footprint for this snapshot.
 func (snap *Snapshot) Info() s.Settings {
 	return s.Settings{
+		"mfile":      snap.mfile,
+		"zfiles":     snap.zfiles,
+		"vfiles":     snap.vfiles,
 		"zblocksize": snap.zblocksize,
 		"mblocksize": snap.mblocksize,
 		"vblocksize": snap.vblocksize,
@@ -296,10 +303,42 @@ func (snap *Snapshot) Info() s.Settings {
 
 // Log vital information
 func (snap *Snapshot) Log() {
-	fmsg := "%v zblock:%v mblock:%v footprint: %v n_count: %v"
-	zsize, msize := snap.zblocksize, snap.mblocksize
-	footprint, n_count := snap.footprint, snap.n_count
-	infof(fmsg, snap.logprefix, zsize, msize, footprint, n_count)
+	info := snap.Info()
+
+	// seqno
+	fmsg := "%v has %v entries, %v deleted, with maximum seqno %v"
+	n_count := info.Int64("n_count")
+	n_deleted := info.Int64("n_deleted")
+	seqno := info.Int64("seqno")
+	infof(fmsg, snap.logprefix, n_count, n_deleted, seqno)
+
+	// log files
+	infof("%v m-index file: %q", snap.logprefix, info.String("mfile"))
+	zfiles, vfiles := info.Strings("zfiles"), info.Strings("vfiles")
+	for i, zfile := range zfiles {
+		infof("%v z-index file: %q", snap.logprefix, zfile)
+		if len(vfiles) > 0 {
+			infof("%v value-log file: %q", snap.logprefix, vfiles[i])
+		}
+	}
+
+	fmsg = "%v m-block:%v z-block:%v v-block: %v"
+	zsize, msize := info.Int64("zblocksize"), info.Int64("mblocksize")
+	vsize := info.Int64("vblocksize")
+	infof(fmsg, snap.logprefix, zsize, msize, vsize)
+
+	fmsg = "%v built at %v, took %v to build -- {m:%v, z:%v, v:%v}"
+	epoch := time.Unix(info.Int64("epoch"), 0)
+	took := time.Duration(info.Int64("buildtime")).Round(time.Second)
+	mblocks, zblocks := info.Int64("n_mblocks"), info.Int64("n_zblocks")
+	vblocks := info.Int64("n_vblocks")
+	infof(fmsg, snap.logprefix, epoch, took, mblocks, zblocks, vblocks)
+
+	fmsg = "%v disk footprint is %v for a payload of %v ratio: %.2f"
+	payload := info.Int64("keymem") + info.Int64("valmem")
+	footprint := info.Int64("footprint")
+	ratio := float64(payload) / float64(footprint)
+	infof(fmsg, snap.logprefix, footprint, payload, ratio)
 }
 
 // Validate snapshot on disk. This is a costly call, use it only
