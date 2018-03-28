@@ -51,7 +51,11 @@ func BenchmarkSnapCount(b *testing.B) {
 }
 
 func BenchmarkSnapGet(b *testing.B) {
-	snap, keys := makeBubt(b.N)
+	n := b.N
+	if n < 1000 {
+		n = 1000
+	}
+	snap, keys := makeBubt(n)
 	defer snap.Destroy()
 	defer snap.Close()
 
@@ -62,7 +66,11 @@ func BenchmarkSnapGet(b *testing.B) {
 }
 
 func BenchmarkSnapScan(b *testing.B) {
-	snap, _ := makeBubt(b.N)
+	n := b.N
+	if n < 1000 {
+		n = 1000
+	}
+	snap, _ := makeBubt(n)
 	defer snap.Destroy()
 	defer snap.Close()
 
@@ -75,7 +83,11 @@ func BenchmarkSnapScan(b *testing.B) {
 }
 
 func BenchmarkSnapView(b *testing.B) {
-	snap, _ := makeBubt(b.N)
+	n := b.N
+	if n < 1000 {
+		n = 1000
+	}
+	snap, _ := makeBubt(n)
 	defer snap.Destroy()
 	defer snap.Close()
 
@@ -86,7 +98,11 @@ func BenchmarkSnapView(b *testing.B) {
 }
 
 func BenchmarkViewGet(b *testing.B) {
-	snap, keys := makeBubt(b.N)
+	n := b.N
+	if n < 1000 {
+		n = 1000
+	}
+	snap, keys := makeBubt(n)
 	defer snap.Destroy()
 	defer snap.Close()
 
@@ -99,7 +115,11 @@ func BenchmarkViewGet(b *testing.B) {
 }
 
 func BenchmarkViewCursor(b *testing.B) {
-	snap, _ := makeBubt(b.N)
+	n := b.N
+	if n < 1000 {
+		n = 1000
+	}
+	snap, _ := makeBubt(n)
 	defer snap.Destroy()
 	defer snap.Close()
 
@@ -112,7 +132,11 @@ func BenchmarkViewCursor(b *testing.B) {
 }
 
 func BenchmarkCursorKey(b *testing.B) {
-	snap, _ := makeBubt(b.N)
+	n := 1000
+	if n < 1000 {
+		n = 1000
+	}
+	snap, _ := makeBubt(n)
 	defer snap.Destroy()
 	defer snap.Close()
 
@@ -128,7 +152,11 @@ func BenchmarkCursorKey(b *testing.B) {
 }
 
 func BenchmarkCursorValue(b *testing.B) {
-	snap, _ := makeBubt(b.N)
+	n := 1000
+	if n < 1000 {
+		n = 1000
+	}
+	snap, _ := makeBubt(n)
 	defer snap.Destroy()
 	defer snap.Close()
 

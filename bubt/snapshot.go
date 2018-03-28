@@ -334,11 +334,14 @@ func (snap *Snapshot) validatequick() {
 		fmsg := "computer footprint %v != actual %v"
 		panic(fmt.Errorf(fmsg, computed, snap.footprint))
 	}
-	// validate footprint ratio to payload
+	// validate footprint ratio to payload, only if payload is more that
+	// seriouspayload (10 MB).
+	seriouspayload := float64(1024 * 1024 * 10)
 	if snap.keymem > 0 {
 		payload := float64(snap.keymem) + float64(snap.n_count*zentrysize)
 		payload += float64(snap.valmem) + float64(snap.n_count*mentrysize)
-		if ratio := payload / float64(snap.footprint); ratio < 0.5 {
+		ratio := payload / float64(snap.footprint)
+		if payload > seriouspayload && ratio < 0.5 {
 			panic(fmt.Errorf("payload/footprint %v exceeds %v", ratio, 0.5))
 		}
 	}
