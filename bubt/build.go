@@ -34,8 +34,8 @@ type Bubt struct {
 }
 
 // NewBubt create a Bubt instance to build a new bottoms-up btree.
-// If zblocksize == 0, then zblocks and mblocks will be stored in same file.
-// if vblocksize == 0, then values will be stored in zblocks.
+// If zblocksize == 0, then zblocksize will be same as mblocksize.
+// if vblocksize == 0, then values will be stored in value log.
 func NewBubt(
 	name string, paths []string,
 	mblocksize, zblocksize, vblocksize int64) (tree *Bubt, err error) {

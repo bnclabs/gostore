@@ -256,6 +256,44 @@ func (snap *Snapshot) Metadata() []byte {
 	return snap.metadata
 }
 
+// Info return parameters used to build the snapshot and statistical
+// information.
+//
+//   zblocksize : block size used for z-index file.
+//   mblocksize : block size used for m-index file.
+//   vblocksize : block size used for value log.
+//   buildtime  : time taken, in nanoseconds, to build this snapshot.
+//   epoch      : snapshot born time, in nanosec, after January 1, 1970 UTC.
+//   seqno      : maximum seqno contained in this snapshot.
+//   keymem     : total payload size for all keys.
+//   valmem     : total payload size for all values.
+//   paddingmem : total bytes used for padding m-block and z-block alignment.
+//   n_zblocks  : total number of blocks in z-index files.
+//   n_mblocks  : total number of blocks in m-index files.
+//   n_vblocks  : total number of blocks in value log.
+//   n_count    : number of entries in this snapshot, includes deleted.
+//   n_deleted  : number of entries marked as deleted.
+//   footprint  : disk footprint for this snapshot.
+func (snap *Snapshot) Info() s.Settings {
+	return s.Settings{
+		"zblocksize": snap.zblocksize,
+		"mblocksize": snap.mblocksize,
+		"vblocksize": snap.vblocksize,
+		"buildtime":  snap.buildtime,
+		"epoch":      snap.epoch,
+		"seqno":      snap.seqno,
+		"keymem":     snap.keymem,
+		"valmem":     snap.valmem,
+		"paddingmem": snap.paddingmem,
+		"n_zblocks":  snap.n_zblocks,
+		"n_mblocks":  snap.n_mblocks,
+		"n_vblocks":  snap.n_vblocks,
+		"n_count":    snap.n_count,
+		"n_deleted":  snap.n_deleted,
+		"footprint":  snap.footprint,
+	}
+}
+
 // Log vital information
 func (snap *Snapshot) Log() {
 	fmsg := "%v zblock:%v mblock:%v footprint: %v n_count: %v"
