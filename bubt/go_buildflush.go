@@ -4,15 +4,17 @@ import "os"
 import "fmt"
 import "path/filepath"
 
+var maxqueue = 128
+
 type bubtflusher struct {
 	idx    int64
 	fpos   int64
 	vlog   []byte
 	file   string
 	fd     *os.File
-	ch     chan []byte
+	ch     chan *blockdata
 	quitch chan struct{}
-	blocks chan []byte
+	pool   *blockpool
 }
 
 func startflusher(idx int, vsize int64, file string) (*bubtflusher, error) {
@@ -20,9 +22,9 @@ func startflusher(idx int, vsize int64, file string) (*bubtflusher, error) {
 		idx:    int64(idx),
 		fpos:   0,
 		file:   file,
-		ch:     make(chan []byte, 100),
+		ch:     make(chan *blockdata, 128),
 		quitch: make(chan struct{}),
-		blocks: make(chan []byte, 100),
+		pool:   newblockpool(128),
 	}
 	if vsize > 0 {
 		flusher.vlog = make([]byte, 0, vsize)
@@ -43,8 +45,8 @@ func (flusher *bubtflusher) writedata(data []byte) error {
 	if len(data) == 0 {
 		return nil
 	}
-	block := flusher.getblock(len(data))
-	copy(block, data)
+	block := flusher.pool.getblock(len(data))
+	copy(block.data, data)
 	select {
 	case flusher.ch <- block:
 	case <-flusher.quitch:
@@ -66,13 +68,13 @@ func (flusher *bubtflusher) run() {
 		close(flusher.quitch)
 	}()
 
-	write := func(block []byte) (rc bool) {
-		//fmt.Println("loop", flusher.idx, len(block))
-		if n, err := flusher.fd.Write(block); err != nil {
+	write := func(block *blockdata) (rc bool) {
+		//fmt.Println("loop", flusher.idx, len(block.data))
+		if n, err := flusher.fd.Write(block.data); err != nil {
 			fatalf("flusher(%q): %v", flusher.file, err)
-		} else if n != len(block) {
+		} else if n != len(block.data) {
 			fmsg := "flusher(%q) partial write %v<%v"
-			fatalf(fmsg, flusher.file, n, len(block))
+			fatalf(fmsg, flusher.file, n, len(block.data))
 		} else {
 			rc = true
 		}
@@ -84,7 +86,7 @@ func (flusher *bubtflusher) run() {
 		if rc := write(block); rc == false {
 			return
 		}
-		flusher.putblock(block)
+		flusher.pool.putblock(block)
 	}
 
 	// if vlog contains some data, flush them first.
@@ -98,25 +100,5 @@ func (flusher *bubtflusher) run() {
 	for i := 0; i < len(markerblock); i++ {
 		markerblock[i] = MarkerByte
 	}
-	write(markerblock)
-}
-
-func (flusher *bubtflusher) getblock(size int) (block []byte) {
-	select {
-	case block = <-flusher.blocks:
-	default:
-		block = make([]byte, size)
-	}
-	if cap(block) < size {
-		block = make([]byte, size)
-	}
-	block = block[:size]
-	return
-}
-
-func (flusher *bubtflusher) putblock(block []byte) {
-	select {
-	case flusher.blocks <- block:
-	default: // Leave it to GC
-	}
+	write(&blockdata{data: markerblock})
 }
