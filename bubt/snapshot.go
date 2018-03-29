@@ -52,29 +52,21 @@ type Snapshot struct {
 	footprint  int64
 	logprefix  string
 
-	viewcache   chan *View
-	curcache    chan *Cursor
-	readbuffers chan *buffers
-}
-
-type buffers struct {
-	index  blkindex
-	zblock []byte
-	mblock []byte
-	vblock []byte
+	viewcache chan *View
+	curcache  chan *Cursor
+	rdpool    *readerpool
 }
 
 // OpenSnapshot from paths.
 func OpenSnapshot(
 	name string, paths []string, mmap bool) (snap *Snapshot, err error) {
 
-	cachesize := runtime.GOMAXPROCS(-1) * 4
+	max := runtime.GOMAXPROCS(-1) * 4
 	snap = &Snapshot{
-		name:        name,
-		viewcache:   make(chan *View, cachesize),
-		curcache:    make(chan *Cursor, cachesize),
-		readbuffers: make(chan *buffers, cachesize),
-		logprefix:   fmt.Sprintf("BUBT [%s]", name),
+		name:      name,
+		viewcache: make(chan *View, max),
+		curcache:  make(chan *Cursor, max),
+		logprefix: fmt.Sprintf("BUBT [%s]", name),
 	}
 
 	defer func() {
@@ -89,6 +81,8 @@ func OpenSnapshot(
 	if _, err = snap.readheader(snap.readm); err != nil {
 		return
 	}
+	msize, zsize, vsize := snap.mblocksize, snap.zblocksize, snap.vblocksize
+	snap.rdpool = newreaderpool(msize, zsize, vsize, int64(max))
 
 	snap.lockfile = filepath.Join(filepath.Dir(snap.mfile), "bubt.lock")
 	if snap.rw, err = flock.New(snap.lockfile); err != nil {
@@ -407,7 +401,7 @@ func (snap *Snapshot) validatequick() {
 	computed += MarkerBlocksize * int64(len(snap.readzs))
 	computed += MarkerBlocksize * int64(len(snap.readvs))
 	if computed != snap.footprint {
-		fmsg := "computer footprint %v != actual %v"
+		fmsg := "computed footprint %v != actual %v"
 		panic(fmt.Errorf(fmsg, computed, snap.footprint))
 	}
 	// validate footprint ratio to payload, only if payload is more that
@@ -500,7 +494,8 @@ func (snap *Snapshot) Get(
 	var lv lazyvalue
 	var v []byte
 
-	buf := snap.getreadbuffer()
+	msize, zsize, vsize := snap.mblocksize, snap.zblocksize, snap.vblocksize
+	buf := snap.rdpool.getreadbuffer(msize, zsize, vsize)
 
 	shardidx, fpos := snap.findinmblock(key, buf)
 	_, wkey, lv, cas, deleted, ok = snap.findinzblock(shardidx, fpos, key, buf)
@@ -512,12 +507,12 @@ func (snap *Snapshot) Get(
 		copy(actualvalue, v)
 	}
 
-	snap.putreadbuffer(buf)
+	snap.rdpool.putreadbuffer(buf)
 	return actualvalue, cas, deleted, ok
 }
 
 func (snap *Snapshot) findinmblock(
-	key []byte, buf *buffers) (shardidx byte, fpos int64) {
+	key []byte, buf *readbuffers) (shardidx byte, fpos int64) {
 
 	mblock := buf.mblock
 	n, err := snap.readm.ReadAt(mblock, snap.root)
@@ -544,7 +539,7 @@ func (snap *Snapshot) findinmblock(
 
 func (snap *Snapshot) findinzblock(
 	shardidx byte, fpos int64,
-	key []byte, buf *buffers) (
+	key []byte, buf *readbuffers) (
 	index int, k []byte, lv lazyvalue, cas uint64, deleted, ok bool) {
 
 	zblock := buf.zblock
@@ -638,27 +633,6 @@ func (snap *Snapshot) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 }
 
 //---- local methods
-
-func (snap *Snapshot) getreadbuffer() (buf *buffers) {
-	select {
-	case buf = <-snap.readbuffers:
-	default:
-		buf = &buffers{
-			index:  make(blkindex, 0, 256),
-			mblock: make([]byte, snap.mblocksize),
-			zblock: make([]byte, snap.zblocksize),
-			vblock: make([]byte, snap.vblocksize),
-		}
-	}
-	return buf
-}
-
-func (snap *Snapshot) putreadbuffer(buf *buffers) {
-	select {
-	case snap.readbuffers <- buf:
-	default: // Leave it for GC.
-	}
-}
 
 func (snap *Snapshot) getview(id uint64) (view *View) {
 	select {

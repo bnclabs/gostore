@@ -18,7 +18,9 @@ func (view *View) ID() uint64 {
 
 // OpenCursor open an active cursor, point at key, inside the index.
 func (view *View) OpenCursor(key []byte) (api.Cursor, error) {
-	buf := view.snap.getreadbuffer()
+	snap := view.snap
+	msize, zsize, vsize := snap.mblocksize, snap.zblocksize, snap.vblocksize
+	buf := snap.rdpool.getreadbuffer(msize, zsize, vsize)
 	cur, err := view.getcursor().opencursor(view.snap, key, buf)
 	return cur, err
 }
@@ -76,7 +78,7 @@ func (view *View) getcursor() (cur *Cursor) {
 }
 
 func (view *View) putcursor(cur *Cursor) {
-	view.snap.putreadbuffer(cur.buf)
+	view.snap.rdpool.putreadbuffer(cur.buf)
 	select {
 	case view.snap.curcache <- cur:
 	default: // leave it for GC

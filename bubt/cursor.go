@@ -12,12 +12,12 @@ type Cursor struct {
 	fposs    []int64
 
 	index    int
-	buf      *buffers
+	buf      *readbuffers
 	finished bool
 }
 
 func (cur *Cursor) opencursor(
-	snap *Snapshot, key []byte, buf *buffers) (*Cursor, error) {
+	snap *Snapshot, key []byte, buf *readbuffers) (*Cursor, error) {
 
 	cur.buf = buf
 	if key == nil { // from beginning

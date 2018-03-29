@@ -48,7 +48,8 @@ func (pool *blockpool) putblock(b *blockdata) {
 
 	for {
 		oldptr := atomic.LoadPointer(&pool.head)
-		b.next, newptr = oldptr, unsafe.Pointer(b)
+		atomic.StorePointer(&b.next, oldptr)
+		newptr = unsafe.Pointer(b)
 		if atomic.CompareAndSwapPointer(&pool.head, oldptr, newptr) {
 			return
 		}
