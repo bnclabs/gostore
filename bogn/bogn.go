@@ -1183,7 +1183,7 @@ func (bogn *Bogn) openbubtsnaps(
 	for _, path := range paths {
 		fis, err := ioutil.ReadDir(path)
 		if err != nil {
-			errorf("%v ReadDir(%q): %v", bogn.logprefix, path, err)
+			errorf("%v openbubtsnaps.ReadDir(): %v", bogn.logprefix, err)
 			return disks, err
 		}
 		for _, fi := range fis {
@@ -1230,7 +1230,7 @@ func (bogn *Bogn) compactbubtsnaps(diskpaths []string, merge bool) error {
 	for _, path := range diskpaths {
 		fis, err := ioutil.ReadDir(path)
 		if err != nil {
-			errorf("%v ReadDir(%q): %v", bogn.logprefix, path, err)
+			errorf("%v compactbubtsnaps.ReadDir(): %v", bogn.logprefix, err)
 			return err
 		}
 		for _, fi := range fis {
@@ -1375,7 +1375,8 @@ func (bogn *Bogn) destroybubtsnaps(diskpaths []string) error {
 	for _, path := range diskpaths {
 		fis, err := ioutil.ReadDir(path)
 		if err != nil {
-			errorf("%v ReadDir(%q): %v", bogn.logprefix, path, err)
+			fmsg := "%v destroybubtsnaps.ReadDir(): %v"
+			errorf(fmsg, bogn.logprefix, path, err)
 			return err
 		}
 		for _, fi := range fis {
