@@ -89,7 +89,6 @@ func (flusher *bubtflusher) run() {
 		flusher.pool.putblock(block)
 	}
 
-	// if vlog contains some data, flush them first.
 	if len(flusher.vlog) > 0 {
 		fmsg := "unexpected partial value log %v"
 		panic(fmt.Errorf(fmsg, len(flusher.vlog)))
