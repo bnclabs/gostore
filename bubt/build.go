@@ -20,6 +20,7 @@ const MarkerByte = 0xAB
 // immutable btree, built bottoms up and not updated there after.
 type Bubt struct {
 	name       string
+	tombpurge  bool
 	mflusher   *bubtflusher
 	zflushers  []*bubtflusher
 	vflushers  []*bubtflusher
@@ -51,6 +52,7 @@ func NewBubt(
 		mblocksize: mblocksize,
 		zblocksize: zblocksize,
 		vblocksize: vblocksize,
+		tombpurge:  false,
 	}
 	mpath, zpaths := tree.pickmzpath(paths)
 	tree.logprefix = fmt.Sprintf("BUBT [%s]", name)
@@ -70,6 +72,12 @@ func NewBubt(
 	tree.zflushers = tree.makezflushers(zpaths)
 	tree.vflushers = tree.makevflushers(zpaths)
 	return tree, nil
+}
+
+// TombstonePurge to enable or disable purging tombstone entries while
+// Building a bubt instance from an iterator.
+func (tree *Bubt) TombstonePurge(what bool) {
+	tree.tombpurge = what
 }
 
 func (tree *Bubt) makezflushers(zpaths []string) []*bubtflusher {
@@ -119,9 +127,14 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 
 		key, val, seqno, del, e = iter(fin)
 		if e == nil {
+			// account seqno even for deleted (tombstone) entries.
 			if maxseqno < seqno {
 				maxseqno = seqno
 			}
+			if tree.tombpurge && del { // skip accounting for deleted entries
+				return key, val, seqno, del, e // wish there is tail recursion
+			}
+			// account everything else for non-deleted entries.
 			keymem = keymem + uint64(len(key))
 			if del {
 				n_deleted++
@@ -234,16 +247,22 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 		if key == nil {
 			return
 		}
-		ok := z.insert(key, value, seqno, deleted)
-		if ok == false {
-			panic("first insert to zblock, check whether key > zblocksize")
+
+		ok := true
+		if tree.tombpurge && deleted == false {
+			ok = z.insert(key, value, seqno, deleted)
+			if ok == false {
+				panic("first insert to zblock, check whether key > zblocksize")
+			}
 		}
 		for ok {
 			key, value, seqno, deleted, err = compiter(false /*close*/)
 			if err != nil && err.Error() != io.EOF.Error() {
 				panic(err)
 			}
-			ok = z.insert(key, value, seqno, deleted)
+			if tree.tombpurge && deleted == false {
+				ok = z.insert(key, value, seqno, deleted)
+			}
 		}
 		return
 	}

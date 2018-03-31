@@ -7,7 +7,7 @@ import "math/rand"
 func TestValidate(t *testing.T) {
 	n := 1000000
 	paths := makepaths3()
-	mi, _ := makeLLRB(n)
+	mi, _, _ := makeLLRB(n)
 	defer mi.Destroy()
 
 	t.Logf("paths %v, entries: %v", paths, n)
@@ -42,7 +42,7 @@ func TestValidate(t *testing.T) {
 func TestLog(t *testing.T) {
 	n := 1000000
 	paths := makepaths3()
-	mi, _ := makeLLRB(n)
+	mi, _, _ := makeLLRB(n)
 	defer mi.Destroy()
 
 	t.Logf("paths %v, entries: %v", paths, n)
@@ -235,7 +235,7 @@ func BenchmarkCursorYNext(b *testing.B) {
 }
 
 func makeBubt(n int) (*Snapshot, [][]byte) {
-	mi, keys := makeLLRB(n)
+	mi, keys, _ := makeLLRB(n)
 	defer mi.Destroy()
 
 	name, paths := "benchbubt", makepaths3()
