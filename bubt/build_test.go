@@ -138,6 +138,7 @@ func TestSnapshotGetM(t *testing.T) {
 	} else if snap.ID() != name {
 		t.Errorf("expected %v, got %v", name, snap.ID())
 	}
+
 	miter = mi.Scan()
 	for key, value, seqno, deleted, err := miter(false /*fin*/); err == nil; {
 		v, s, d, ok := snap.Get(key, []byte{})

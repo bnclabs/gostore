@@ -253,7 +253,7 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 		}
 
 		ok := true
-		if tree.tombpurge && deleted == false {
+		if (tree.tombpurge && deleted == false) || tree.tombpurge == false {
 			ok = z.insert(key, value, seqno, deleted)
 			if ok == false {
 				panic("first insert to zblock, check whether key > zblocksize")
@@ -261,10 +261,12 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 		}
 		for ok {
 			key, value, seqno, deleted, err = compiter(false /*close*/)
-			if err != nil && err.Error() != io.EOF.Error() {
+			if err == io.EOF {
+				break
+			} else if err != nil {
 				panic(err)
 			}
-			if tree.tombpurge && deleted == false {
+			if (tree.tombpurge && deleted == false) || tree.tombpurge == false {
 				ok = z.insert(key, value, seqno, deleted)
 			}
 		}
@@ -350,7 +352,7 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 		if err != nil && err.Error() != io.EOF.Error() {
 			panic(err)
 
-		} else if key != nil {
+		} else if err == nil && key != nil {
 			m := newm(tree, tree.mblocksize)
 			m, _ = buildm(m, 20 /*levels can't go more than 20*/)
 			root = flushmblock(m)
