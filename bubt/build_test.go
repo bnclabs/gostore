@@ -49,7 +49,7 @@ func TestDestroy(t *testing.T) {
 		t.Errorf("expected %v, got %v", zsize, snap.zblocksize)
 	}
 
-	if string(snap.metadata) != metadata {
+	if string(snap.metadata) != "wawaltreatment" {
 		t.Errorf("expected %q, got %q", metadata, snap.metadata)
 	}
 }

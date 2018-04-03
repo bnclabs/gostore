@@ -16,6 +16,8 @@ const MarkerBlocksize = 4096
 // MarkerByte to populate Markerblock.
 const MarkerByte = 0xAB
 
+var metadataMarker = []byte("wawaltreatment")
+
 // Bubt instance can be used to persist sorted {key,value} entries in
 // immutable btree, built bottoms up and not updated there after.
 type Bubt struct {
@@ -24,6 +26,7 @@ type Bubt struct {
 	mflusher   *bubtflusher
 	zflushers  []*bubtflusher
 	vflushers  []*bubtflusher
+	mdok       bool
 	headmblock *mblock
 
 	// settings, will be flushed to the tip of indexfile.
@@ -53,6 +56,7 @@ func NewBubt(
 		zblocksize: zblocksize,
 		vblocksize: vblocksize,
 		tombpurge:  false,
+		mdok:       false,
 	}
 	mpath, zpaths := tree.pickmzpath(paths)
 	tree.logprefix = fmt.Sprintf("BUBT [%s]", name)
@@ -415,6 +419,7 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 		if err != nil {
 			return err
 		}
+		tree.mdok = true
 	}
 
 	fmsg := "%v built with root@%v %v bytes infoblock %v bytes metadata"
@@ -432,12 +437,19 @@ func (tree *Bubt) Writemetadata(metadata []byte) (int, error) {
 		panic(err)
 	}
 	infof("%v wrote %v bytes metadata", tree.logprefix, len(metadata))
+	tree.mdok = true
 	return len(block), nil
 }
 
 // Close instance after building the btree. This will mark disk files as
 // immutable for rest of its life-time. Use OpenSnapshot for reading.
 func (tree *Bubt) Close() {
+	// if metadata is not flushed, flush an empty metadata.
+	if tree.mdok == false {
+		tree.Writemetadata(metadataMarker)
+		tree.mdok = true
+	}
+
 	if tree.mflusher != nil {
 		tree.mflusher.close()
 	}
