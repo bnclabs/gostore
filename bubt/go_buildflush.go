@@ -11,17 +11,21 @@ type bubtflusher struct {
 	fpos   int64
 	vlog   []byte
 	file   string
+	mode   string
 	fd     *os.File
 	ch     chan *blockdata
 	quitch chan struct{}
 	pool   *blockpool
 }
 
-func startflusher(idx int, vsize int64, file string) (*bubtflusher, error) {
+func startflusher(
+	idx int, vsize int64, oldfile, newfile, mode string) (*bubtflusher, error) {
+
 	flusher := &bubtflusher{
 		idx:    int64(idx),
 		fpos:   0,
-		file:   file,
+		file:   newfile,
+		mode:   mode,
 		ch:     make(chan *blockdata, 128),
 		quitch: make(chan struct{}),
 		pool:   newblockpool(128),
@@ -30,12 +34,22 @@ func startflusher(idx int, vsize int64, file string) (*bubtflusher, error) {
 		flusher.vlog = make([]byte, 0, vsize)
 		flusher.fpos = int64(flusher.idx << 56)
 	}
-	path := filepath.Dir(file)
+	path := filepath.Dir(newfile)
 	if err := os.MkdirAll(path, 0770); err != nil {
 		errorf("os.MkdirAll(%q): %v", path, err)
 		return nil, err
+	} else if mode == "create" {
+		flusher.fd = createfile(newfile)
+
+	} else if mode == "appendlink" {
+		size := filesize(oldfile)
+		if err := os.Truncate(oldfile, size-MarkerBlocksize); err != nil {
+			panic(err)
+		}
+		flusher.fpos += (size - MarkerBlocksize)
+		flusher.fd = appendlinkfile(oldfile, newfile)
 	} else {
-		flusher.fd = createfile(flusher.file)
+		panic(fmt.Errorf("invalid mode %q", mode))
 	}
 	go flusher.run()
 	return flusher, nil

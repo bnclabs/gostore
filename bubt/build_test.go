@@ -13,7 +13,7 @@ import "github.com/bnclabs/gostore/llrb"
 import s "github.com/bnclabs/gosettings"
 
 func TestDestroy(t *testing.T) {
-	paths := makepaths3()
+	paths := makepaths123(-1)
 	t.Log(paths)
 
 	name, msize, zsize := "testbuild", int64(4096), int64(4096)
@@ -55,7 +55,7 @@ func TestDestroy(t *testing.T) {
 }
 
 func TestBuildMetadata(t *testing.T) {
-	paths := makepaths3()
+	paths := makepaths123(-1)
 
 	name, msize, zsize := "testbuild", int64(4096), int64(8192)
 	bubt, err := NewBubt(name, paths, msize, zsize, -1)
@@ -94,13 +94,14 @@ func TestBuildMetadata(t *testing.T) {
 	}
 
 	if string(snap.metadata) != string(metadata) {
-		t.Errorf("expected %q, got %q", string(metadata), string(snap.metadata))
+		fmsg := "expected %q, got %q"
+		t.Errorf(fmsg, string(metadata), string(snap.metadata))
 	}
 }
 
 func TestSnapshotGetM(t *testing.T) {
 	n := 1000000
-	paths := makepaths3()
+	paths := makepaths123(-1)
 	mi, _, _ := makeLLRB(n)
 	defer mi.Destroy()
 
@@ -158,7 +159,7 @@ func TestSnapshotGetM(t *testing.T) {
 
 func TestSnapshotGetZ(t *testing.T) {
 	n := 1000000
-	paths := makepaths3()
+	paths := makepaths123(-1)
 	mi, _, _ := makeLLRB(n)
 	defer mi.Destroy()
 
@@ -166,7 +167,7 @@ func TestSnapshotGetZ(t *testing.T) {
 
 	rand.Seed(time.Now().UnixNano())
 	name, msize := "testbuild", int64(4096)
-	zsize := []int64{0, msize, msize * 2}[rand.Intn(100000)%2]
+	zsize := []int64{0, msize, msize * 2}[rand.Intn(100000)%3]
 	mmap := []bool{false, true}[rand.Intn(10000)%2]
 	t.Logf("zsize: %v, vsize: 0, mmap: %v", zsize, mmap)
 	bubt, err := NewBubt(name, paths, msize, zsize, 0)
@@ -214,7 +215,7 @@ func TestSnapshotGetZ(t *testing.T) {
 
 func TestSnapshotGetV(t *testing.T) {
 	n := 1000000
-	paths := makepaths3()
+	paths := makepaths123(-1)
 	mi, _, _ := makeLLRB(n)
 	defer mi.Destroy()
 
@@ -222,8 +223,8 @@ func TestSnapshotGetV(t *testing.T) {
 
 	rand.Seed(time.Now().UnixNano())
 	name, msize := "testbuild", int64(4096)
-	zsize := []int64{0, msize, msize * 2}[rand.Intn(100000)%2]
-	vsize := []int64{0, zsize, zsize * 2}[rand.Intn(100000)%2]
+	zsize := []int64{0, msize, msize * 2}[rand.Intn(100000)%3]
+	vsize := []int64{0, zsize, zsize * 2}[rand.Intn(100000)%3]
 	mmap := []bool{false, true}[rand.Intn(10000)%2]
 	t.Logf("zsize: %v, vsize: %v, mmap: %v", zsize, vsize, mmap)
 	bubt, err := NewBubt(name, paths, msize, zsize, vsize)
@@ -271,7 +272,7 @@ func TestSnapshotGetV(t *testing.T) {
 
 func TestTombstonePurge(t *testing.T) {
 	n := 1000000
-	paths := makepaths3()
+	paths := makepaths123(-1)
 	mi, _, ndel := makeLLRB(n)
 	defer mi.Destroy()
 
@@ -279,8 +280,8 @@ func TestTombstonePurge(t *testing.T) {
 
 	rand.Seed(time.Now().UnixNano())
 	name, msize := "testbuild", int64(4096)
-	zsize := []int64{0, msize, msize * 2}[rand.Intn(100000)%2]
-	vsize := []int64{0, zsize, zsize * 2}[rand.Intn(100000)%2]
+	zsize := []int64{0, msize, msize * 2}[rand.Intn(100000)%3]
+	vsize := []int64{0, zsize, zsize * 2}[rand.Intn(100000)%3]
 	mmap := []bool{false, true}[rand.Intn(10000)%2]
 	t.Logf("zsize: %v, vsize: %v, mmap: %v", zsize, vsize, mmap)
 	bubt, err := NewBubt(name, paths, msize, zsize, vsize)
@@ -392,7 +393,7 @@ func TestSnapshotScanM1(t *testing.T) {
 
 func TestSnapshotScanM2(t *testing.T) {
 	n := 1000000
-	paths := makepaths3()
+	paths := makepaths123(-1)
 	mi, _, _ := makeLLRB(n)
 	defer mi.Destroy()
 
@@ -451,7 +452,7 @@ func TestSnapshotScanM2(t *testing.T) {
 
 func TestSnapshotScanM3(t *testing.T) {
 	n := 1000000
-	paths := makepaths3()
+	paths := makepaths123(-1)
 	mi, _, _ := makeLLRB(n)
 	defer mi.Destroy()
 
@@ -518,7 +519,7 @@ func TestSnapshotScanZ1(t *testing.T) {
 
 	rand.Seed(time.Now().UnixNano())
 	name, msize := "testbuild", int64(4096)
-	zsize := []int64{0, msize, msize * 2}[rand.Intn(100000)%2]
+	zsize := []int64{0, msize, msize * 2}[rand.Intn(100000)%3]
 	mmap := []bool{false, true}[rand.Intn(10000)%2]
 	t.Logf("zsize: %v, vsize : 0, mmap: %v", zsize, mmap)
 	bubt, err := NewBubt(name, paths, msize, zsize, 0)
@@ -575,7 +576,7 @@ func TestSnapshotScanZ1(t *testing.T) {
 
 func TestSnapshotScanZ2(t *testing.T) {
 	n := 1000000
-	paths := makepaths3()
+	paths := makepaths123(-1)
 	mi, _, _ := makeLLRB(n)
 	defer mi.Destroy()
 
@@ -583,7 +584,7 @@ func TestSnapshotScanZ2(t *testing.T) {
 
 	rand.Seed(time.Now().UnixNano())
 	name, msize := "testbuild", int64(4096)
-	zsize := []int64{0, msize, msize * 2}[rand.Intn(100000)%2]
+	zsize := []int64{0, msize, msize * 2}[rand.Intn(100000)%3]
 	mmap := []bool{false, true}[rand.Intn(10000)%2]
 	t.Logf("zsize: %v, vsize: 0, mmap: %v", zsize, mmap)
 	bubt, err := NewBubt(name, paths, msize, zsize, -1)
@@ -635,7 +636,7 @@ func TestSnapshotScanZ2(t *testing.T) {
 
 func TestSnapshotScanZ3(t *testing.T) {
 	n := 1000000
-	paths := makepaths3()
+	paths := makepaths123(-1)
 	mi, _, _ := makeLLRB(n)
 	defer mi.Destroy()
 
@@ -702,8 +703,8 @@ func TestSnapshotScanV1(t *testing.T) {
 
 	rand.Seed(time.Now().UnixNano())
 	name, msize := "testbuild", int64(4096)
-	zsize := []int64{0, msize, msize * 2}[rand.Intn(100000)%2]
-	vsize := []int64{0, zsize, zsize * 2}[rand.Intn(100000)%2]
+	zsize := []int64{0, msize, msize * 2}[rand.Intn(100000)%3]
+	vsize := []int64{0, zsize, zsize * 2}[rand.Intn(100000)%3]
 	mmap := []bool{false, true}[rand.Intn(10000)%2]
 	t.Logf("zsize: %v, vsize: %v, mmap: %v", zsize, vsize, mmap)
 	bubt, err := NewBubt(name, paths, msize, zsize, vsize)
@@ -760,7 +761,7 @@ func TestSnapshotScanV1(t *testing.T) {
 
 func TestSnapshotScanV2(t *testing.T) {
 	n := 1000000
-	paths := makepaths3()
+	paths := makepaths123(-1)
 	mi, _, _ := makeLLRB(n)
 	defer mi.Destroy()
 
@@ -768,8 +769,8 @@ func TestSnapshotScanV2(t *testing.T) {
 
 	rand.Seed(time.Now().UnixNano())
 	name, msize := "testbuild", int64(4096)
-	zsize := []int64{0, msize, msize * 2}[rand.Intn(100000)%2]
-	vsize := []int64{0, zsize, zsize * 2}[rand.Intn(100000)%2]
+	zsize := []int64{0, msize, msize * 2}[rand.Intn(100000)%3]
+	vsize := []int64{0, zsize, zsize * 2}[rand.Intn(100000)%3]
 	mmap := []bool{false, true}[rand.Intn(10000)%2]
 	t.Logf("zsize: %v, vsize: %v mmap: %v", zsize, vsize, mmap)
 	bubt, err := NewBubt(name, paths, msize, zsize, vsize)
@@ -821,7 +822,7 @@ func TestSnapshotScanV2(t *testing.T) {
 
 func TestSnapshotScanV3(t *testing.T) {
 	n := 1000000
-	paths := makepaths3()
+	paths := makepaths123(-1)
 	mi, _, _ := makeLLRB(n)
 	defer mi.Destroy()
 
@@ -879,9 +880,109 @@ func TestSnapshotScanV3(t *testing.T) {
 	diter(true /*fin*/)
 }
 
+func TestAppendValuelogs(t *testing.T) {
+	n := 1000
+	mi, _, _ := makeLLRB(n)
+	defer mi.Destroy()
+
+	paths := makepaths123(3)
+	t.Logf("paths %v, entries: %v", paths, n)
+
+	rand.Seed(time.Now().UnixNano())
+
+	// create a snapshot
+	name, msize := "testbuild1", int64(4096)
+	zsize := []int64{msize, msize * 2}[rand.Intn(100000)%2]
+	vsize := []int64{zsize, zsize * 2}[rand.Intn(100000)%2]
+	mmap := []bool{false, true}[rand.Intn(10000)%2]
+	t.Logf("name: %v zsize: %v, vsize: %v, mmap: %v", name, zsize, vsize, mmap)
+	bt1, err := NewBubt(name, paths, msize, zsize, vsize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	iter := mi.Scan()
+	if err := bt1.Build(iter, []byte("this is metadata")); err != nil {
+		t.Fatal(err)
+	}
+	iter(true /*fin*/)
+	vfiles := bt1.vfiles
+	bt1.Close()
+
+	// rebuild and merge another snapshot
+	n = 1000
+	mi, _, _ = makeLLRBUpdate(n, mi)
+
+	name = "testbuild2"
+	msize = []int64{msize, msize * 2}[rand.Intn(100000)%2]
+	zsize = []int64{msize, msize * 2}[rand.Intn(100000)%2]
+	mmap = []bool{false, true}[rand.Intn(10000)%2]
+	t.Logf("name: %v zsize: %v, vsize: %v, mmap: %v", name, zsize, vsize, mmap)
+	bt, err := NewBubt(name, paths, msize, zsize, vsize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bt.AppendValuelogs(vsize, vfiles)
+	iter = mi.Scan()
+	if err := bt.Build(iter, []byte("this is metadata")); err != nil {
+		t.Fatal(err)
+	}
+	iter(true /*fin*/)
+	bt.Close()
+
+	// delete previous snapshot after building testbuild2.
+	PurgeSnapshot("testbuild1", paths)
+
+	// open and verify testbuild2
+	snap, err := OpenSnapshot(name, paths, mmap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer snap.Destroy()
+	defer snap.Close()
+
+	info := snap.Info()
+	t.Logf("zfiles: %v", info["zfiles"])
+	t.Logf("vfiles: %v", info["vfiles"])
+	t.Logf("n_mi : %v, snap: %v", mi.Count(), snap.Count())
+
+	if snap.Count() != mi.Count() {
+		t.Errorf("expected %v, got %v", mi.Count(), snap.Count())
+	}
+	miter, diter := mi.Scan(), snap.Scan()
+	key, value, seqno, deleted, err := miter(false /*fin*/)
+	k, v, s, d, e := diter(false /*fin*/)
+	for err == nil || e == nil {
+		//fmt.Println("mi", string(key), deleted, seqno, err)
+		//fmt.Println("dk", string(k), d, s, e)
+		if err != nil {
+			t.Errorf("unexpected %v", err)
+			break
+		} else if bytes.Compare(k, key) != 0 {
+			t.Errorf("expected %q, got %q", key, k)
+			break
+		} else if d != deleted {
+			t.Errorf("%s expected %v, got %v", key, deleted, d)
+			break
+		} else if s != seqno {
+			t.Errorf("%s expected %v, got %v", key, seqno, s)
+			break
+		} else if deleted == false && bytes.Compare(v, value) != 0 {
+			t.Errorf("%s expected %q, got %q", key, value, v)
+			break
+		}
+		key, value, seqno, deleted, err = miter(false /*fin*/)
+		k, v, s, d, e = diter(false /*fin*/)
+	}
+	if err != io.EOF || e != io.EOF {
+		t.Errorf("%v %v", err, e)
+	}
+	miter(true /*fin*/)
+	diter(true /*fin*/)
+}
+
 func TestView(t *testing.T) {
 	n := 1000000
-	paths := makepaths3()
+	paths := makepaths123(-1)
 	mi, _, _ := makeLLRB(n)
 	defer mi.Destroy()
 
@@ -889,7 +990,7 @@ func TestView(t *testing.T) {
 
 	rand.Seed(time.Now().UnixNano())
 	name, msize := "testbuild", int64(4096)
-	zsize := []int64{0, msize, msize * 2}[rand.Intn(100000)%2]
+	zsize := []int64{0, msize, msize * 2}[rand.Intn(100000)%3]
 	mmap := []bool{false, true}[rand.Intn(10000)%2]
 	t.Logf("zsize: %v, mmap: %v", zsize, mmap)
 	bubt, err := NewBubt(name, paths, msize, zsize, -1)
@@ -933,13 +1034,13 @@ func TestView(t *testing.T) {
 }
 
 func TestCursorGetNext(t *testing.T) {
-	n, paths := 1000, makepaths3()
+	n, paths := 1000, makepaths123(-1)
 	mi, _, _ := makeLLRB(n)
 	defer mi.Destroy()
 
 	rand.Seed(time.Now().UnixNano())
 	name, msize := "testbuild", int64(4096)
-	zsize := []int64{0, msize, msize * 2}[rand.Intn(100000)%2]
+	zsize := []int64{0, msize, msize * 2}[rand.Intn(100000)%3]
 	mmap := []bool{false, true}[rand.Intn(10000)%2]
 	t.Logf("zsize: %v, mmap: %v", zsize, mmap)
 	bubt, err := NewBubt(name, paths, msize, zsize, 0)
@@ -1030,13 +1131,13 @@ func TestCursorGetNext(t *testing.T) {
 }
 
 func TestCursorYNext1(t *testing.T) {
-	n, paths := 10000, makepaths3()
+	n, paths := 10000, makepaths123(-1)
 	mi, _, _ := makeLLRB(n)
 	defer mi.Destroy()
 
 	rand.Seed(time.Now().UnixNano())
 	name, msize := "testbuild", int64(4096)
-	zsize := []int64{0, msize, msize * 2}[rand.Intn(100000)%2]
+	zsize := []int64{0, msize, msize * 2}[rand.Intn(100000)%3]
 	mmap := []bool{false, true}[rand.Intn(10000)%2]
 	t.Logf("zsize: %v, mmap: %v", zsize, mmap)
 	bubt, err := NewBubt(name, paths, msize, zsize, -1)
@@ -1092,7 +1193,7 @@ func TestCursorYNext1(t *testing.T) {
 }
 
 func TestCursorYNext2(t *testing.T) {
-	n, paths := 10000, makepaths3()
+	n, paths := 10000, makepaths123(-1)
 	mi, _, _ := makeLLRB(n)
 	defer mi.Destroy()
 
@@ -1152,13 +1253,13 @@ func TestCursorYNext2(t *testing.T) {
 }
 
 func TestOddEvenGet(t *testing.T) {
-	paths, nentries := makepaths3(), 100000
+	paths, nentries := makepaths123(-1), 100000
 	mi, _ := makeLLRBEven(nentries)
 	defer mi.Destroy()
 
 	rand.Seed(time.Now().UnixNano())
 	name, msize := "testbuild", int64(4096)
-	zsize := []int64{0, msize, msize * 2}[rand.Intn(100000)%2]
+	zsize := []int64{0, msize, msize * 2}[rand.Intn(100000)%3]
 	mmap := []bool{false, true}[rand.Intn(10000)%2]
 
 	t.Logf("msize: %v, zsize: %v, mmap: %v", msize, zsize, mmap)
@@ -1218,13 +1319,33 @@ func makeLLRB(n int) (*llrb.LLRB, [][]byte, int64) {
 	mi := llrb.NewLLRB("buildllrb", setts)
 	ndel, keys := int64(0), [][]byte{}
 	for i := 0; i < n; i++ {
-		ksize := 8 + rand.Intn(256)
+		ksize := 8 + rand.Intn(32)
 		fmsg := fmt.Sprintf("key%%0%vd", ksize)
-		key := []byte(fmt.Sprintf(fmsg, i*2))
+		key := []byte(fmt.Sprintf(fmsg, i))
 
-		vsize := ksize + rand.Intn(1024)
+		vsize := ksize + rand.Intn(64)
 		fmsg = fmt.Sprintf("val%%0%vd", vsize)
-		val := []byte(fmt.Sprintf(fmsg, i*2))
+		val := []byte(fmt.Sprintf(fmsg, i))
+		mi.Set(key, val, nil)
+		if i%10 == 0 {
+			mi.Delete(key, nil, true /*lsm*/)
+			ndel++
+		}
+		keys = append(keys, key)
+	}
+	return mi, keys, ndel
+}
+
+func makeLLRBUpdate(n int, mi *llrb.LLRB) (*llrb.LLRB, [][]byte, int64) {
+	ndel, keys := int64(0), [][]byte{}
+	for i := 0; i < n; i++ {
+		ksize := 8 + rand.Intn(32)
+		fmsg := fmt.Sprintf("key%%0%vd", ksize)
+		key := []byte(fmt.Sprintf(fmsg, i))
+
+		vsize := ksize + rand.Intn(64)
+		fmsg = fmt.Sprintf("val%%0%vd", vsize)
+		val := []byte(fmt.Sprintf(fmsg, i))
 		mi.Set(key, val, nil)
 		if i%10 == 0 {
 			mi.Delete(key, nil, true /*lsm*/)
@@ -1260,11 +1381,13 @@ func makepaths1() []string {
 	return paths
 }
 
-func makepaths3() []string {
+func makepaths123(n int) []string {
 	path, paths := os.TempDir(), []string{}
 	dirs := []string{"1", "2", "3"}
-	n := 1 + (rand.Intn(len(dirs)*1000) % (len(dirs) - 1))
-	for _, base := range dirs[:n+1] {
+	if n < 0 {
+		n = 1 + (rand.Intn(1000) % len(dirs))
+	}
+	for _, base := range dirs[:n] {
 		paths = append(paths, filepath.Join(path, base))
 	}
 	return paths

@@ -15,6 +15,19 @@ func createfile(name string) *os.File {
 	return fd
 }
 
+func appendlinkfile(oldfile, newfile string) *os.File {
+	if oldfile != "" {
+		if err := os.Link(oldfile, newfile); err != nil {
+			panic(err)
+		}
+	}
+	fd, err := os.OpenFile(newfile, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		panic(fmt.Errorf("append file: %v", err))
+	}
+	return fd
+}
+
 func openfile(filename string, ismmap bool) (r io.ReaderAt) {
 	if ismmap {
 		r, err := mmap.Open(filename)
@@ -42,7 +55,7 @@ func closereadat(rd io.ReaderAt) error {
 	return nil
 }
 
-func filesize(r io.ReaderAt) int64 {
+func filesize(r interface{}) int64 {
 	if r == nil {
 		return 0
 	}
@@ -52,10 +65,17 @@ func filesize(r io.ReaderAt) int64 {
 
 	case *os.File:
 		fi, err := x.Stat()
-		if err == nil {
-			return int64(fi.Size())
+		if err != nil {
+			panic(err)
 		}
-		panic(err)
+		return int64(fi.Size())
+
+	case string:
+		fi, err := os.Stat(x)
+		if err != nil {
+			panic(err)
+		}
+		return fi.Size()
 	}
 	panic("unreachable code")
 }

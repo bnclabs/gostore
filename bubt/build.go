@@ -3,6 +3,8 @@ package bubt
 import "io"
 import "fmt"
 import "time"
+import "regexp"
+import "strconv"
 import "encoding/json"
 import "path/filepath"
 import "encoding/binary"
@@ -26,8 +28,11 @@ type Bubt struct {
 	mflusher   *bubtflusher
 	zflushers  []*bubtflusher
 	vflushers  []*bubtflusher
-	mdok       bool
 	headmblock *mblock
+	vlinks     []string
+	vfiles     []string
+	vmode      string
+	mdok       bool
 
 	// settings, will be flushed to the tip of indexfile.
 	mblocksize int64
@@ -69,12 +74,19 @@ func NewBubt(
 	}()
 
 	mfile := filepath.Join(mpath, name, "bubt-mindex.data")
-	if tree.mflusher, err = startflusher(0, -1, mfile); err != nil {
+	tree.mflusher, err = startflusher(0, -1, "", mfile, "create")
+	if err != nil {
 		panic(err)
 	}
 	// if zblocksize <= 0 then zpaths will be empty
 	tree.zflushers = tree.makezflushers(zpaths)
-	tree.vflushers = tree.makevflushers(zpaths)
+	// assume that vfiles are going to be created.
+	tree.vmode, tree.vfiles = "create", make([]string, len(zpaths))
+	tree.vlinks = make([]string, len(zpaths))
+	for idx, vpath := range zpaths {
+		fname := fmt.Sprintf("bubt-vlog-%d.data", idx+1)
+		tree.vfiles[idx] = filepath.Join(vpath, tree.name, fname)
+	}
 	return tree, nil
 }
 
@@ -84,13 +96,41 @@ func (tree *Bubt) TombstonePurge(what bool) {
 	tree.tombpurge = what
 }
 
+func (tree *Bubt) AppendValuelogs(vblocksize int64, valuelogs []string) {
+	if vblocksize <= 0 {
+		panic(fmt.Errorf("cannot set value log files with vblocksize <= 0"))
+
+	} else if len(valuelogs) != len(tree.zflushers) {
+		fmsg := "Cannot match value logs %v with z-index files %v"
+		panic(fmt.Errorf(fmsg, len(valuelogs), len(tree.zflushers)))
+	}
+	tree.vblocksize = vblocksize
+
+	re, _ := regexp.Compile("bubt-vlog-([0-9]+).data")
+	m := map[int]bool{}
+	for _, file := range valuelogs {
+		matches := re.FindStringSubmatch(filepath.Base(file))
+		vshard, err := strconv.Atoi(matches[1])
+		if err != nil || vshard < 1 {
+			panic(fmt.Errorf("invalid value log %q", file))
+		}
+		tree.vlinks[vshard-1] = file
+		m[vshard-1] = true
+	}
+	if len(m) != len(valuelogs) {
+		fmsg := "supplied value logs %v does not match with z-index files"
+		panic(fmt.Errorf(fmsg, valuelogs))
+	}
+	tree.vmode = "appendlink"
+}
+
 func (tree *Bubt) makezflushers(zpaths []string) []*bubtflusher {
 	zflushers := make([]*bubtflusher, 0)
 	for idx, zpath := range zpaths {
 		// boot zindex files.
 		fname := fmt.Sprintf("bubt-zindex-%d.data", idx+1)
 		zfile := filepath.Join(zpath, tree.name, fname)
-		zflusher, err := startflusher(idx+1, -1, zfile)
+		zflusher, err := startflusher(idx+1, -1, "", zfile, "create")
 		if err != nil {
 			panic(err)
 		}
@@ -99,33 +139,43 @@ func (tree *Bubt) makezflushers(zpaths []string) []*bubtflusher {
 	return zflushers
 }
 
-func (tree *Bubt) makevflushers(zpaths []string) []*bubtflusher {
+func (tree *Bubt) makevflushers(vfiles []string) ([]*bubtflusher, uint64) {
 	if tree.vblocksize <= 0 {
-		return nil
+		return nil, 0
 	}
-	vflushers := make([]*bubtflusher, 0)
-	for idx, zpath := range zpaths {
-		// boot value log files.
-		fname := fmt.Sprintf("bubt-vlog-%d.data", idx+1)
-		vfile := filepath.Join(zpath, tree.name, fname)
-		vflusher, err := startflusher(idx+1, tree.vblocksize, vfile)
+	vflushers, n_vblocks := make([]*bubtflusher, 0), int64(0)
+	for idx, vfile := range vfiles {
+		vlink, vsize := tree.vlinks[idx], tree.vblocksize
+		vflusher, err := startflusher(idx+1, vsize, vlink, vfile, tree.vmode)
 		if err != nil {
 			panic(err)
 		}
 		vflushers = append(vflushers, vflusher)
+		fsize := filesize(vfile)
+		if fsize > 0 {
+			if (fsize % tree.vblocksize) != 0 {
+				fmsg := "value log files size err %v %% %v"
+				panic(fmt.Errorf(fmsg, fsize, tree.vblocksize))
+			}
+			n_vblocks += (fsize / tree.vblocksize)
+		}
 	}
-	return vflushers
+	return vflushers, uint64(n_vblocks)
 }
 
 // Build starts building the tree from iterator, iterator is expected
 // to be a full-table scan over another data-store.
 func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
+	var n_vblocks uint64
+
 	debugf("%v starting bottoms up build ...\n", tree.logprefix)
+
+	tree.vflushers, n_vblocks = tree.makevflushers(tree.vfiles)
 
 	start := time.Now()
 	maxseqno, keymem, valmem := uint64(0), uint64(0), uint64(0)
 	n_count, n_deleted, paddingmem := int64(0), int64(0), int64(0)
-	n_zblocks, n_mblocks, n_vblocks := int64(0), uint64(0), uint64(0)
+	n_zblocks, n_mblocks := int64(0), uint64(0)
 	compiter := func(
 		fin bool) (key, val []byte, seqno uint64, del bool, e error) {
 

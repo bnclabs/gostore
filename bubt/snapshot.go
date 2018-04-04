@@ -92,17 +92,7 @@ func OpenSnapshot(
 	}
 	snap.rw.RLock()
 
-	// initialize the current capacity of zblock-files and its footprint.
-	snap.footprint = filesize(snap.readm)
-	snap.zsizes = make([]int64, len(snap.readzs))
-	for i := range snap.zfiles {
-		zsize := filesize(snap.readzs[i])
-		snap.footprint += zsize
-		if len(snap.readvs) > 0 {
-			snap.footprint += filesize(snap.readvs[i])
-		}
-		snap.zsizes[i] = zsize
-	}
+	snap.footprint = snap.diskfootprint()
 	snap.validatequick()
 	return
 }
@@ -246,6 +236,20 @@ func (snap *Snapshot) Footprint() int64 {
 	return snap.footprint
 }
 
+func (snap *Snapshot) diskfootprint() int64 {
+	footprint := filesize(snap.readm)
+	snap.zsizes = make([]int64, len(snap.readzs))
+	for i := range snap.zfiles {
+		zsize := filesize(snap.readzs[i])
+		footprint += zsize
+		if len(snap.readvs) > 0 {
+			footprint += filesize(snap.readvs[i])
+		}
+		snap.zsizes[i] = zsize
+	}
+	return footprint
+}
+
 // Metadata return metadata blob associated with this snapshot.
 func (snap *Snapshot) Metadata() []byte {
 	return snap.metadata
@@ -254,9 +258,9 @@ func (snap *Snapshot) Metadata() []byte {
 // Info return parameters used to build the snapshot and statistical
 // information.
 //
-//   mfile		: m-index file name.
-//   zfiles		: list of z-index file name.
-//   vfiles      : list of value log files for each each z-index, if present.
+//   mfile      : m-index file name.
+//   zfiles     : list of z-index file name.
+//   vfiles     : list of value log files for each each z-index, if present.
 //   zblocksize : block size used for z-index file.
 //   mblocksize : block size used for m-index file.
 //   vblocksize : block size used for value log.
@@ -401,8 +405,9 @@ func (snap *Snapshot) validatequick() {
 	computed += MarkerBlocksize * int64(len(snap.readzs))
 	computed += MarkerBlocksize * int64(len(snap.readvs))
 	if computed != snap.footprint {
-		fmsg := "computed footprint %v != actual %v"
-		panic(fmt.Errorf(fmsg, computed, snap.footprint))
+		fmsg := "computed footprint %v != actual %v (%v)"
+		diff := computed - snap.footprint
+		panic(fmt.Errorf(fmsg, computed, snap.footprint, diff))
 	}
 	// validate footprint ratio to payload, only if payload is more that
 	// seriouspayload (10 MB).

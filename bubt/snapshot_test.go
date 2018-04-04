@@ -6,7 +6,7 @@ import "math/rand"
 
 func TestValidate(t *testing.T) {
 	n := 1000000
-	paths := makepaths3()
+	paths := makepaths123(-1)
 	mi, _, _ := makeLLRB(n)
 	defer mi.Destroy()
 
@@ -41,7 +41,7 @@ func TestValidate(t *testing.T) {
 
 func TestLog(t *testing.T) {
 	n := 1000000
-	paths := makepaths3()
+	paths := makepaths123(-1)
 	mi, _, _ := makeLLRB(n)
 	defer mi.Destroy()
 
@@ -238,7 +238,7 @@ func makeBubt(n int) (*Snapshot, [][]byte) {
 	mi, keys, _ := makeLLRB(n)
 	defer mi.Destroy()
 
-	name, paths := "benchbubt", makepaths3()
+	name, paths := "benchbubt", makepaths123(-1)
 	bubt, err := NewBubt(name, paths, 4096 /*msize*/, 4096 /*zsize*/, 0)
 	if err != nil {
 		panic(err)
