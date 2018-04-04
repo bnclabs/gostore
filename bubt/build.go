@@ -96,6 +96,9 @@ func (tree *Bubt) TombstonePurge(what bool) {
 	tree.tombpurge = what
 }
 
+// AppendValuelogs builder should use `valuelogs` files instead of
+// creating a new set of value-logs corresponding to each z-index
+// files, vblocksize should be same as used while creating `valuelogs`.
 func (tree *Bubt) AppendValuelogs(vblocksize int64, valuelogs []string) {
 	if vblocksize <= 0 {
 		panic(fmt.Errorf("cannot set value log files with vblocksize <= 0"))
