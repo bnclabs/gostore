@@ -81,6 +81,7 @@ func YSort(a, b api.Iterator) api.Iterator {
 			bkey, bval, bseqno, bdel, berr = pull(b, fin, bkey, bval)
 			akey, aval, aseqno, adel, aerr = pull(a, fin, akey, aval)
 		}
+		//fmt.Printf("ysort %q %q %v %v %v\n", key, val, seqno, del, err)
 		return key, val, seqno, del, err
 	}
 }
