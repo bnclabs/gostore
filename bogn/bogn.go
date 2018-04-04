@@ -35,8 +35,7 @@ type Bogn struct {
 	dgmstate  int64
 	snapspin  uint64
 	// statistics
-	rdbytes int64
-	wrbytes int64
+	wramplification int64
 
 	name         string
 	epoch        time.Time
@@ -1477,11 +1476,13 @@ func (bogn *Bogn) indexfootprint(index api.Index) int64 {
 			return 0
 		}
 		return idx.Footprint()
+
 	case *llrb.MVCC:
 		if idx == nil {
 			return 0
 		}
 		return idx.Footprint()
+
 	case *bubt.Snapshot:
 		if idx == nil {
 			return 0
@@ -1489,6 +1490,21 @@ func (bogn *Bogn) indexfootprint(index api.Index) int64 {
 		return idx.Footprint()
 	}
 	panic("impossible case")
+}
+
+func (bogn *Bogn) diskwritebytes(disk api.Index) int64 {
+	if disk == nil {
+		return 0
+	}
+	switch index := disk.(type) {
+	case *bubt.Snapshot:
+		info := index.Info()
+		bogn.wramplification = info.Int64("keymem")
+		bogn.wramplification += info.Int64("valmem")
+		bogn.wramplification += info.Int64("paddingmem")
+		return bogn.wramplification
+	}
+	panic("unreachable code")
 }
 
 func (bogn *Bogn) diskmetadata(disk api.Index) map[string]interface{} {
@@ -1533,17 +1549,9 @@ func (bogn *Bogn) diskmetadata(disk api.Index) map[string]interface{} {
 }
 
 func (bogn *Bogn) addamplification(disks []api.Index, ndisk api.Index) {
-	wrbytes, rdbytes := int64(0), int64(0)
-	for _, disk := range disks {
-		if disk != nil {
-			rdbytes += bogn.indexfootprint(disk)
-		}
-	}
 	if ndisk != nil {
-		wrbytes += bogn.indexfootprint(ndisk)
+		atomic.AddInt64(&bogn.wramplification, bogn.diskwritebytes(ndisk))
 	}
-	atomic.AddInt64(&bogn.rdbytes, rdbytes)
-	atomic.AddInt64(&bogn.wrbytes, wrbytes)
 }
 
 func (bogn *Bogn) newuuid() string {
@@ -1556,7 +1564,6 @@ func (bogn *Bogn) newuuid() string {
 }
 
 func (bogn *Bogn) logstatistics() {
-	x := humanize.Bytes(uint64(atomic.LoadInt64(&bogn.rdbytes)))
-	y := humanize.Bytes(uint64(atomic.LoadInt64(&bogn.wrbytes)))
-	infof("%v amplifications read: %v, write: %v", bogn.logprefix, x, y)
+	n := humanize.Bytes(uint64(atomic.LoadInt64(&bogn.wramplification)))
+	infof("%v write amplifications write: %v", bogn.logprefix, n)
 }
