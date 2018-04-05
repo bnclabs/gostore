@@ -1489,7 +1489,7 @@ func (bogn *Bogn) indexfootprint(index api.Index) int64 {
 		}
 		return idx.Footprint()
 	}
-	panic("impossible case")
+	panic("unreachable code")
 }
 
 func (bogn *Bogn) diskwritebytes(disk api.Index) int64 {
@@ -1499,9 +1499,21 @@ func (bogn *Bogn) diskwritebytes(disk api.Index) int64 {
 	switch index := disk.(type) {
 	case *bubt.Snapshot:
 		info := index.Info()
-		bogn.wramplification = info.Int64("keymem")
-		bogn.wramplification += info.Int64("valmem")
-		bogn.wramplification += info.Int64("paddingmem")
+		zsize := info.Int64("zblocksize")
+		msize := info.Int64("mblocksize")
+		vsize := info.Int64("vblocksize")
+		bogn.wramplification = info.Int64("n_zblocks") * zsize
+		bogn.wramplification += info.Int64("n_mblocks") * msize
+		n_vblocks := info.Int64("n_vblocks")
+		n_ablocks := info.Int64("n_ablocks")
+		bogn.wramplification += (n_vblocks - n_ablocks) * vsize
+
+		numpaths := info.Int64("numpaths")
+		bogn.wramplification += numpaths * bubt.MarkerBlocksize
+		if vsize > 0 {
+			bogn.wramplification += numpaths * bubt.MarkerBlocksize
+		}
+
 		return bogn.wramplification
 	}
 	panic("unreachable code")
