@@ -146,7 +146,7 @@ func (tree *Bubt) makevflushers(vfiles []string) ([]*bubtflusher, uint64) {
 	if tree.vblocksize <= 0 {
 		return nil, 0
 	}
-	vflushers, n_vblocks := make([]*bubtflusher, 0), int64(0)
+	vflushers, n_ablocks := make([]*bubtflusher, 0), int64(0)
 	for idx, vfile := range vfiles {
 		vlink, vsize := tree.vlinks[idx], tree.vblocksize
 		vflusher, err := startflusher(idx+1, vsize, vlink, vfile, tree.vmode)
@@ -160,25 +160,23 @@ func (tree *Bubt) makevflushers(vfiles []string) ([]*bubtflusher, uint64) {
 				fmsg := "value log files size err %v %% %v"
 				panic(fmt.Errorf(fmsg, fsize, tree.vblocksize))
 			}
-			n_vblocks += (fsize / tree.vblocksize)
+			n_ablocks += (fsize / tree.vblocksize)
 		}
 	}
-	return vflushers, uint64(n_vblocks)
+	return vflushers, uint64(n_ablocks)
 }
 
 // Build starts building the tree from iterator, iterator is expected
 // to be a full-table scan over another data-store.
 func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
-	var n_vblocks uint64
-
 	debugf("%v starting bottoms up build ...\n", tree.logprefix)
 
-	tree.vflushers, n_vblocks = tree.makevflushers(tree.vfiles)
+	tree.vflushers, n_ablocks = tree.makevflushers(tree.vfiles)
 
 	start := time.Now()
 	maxseqno, keymem, valmem := uint64(0), uint64(0), uint64(0)
 	n_count, n_deleted, paddingmem := int64(0), int64(0), int64(0)
-	n_zblocks, n_mblocks := int64(0), uint64(0)
+	n_zblocks, n_mblocks, n_vblocks := int64(0), uint64(0), n_ablocks
 	compiter := func(
 		fin bool) (key, val []byte, seqno uint64, del bool, e error) {
 
@@ -441,6 +439,7 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 	block := make([]byte, MarkerBlocksize)
 	infoblock := s.Settings{
 		"name":       tree.name,
+		"numpaths":   len(tree.zflushers),
 		"zblocksize": tree.zblocksize,
 		"mblocksize": tree.mblocksize,
 		"vblocksize": tree.vblocksize,
@@ -453,6 +452,7 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 		"n_zblocks":  fmt.Sprintf("%d", n_zblocks),
 		"n_mblocks":  fmt.Sprintf("%d", n_mblocks),
 		"n_vblocks":  fmt.Sprintf("%d", n_vblocks),
+		"n_ablocks":  fmt.Sprintf("%d", n_ablocks),
 		"n_count":    fmt.Sprintf("%d", n_count),
 		"n_deleted":  fmt.Sprintf("%d", n_deleted),
 	}
