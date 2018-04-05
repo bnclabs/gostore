@@ -171,6 +171,8 @@ func (tree *Bubt) makevflushers(vfiles []string) ([]*bubtflusher, uint64) {
 func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 	debugf("%v starting bottoms up build ...\n", tree.logprefix)
 
+	var n_ablocks uint64
+
 	tree.vflushers, n_ablocks = tree.makevflushers(tree.vfiles)
 
 	start := time.Now()
