@@ -25,7 +25,13 @@ var Compacttick = time.Duration(1 * time.Second)
 //   findisk(bogn *Bogn, disks []api.Index, ndisk api.Index) error
 // dowindup(bogn *Bogn) error
 
-func compactor(bogn *Bogn) {
+func tombstonepurge(bogn *Bogn) {
+	ch := make(chan struct{})
+	bogn.compactorch <- []interface{}{"compact.tombstonepurge", ch}
+	<-ch
+}
+
+func compactor(bogn *Bogn, compactorch chan []interface{}) {
 	infof("%v starting compactor ...", bogn.logprefix)
 
 	defer func() {
@@ -57,6 +63,8 @@ func compactor(bogn *Bogn) {
 	// disks - list of disks to compact
 	// ndisk - compacted {level,version} of `disks`
 	var disks []api.Index
+	var cmd []interface{}
+	var what string
 
 loop:
 	for range ticker.C {
@@ -69,10 +77,16 @@ loop:
 
 		if respch == nil { // try to start disk compaction.
 			var nextlevel int
-			var what string
-			disks, nextlevel, what = bogn.pickcompactdisks()
+			select {
+			case cmd = <-compactorch:
+			default:
+				cmd = nil
+			}
+			disks, nextlevel, what = bogn.pickcompactdisks(cmd)
 			if nextlevel >= 0 {
 				respch, errch = startdisk(bogn, disks, nextlevel, what)
+			} else {
+				disks, what, cmd = nil, "", nil
 			}
 		}
 
@@ -82,7 +96,10 @@ loop:
 				if err := findisk(bogn, disks, ndisk); err != nil {
 					panic(err)
 				}
-				disks, respch, errch = nil, nil, nil
+				if cmd != nil && what == "compact.tombstonepurge" {
+					close(cmd[1].(chan struct{}))
+				}
+				disks, respch, errch, what, cmd = nil, nil, nil, "", nil
 				if bogn.isclosed() {
 					break loop
 				}
@@ -175,7 +192,7 @@ func dopersist(bogn *Bogn) (err error) {
 	// iterate on snap.mw
 	iter, uuid := snap.persistiterator(), bogn.newuuid()
 	ndisk, err := bogn.builddiskstore(
-		level, nversion, uuid, "" /*flushunix*/, disksetts, iter,
+		level, nversion, uuid, "" /*flushunix*/, disksetts, iter, "persist",
 	)
 	if err != nil {
 		return err
@@ -267,7 +284,7 @@ func doflush(bogn *Bogn, disks []api.Index, overf, elapsed bool) (err error) {
 	uuid = bogn.newuuid()
 	iter := snap.flushiterator(fdisks)
 	ndisk, err := bogn.builddiskstore(
-		nlevel, nversion, uuid, "" /*flushunix*/, disksetts, iter,
+		nlevel, nversion, uuid, "" /*flushunix*/, disksetts, iter, what,
 	)
 	if err != nil {
 		return err
@@ -338,7 +355,7 @@ func startdisk(
 		infof(fmsg, bogn.logprefix, what, strings.Join(ids, " + "))
 
 		ndisk, err := bogn.builddiskstore(
-			nlevel, nversion, uuid, flushunix, disksetts, iter,
+			nlevel, nversion, uuid, flushunix, disksetts, iter, what,
 		)
 		if err != nil {
 			errch <- err
@@ -418,7 +435,7 @@ func dowindup(bogn *Bogn) error {
 
 	iter, uuid := snap.windupiterator(purgedisk), bogn.newuuid()
 	ndisk, err := bogn.builddiskstore(
-		nlevel, nversion, uuid, "" /*flushunix*/, disksetts, iter,
+		nlevel, nversion, uuid, "" /*flushunix*/, disksetts, iter, "windup",
 	)
 	if err != nil {
 		return err

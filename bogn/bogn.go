@@ -43,6 +43,7 @@ type Bogn struct {
 	diskversions [16]int
 	finch        chan struct{}
 	snaprw       sync.RWMutex
+	compactorch  chan []interface{}
 	txnmeta
 
 	// bogn settings
@@ -394,8 +395,9 @@ func (bogn *Bogn) mvccfromdisk(
 // started as:
 //   inst := NewBogn("storage", setts).Start()
 func (bogn *Bogn) Start() *Bogn {
+	bogn.compactorch = make(chan []interface{}, 1)
 	go purger(bogn)
-	go compactor(bogn)
+	go compactor(bogn, bogn.compactorch)
 
 	// wait until all routines have started.
 	for atomic.LoadInt64(&bogn.nroutines) < 2 {
@@ -552,13 +554,13 @@ func (bogn *Bogn) pickflushdisk(
 	var ok bool
 
 	if fdisks, nlevel, ok = bogn.pickflushdisk1(cdisks); ok {
-		return fdisks, nlevel, "fresh"
+		return fdisks, nlevel, "flush.fresh"
 	} else if fdisks, nlevel, ok = bogn.pickflushdisk2(cdisks); ok {
-		return fdisks, nlevel, "aggressive"
+		return fdisks, nlevel, "flush.aggressive"
 	} else if fdisks, nlevel, ok = bogn.pickflushdisk3(cdisks); ok {
-		return fdisks, nlevel, "fallback"
+		return fdisks, nlevel, "flush.fallback"
 	} else if fdisks, nlevel, ok = bogn.pickflushdisk4(cdisks); ok {
-		return fdisks, nlevel, "merge"
+		return fdisks, nlevel, "flush.merge"
 	}
 	panic("unreachable code")
 }
@@ -641,27 +643,53 @@ func (bogn *Bogn) pickflushdisk4(
 	return []api.Index{latestdisk}, snap.nextbutlevel(latestlevel), ok
 }
 
-func (bogn *Bogn) pickcompactdisks() (
+func (bogn *Bogn) pickcompactdisks(cmd []interface{}) (
 	disks []api.Index, nextlevel int, what string) {
 
 	var ok bool
 
-	if disks, nextlevel, ok = bogn.pickcompactdisks1(); ok {
-		return disks, nextlevel, "none"
+	// "offlinemerge", "persist"
+	if disks, nextlevel, ok = bogn.pickcompactdisks1(cmd); ok {
+		return disks, nextlevel, "compact.tombstonepurge"
 	} else if disks, nextlevel, ok = bogn.pickcompactdisks2(); ok {
-		return disks, nextlevel, "aggressive"
+		return disks, nextlevel, "compact.none"
 	} else if disks, nextlevel, ok = bogn.pickcompactdisks3(); ok {
-		return disks, nextlevel, "ratio"
+		return disks, nextlevel, "compact.aggressive"
 	} else if disks, nextlevel, ok = bogn.pickcompactdisks4(); ok {
-		return disks, nextlevel, "period"
+		return disks, nextlevel, "compact.ratio"
 	} else if disks, nextlevel, ok = bogn.pickcompactdisks5(); ok {
-		return disks, nextlevel, "self"
+		return disks, nextlevel, "compact.period"
+	} else if disks, nextlevel, ok = bogn.pickcompactdisks6(); ok {
+		return disks, nextlevel, "compact.self"
 	}
 	return nil, -1, "none"
 }
 
+// tombstone purge for the last level
+func (bogn *Bogn) pickcompactdisks1(cmd []interface{}) (
+	cdisks []api.Index, nextlevel int, ok bool) {
+
+	snap := bogn.currsnapshot()
+	disks := snap.disklevels([]api.Index{})
+
+	if cmd == nil || len(cmd) == 0 {
+		return nil, -1, false
+	} else if op := cmd[0].(string); op != "compact.tombstonepurge" {
+		return nil, -1, false
+	} else if len(disks) == 0 {
+		return nil, -1, false
+	}
+
+	disk := disks[len(disks)-1]
+	level, _, _ := bogn.path2level(disk.ID())
+	if level != len(snap.disks)-1 {
+		panic("impossible situation")
+	}
+	return []api.Index{disk}, snap.nextbutlevel(level), true
+}
+
 // no compaction: there is only one disk level
-func (bogn *Bogn) pickcompactdisks1() (
+func (bogn *Bogn) pickcompactdisks2() (
 	cdisks []api.Index, nextlevel int, ok bool) {
 
 	snap := bogn.currsnapshot()
@@ -674,7 +702,7 @@ func (bogn *Bogn) pickcompactdisks1() (
 
 // aggressive compaction, if number of levels is more than 3 then
 // compact without checking for compactratio or compactperiod.
-func (bogn *Bogn) pickcompactdisks2() (
+func (bogn *Bogn) pickcompactdisks3() (
 	cdisks []api.Index, nextlevel int, ok bool) {
 
 	snap := bogn.currsnapshot()
@@ -690,7 +718,7 @@ func (bogn *Bogn) pickcompactdisks2() (
 }
 
 // check whether ratio between two snapshot's payload exceeds compactratio.
-func (bogn *Bogn) pickcompactdisks3() (
+func (bogn *Bogn) pickcompactdisks4() (
 	cdisks []api.Index, nextlevel int, ok bool) {
 
 	snap := bogn.currsnapshot()
@@ -709,7 +737,7 @@ func (bogn *Bogn) pickcompactdisks3() (
 }
 
 // check whether disk's lifetime exceeds compact period.
-func (bogn *Bogn) pickcompactdisks4() (
+func (bogn *Bogn) pickcompactdisks5() (
 	cdisks []api.Index, nextlevel int, ok bool) {
 
 	snap := bogn.currsnapshot()
@@ -727,7 +755,7 @@ func (bogn *Bogn) pickcompactdisks4() (
 	return nil, -1, false
 }
 
-func (bogn *Bogn) pickcompactdisks5() (
+func (bogn *Bogn) pickcompactdisks6() (
 	cdisks []api.Index, nextlevel int, ok bool) {
 
 	snap := bogn.currsnapshot()
@@ -923,6 +951,13 @@ func (bogn *Bogn) validatedisklevel(
 	return maxseqno
 }
 
+// TombstonePurge call will remove all entries marked as deleted from
+// the oldest and top-most disk level, provided the highest seqno stored
+// in that level is less that `seqno`.
+func (bogn *Bogn) TombstonePurge() {
+	tombstonepurge(bogn)
+}
+
 // Close this instance, no calls allowed after Close.
 func (bogn *Bogn) Close() {
 	bogn.logstatistics()
@@ -1097,12 +1132,12 @@ func (bogn *Bogn) newmemstore(level string, seqno uint64) (api.Index, error) {
 
 func (bogn *Bogn) builddiskstore(
 	level, version int, sha, flushunix string, settstodisk s.Settings,
-	iter api.Iterator) (index api.Index, err error) {
+	iter api.Iterator, what string) (index api.Index, err error) {
 
 	switch bogn.diskstore {
 	case "bubt":
 		index, err = bogn.builddiskbubt(
-			level, version, sha, flushunix, settstodisk, iter,
+			level, version, sha, flushunix, settstodisk, iter, what,
 		)
 		infof("%v new bubt snapshot %q", bogn.logprefix, index.ID())
 		return
@@ -1112,7 +1147,7 @@ func (bogn *Bogn) builddiskstore(
 
 func (bogn *Bogn) builddiskbubt(
 	level, version int, sha, flushunix string, settstodisk s.Settings,
-	iter api.Iterator) (index api.Index, err error) {
+	iter api.Iterator, what string) (index api.Index, err error) {
 
 	// book-keep largest seqno for this snapshot.
 	var diskseqno, count uint64
@@ -1143,6 +1178,9 @@ func (bogn *Bogn) builddiskbubt(
 	if err != nil {
 		errorf("%v NewBubt(): %v", bogn.logprefix, err)
 		return nil, err
+	}
+	if what == "compact.tombstonepurge" {
+		bt.TombstonePurge(true)
 	}
 
 	// build
@@ -1350,7 +1388,7 @@ func (bogn *Bogn) mergedisksnapshots(disks []api.Index) error {
 	diskversions := bogn.getdiskversions(disks[0])
 	version := diskversions[level] + 1
 	ndisk, err := bogn.builddiskstore(
-		level, version, uuid, flushunix, disksetts, iter,
+		level, version, uuid, flushunix, disksetts, iter, "offlinemerge",
 	)
 	if err != nil {
 		return err
