@@ -139,7 +139,8 @@ func makeflusher(bogn *Bogn) func([]api.Index) error {
 
 	stra := humanize.Bytes(uint64(bogn.memcapacity))
 	strb := humanize.Bytes(uint64(mwthreshold))
-	infof("%v start memory threshold at %v of %v\n", bogn.logprefix, strb, stra)
+	fmsg := "%v start memory threshold at %v of %v\n"
+	infof(fmsg, bogn.logprefix, strb, stra)
 
 	return func(disks []api.Index) error {
 		snap := bogn.currsnapshot()
@@ -184,20 +185,30 @@ func dopersist(bogn *Bogn) (err error) {
 	infof("%v dopersist ...", bogn.logprefix)
 
 	snap := bogn.currsnapshot()
+	if !snap.isdirty() {
+		fmsg := "%v no new mutations on snapshot %v"
+		infof(fmsg, bogn.logprefix, snap.id)
+	}
 
 	level := len(snap.disks) - 1
 	nversion := bogn.nextdiskversion(level)
 	disksetts := bogn.settingstodisk()
 
 	// iterate on snap.mw
-	iter, uuid := snap.persistiterator(), bogn.newuuid()
+	itere, uuid := snap.persistiterator(), bogn.newuuid()
 	ndisk, err := bogn.builddiskstore(
-		level, nversion, uuid, "" /*flushunix*/, disksetts, iter, "persist",
+		level, nversion, uuid, "" /*flushunix*/, disksetts, itere,
+		"" /*appendid*/, nil /*valuelogs*/, "persist",
 	)
 	if err != nil {
 		return err
 	}
-	iter(true /*fin*/)
+	itere(true /*fin*/)
+	bogn.addamplification(ndisk)
+	lastseqno := bogn.getdiskseqno(ndisk)
+
+	fmsg := "%v doperist: snapshot %v moved ahead from %v to %v"
+	infof(fmsg, bogn.logprefix, snap.id, snap.beginseqno, lastseqno)
 
 	// organise the next set of stores, keep the write-store as it is
 	// and update the latest disk store.
@@ -208,8 +219,7 @@ func dopersist(bogn *Bogn) (err error) {
 		bogn.snaplock()
 		defer bogn.snapunlock()
 
-		seqno := bogn.Getseqno()
-		head := newsnapshot(bogn, snap.mw, nil, nil, disks, uuid, seqno)
+		head := newsnapshot(bogn, snap.mw, nil, nil, disks, uuid, lastseqno)
 		head.yget = head.mw.Get
 		atomic.StorePointer(&head.next, unsafe.Pointer(snap))
 		head.refer()
@@ -218,7 +228,7 @@ func dopersist(bogn *Bogn) (err error) {
 		snap.addtopurge(snap.disklevels([]api.Index{})...)
 		snap.release()
 
-		fmsg := "%v new snapshot %v after persistance %v"
+		fmsg = "%v new snapshot %v after persistance %v"
 		infof(fmsg, snap.bogn.logprefix, head.attributes(), ndisk.ID())
 	}()
 
@@ -226,6 +236,7 @@ func dopersist(bogn *Bogn) (err error) {
 }
 
 func doflush(bogn *Bogn, disks []api.Index, overf, elapsed bool) (err error) {
+	infof("%v doflush ...", bogn.logprefix)
 	cause := "overflow"
 	if overf && elapsed {
 		panic(fmt.Errorf("impossible situation"))
@@ -236,6 +247,11 @@ func doflush(bogn *Bogn, disks []api.Index, overf, elapsed bool) (err error) {
 	}
 
 	fdisks, nlevel, what := bogn.pickflushdisk(disks)
+	if nlevel < 0 {
+		infof("%v skipping flush %q", bogn.logprefix, what)
+		return nil
+	}
+
 	ids := []string{"mw", "mc"}
 	for _, d := range fdisks {
 		ids = append(ids, d.ID())
@@ -243,7 +259,7 @@ func doflush(bogn *Bogn, disks []api.Index, overf, elapsed bool) (err error) {
 	fmsg := "%v doflush (%v) as %q for %v"
 	infof(fmsg, bogn.logprefix, cause, what, strings.Join(ids, " + "))
 
-	var mwseqno uint64
+	var from, mwseqno uint64
 
 	snap := bogn.currsnapshot()
 	uuid := bogn.newuuid()
@@ -251,15 +267,17 @@ func doflush(bogn *Bogn, disks []api.Index, overf, elapsed bool) (err error) {
 		bogn.snaplock()
 		defer bogn.snapunlock()
 
-		fmsg := "%v snapshot %v moved ahead from %v to %v (heap: %v)"
-		from, bgheap := snap.beginseqno, humanize.Bytes(uint64(snap.memheap()))
-		mwseqno = snap.mwseqno()
+		fmsg := "%v doflush: snapshot %v moved ahead from %v to %v (heap: %v)"
+		from, mwseqno = snap.beginseqno, snap.mwseqno()
+		bgheap := humanize.Bytes(uint64(snap.memheap()))
 		infof(fmsg, bogn.logprefix, snap.id, from, mwseqno, bgheap)
 
 		var mw api.Index
 		if mw, err = bogn.newmemstore("mw", mwseqno); err != nil {
 			panic(err) // should never happen
 		}
+		// it is expected that all mutations uptil mwseqno, the last
+		// mutation on `snap`, will be flushed to disk.
 		head := newsnapshot(
 			bogn, mw, snap.mw, snap.mc, snap.disks, uuid, mwseqno,
 		)
@@ -278,20 +296,28 @@ func doflush(bogn *Bogn, disks []api.Index, overf, elapsed bool) (err error) {
 	disksetts := bogn.settingstodisk()
 
 	// Finalize mr level, wait for read snapshot to catch up with tip.
+	// it is safe to call finalize on `mr` because write operations are
+	// not going to be on the new created `mw`.
 	snap.finalizeindex(snap.mr)
 
 	// iterate on snap.mr [+ snap.mc] [+ fdisks]
 	uuid = bogn.newuuid()
-	iter := snap.flushiterator(fdisks)
+	itere := snap.flushiterator(fdisks)
+	appendid, valuelogs := bogn.indexvaluelogs(fdisks)
 	ndisk, err := bogn.builddiskstore(
-		nlevel, nversion, uuid, "" /*flushunix*/, disksetts, iter, what,
+		nlevel, nversion, uuid, "" /*flushunix*/, disksetts, itere,
+		appendid, valuelogs, what,
 	)
 	if err != nil {
 		return err
 	}
-	iter(true /*fin*/)
+	itere(true /*fin*/)
 
-	bogn.addamplification(fdisks, ndisk)
+	bogn.addamplification(ndisk)
+
+	if lastseqno := bogn.getdiskseqno(ndisk); lastseqno != mwseqno {
+		panic(fmt.Errorf("lastseqno(%v) != mwseqno(%v)", lastseqno, mwseqno))
+	}
 
 	var ndisks [16]api.Index
 	copy(ndisks[:], snap.disks[:])
@@ -340,7 +366,7 @@ func startdisk(
 
 	disk0 := disks[0]
 	respch, errch := make(chan api.Index, 1), make(chan error, 1)
-	iter, uuid := compactiterator(disks), bogn.newuuid()
+	itere, uuid := compactiterator(disks), bogn.newuuid()
 	nversion := bogn.nextdiskversion(nlevel)
 	disksetts := (s.Settings{}).Mixin(bogn.settingsfromdisk(disk0))
 	flushunix := bogn.getflushunix(disk0)
@@ -349,21 +375,23 @@ func startdisk(
 	for _, disk := range disks {
 		ids = append(ids, disk.ID())
 	}
+	appendid, valuelogs := bogn.indexvaluelogs(disks)
 
 	go func() {
 		fmsg := "%v start disk compaction (%v) %v ..."
 		infof(fmsg, bogn.logprefix, what, strings.Join(ids, " + "))
 
 		ndisk, err := bogn.builddiskstore(
-			nlevel, nversion, uuid, flushunix, disksetts, iter, what,
+			nlevel, nversion, uuid, flushunix, disksetts, itere,
+			appendid, valuelogs, what,
 		)
 		if err != nil {
 			errch <- err
 			return
 		}
-		iter(true /*fin*/)
+		itere(true /*fin*/)
 
-		bogn.addamplification(disks, ndisk)
+		bogn.addamplification(ndisk)
 
 		respch <- ndisk
 	}()
@@ -416,7 +444,7 @@ func dowindup(bogn *Bogn) error {
 		infof("%v no new mutations on snapshot %v", bogn.logprefix, snap.id)
 		return nil
 	}
-	fmsg := "%v snapshot %v moved ahead from %v to %v (heap: %v)"
+	fmsg := "%v dowindup: snapshot %v moved ahead from %v to %v (heap: %v)"
 	mwseqno, bgheap := snap.mwseqno(), humanize.Bytes(uint64(snap.memheap()))
 	infof(fmsg, bogn.logprefix, snap.id, snap.beginseqno, mwseqno, bgheap)
 
@@ -433,16 +461,18 @@ func dowindup(bogn *Bogn) error {
 	// Finalize mw level, to catch up with tip.
 	snap.finalizeindex(snap.mw)
 
-	iter, uuid := snap.windupiterator(purgedisk), bogn.newuuid()
+	itere, uuid := snap.windupiterator(purgedisk), bogn.newuuid()
+	appendid, valuelogs := bogn.indexvaluelogs([]api.Index{purgedisk})
 	ndisk, err := bogn.builddiskstore(
-		nlevel, nversion, uuid, "" /*flushunix*/, disksetts, iter, "windup",
+		nlevel, nversion, uuid, "" /*flushunix*/, disksetts, itere,
+		appendid, valuelogs, "windup",
 	)
 	if err != nil {
 		return err
 	}
-	iter(true /*fin*/)
+	itere(true /*fin*/)
 
-	bogn.addamplification([]api.Index{purgedisk}, ndisk)
+	bogn.addamplification(ndisk)
 
 	var disks [16]api.Index
 	copy(disks[:], snap.disks[:])

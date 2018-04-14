@@ -17,16 +17,16 @@ func TestValidate(t *testing.T) {
 	zsize := []int64{0, msize, msize * 2}[rand.Intn(100000)%2]
 	vsize := []int64{0, zsize, zsize * 2}[rand.Intn(100000)%2]
 	mmap := []bool{false, true}[rand.Intn(10000)%2]
-	t.Logf("zsize: %v, vsize: 0, mmap: %v", zsize, mmap)
+	t.Logf("zsize: %v, vsize: %v, mmap: %v", zsize, vsize, mmap)
 	bubt, err := NewBubt(name, paths, msize, zsize, vsize)
 	if err != nil {
 		t.Fatal(err)
 	}
-	miter := mi.Scan()
-	if err := bubt.Build(miter, []byte("this is metadata")); err != nil {
+	mitere := mi.ScanEntries()
+	if err := bubt.Build(mitere, []byte("this is metadata")); err != nil {
 		t.Fatal(err)
 	}
-	miter(true /*fin*/)
+	mitere(true /*fin*/)
 	bubt.Close()
 
 	snap, err := OpenSnapshot(name, paths, mmap)
@@ -57,11 +57,11 @@ func TestLog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	miter := mi.Scan()
-	if err := bubt.Build(miter, []byte("this is metadata")); err != nil {
+	mitere := mi.ScanEntries()
+	if err := bubt.Build(mitere, []byte("this is metadata")); err != nil {
 		t.Fatal(err)
 	}
-	miter(true /*fin*/)
+	mitere(true /*fin*/)
 	bubt.Close()
 
 	snap, err := OpenSnapshot(name, paths, mmap)
@@ -75,7 +75,7 @@ func TestLog(t *testing.T) {
 }
 
 func BenchmarkSnapCount(b *testing.B) {
-	snap, _ := makeBubt(10000)
+	snap, _ := makeBubt(10000, 4096, 4096, 0)
 	defer snap.Destroy()
 	defer snap.Close()
 
@@ -90,7 +90,7 @@ func BenchmarkSnapGet(b *testing.B) {
 	if n < 1000 {
 		n = 1000
 	}
-	snap, keys := makeBubt(n)
+	snap, keys := makeBubt(n, 4096, 4096, 0)
 	defer snap.Destroy()
 	defer snap.Close()
 
@@ -105,11 +105,45 @@ func BenchmarkSnapScan(b *testing.B) {
 	if n < 1000 {
 		n = 1000
 	}
-	snap, _ := makeBubt(n)
+	snap, _ := makeBubt(n, 4096, 4096, 0)
 	defer snap.Destroy()
 	defer snap.Close()
 
 	iter := snap.Scan()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		iter(false /*fin*/)
+	}
+	iter(true /*fin*/)
+}
+
+func BenchmarkSnapScanEntries(b *testing.B) {
+	n := b.N
+	if n < 1000 {
+		n = 1000
+	}
+	snap, _ := makeBubt(n, 4096, 4096, 0)
+	defer snap.Destroy()
+	defer snap.Close()
+
+	iter := snap.ScanEntries()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		iter(false /*fin*/)
+	}
+	iter(true /*fin*/)
+}
+
+func BenchmarkSnapScanEntriesV(b *testing.B) {
+	n := b.N
+	if n < 1000 {
+		n = 1000
+	}
+	snap, _ := makeBubt(n, 4096, 4096, 4096)
+	defer snap.Destroy()
+	defer snap.Close()
+
+	iter := snap.ScanEntries()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		iter(false /*fin*/)
@@ -122,7 +156,7 @@ func BenchmarkSnapView(b *testing.B) {
 	if n < 1000 {
 		n = 1000
 	}
-	snap, _ := makeBubt(n)
+	snap, _ := makeBubt(n, 4096, 4096, 0)
 	defer snap.Destroy()
 	defer snap.Close()
 
@@ -137,7 +171,7 @@ func BenchmarkViewGet(b *testing.B) {
 	if n < 1000 {
 		n = 1000
 	}
-	snap, keys := makeBubt(n)
+	snap, keys := makeBubt(n, 4096, 4096, 0)
 	defer snap.Destroy()
 	defer snap.Close()
 
@@ -154,7 +188,7 @@ func BenchmarkViewCursor(b *testing.B) {
 	if n < 1000 {
 		n = 1000
 	}
-	snap, _ := makeBubt(n)
+	snap, _ := makeBubt(n, 4096, 4096, 0)
 	defer snap.Destroy()
 	defer snap.Close()
 
@@ -171,7 +205,7 @@ func BenchmarkCursorKey(b *testing.B) {
 	if n < 1000 {
 		n = 1000
 	}
-	snap, _ := makeBubt(n)
+	snap, _ := makeBubt(n, 4096, 4096, 0)
 	defer snap.Destroy()
 	defer snap.Close()
 
@@ -191,7 +225,7 @@ func BenchmarkCursorValue(b *testing.B) {
 	if n < 1000 {
 		n = 1000
 	}
-	snap, _ := makeBubt(n)
+	snap, _ := makeBubt(n, 4096, 4096, 0)
 	defer snap.Destroy()
 	defer snap.Close()
 
@@ -207,7 +241,7 @@ func BenchmarkCursorValue(b *testing.B) {
 }
 
 func BenchmarkCursorGetNext(b *testing.B) {
-	snap, _ := makeBubt(b.N)
+	snap, _ := makeBubt(b.N, 4096, 4096, 0)
 	defer snap.Destroy()
 	defer snap.Close()
 
@@ -221,7 +255,7 @@ func BenchmarkCursorGetNext(b *testing.B) {
 }
 
 func BenchmarkCursorYNext(b *testing.B) {
-	snap, _ := makeBubt(b.N)
+	snap, _ := makeBubt(b.N, 4096, 4096, 0)
 	defer snap.Destroy()
 	defer snap.Close()
 
@@ -234,23 +268,23 @@ func BenchmarkCursorYNext(b *testing.B) {
 	view.Abort()
 }
 
-func makeBubt(n int) (*Snapshot, [][]byte) {
+func makeBubt(n int, msize, zsize, vsize int64) (*Snapshot, [][]byte) {
 	mi, keys, _ := makeLLRB(n)
 	defer mi.Destroy()
 
 	name, paths := "benchbubt", makepaths123(-1)
-	bubt, err := NewBubt(name, paths, 4096 /*msize*/, 4096 /*zsize*/, 0)
+	bubt, err := NewBubt(name, paths, msize, zsize, vsize)
 	if err != nil {
 		panic(err)
 	}
-	miter := mi.Scan()
-	if err := bubt.Build(miter, []byte("this is metadata")); err != nil {
+	mitere := mi.ScanEntries()
+	if err := bubt.Build(mitere, []byte("this is metadata")); err != nil {
 		panic(err)
 	}
-	miter(true /*fin*/)
+	mitere(true /*fin*/)
 	bubt.Close()
 
-	snap, err := OpenSnapshot(name, paths, true /*mmap*/)
+	snap, err := OpenSnapshot(name, paths, false /*mmap*/)
 	if err != nil {
 		panic(err)
 	}

@@ -6,6 +6,10 @@ type Getter func(key, value []byte) (val []byte, cas uint64, del, ok bool)
 // Iterator function to iterate on each indexed entry in sort order.
 type Iterator func(fin bool) (key, val []byte, seqno uint64, del bool, e error)
 
+// EntryIterator function to iterate on each indexed entry in sort order.
+// Returned IndexEntry is valid only till next call to the EntryIterator.
+type EntryIterator func(fin bool) IndexEntry
+
 // Index defines basic set of index operations that are mandated.
 type Index interface {
 	// ID is same as the name supplied while creating the index instance.
@@ -35,6 +39,9 @@ type Index interface {
 
 	// Scan return a full table iterator.
 	Scan() Iterator
+
+	// ScanEntries return a full table iterator.
+	ScanEntries() EntryIterator
 
 	// BeginTxn starts a read-write transaction. Transactions must
 	// satisfy ACID properties. Finally all transactor objects must
@@ -121,4 +128,21 @@ type Cursor interface {
 	// YNext implements Iterator api, to iterate over the index. Typically
 	// used for lsm-sort.
 	YNext(fin bool) (key, val []byte, seqno uint64, deleted bool, err error)
+}
+
+// IndexEntry interface can be used to access individual fields in an entry.
+type IndexEntry interface {
+	// ID return the index id.
+	ID() string
+
+	// Key return entry's key, mutation seqno and whether entry is marked
+	// deleted. If entry is last entry, error will be io.EOF.
+	Key() (key []byte, seqno uint64, deleted bool, err error)
+
+	// Value return entry's value. If entry is empty, returns nil.
+	Value() []byte
+
+	// Valueref returns reference to value, if value is stored in separate
+	// file, else vpos will be -1.
+	Valueref() (valuelen uint64, vpos int64)
 }

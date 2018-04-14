@@ -647,6 +647,7 @@ func (llrb *LLRB) Scan() api.Iterator {
 
 	var err error
 	leseqno := llrb.startscan(nil, sb, 0)
+
 	return func(fin bool) ([]byte, []byte, uint64, bool, error) {
 		if err != nil {
 			return nil, nil, 0, false, err
@@ -667,6 +668,41 @@ func (llrb *LLRB) Scan() api.Iterator {
 			return nil, nil, 0, false, err
 		}
 		return key, value, seqno, deleted, nil
+	}
+}
+
+// ScanEntries return a full table iterator, if iteration is stopped
+// before reaching end of table (io.EOF), application should call
+// iterator with fin as true. EG: iter(true)
+func (llrb *LLRB) ScanEntries() api.EntryIterator {
+	currkey := []byte(nil)
+	sb := makescanbuf()
+
+	re := &indexentry{id: llrb.ID()}
+	leseqno := llrb.startscan(nil, sb, 0)
+
+	return func(fin bool) api.IndexEntry {
+		if re.err != nil {
+			return re
+
+		} else if fin {
+			sb = nil
+			return re.set(nil, nil, 0, false, io.EOF)
+		}
+
+		key, value, seqno, deleted := sb.pop()
+		if key == nil { // prefetch is nil
+			llrb.startscan(currkey, sb, leseqno)
+			key, value, seqno, deleted = sb.pop()
+		}
+
+		if key == nil { // iteration has finished
+			sb = nil
+			return re.set(nil, nil, 0, false, io.EOF)
+		}
+		currkey = lib.Fixbuffer(currkey, int64(len(key)))
+		copy(currkey, key)
+		return re.set(key, value, seqno, deleted, nil)
 	}
 }
 

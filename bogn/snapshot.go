@@ -31,6 +31,8 @@ type snapshot struct {
 	cachech chan *setcache
 }
 
+// beginseqno: to detect whether there are any non-durable mutations
+// held by this snapshot.
 func opensnapshot(
 	bogn *Bogn, mw api.Index, disks [16]api.Index,
 	beginseqno uint64) (*snapshot, error) {
@@ -64,6 +66,8 @@ func opensnapshot(
 	return head, nil
 }
 
+// beginseqno: to detect whether there are any non-durable mutations
+// held by this snapshot.
 func newsnapshot(
 	bogn *Bogn, mw, mr, mc api.Index, disks [16]api.Index,
 	uuid string, beginseqno uint64) *snapshot {
@@ -300,48 +304,48 @@ func (snap *snapshot) iterator() api.Iterator {
 }
 
 // iterate on write store.
-func (snap *snapshot) persistiterator() api.Iterator {
+func (snap *snapshot) persistiterator() api.EntryIterator {
 	if snap.mw != nil {
-		return snap.mw.Scan()
+		return snap.mw.ScanEntries()
 	}
 	return nil
 }
 
 // iterate on write store, read store, cache store and a latest disk store.
-func (snap *snapshot) flushiterator(disks []api.Index) api.Iterator {
-	var ref [20]api.Iterator
+func (snap *snapshot) flushiterator(disks []api.Index) api.EntryIterator {
+	var ref [20]api.EntryIterator
 	scans := ref[:0]
 
-	if iter := snap.mr.Scan(); iter != nil {
-		scans = append(scans, iter)
+	if itere := snap.mr.ScanEntries(); itere != nil {
+		scans = append(scans, itere)
 	}
 	if snap.mc != nil {
-		if iter := snap.mc.Scan(); iter != nil {
-			scans = append(scans, iter)
+		if itere := snap.mc.ScanEntries(); itere != nil {
+			scans = append(scans, itere)
 		}
 	}
 	for _, disk := range disks {
-		if iter := disk.Scan(); iter != nil {
-			scans = append(scans, iter)
+		if itere := disk.ScanEntries(); itere != nil {
+			scans = append(scans, itere)
 		}
 	}
-	return reduceiter(scans)
+	return reduceitere(scans)
 }
 
-func (snap *snapshot) windupiterator(disk api.Index) api.Iterator {
-	var ref [20]api.Iterator
+func (snap *snapshot) windupiterator(disk api.Index) api.EntryIterator {
+	var ref [20]api.EntryIterator
 	scans := ref[:0]
 
-	if iter := snap.mw.Scan(); iter != nil {
-		scans = append(scans, iter)
+	if itere := snap.mw.ScanEntries(); itere != nil {
+		scans = append(scans, itere)
 	}
 	if disk != nil {
-		if iter := disk.Scan(); iter != nil {
-			scans = append(scans, iter)
+		if itere := disk.ScanEntries(); itere != nil {
+			scans = append(scans, itere)
 		}
 	}
 
-	return reduceiter(scans)
+	return reduceitere(scans)
 }
 
 func (snap *snapshot) set(key, value, oldvalue []byte) ([]byte, uint64) {
@@ -422,16 +426,16 @@ func (snap *snapshot) attributes() string {
 	return "<" + memlevels + " " + disklevels + ">"
 }
 
-func compactiterator(disks []api.Index) api.Iterator {
-	var ref [20]api.Iterator
+func compactiterator(disks []api.Index) api.EntryIterator {
+	var ref [20]api.EntryIterator
 	scans := ref[:0]
 
 	for _, disk := range disks {
-		if iter := disk.Scan(); iter != nil {
-			scans = append(scans, iter)
+		if itere := disk.ScanEntries(); itere != nil {
+			scans = append(scans, itere)
 		}
 	}
-	return reduceiter(scans)
+	return reduceitere(scans)
 }
 
 func reduceiter(scans []api.Iterator) api.Iterator {
@@ -441,6 +445,17 @@ func reduceiter(scans []api.Iterator) api.Iterator {
 	scan := scans[len(scans)-1]
 	for i := len(scans) - 2; i >= 0; i-- {
 		scan = lsm.YSort(scan, scans[i])
+	}
+	return scan
+}
+
+func reduceitere(scans []api.EntryIterator) api.EntryIterator {
+	if len(scans) == 0 {
+		return nil
+	}
+	scan := scans[len(scans)-1]
+	for i := len(scans) - 2; i >= 0; i-- {
+		scan = lsm.YSortEntries(scan, scans[i])
 	}
 	return scan
 }

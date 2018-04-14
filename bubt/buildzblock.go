@@ -53,11 +53,14 @@ func (z *zblock) reset(vlogpos int64, vlog []byte) *zblock {
 	return z
 }
 
-func (z *zblock) insert(key, value []byte, seqno uint64, deleted bool) bool {
+func (z *zblock) insert(
+	key, value []byte, valuelen uint64, vlogpos int64,
+	seqno uint64, deleted bool) bool {
+
 	//fmt.Println(len(key), len(value), z.zblocksize)
 	if key == nil {
 		return false
-	} else if z.isoverflow(key, value) {
+	} else if z.isoverflow(key, value, deleted) {
 		return false
 	}
 
@@ -72,13 +75,20 @@ func (z *zblock) insert(key, value []byte, seqno uint64, deleted bool) bool {
 		z.entries = append(z.entries, scratch[:]...)
 		z.entries = append(z.entries, key...)
 
-	} else if len(value) == 0 {
+	} else if len(value) == 0 && vlogpos < 0 { // no value
 		ze.cleardeleted().setvaluelen(0)
 		z.entries = append(z.entries, scratch[:]...)
 		z.entries = append(z.entries, key...)
 
+	} else if len(value) == 0 { // value-ref to value-log
+		ze.setvlog().cleardeleted().setvaluelen(valuelen)
+		z.entries = append(z.entries, scratch[:]...)
+		z.entries = append(z.entries, key...)
+		binary.BigEndian.PutUint64(scratch[:8], uint64(vlogpos))
+		z.entries = append(z.entries, scratch[:8]...)
+
 	} else {
-		valuelen := uint64(len(value))
+		valuelen = uint64(len(value))
 		ok, vlogpos := z.addtovalueblock(value)
 		if ok { // value in vlog file
 			valuelen += 8
@@ -126,12 +136,14 @@ func (z *zblock) finalize() (int64, bool) {
 
 //---- local methods
 
-func (z *zblock) isoverflow(key, value []byte) bool {
+func (z *zblock) isoverflow(key, value []byte, deleted bool) bool {
 	entrysz := int64(zentrysize + len(key))
-	if z.vblocksize > 0 {
-		entrysz += 8 // just file position into value log.
-	} else {
-		entrysz += int64(len(value))
+	if deleted == false {
+		if z.vblocksize > 0 {
+			entrysz += 8 // just file position into value log.
+		} else {
+			entrysz += int64(len(value))
+		}
 	}
 	total := int64(len(z.entries)) + entrysz + z.index.nextfootprint()
 	if total > z.zblocksize {

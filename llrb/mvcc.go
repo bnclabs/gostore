@@ -1240,6 +1240,40 @@ func (mvcc *MVCC) Scan() api.Iterator {
 	}
 }
 
+// ScanEntries return a full table iterator, if iteration is stopped
+// before reaching end of table (io.EOF), application should call
+// iterator with fin as true. EG: iter(true)
+func (mvcc *MVCC) ScanEntries() api.EntryIterator {
+	currkey := []byte(nil)
+	sb := makescanbuf()
+
+	re := &indexentry{id: mvcc.ID()}
+	leseqno := mvcc.startscan(nil, sb, 0)
+
+	return func(fin bool) api.IndexEntry {
+		if re.err != nil {
+			return re
+		} else if fin {
+			sb = nil
+			return re.set(nil, nil, 0, false, io.EOF)
+		}
+
+		key, value, seqno, deleted := sb.pop()
+		if key == nil { // prefetch is nil
+			mvcc.startscan(currkey, sb, leseqno)
+			key, value, seqno, deleted = sb.pop()
+		}
+
+		if key == nil { // iteration has finished
+			sb = nil
+			return re.set(nil, nil, 0, false, io.EOF)
+		}
+		currkey = lib.Fixbuffer(currkey, int64(len(key)))
+		copy(currkey, key)
+		return re.set(key, value, seqno, deleted, nil)
+	}
+}
+
 // TODO: can we instead to the snapshot and avoid rlock ?
 func (mvcc *MVCC) startscan(key []byte, sb *scanbuf, leseqno uint64) uint64 {
 	rsnap := mvcc.readsnapshot()

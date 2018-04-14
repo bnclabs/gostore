@@ -32,6 +32,7 @@ type Bubt struct {
 	vlinks     []string
 	vfiles     []string
 	vmode      string
+	appendid   string
 	mdok       bool
 
 	// settings, will be flushed to the tip of indexfile.
@@ -99,7 +100,9 @@ func (tree *Bubt) TombstonePurge(what bool) {
 // AppendValuelogs builder should use `valuelogs` files instead of
 // creating a new set of value-logs corresponding to each z-index
 // files, vblocksize should be same as used while creating `valuelogs`.
-func (tree *Bubt) AppendValuelogs(vblocksize int64, valuelogs []string) {
+// appendid, should be same as the index.ID() whose value-logs are to
+// be appended.
+func (tree *Bubt) AppendValuelogs(vblocksize int64, appendid string, valuelogs []string) {
 	if vblocksize <= 0 {
 		panic(fmt.Errorf("cannot set value log files with vblocksize <= 0"))
 
@@ -107,7 +110,7 @@ func (tree *Bubt) AppendValuelogs(vblocksize int64, valuelogs []string) {
 		fmsg := "Cannot match value logs %v with z-index files %v"
 		panic(fmt.Errorf(fmsg, len(valuelogs), len(tree.zflushers)))
 	}
-	tree.vblocksize = vblocksize
+	tree.vblocksize, tree.appendid = vblocksize, appendid
 
 	re, _ := regexp.Compile("bubt-vlog-([0-9]+).data")
 	m := map[int]bool{}
@@ -168,7 +171,7 @@ func (tree *Bubt) makevflushers(vfiles []string) ([]*bubtflusher, uint64) {
 
 // Build starts building the tree from iterator, iterator is expected
 // to be a full-table scan over another data-store.
-func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
+func (tree *Bubt) Build(itere api.EntryIterator, metadata []byte) (err error) {
 	debugf("%v starting bottoms up build ...\n", tree.logprefix)
 
 	var n_ablocks uint64
@@ -180,27 +183,37 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 	n_count, n_deleted, paddingmem := int64(0), int64(0), int64(0)
 	n_zblocks, n_mblocks, n_vblocks := int64(0), uint64(0), n_ablocks
 	compiter := func(
-		fin bool) (key, val []byte, seqno uint64, del bool, e error) {
+		fin bool) (key, val []byte,
+		valuelen uint64, vlogpos int64, seqno uint64, del bool, e error) {
 
-		key, val, seqno, del, e = iter(fin)
+		entry := itere(fin)
+		key, seqno, del, e = entry.Key()
+		if len(tree.appendid) > 0 && entry.ID() == tree.appendid {
+			val = nil
+			valuelen, vlogpos = entry.Valueref()
+		} else {
+			val = entry.Value()
+			valuelen, vlogpos = uint64(len(val)), -1
+		}
+
 		if e == nil {
 			// account seqno even for deleted (tombstone) entries.
 			if maxseqno < seqno {
 				maxseqno = seqno
 			}
 			if tree.tombpurge && del { // skip accounting for deleted entries
-				return key, val, seqno, del, e // wish there is tail recursion
+				return key, val, valuelen, vlogpos, seqno, del, e
 			}
 			// account everything else for non-deleted entries.
 			keymem = keymem + uint64(len(key))
 			if del {
 				n_deleted++
 			} else {
-				valmem += uint64(len(val))
+				valmem += valuelen
 			}
 			n_count++
 		}
-		return key, val, seqno, del, e
+		return key, val, valuelen, vlogpos, seqno, del, e
 	}
 
 	scratchvlog := make([]byte, tree.vblocksize)
@@ -217,8 +230,6 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 	}
 
 	flushzblock := func(zflusher *bubtflusher) ([]byte, int64) {
-		var vpos int64
-
 		if padded, ok := z.finalize(); ok {
 			paddingmem += padded
 			fpos := zflusher.fpos
@@ -235,7 +246,7 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 			if err := zflusher.writedata(z.block); err != nil {
 				panic(err)
 			}
-			vpos = int64(zflusher.idx<<56) | fpos
+			vpos := int64(zflusher.idx<<56) | fpos
 			//fmt.Printf("flushzblock %s %x\n", z.firstkey, vpos)
 			return z.vlog, vpos
 		}
@@ -297,30 +308,32 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 	}
 
 	var key, value []byte
+	var valuelen uint64
+	var vlogpos int64
 	var seqno uint64
 	var deleted bool
 
 	buildz := func() {
-		if key == nil {
+		if len(key) == 0 {
 			return
 		}
 
 		ok := true
 		if (tree.tombpurge && deleted == false) || tree.tombpurge == false {
-			ok = z.insert(key, value, seqno, deleted)
+			ok = z.insert(key, value, valuelen, vlogpos, seqno, deleted)
 			if ok == false {
 				panic("first insert to zblock, check whether key > zblocksize")
 			}
 		}
 		for ok {
-			key, value, seqno, deleted, err = compiter(false /*close*/)
+			key, value, valuelen, vlogpos, seqno, deleted, err = compiter(false)
 			if err == io.EOF {
 				break
 			} else if err != nil {
 				panic(err)
 			}
 			if (tree.tombpurge && deleted == false) || tree.tombpurge == false {
-				ok = z.insert(key, value, seqno, deleted)
+				ok = z.insert(key, value, valuelen, vlogpos, seqno, deleted)
 			}
 		}
 		return
@@ -336,7 +349,7 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 		if m1 == nil {
 			return nil, nil
 
-		} else if key == nil { // no more entries
+		} else if len(key) == 0 { // no more entries
 			return m1, nil
 
 		} else if level == 0 { // build leaf node.
@@ -400,12 +413,12 @@ func (tree *Bubt) Build(iter api.Iterator, metadata []byte) (err error) {
 
 	// start building the tree, with maximum fill possible rate.
 	var root int64
-	if iter != nil {
-		key, value, seqno, deleted, err = compiter(false /*close*/)
+	if itere != nil {
+		key, value, valuelen, vlogpos, seqno, deleted, err = compiter(false)
 		if err != nil && err.Error() != io.EOF.Error() {
 			panic(err)
 
-		} else if err == nil && key != nil {
+		} else if err == nil && len(key) > 0 {
 			m := newm(tree, tree.mblocksize)
 			m, _ = buildm(m, 20 /*levels can't go more than 20*/)
 			root = flushmblock(m)

@@ -44,9 +44,11 @@ type Snapshot struct {
 	keymem     int64
 	valmem     int64
 	paddingmem int64
+	numpaths   int64
 	n_zblocks  int64
 	n_mblocks  int64
 	n_vblocks  int64
+	n_ablocks  int64
 	n_count    int64
 	n_deleted  int64
 	footprint  int64
@@ -209,9 +211,11 @@ func (snap *Snapshot) readheader(r io.ReaderAt) (*Snapshot, error) {
 	snap.keymem = info.Int64("keymem")
 	snap.valmem = info.Int64("valmem")
 	snap.paddingmem = info.Int64("paddingmem")
+	snap.numpaths = info.Int64("numpaths")
 	snap.n_zblocks = info.Int64("n_zblocks")
 	snap.n_mblocks = info.Int64("n_mblocks")
 	snap.n_vblocks = info.Int64("n_vblocks")
+	snap.n_ablocks = info.Int64("n_ablocks")
 	snap.n_count = info.Int64("n_count")
 	snap.n_deleted = info.Int64("n_deleted")
 
@@ -236,6 +240,11 @@ func (snap *Snapshot) Footprint() int64 {
 	return snap.footprint
 }
 
+// Getseqno return the latest mutation's seqno persisted in this snapshot.
+func (snap *Snapshot) Getseqno() uint64 {
+	return uint64(snap.seqno)
+}
+
 func (snap *Snapshot) diskfootprint() int64 {
 	footprint := filesize(snap.readm)
 	snap.zsizes = make([]int64, len(snap.readzs))
@@ -248,6 +257,13 @@ func (snap *Snapshot) diskfootprint() int64 {
 		snap.zsizes[i] = zsize
 	}
 	return footprint
+}
+
+func (snap *Snapshot) Valuelogs() []string {
+	if snap.vblocksize > 0 && len(snap.vfiles) > 0 {
+		return snap.vfiles
+	}
+	return nil
 }
 
 // Metadata return metadata blob associated with this snapshot.
@@ -270,8 +286,10 @@ func (snap *Snapshot) Metadata() []byte {
 //   keymem     : total payload size for all keys.
 //   valmem     : total payload size for all values.
 //   paddingmem : total bytes used for padding m-block and z-block alignment.
+//   numpaths   : number of paths for this instance.
 //   n_zblocks  : total number of blocks in z-index files.
 //   n_mblocks  : total number of blocks in m-index files.
+//   n_ablocks  : total number of blocks in value log, before appending.
 //   n_vblocks  : total number of blocks in value log.
 //   n_count    : number of entries in this snapshot, includes deleted.
 //   n_deleted  : number of entries marked as deleted.
@@ -290,9 +308,11 @@ func (snap *Snapshot) Info() s.Settings {
 		"keymem":     snap.keymem,
 		"valmem":     snap.valmem,
 		"paddingmem": snap.paddingmem,
+		"numpaths":   snap.numpaths,
 		"n_zblocks":  snap.n_zblocks,
 		"n_mblocks":  snap.n_mblocks,
 		"n_vblocks":  snap.n_vblocks,
+		"n_ablocks":  snap.n_ablocks,
 		"n_count":    snap.n_count,
 		"n_deleted":  snap.n_deleted,
 		"footprint":  snap.footprint,
@@ -325,12 +345,12 @@ func (snap *Snapshot) Log() {
 	vsize := info.Int64("vblocksize")
 	infof(fmsg, snap.logprefix, zsize, msize, vsize)
 
-	fmsg = "%v built at %v, took %v to build -- {m:%v, z:%v, v:%v}"
+	fmsg = "%v built at %v, took %v to build -- {m:%v, z:%v, a: %v, v:%v}"
 	epoch := time.Unix(info.Int64("epoch"), 0)
 	took := time.Duration(info.Int64("buildtime")).Round(time.Second)
 	mblocks, zblocks := info.Int64("n_mblocks"), info.Int64("n_zblocks")
-	vblocks := info.Int64("n_vblocks")
-	infof(fmsg, snap.logprefix, epoch, took, mblocks, zblocks, vblocks)
+	ablocks, vblocks := info.Int64("n_ablocks"), info.Int64("n_vblocks")
+	infof(fmsg, snap.logprefix, epoch, took, mblocks, zblocks, ablocks, vblocks)
 
 	fmsg = "%v disk footprint is %v for a payload of %v ratio: %.2f"
 	payload := info.Int64("keymem") + info.Int64("valmem")
@@ -616,6 +636,46 @@ func (snap *Snapshot) Scan() api.Iterator {
 			return nil, nil, 0, false, err
 		}
 		return key, value, seqno, deleted, err
+	}
+}
+
+// ScanEntry return a full table iterator, if iteration is stopped before
+// reaching end of table (io.EOF), application should call iterator
+// with fin as true. EG: iter(true)
+func (snap *Snapshot) ScanEntries() api.EntryIterator {
+	view := snap.getview(0xC0FFEE)
+	cur, err := view.OpenCursor(nil)
+	if err != nil {
+		view.Abort()
+		fmsg := "%v view(%v).OpenCursor(nil): %v"
+		errorf(fmsg, snap.logprefix, view.id, err)
+		return nil
+
+	} else if cur == nil {
+		view.Abort()
+		fmsg := "%v view(%v).OpenCursor(nil) cursor is nil"
+		errorf(fmsg, snap.logprefix, view.id)
+		return nil
+	}
+
+	re := &indexentry{id: snap.ID(), snap: snap}
+
+	return func(fin bool) api.IndexEntry {
+		if re.err != nil {
+			return re
+
+		} else if fin {
+			_, lv, _, _, err := cur.(*Cursor).ynextentry(fin) // return io.EOF
+			view.Abort()
+			return re.set(nil, lv, 0, false, err)
+		}
+
+		key, lv, seqno, deleted, err := cur.(*Cursor).ynextentry(fin)
+		if err != nil {
+			view.Abort()
+			return re.set(nil, lv, 0, false, err)
+		}
+		return re.set(key, lv, seqno, deleted, err)
 	}
 }
 

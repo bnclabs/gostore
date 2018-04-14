@@ -65,7 +65,7 @@ func makezsnap(tb testing.TB) (zsnap, [][]byte) {
 	i := uint64(0)
 	k := fmt.Sprintf("%16d", i)
 	v, seqno, deleted := k, i, true
-	for z.insert([]byte(k), []byte(v), seqno, deleted) {
+	for z.insert([]byte(k), []byte(v), 0, -1, seqno, deleted) {
 		keys = append(keys, []byte(k))
 		i++
 		k = fmt.Sprintf("%16d", i)

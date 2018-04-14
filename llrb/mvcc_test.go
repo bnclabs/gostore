@@ -1097,7 +1097,7 @@ func TestMVCCScan(t *testing.T) {
 		iter := mvcc.Scan()
 		defer iter(true /*fin*/)
 
-		refkey, refval, refseqno, refdeleted, referr := cur.YNext(false /*fin*/)
+		refkey, refval, refseqno, refdeleted, referr := cur.YNext(false)
 		key, val, seqno, deleted, err := iter(false /*close*/)
 		for referr == nil && referr == nil {
 			orgkey := []byte(fmt.Sprintf("key%08v", count))
@@ -1120,8 +1120,78 @@ func TestMVCCScan(t *testing.T) {
 			} else if deleted != refdeleted {
 				t.Errorf("expected %v, got %v", refdeleted, deleted)
 			}
-			refkey, refval, refseqno, refdeleted, referr = cur.YNext(false /*fin*/)
+			refkey, refval, refseqno, refdeleted, referr = cur.YNext(false)
 			key, val, seqno, deleted, err = iter(false /*close*/)
+			count++
+		}
+		if err != io.EOF || referr != io.EOF {
+			t.Errorf("expected nil %v, %v", referr, err)
+		}
+	}
+
+	mvccsetts := Defaultsettings()
+	snaptick := time.Duration(mvccsetts.Int64("snapshottick") * 2)
+	snaptick = snaptick * time.Millisecond
+
+	// load data
+	for i := 0; i < 1000; i++ {
+		mvcc := NewMVCC("scan", mvccsetts)
+		load(i, mvcc)
+		time.Sleep(snaptick * 4)
+		compare(i, mvcc)
+		mvcc.Destroy()
+	}
+
+}
+
+func TestMVCCScanEntries(t *testing.T) {
+	load := func(n int, mvcc *MVCC) {
+		for i := 0; i < n; i++ {
+			k := []byte(fmt.Sprintf("key%08v", i))
+			v := []byte(fmt.Sprintf("val%08v", i))
+			mvcc.Set(k, v, nil)
+			mvcc.Validate()
+		}
+	}
+
+	compare := func(n int, mvcc *MVCC) {
+		view := mvcc.View(0)
+		defer view.Abort()
+
+		count := 0
+		cur, _ := view.OpenCursor(nil)
+		iter := mvcc.ScanEntries()
+		defer iter(true /*fin*/)
+
+		refkey, refval, refseqno, refdeleted, referr := cur.YNext(false)
+		entry := iter(false /*close*/)
+		key, seqno, deleted, err := entry.Key()
+		val := entry.Value()
+		for referr == nil && referr == nil {
+			orgkey := []byte(fmt.Sprintf("key%08v", count))
+			orgval := []byte(fmt.Sprintf("val%08v", count))
+			if bytes.Compare(orgkey, key) != 0 {
+				t.Errorf("expected %q, got %q", orgkey, key)
+			} else if bytes.Compare(orgval, val) != 0 {
+				t.Errorf("for %q, expected %q, got %q", key, orgval, val)
+			} else if uint64(count+1) != seqno {
+				t.Errorf("for %q, expected %v, got %v", key, count, seqno)
+			}
+
+			//t.Logf("iter %q iter:%q", refkey, key)
+			if bytes.Compare(key, refkey) != 0 {
+				t.Errorf("expected %q, got %q", refkey, key)
+			} else if bytes.Compare(val, refval) != 0 {
+				t.Errorf("expected %s, got %s", refval, val)
+			} else if seqno != refseqno {
+				t.Errorf("expected %v, got %v", refseqno, seqno)
+			} else if deleted != refdeleted {
+				t.Errorf("expected %v, got %v", refdeleted, deleted)
+			}
+			refkey, refval, refseqno, refdeleted, referr = cur.YNext(false)
+			entry = iter(false /*close*/)
+			key, seqno, deleted, err = entry.Key()
+			val = entry.Value()
 			count++
 		}
 		if err != io.EOF || referr != io.EOF {
@@ -1303,13 +1373,26 @@ func BenchmarkMVCCScan(b *testing.B) {
 	llrb := makeBenchLLRB(b.N)
 	defer llrb.Destroy()
 
-	scan := llrb.Scan()
+	iter := llrb.Scan()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		scan(false /*close*/)
+		iter(false /*close*/)
 	}
-	scan(true /*fin*/)
+	iter(true /*fin*/)
+}
+
+func BenchmarkMVCCScanEntries(b *testing.B) {
+	llrb := makeBenchLLRB(b.N)
+	defer llrb.Destroy()
+
+	iter := llrb.ScanEntries()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		iter(false /*close*/)
+	}
+	iter(true /*fin*/)
 }
 
 func makeBenchMVCC(n int) *MVCC {

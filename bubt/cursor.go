@@ -137,6 +137,10 @@ func (cur *Cursor) YNext(fin bool) (key,
 	var lv lazyvalue
 
 	cur.finished = fin
+	if cur.finished {
+		return nil, nil, 0, false, io.EOF
+	}
+
 	if cur.ynext == false {
 		z := zsnap(cur.buf.zblock)
 		cur.ynext = true
@@ -148,6 +152,25 @@ func (cur *Cursor) YNext(fin bool) (key,
 	}
 	key, lv, seqno, deleted, err = cur.getnext()
 	value, cur.buf.vblock = lv.getactual(cur.snap, cur.buf.vblock)
+	return
+}
+
+func (cur *Cursor) ynextentry(fin bool) (key []byte,
+	lv lazyvalue, seqno uint64, deleted bool, err error) {
+
+	cur.finished = fin
+	if cur.finished {
+		return nil, lv, 0, false, io.EOF
+
+	} else if cur.ynext == false {
+		z := zsnap(cur.buf.zblock)
+		cur.ynext = true
+		if z.isbounded(cur.index) {
+			key, lv, seqno, deleted = z.entryat(cur.index)
+			return
+		}
+	}
+	key, lv, seqno, deleted, err = cur.getnext()
 	return
 }
 

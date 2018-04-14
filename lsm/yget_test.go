@@ -37,18 +37,19 @@ func TestYGetM(t *testing.T) {
 	paths := makepaths()
 
 	name, msize, mmap := "bubt1", int64(4096), false
-	t.Logf("bubt1:: msize: %v, zsize: %v, vsize: %v", msize, msize, 0)
+	t.Logf("bubt1: paths : %v", paths)
+	t.Logf("bubt1: msize: %v, zsize: %v, vsize: %v", msize, msize, 0)
 	bb, err := bubt.NewBubt(name, paths, msize, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	iter := llrb1.Scan()
-	err = bb.Build(iter, []byte("this is metadata for llrb1"))
+	itere := llrb1.ScanEntries()
+	err = bb.Build(itere, []byte("this is metadata for llrb1"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	bb.Close()
-	iter(true /*fin*/)
+	itere(true /*fin*/)
 
 	bubt1, err := bubt.OpenSnapshot(name, paths, mmap)
 	if err != nil {
@@ -61,13 +62,13 @@ func TestYGetM(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	iter = llrb2.Scan()
-	err = bb.Build(iter, []byte("this is metadata for bubt4"))
+	itere = llrb2.ScanEntries()
+	err = bb.Build(itere, []byte("this is metadata for bubt4"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	bb.Close()
-	iter(true /*fin*/)
+	itere(true /*fin*/)
 
 	bubt2, err := bubt.OpenSnapshot(name, paths, mmap)
 	if err != nil {
@@ -127,13 +128,13 @@ func TestYGetZ(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	iter := llrb1.Scan()
-	err = bb.Build(iter, []byte("this is metadata for llrb1"))
+	itere := llrb1.ScanEntries()
+	err = bb.Build(itere, []byte("this is metadata for llrb1"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	bb.Close()
-	iter(true /*fin*/)
+	itere(true /*fin*/)
 
 	bubt1, err := bubt.OpenSnapshot(name, paths, mmap)
 	if err != nil {
@@ -146,13 +147,13 @@ func TestYGetZ(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	iter = llrb2.Scan()
-	err = bb.Build(iter, []byte("this is metadata for bubt4"))
+	itere = llrb2.ScanEntries()
+	err = bb.Build(itere, []byte("this is metadata for bubt4"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	bb.Close()
-	iter(true /*fin*/)
+	itere(true /*fin*/)
 
 	bubt2, err := bubt.OpenSnapshot(name, paths, mmap)
 	if err != nil {
@@ -213,13 +214,13 @@ func TestYGetV(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	iter := llrb1.Scan()
-	err = bb.Build(iter, []byte("this is metadata for llrb1"))
+	itere := llrb1.ScanEntries()
+	err = bb.Build(itere, []byte("this is metadata for llrb1"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	bb.Close()
-	iter(true /*fin*/)
+	itere(true /*fin*/)
 
 	bubt1, err := bubt.OpenSnapshot(name, paths, mmap)
 	if err != nil {
@@ -232,13 +233,13 @@ func TestYGetV(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	iter = llrb2.Scan()
-	err = bb.Build(iter, []byte("this is metadata for bubt4"))
+	itere = llrb2.ScanEntries()
+	err = bb.Build(itere, []byte("this is metadata for bubt4"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	bb.Close()
-	iter(true /*fin*/)
+	itere(true /*fin*/)
 
 	bubt2, err := bubt.OpenSnapshot(name, paths, mmap)
 	if err != nil {
@@ -291,13 +292,13 @@ func BenchmarkYGetM(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	iter := llrb1.Scan()
-	err = bb.Build(iter, []byte("this is metadata for llrb1"))
+	itere := llrb1.ScanEntries()
+	err = bb.Build(itere, []byte("this is metadata for llrb1"))
 	if err != nil {
 		b.Fatal(err)
 	}
 	bb.Close()
-	iter(true /*fin*/)
+	itere(true /*fin*/)
 
 	bubt1, err := bubt.OpenSnapshot(name, paths, mmap)
 	if err != nil {
@@ -309,13 +310,13 @@ func BenchmarkYGetM(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	iter = llrb2.Scan()
-	err = bb.Build(iter, []byte("this is metadata for bubt4"))
+	itere = llrb2.ScanEntries()
+	err = bb.Build(itere, []byte("this is metadata for bubt4"))
 	if err != nil {
 		b.Fatal(err)
 	}
 	bb.Close()
-	iter(true /*fin*/)
+	itere(true /*fin*/)
 
 	bubt2, err := bubt.OpenSnapshot(name, paths, mmap)
 	if err != nil {
@@ -357,13 +358,13 @@ func BenchmarkYGetV(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	iter := llrb1.Scan()
-	err = bb.Build(iter, []byte("this is metadata for llrb1"))
+	itere := llrb1.ScanEntries()
+	err = bb.Build(itere, []byte("this is metadata for llrb1"))
 	if err != nil {
 		b.Fatal(err)
 	}
 	bb.Close()
-	iter(true /*fin*/)
+	itere(true /*fin*/)
 
 	bubt1, err := bubt.OpenSnapshot(name, paths, mmap)
 	if err != nil {
@@ -375,13 +376,13 @@ func BenchmarkYGetV(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	iter = llrb2.Scan()
-	err = bb.Build(iter, []byte("this is metadata for bubt4"))
+	itere = llrb2.ScanEntries()
+	err = bb.Build(itere, []byte("this is metadata for bubt4"))
 	if err != nil {
 		b.Fatal(err)
 	}
 	bb.Close()
-	iter(true /*fin*/)
+	itere(true /*fin*/)
 
 	bubt2, err := bubt.OpenSnapshot(name, paths, mmap)
 	if err != nil {
@@ -448,6 +449,11 @@ func makepaths() []string {
 	n := 1 + (rand.Intn(len(dirs)) % len(dirs))
 	for _, base := range dirs[:n] {
 		paths = append(paths, filepath.Join(path, base))
+	}
+	for _, path := range paths {
+		if err := os.RemoveAll(path); err != nil {
+			panic(err)
+		}
 	}
 	return paths
 }
