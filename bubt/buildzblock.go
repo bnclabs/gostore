@@ -88,10 +88,15 @@ func (z *zblock) insert(
 		z.entries = append(z.entries, scratch[:8]...)
 
 	} else {
+		var ok bool
+		var vle vlogentry
+		var vlogpos int64
+
 		valuelen = uint64(len(value))
-		ok, vlogpos := z.addtovalueblock(value)
+		ok, vlogpos, z.vlogpos, z.vlog = vle.serialize(
+			z.vblocksize, z.vlogpos, value, z.vlog, z.zerovbuff,
+		)
 		if ok { // value in vlog file
-			valuelen += 8
 			ze.setvlog()
 		}
 		ze.cleardeleted().setvaluelen(valuelen)
@@ -157,27 +162,4 @@ func (z *zblock) setfirstkey(key []byte) {
 		z.firstkey = lib.Fixbuffer(z.firstkey, int64(len(key)))
 		copy(z.firstkey, key)
 	}
-}
-
-func (z *zblock) addtovalueblock(value []byte) (bool, int64) {
-	var scratch [8]byte
-
-	if z.vblocksize <= 0 {
-		return false, 0
-	}
-
-	if int64(len(value)) < z.vblocksize {
-		remain := z.vblocksize - (int64(len(z.vlog)) % z.vblocksize)
-		if int64(len(value)) > remain {
-			z.vlog = append(z.vlog, z.zerovbuff[:remain]...)
-			z.vlogpos += remain
-		}
-	}
-	vlogpos := z.vlogpos
-	binary.BigEndian.PutUint64(scratch[:], uint64(len(value)))
-	z.vlog = append(z.vlog, scratch[:]...)
-	z.vlog = append(z.vlog, value...)
-	z.vlogpos += int64(len(scratch) + len(value))
-	//fmt.Println("addtovalueblock", len(z.vlog))
-	return true, vlogpos
 }

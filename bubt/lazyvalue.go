@@ -31,7 +31,7 @@ func (lv *lazyvalue) getactual(snap *Snapshot, vblock []byte) ([]byte, []byte) {
 		return nil, vblock
 	}
 
-	vblock = lib.Fixbuffer(vblock, lv.valuelen)
+	vblock = lib.Fixbuffer(vblock, lv.valuelen+vlogentrysize)
 	r := snap.readvs[lv.shardidx-1]
 	n, err := r.ReadAt(vblock, lv.fpos)
 	if err != nil {
@@ -41,7 +41,8 @@ func (lv *lazyvalue) getactual(snap *Snapshot, vblock []byte) ([]byte, []byte) {
 		err := fmt.Errorf("bubt.snap.partialvlog %v < %v", n, len(vblock))
 		panic(err)
 	}
-	return vblock[8:], vblock
+	value := vblock[vlogentrysize:]
+	return value, vblock
 }
 
 func (lv *lazyvalue) inlinevalue() []byte {
