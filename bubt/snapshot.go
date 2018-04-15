@@ -380,7 +380,8 @@ func (snap *Snapshot) Validate() {
 		}
 		if len(prevkey) > 0 {
 			if bytes.Compare(prevkey, key) >= 0 {
-				panic(fmt.Errorf("key %q comes before %q", prevkey, key))
+				fmsg := "%v key %q comes before %q"
+				panic(fmt.Errorf(fmsg, snap.name, prevkey, key))
 			}
 		}
 		n_count++
@@ -392,17 +393,17 @@ func (snap *Snapshot) Validate() {
 
 	// validate count
 	if n_count != snap.n_count {
-		fmsg := "expected %v entries, found %v"
-		panic(fmt.Errorf(fmsg, snap.n_count, n_count))
+		fmsg := "%v expected %v entries, found %v"
+		panic(fmt.Errorf(fmsg, snap.name, snap.n_count, n_count))
 	}
 	// validate keymem, valmem
 	if keymem != snap.keymem {
-		fmsg := "build time keymem %v != actual %v"
-		panic(fmt.Errorf(fmsg, snap.keymem, keymem))
+		fmsg := "%v build time keymem %v != actual %v"
+		panic(fmt.Errorf(fmsg, snap.name, snap.keymem, keymem))
 	}
 	if valmem != snap.valmem {
-		fmsg := "build time valmem %v != actual %v"
-		panic(fmt.Errorf(fmsg, snap.valmem, valmem))
+		fmsg := "%v build time valmem %v != actual %v"
+		panic(fmt.Errorf(fmsg, snap.name, snap.valmem, valmem))
 	}
 
 	snap.validatequick()
