@@ -6,9 +6,10 @@ import "github.com/bnclabs/gostore/lib"
 
 type lazyvalue struct {
 	actual   []byte
+	valuelen int64
+	vlogpos  int64
 	shardidx int
 	fpos     int64
-	valuelen int64
 }
 
 func (lv *lazyvalue) setfields(valuelen, vlogpos int64, value []byte) {
@@ -17,7 +18,7 @@ func (lv *lazyvalue) setfields(valuelen, vlogpos int64, value []byte) {
 	} else {
 		lv.actual = nil
 	}
-	lv.valuelen = valuelen
+	lv.valuelen, lv.vlogpos = valuelen, vlogpos
 	lv.shardidx = int(uint64(vlogpos) >> 56)
 	lv.fpos = int64(uint64(vlogpos) & 0x00FFFFFFFFFFFFFF)
 }

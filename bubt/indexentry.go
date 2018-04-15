@@ -42,6 +42,6 @@ func (entry *indexentry) ID() string {
 }
 
 func (entry *indexentry) Valueref() (valuelen uint64, vlogpos int64) {
-	valuelen, vlogpos = uint64(entry.lv.valuelen), entry.lv.fpos
+	valuelen, vlogpos = uint64(entry.lv.valuelen), entry.lv.vlogpos
 	return
 }
