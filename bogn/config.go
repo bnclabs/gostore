@@ -89,7 +89,7 @@ func Defaultsettings() s.Settings {
 			"bubt.diskpaths":  "/opt/bogn/",
 			"bubt.mblocksize": 4096,
 			"bubt.zblocksize": 4096,
-			"bubt.vblocksize": 4096 * 4,
+			"bubt.vblocksize": 0,
 			"bubt.mmap":       true,
 		}
 		setts = (s.Settings{}).Mixin(setts, bubtsetts)
