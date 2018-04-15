@@ -49,7 +49,8 @@ func opensnapshot(
 	infof(fmsg, bogn.logprefix, head.id, head.attributes())
 
 	if head.mw == nil {
-		if head.mw, err = bogn.newmemstore("mw", 0); err != nil {
+		head.mw, err = bogn.newmemstore("opensnapshot", "mw", 0)
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -57,7 +58,8 @@ func opensnapshot(
 		numcpu := runtime.GOMAXPROCS(-1) * 100
 		head.setch = make(chan *setcache, numcpu)
 		head.cachech = make(chan *setcache, numcpu)
-		if head.mc, err = bogn.newmemstore("mc", 0); err != nil {
+		head.mc, err = bogn.newmemstore("opensnapshot", "mc", 0)
+		if err != nil {
 			return nil, err
 		}
 		go cacher(bogn, head.mc, head.setch, head.cachech)

@@ -16,7 +16,7 @@ type setcache struct {
 }
 
 func cacher(bogn *Bogn, mc api.Index, setch, cachech chan *setcache) {
-	infof("%v starting cacher for %s ...", bogn.logprefix, mc.ID())
+	infof("%v rcacher: starting for %s ...", bogn.logprefix, mc.ID())
 
 	defer func() {
 		mc.Destroy()
@@ -24,7 +24,7 @@ func cacher(bogn *Bogn, mc api.Index, setch, cachech chan *setcache) {
 			errorf("%v cacher crashed %v", bogn.logprefix, r)
 			errorf("\n%s", lib.GetStacktrace(2, debug.Stack()))
 		} else {
-			infof("%v stopped cacher %s", bogn.logprefix, mc.ID())
+			infof("%v rcacher: stopped %s", bogn.logprefix, mc.ID())
 		}
 		atomic.AddInt64(&bogn.nroutines, -1)
 	}()

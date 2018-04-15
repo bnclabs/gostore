@@ -67,7 +67,7 @@ type Bogn struct {
 func PurgeIndex(name, logpath, diskstore string, diskpaths []string) {
 	bogn := &Bogn{name: name}
 	bogn.logprefix = fmt.Sprintf("BOGN [%v]", name)
-	bogn.destroydisksnaps(logpath, diskstore, diskpaths)
+	bogn.destroydisksnaps("purge", logpath, diskstore, diskpaths)
 	return
 }
 
@@ -76,7 +76,7 @@ func PurgeIndex(name, logpath, diskstore string, diskpaths []string) {
 func CompactIndex(name, diskstore string, diskpaths []string, merge bool) {
 	bogn := &Bogn{name: name, diskstore: diskstore, snapshot: nil}
 	bogn.logprefix = fmt.Sprintf("BOGN [%v]", name)
-	bogn.compactdisksnaps(diskstore, diskpaths, merge)
+	bogn.compactdisksnaps("compactindex", diskstore, diskpaths, merge)
 	return
 }
 
@@ -94,7 +94,7 @@ func New(name string, setts s.Settings) (*Bogn, error) {
 	bogn.finch = make(chan struct{})
 
 	startedat := bogn.epoch.Format(time.RFC3339Nano)
-	infof("%v starting epoch@%v ...", bogn.logprefix, startedat)
+	infof("%v boot: starting epoch@%v ...", bogn.logprefix, startedat)
 
 	merge := false
 	CompactIndex(bogn.name, bogn.diskstore, bogn.getdiskpaths(), merge)
@@ -175,7 +175,7 @@ func (bogn *Bogn) readsettings(setts s.Settings) *Bogn {
 		if len(bogn.logpath) == 0 {
 			panic("unable to pick/locate a logdir")
 		}
-		infof("%v logpath: %q", bogn.logprefix, bogn.logpath)
+		infof("%v boot: with logpath %q", bogn.logprefix, bogn.logpath)
 	}
 
 	return bogn.readmemsettings(setts)
@@ -342,7 +342,7 @@ func (bogn *Bogn) warmupfromdisk(disks []api.Index) api.Index {
 		panic("unreachable code")
 	}
 
-	fmsg := "%v memory capacity %v too small to warmup %v, %v entries"
+	fmsg := "%v warmup: memory capacity %v too small %v, %v entries"
 	arg1 := humanize.Bytes(uint64(memcapacity))
 	arg2 := humanize.Bytes(uint64(payload))
 	infof(fmsg, bogn.logprefix, arg1, arg2, entries)
@@ -362,7 +362,7 @@ func (bogn *Bogn) llrbfromdisk(
 	mw.Setseqno(seqno)
 	iter(true /*fin*/)
 
-	fmsg := "%v warmup LLRB %v (%v) %v entries -> %v in %v"
+	fmsg := "%v warmup: LLRB %v (%v) %v entries -> %v in %v"
 	arg1 := humanize.Bytes(uint64(payload))
 	took := time.Since(now).Round(time.Second)
 	infof(fmsg, bogn.logprefix, ndisk.ID(), arg1, entries, mw.ID(), took)
@@ -383,7 +383,7 @@ func (bogn *Bogn) mvccfromdisk(
 	mw.Setseqno(seqno)
 	iter(true /*fin*/)
 
-	fmsg := "%v warmup MVCC %v (%v) %v entries -> %v in %v"
+	fmsg := "%v warmup: MVCC %v (%v) %v entries -> %v in %v"
 	arg1 := humanize.Bytes(uint64(payload))
 	took := time.Since(now).Round(time.Second)
 	infof(fmsg, bogn.logprefix, ndisk.ID(), arg1, entries, mw.ID(), took)
@@ -926,7 +926,7 @@ func (bogn *Bogn) Validate() {
 		disk := disks[i]
 		if disk != nil {
 			endseqno = bogn.validatedisklevel(disk, seqno)
-			fmsg := "%v validate disk %v (after seqno %v to %v) ... ok"
+			fmsg := "%v validate: disk %v (after seqno %v to %v) ... ok"
 			infof(fmsg, bogn.logprefix, disk.ID(), seqno, endseqno)
 			seqno = endseqno
 		}
@@ -952,7 +952,8 @@ func (bogn *Bogn) validatedisklevel(
 		maxseqno, count = idx.Getseqno(), idx.Count()
 		idx.Validate()
 	}
-	infof("%v found %v entries in %v", bogn.logprefix, count, index.ID())
+	fmsg := "%v validate: found %v entries in %v"
+	infof(fmsg, bogn.logprefix, count, index.ID())
 	return maxseqno
 }
 
@@ -965,13 +966,13 @@ func (bogn *Bogn) TombstonePurge() {
 
 // Close this instance, no calls allowed after Close.
 func (bogn *Bogn) Close() {
-	bogn.logstatistics()
-
 	close(bogn.finch)
 
 	for atomic.LoadInt64(&bogn.nroutines) > 0 {
 		time.Sleep(10 * time.Millisecond)
 	}
+
+	bogn.logstatistics("close")
 
 	// check whether all mutations are flushed to disk.
 	snap := bogn.currsnapshot()
@@ -984,17 +985,19 @@ func (bogn *Bogn) Close() {
 		}
 	}
 
+	// close disk snapshots.
+	for _, disk := range snap.disks {
+		if disk != nil {
+			infof("%v closing disk snapshot %v", bogn.logprefix, disk.ID())
+			disk.Close()
+		}
+	}
+
 	// clear up the current snapshots and all the entire list.
 	snap.addtopurge(snap.mw, snap.mr, snap.mc)
 	for purgesnapshot(snap) == false {
 		time.Sleep(10 * time.Millisecond)
 		snap = bogn.currsnapshot()
-	}
-	// close disk snapshots.
-	for _, disk := range snap.disks {
-		if disk != nil {
-			disk.Close()
-		}
 	}
 	bogn.setheadsnapshot(nil)
 
@@ -1004,7 +1007,7 @@ func (bogn *Bogn) Close() {
 // Destroy the disk snapshots of this instance, no calls allowed after Destroy.
 func (bogn *Bogn) Destroy() {
 	diskpaths := bogn.getdiskpaths()
-	bogn.destroydisksnaps(bogn.logpath, bogn.diskstore, diskpaths)
+	bogn.destroydisksnaps("destory", bogn.logpath, bogn.diskstore, diskpaths)
 	infof("%v destroyed ...", bogn.logprefix)
 	return
 }
@@ -1120,7 +1123,9 @@ func (bogn *Bogn) Delete(key, oldvalue []byte, lsm bool) ([]byte, uint64) {
 
 //---- local methods
 
-func (bogn *Bogn) newmemstore(level string, seqno uint64) (api.Index, error) {
+func (bogn *Bogn) newmemstore(
+	logprefix, level string, seqno uint64) (api.Index, error) {
+
 	var name string
 
 	switch level {
@@ -1137,20 +1142,21 @@ func (bogn *Bogn) newmemstore(level string, seqno uint64) (api.Index, error) {
 		llrbsetts := bogn.setts.Section("llrb.").Trim("llrb.")
 		index := llrb.NewLLRB(name, llrbsetts)
 		index.Setseqno(seqno)
-		infof("%v new llrb store %q", bogn.logprefix, name)
+		infof("%v %v: new llrb store %q", bogn.logprefix, logprefix, name)
 		return index, nil
 
 	case "mvcc":
 		llrbsetts := bogn.setts.Section("llrb.").Trim("llrb.")
 		index := llrb.NewMVCC(name, llrbsetts)
 		index.Setseqno(seqno)
-		infof("%v new mvcc store %q", bogn.logprefix, name)
+		infof("%v %v: new mvcc store %q", bogn.logprefix, logprefix, name)
 		return index, nil
 	}
 	panic(fmt.Errorf("invalid memstore %q", bogn.memstore))
 }
 
 func (bogn *Bogn) builddiskstore(
+	logprefix string,
 	level, version int, sha, flushunix string, settstodisk s.Settings,
 	itere api.EntryIterator, appendid string, valuelogs []string,
 	what string) (index api.Index, err error) {
@@ -1158,16 +1164,18 @@ func (bogn *Bogn) builddiskstore(
 	switch bogn.diskstore {
 	case "bubt":
 		index, err = bogn.builddiskbubt(
-			level, version, sha, flushunix, settstodisk, itere,
+			logprefix, level, version, sha, flushunix, settstodisk, itere,
 			appendid, valuelogs, what,
 		)
-		infof("%v new bubt snapshot %q", bogn.logprefix, index.ID())
+		fmsg := "%v %v: new bubt snapshot %q"
+		infof(fmsg, bogn.logprefix, logprefix, index.ID())
 		return
 	}
 	panic("impossible situation")
 }
 
 func (bogn *Bogn) builddiskbubt(
+	logprefix string,
 	level, version int, sha, flushunix string, settstodisk s.Settings,
 	itere api.EntryIterator, appendid string, valuelogs []string,
 	what string) (index api.Index, err error) {
@@ -1230,7 +1238,8 @@ func (bogn *Bogn) builddiskbubt(
 	mmap := bubtsetts.Bool("mmap")
 	snap := bogn.currsnapshot()
 	if mmap == false && snap != nil {
-		if latestlevel, _ := snap.latestlevel(); level <= latestlevel {
+		latestlevel, _ := snap.latestlevel()
+		if latestlevel < 0 || level <= latestlevel {
 			mmap = true
 		}
 	}
@@ -1240,11 +1249,11 @@ func (bogn *Bogn) builddiskbubt(
 		return nil, err
 	}
 
-	footprint := humanize.Bytes(uint64(ndisk.Footprint()))
-	payload := humanize.Bytes(uint64(bogn.indexpayload(ndisk)))
+	fp := humanize.Bytes(uint64(ndisk.Footprint()))
+	payl := humanize.Bytes(uint64(bogn.indexpayload(ndisk)))
 	id, elapsed := ndisk.ID(), time.Since(now)
-	fmsg := "%v took %v for bubt %v with %v entries, ~%v/%v & mmap:%v\n"
-	infof(fmsg, bogn.logprefix, elapsed, id, count, payload, footprint, mmap)
+	fmsg := "%v %v: took %v for bubt %v with %v entries, ~%v/%v & mmap:%v\n"
+	infof(fmsg, bogn.logprefix, logprefix, elapsed, id, count, payl, fp, mmap)
 
 	return ndisk, nil
 }
@@ -1324,16 +1333,18 @@ func (bogn *Bogn) openbubtsnaps(
 
 // compact away older versions in disk levels.
 func (bogn *Bogn) compactdisksnaps(
-	diskstore string, diskpaths []string, merge bool) error {
+	logprefix, diskstore string, diskpaths []string, merge bool) error {
 
 	switch diskstore {
 	case "bubt":
-		return bogn.compactbubtsnaps(diskpaths, merge)
+		return bogn.compactbubtsnaps(logprefix, diskpaths, merge)
 	}
 	panic(fmt.Errorf("invalid diskstore %v", diskstore))
 }
 
-func (bogn *Bogn) compactbubtsnaps(diskpaths []string, merge bool) error {
+func (bogn *Bogn) compactbubtsnaps(
+	logprefix string, diskpaths []string, merge bool) error {
+
 	var disks [16]api.Index
 
 	mmap, dircache := false, map[string]bool{}
@@ -1364,14 +1375,14 @@ func (bogn *Bogn) compactbubtsnaps(diskpaths []string, merge bool) error {
 				disks[level] = disk
 
 			} else if _, over, _ := bogn.path2level(od.ID()); over < version {
-				fmsg := "%v compact away older version %v"
-				infof(fmsg, bogn.logprefix, od.ID())
+				fmsg := "%v %v: compact away older version %v"
+				infof(fmsg, bogn.logprefix, logprefix, od.ID())
 				bogn.destroylevels(od)
 				disks[level] = disk
 
 			} else {
-				fmsg := "%v compact away older version %v"
-				infof(fmsg, bogn.logprefix, disk.ID())
+				fmsg := "%v %v: compact away older version %v"
+				infof(fmsg, bogn.logprefix, logprefix, disk.ID())
 				bogn.destroylevels(disk)
 			}
 			dircache[dirname] = true
@@ -1385,17 +1396,21 @@ func (bogn *Bogn) compactbubtsnaps(diskpaths []string, merge bool) error {
 		}
 	}
 	if len(validdisks) == 0 {
-		infof("%v no disk levels found for compaction", bogn.logprefix)
+		fmsg := "%v %v: no disk levels found for compaction"
+		infof(fmsg, bogn.logprefix, logprefix)
 	} else if len(validdisks) == 1 {
-		infof("%v no compaction, single disk snapshot found", bogn.logprefix)
+		fmsg := "%v %v: no compaction, single disk snapshot found"
+		infof(fmsg, bogn.logprefix, logprefix)
 	} else if merge {
-		return bogn.mergedisksnapshots(validdisks)
+		return bogn.mergedisksnapshots(logprefix, validdisks)
 	}
 	bogn.closelevels(validdisks...)
 	return nil
 }
 
-func (bogn *Bogn) mergedisksnapshots(disks []api.Index) error {
+func (bogn *Bogn) mergedisksnapshots(
+	logprefix string, disks []api.Index) error {
+
 	scans := make([]api.EntryIterator, 0)
 	sourceids := []string{}
 	for _, disk := range disks {
@@ -1411,14 +1426,15 @@ func (bogn *Bogn) mergedisksnapshots(disks []api.Index) error {
 	flushunix := bogn.getflushunix(disks[0])
 	bogn.setts = disksetts
 
-	infof("%v merging [%v]", bogn.logprefix, strings.Join(sourceids, ","))
+	fmsg := "%v %v: merging [%v]"
+	infof(fmsg, bogn.logprefix, logprefix, strings.Join(sourceids, ","))
 
 	itere := reduceitere(scans)
 	level, uuid := 15, bogn.newuuid()
 	diskversions := bogn.getdiskversions(disks[0])
 	version := diskversions[level] + 1
 	ndisk, err := bogn.builddiskstore(
-		level, version, uuid, flushunix, disksetts, itere,
+		logprefix, level, version, uuid, flushunix, disksetts, itere,
 		"" /*appendid*/, nil /*valuelogs*/, "offlinemerge",
 	)
 	if err != nil {
@@ -1430,7 +1446,7 @@ func (bogn *Bogn) mergedisksnapshots(disks []api.Index) error {
 
 	for _, disk := range disks[:] {
 		if disk != nil {
-			infof("%v merged out %q", bogn.logprefix, disk.ID())
+			infof("%v %v: merged out %q", bogn.logprefix, logprefix, disk.ID())
 			disk.Close()
 			disk.Destroy()
 		}
@@ -1439,7 +1455,7 @@ func (bogn *Bogn) mergedisksnapshots(disks []api.Index) error {
 }
 
 func (bogn *Bogn) destroydisksnaps(
-	logpath, diskstore string, diskpaths []string) error {
+	logprefix, logpath, diskstore string, diskpaths []string) error {
 
 	// purge log dir
 	paths := make([]string, len(diskpaths))
@@ -1447,14 +1463,14 @@ func (bogn *Bogn) destroydisksnaps(
 	if len(logpath) > 0 {
 		paths = append(paths, logpath)
 	}
-	if err := bogn.destorybognlogs(paths); err != nil {
+	if err := bogn.destorybognlogs(logprefix, paths); err != nil {
 		return err
 	}
 
 	// purge disk snapshots
 	switch diskstore {
 	case "bubt":
-		if err := bogn.destroybubtsnaps(diskpaths); err != nil {
+		if err := bogn.destroybubtsnaps(logprefix, diskpaths); err != nil {
 			return err
 		}
 		return nil
@@ -1462,7 +1478,7 @@ func (bogn *Bogn) destroydisksnaps(
 	panic("unreachable code")
 }
 
-func (bogn *Bogn) destorybognlogs(diskpaths []string) error {
+func (bogn *Bogn) destorybognlogs(logprefix string, diskpaths []string) error {
 	for _, path := range diskpaths {
 		logdir := bogn.logdir(path)
 		if fi, err := os.Stat(logdir); err != nil {
@@ -1473,15 +1489,15 @@ func (bogn *Bogn) destorybognlogs(diskpaths []string) error {
 				errorf("%v RemoveAll(%q): %v", bogn.logprefix, logdir, err)
 				return err
 			}
-			infof("%v removed logdir %q", bogn.logprefix, logdir)
+			infof("%v %v: removed logdir %q", bogn.logprefix, logprefix, logdir)
 			return nil
 		}
 	}
-	infof("%v no logdir found !!", bogn.logprefix)
+	infof("%v %v: no logdir found !!", bogn.logprefix, logprefix)
 	return nil
 }
 
-func (bogn *Bogn) destroybubtsnaps(diskpaths []string) error {
+func (bogn *Bogn) destroybubtsnaps(logprefix string, diskpaths []string) error {
 	pathlist := strings.Join(diskpaths, ", ")
 	for _, path := range diskpaths {
 		fis, err := ioutil.ReadDir(path)
@@ -1497,8 +1513,8 @@ func (bogn *Bogn) destroybubtsnaps(diskpaths []string) error {
 			if level < 0 {
 				continue // not a bogn directory
 			}
-			fmsg := "%v purge bubt snapshot %q under %q"
-			infof(fmsg, bogn.logprefix, fi.Name(), pathlist)
+			fmsg := "%v %v: purge bubt snapshot %q under %q"
+			infof(fmsg, bogn.logprefix, logprefix, fi.Name(), pathlist)
 			bubt.PurgeSnapshot(fi.Name(), diskpaths)
 		}
 	}
@@ -1713,7 +1729,7 @@ func (bogn *Bogn) diskwritebytes(disk api.Index) int64 {
 			wramplification += numpaths * bubt.MarkerBlocksize
 		}
 
-		return atomic.AddInt64(&bogn.wramplification, wramplification)
+		return wramplification
 	}
 	panic("unreachable code")
 }
@@ -1774,9 +1790,9 @@ func (bogn *Bogn) newuuid() string {
 	return string(uuidb[:uuid.Format(uuidb)])
 }
 
-func (bogn *Bogn) logstatistics() {
+func (bogn *Bogn) logstatistics(logprefix string) {
 	n := humanize.Bytes(uint64(atomic.LoadInt64(&bogn.wramplification)))
-	infof("%v write amplifications write: %v", bogn.logprefix, n)
+	infof("%v %v: write amplifications %v", bogn.logprefix, logprefix, n)
 }
 
 func (bogn *Bogn) isappendvlogs(

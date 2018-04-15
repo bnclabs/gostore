@@ -7,14 +7,14 @@ import "runtime/debug"
 import "github.com/bnclabs/gostore/lib"
 
 func purger(bogn *Bogn) {
-	infof("%v starting purger ...", bogn.logprefix)
+	infof("%v rpurger: starting ...", bogn.logprefix)
 
 	defer func() {
 		if r := recover(); r != nil {
 			errorf("%v purger crashed %v", bogn.logprefix, r)
 			errorf("\n%s", lib.GetStacktrace(2, debug.Stack()))
 		} else {
-			infof("%v stopped purger", bogn.logprefix)
+			infof("%v rpurger: stopped ", bogn.logprefix)
 		}
 		atomic.AddInt64(&bogn.nroutines, -1)
 	}()
@@ -56,7 +56,7 @@ func purgesnapshot(snap *snapshot) bool {
 			// then destroy
 			for _, index := range snap.purgeindexes {
 				index.Destroy()
-				fmsg := "%v purged %q in snapshot %v"
+				fmsg := "%v rpurger: purged %q in snapshot %v"
 				infof(fmsg, snap.bogn.logprefix, index.ID(), snap.id)
 			}
 			snap.close()
