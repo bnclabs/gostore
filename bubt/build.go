@@ -202,6 +202,7 @@ func (tree *Bubt) Build(itere api.EntryIterator, metadata []byte) (err error) {
 				maxseqno = seqno
 			}
 			if tree.tombpurge && del { // skip accounting for deleted entries
+				// wish there is tail-recursion !!
 				return key, val, valuelen, vlogpos, seqno, del, e
 			}
 			// account everything else for non-deleted entries.
@@ -357,12 +358,12 @@ func (tree *Bubt) Build(itere api.EntryIterator, metadata []byte) (err error) {
 			ok := true
 			for ok {
 				zflusher, vflusher := pickzflusher()
-				vlogpos, vlog := int64(0), []byte(nil)
+				vlp, vlog := int64(0), []byte(nil)
 				if vflusher != nil {
-					vlogpos, vlog = vflusher.fpos, vflusher.vlog
-					vlogpos += int64(len(vlog))
+					vlp, vlog = vflusher.fpos, vflusher.vlog
+					vlp += int64(len(vlog))
 				}
-				z.reset(vlogpos, vlog)
+				z.reset(vlp, vlog)
 
 				buildz()
 
