@@ -42,7 +42,7 @@ func TestMemcpy(t *testing.T) {
 func TestFailsafeRequest(t *testing.T) {
 	reqch := make(chan []interface{}, 10)
 	respch := make(chan []interface{}, 1)
-	finch := make(chan bool)
+	finch := make(chan struct{})
 	donech := make(chan bool)
 
 	go func() {
@@ -61,6 +61,7 @@ func TestFailsafeRequest(t *testing.T) {
 	}
 	<-donech
 
+	finch = make(chan struct{})
 	go func() {
 		resp, err := FailsafeRequest(reqch, respch, []interface{}{"case2"}, finch)
 		if resp != nil {
@@ -90,7 +91,7 @@ func TestFailsafeRequest(t *testing.T) {
 
 func TestFailsafePost(t *testing.T) {
 	reqch := make(chan []interface{}, 10)
-	finch := make(chan bool)
+	finch := make(chan struct{})
 	donech := make(chan bool)
 
 	go func() {

@@ -44,7 +44,10 @@ func Memcpy(dst, src unsafe.Pointer, ln int) int {
 // prevent caller from blocking. Similarly, while waiting for a response from
 // respch channel, if gen-server has exited or crashed, prevent caller from
 // blocking.
-func FailsafeRequest(reqch, respch chan []interface{}, cmd []interface{}, finch chan bool) ([]interface{}, error) {
+func FailsafeRequest(
+	reqch, respch chan []interface{},
+	cmd []interface{}, finch chan struct{}) ([]interface{}, error) {
+
 	select {
 	case reqch <- cmd:
 		if respch != nil {
@@ -55,6 +58,7 @@ func FailsafeRequest(reqch, respch chan []interface{}, cmd []interface{}, finch 
 				return nil, errors.New("server closed")
 			}
 		}
+
 	case <-finch:
 		return nil, errors.New("server closed")
 	}
@@ -64,7 +68,9 @@ func FailsafeRequest(reqch, respch chan []interface{}, cmd []interface{}, finch 
 // FailsafePost for gen-server design pattern. While posting a message to
 // reqch channel, if i/p channel is full but gen-server has exited or crashed,
 // prevent caller from blocking.
-func FailsafePost(reqch chan []interface{}, cmd []interface{}, finch chan bool) error {
+func FailsafePost(
+	reqch chan []interface{}, cmd []interface{}, finch chan struct{}) error {
+
 	select {
 	case reqch <- cmd:
 	case <-finch:
