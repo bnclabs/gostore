@@ -29,15 +29,17 @@ import "github.com/bnclabs/gostore/llrb"
 //      Set this as true only when a subset of keys in bogn-index will
 //      be actived accessed, either for read or write.
 //
+// "autocommit" (int64, default: 100)
+//		Time is seconds to periodically persist transient writes onto disk.
+//		If set to ZERO, then it is upto the application to issue a Commit()
+//		call to persist the transient writes.
+//
 // "flushratio" (floating, default: .25)
 //      This configuration is valid only when `dgm` is set to true.
 //      When ratio between memory footprint, for the latest batch of
 //		mutations, and latest level's disk-footprint falls below flushratio,
 //		then a newer level will be created to flush the latest batch of
 //		mutations in memory.
-//
-// "flushperiod" (int64, default: 100)
-//		Time is seconds to periodically persist transient writes onto disk.
 //
 // "compactratio" (floating, default: .50)
 //      This configuration is valid only when `dgm` is set to true.
@@ -74,7 +76,7 @@ func Defaultsettings() s.Settings {
 		"dgm":           false,
 		"workingset":    false,
 		"flushratio":    0.25,
-		"flushperiod":   100,
+		"autocommit":    100,
 		"compactratio":  0.50,
 		"compactperiod": 300,
 	}

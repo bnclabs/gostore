@@ -120,7 +120,7 @@ func TestReloadDurable(t *testing.T) {
 	}
 	index.Start()
 
-	n := 3000000
+	n := 1000000
 	k, v := []byte("key000000000000"), []byte("val00000000000000")
 	for i := 0; i < n; i++ {
 		x := fmt.Sprintf("%d", i)

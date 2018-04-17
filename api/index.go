@@ -146,3 +146,9 @@ type IndexEntry interface {
 	// file, else vpos will be -1.
 	Valueref() (valuelen uint64, vpos int64)
 }
+
+// Disksnapshot provides read-only API to fetch snapshot information.
+type Disksnapshot interface {
+	// Appdata return application data associated with this snapshot.
+	Appdata() []byte
+}

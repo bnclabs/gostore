@@ -25,15 +25,39 @@ var Compacttick = time.Duration(1 * time.Second)
 //   findisk(bogn *Bogn, disks []api.Index, ndisk api.Index) error
 // dowindup(bogn *Bogn) error
 
+func posttick(bogn *Bogn) {
+	respch := make(chan []interface{}, 1)
+	cmd := []interface{}{"compact.autocommit", respch}
+	lib.FailsafeRequest(bogn.compactorch, respch, cmd, bogn.finch)
+}
+
+func postfindisk(bogn *Bogn, ndisk api.Index, err error) {
+	cmd := []interface{}{"compact.findisk", ndisk, err}
+	lib.FailsafeRequest(bogn.compactorch, nil, cmd, nil)
+}
+
+func postcommit(bogn *Bogn, appdata []byte) {
+	respch := make(chan []interface{}, 1)
+	cmd := []interface{}{"compact.commit", appdata, respch}
+	lib.FailsafeRequest(bogn.compactorch, respch, cmd, nil)
+}
+
+func compactorclose(bogn *Bogn) {
+	respch := make(chan []interface{}, 1)
+	cmd := []interface{}{"compact.close", respch}
+	lib.FailsafeRequest(bogn.compactorch, respch, cmd, nil)
+}
+
 func tombstonepurge(bogn *Bogn) {
-	ch := make(chan struct{})
-	bogn.compactorch <- []interface{}{"compact.tombstonepurge", ch}
-	<-ch
+	respch := make(chan []interface{}, 1)
+	cmd := []interface{}{"compact.tombstonepurge", respch}
+	lib.FailsafeRequest(bogn.compactorch, respch, cmd, nil)
 }
 
 func compactor(bogn *Bogn, compactorch chan []interface{}) {
 	infof("%v rcompactor: starting ...", bogn.logprefix)
 
+	atomic.AddInt64(&bogn.nroutines, 1)
 	defer func() {
 		if r := recover(); r != nil {
 			errorf("%v compactor crashed %v", bogn.logprefix, r)
@@ -48,12 +72,11 @@ func compactor(bogn *Bogn, compactorch chan []interface{}) {
 		}
 	}()
 
-	atomic.AddInt64(&bogn.nroutines, 1)
-	ticker := time.NewTicker(Compacttick)
-	doflushing := makeflusher(bogn)
+	if bogn.autocommit > 0 {
+		go compactticker(bogn, compactorch)
+	}
 
-	var respch chan api.Index
-	var errch chan error
+	doflushing := makeflusher(bogn)
 
 	// atmost two concurrent compaction can run.
 	// a. compacting data in memory with latest level on disk, doflush().
@@ -63,71 +86,104 @@ func compactor(bogn *Bogn, compactorch chan []interface{}) {
 	// disks - list of disks to compact
 	// ndisk - compacted {level,version} of `disks`
 	var disks []api.Index
-	var cmd []interface{}
 	var what string
+	var tspch chan []interface{}
 
-loop:
-	for range ticker.C {
-		if bogn.isclosed() && respch == nil {
-			break loop
+	tombstonepurge, activecompaction, closed := false, false, false
 
-		} else if bogn.durable == false { // disk is not involved.
-			continue loop
-		}
-
-		if respch == nil { // try to start disk compaction.
-			var nextlevel int
-			select {
-			case cmd = <-compactorch:
-			default:
-				cmd = nil
-			}
-			disks, nextlevel, what = bogn.pickcompactdisks(cmd)
-			if nextlevel >= 0 {
-				respch, errch = startdisk(bogn, disks, nextlevel, what)
-			} else {
-				disks, what, cmd = nil, "", nil
-			}
-		}
-
-		if respch != nil { // if ongoing compaction, check for response
-			select {
-			case ndisk := <-respch:
-				if err := findisk(bogn, disks, ndisk); err != nil {
-					panic(err)
-				}
-				if cmd != nil && what == "compact.tombstonepurge" {
-					close(cmd[1].(chan struct{}))
-				}
-				disks, respch, errch, what, cmd = nil, nil, nil, "", nil
-				if bogn.isclosed() {
-					break loop
-				}
-
-			case <-errch:
-				disks, respch, errch = nil, nil, nil
-				if bogn.isclosed() {
-					break loop
-				}
-
-			default:
-				if bogn.isclosed() {
-					continue loop
-				}
-			}
-		}
-
-		if err := doflushing(disks); err != nil {
-			panic(err)
+	trystartdisk := func() {
+		var nextlevel int
+		disks, nextlevel, what = bogn.pickcompactdisks(tombstonepurge)
+		if nextlevel >= 0 {
+			startdisk(bogn, disks, nextlevel, what)
+			activecompaction = true
+		} else {
+			disks, what, tspch = nil, "", nil
+			activecompaction, tombstonepurge = false, false
 		}
 	}
 
-	if err := dowindup(bogn); err != nil {
-		panic(err)
+	tryfindisk := func(ndisk api.Index, err error) {
+		if err != nil {
+			panic(err)
+
+		} else if ndisk == nil {
+			panic("impossible case")
+		}
+
+		if err := findisk(bogn, disks, ndisk); err != nil {
+			panic(err)
+		}
+		if tombstonepurge && tspch != nil {
+			tspch <- []interface{}{nil}
+		}
+		disks, what, tspch = nil, "", nil
+		activecompaction, tombstonepurge = false, false
+	}
+
+	docmd := func(cmd []interface{}) {
+		switch cmdname := cmd[0].(string); cmdname {
+		case "compact.tombstonepurge":
+			tombstonepurge, tspch = true, cmd[1].(chan []interface{})
+
+		case "compact.autocommit":
+			appdata, respch := []byte(nil), cmd[1].(chan []interface{})
+			if bogn.durable { // disk is not involved.
+				if activecompaction == false {
+					trystartdisk()
+				}
+				// only blocking call !!
+				if err := doflushing(disks, appdata); err != nil {
+					panic(err)
+				}
+			}
+			respch <- []interface{}{nil}
+
+		case "compact.commit":
+			appdata, respch := cmd[1].([]byte), cmd[2].(chan []interface{})
+			if bogn.durable { // disk is not involved.
+				if activecompaction == false {
+					trystartdisk()
+				}
+				// only blocking call !!
+				if err := doflushing(disks, appdata); err != nil {
+					panic(err)
+				}
+			}
+			respch <- []interface{}{nil}
+
+		case "compact.findisk":
+			a, b, ndisk, err := cmd[1], cmd[2], api.Index(nil), error(nil)
+			if a != nil {
+				ndisk = cmd[1].(api.Index)
+			}
+			if b != nil {
+				err = cmd[2].(error)
+			}
+			tryfindisk(ndisk, err)
+
+		case "compact.close":
+			closed = true
+			respch := cmd[1].(chan []interface{})
+			if err := dowindup(bogn); err != nil {
+				panic(err)
+			}
+			respch <- []interface{}{nil}
+		}
+	}
+
+loop:
+	for cmd := range compactorch {
+		if closed == false || activecompaction {
+			docmd(cmd)
+		}
+		if closed && activecompaction == false {
+			break loop
+		}
 	}
 }
 
-func makeflusher(bogn *Bogn) func([]api.Index) error {
+func makeflusher(bogn *Bogn) func([]api.Index, []byte) error {
 	memcap := float64(bogn.memcapacity)
 	// adaptive threshold.
 	mwthreshold := int64(memcap * .9) // start with 90% of configured capacity
@@ -142,7 +198,7 @@ func makeflusher(bogn *Bogn) func([]api.Index) error {
 	fmsg := "%v compactor: start memory threshold at %v of %v\n"
 	infof(fmsg, bogn.logprefix, strb, stra)
 
-	return func(disks []api.Index) error {
+	return func(disks []api.Index, appdata []byte) error {
 		snap := bogn.currsnapshot()
 		overflow := snap.memheap() > mwthreshold
 
@@ -158,7 +214,7 @@ func makeflusher(bogn *Bogn) func([]api.Index) error {
 				mwthreshold = int64(memcap * .5) // start with 50% of capacity
 
 			} else if bogn.flushelapsed() {
-				return dopersist(bogn)
+				return dopersist(bogn, appdata)
 
 			} else {
 				return nil // all is fine don't touch the disk.
@@ -172,7 +228,7 @@ func makeflusher(bogn *Bogn) func([]api.Index) error {
 			fmsg := "%v compactor: new memory threshold at %v of %v\n"
 			infof(fmsg, bogn.logprefix, strb, stra)
 
-			err := doflush(bogn, disks, overflow, flushelapsed)
+			err := doflush(bogn, disks, overflow, flushelapsed, appdata)
 			return err
 		}
 		return nil
@@ -181,7 +237,7 @@ func makeflusher(bogn *Bogn) func([]api.Index) error {
 
 // called only when full data set in memory.
 // TODO: support `workingset` even when `dgm` is false.
-func dopersist(bogn *Bogn) (err error) {
+func dopersist(bogn *Bogn, appdata []byte) (err error) {
 	infof("%v dopersist ...", bogn.logprefix)
 
 	snap := bogn.currsnapshot()
@@ -198,7 +254,7 @@ func dopersist(bogn *Bogn) (err error) {
 	itere, uuid := snap.persistiterator(), bogn.newuuid()
 	ndisk, err := bogn.builddiskstore(
 		"dopersist", level, nversion, uuid, "" /*flushunix*/, disksetts, itere,
-		"" /*appendid*/, nil /*valuelogs*/, "persist",
+		"" /*appendid*/, nil /*valuelogs*/, "persist", appdata,
 	)
 	if err != nil {
 		return err
@@ -235,7 +291,10 @@ func dopersist(bogn *Bogn) (err error) {
 	return nil
 }
 
-func doflush(bogn *Bogn, disks []api.Index, overf, elapsed bool) (err error) {
+func doflush(
+	bogn *Bogn, disks []api.Index, overf, elapsed bool,
+	appdata []byte) (err error) {
+
 	cause := "overflow"
 	if overf && elapsed {
 		panic(fmt.Errorf("impossible situation"))
@@ -305,7 +364,7 @@ func doflush(bogn *Bogn, disks []api.Index, overf, elapsed bool) (err error) {
 	appendid, valuelogs := bogn.indexvaluelogs(fdisks)
 	ndisk, err := bogn.builddiskstore(
 		"doflush", nlevel, nversion, uuid, "" /*flushunix*/, disksetts, itere,
-		appendid, valuelogs, what,
+		appendid, valuelogs, what, appdata,
 	)
 	if err != nil {
 		return err
@@ -357,18 +416,15 @@ func doflush(bogn *Bogn, disks []api.Index, overf, elapsed bool) (err error) {
 	return nil
 }
 
-func startdisk(
-	bogn *Bogn, disks []api.Index, nlevel int,
-	what string) (chan api.Index, chan error) {
-
+func startdisk(bogn *Bogn, disks []api.Index, nlevel int, what string) {
 	infof("%v startdisk ...", bogn.logprefix)
 
 	disk0 := disks[0]
-	respch, errch := make(chan api.Index, 1), make(chan error, 1)
 	itere, uuid := compactiterator(disks), bogn.newuuid()
 	nversion := bogn.nextdiskversion(nlevel)
 	disksetts := (s.Settings{}).Mixin(bogn.settingsfromdisk(disk0))
 	flushunix := bogn.getflushunix(disk0)
+	appdata := bogn.getappdata(disk0)
 
 	ids := []string{}
 	for _, disk := range disks {
@@ -382,19 +438,19 @@ func startdisk(
 
 		ndisk, err := bogn.builddiskstore(
 			"startdisk", nlevel, nversion, uuid, flushunix, disksetts, itere,
-			appendid, valuelogs, what,
+			appendid, valuelogs, what, appdata,
 		)
-		if err != nil {
-			errch <- err
-			return
-		}
 		itere(true /*fin*/)
+		if err != nil {
+			postfindisk(bogn, nil, err)
 
-		bogn.addamplification(ndisk)
-
-		respch <- ndisk
+		} else {
+			bogn.addamplification(ndisk)
+			postfindisk(bogn, ndisk, nil)
+		}
 	}()
-	return respch, errch
+
+	return
 }
 
 func findisk(bogn *Bogn, disks []api.Index, ndisk api.Index) error {
@@ -439,6 +495,9 @@ func dowindup(bogn *Bogn) error {
 	}
 
 	snap := bogn.currsnapshot()
+	if bogn.autocommit == 0 && snap.isdirty() {
+		panic("when autocommit disabled cannot windup a dirty snapshot")
+	}
 	if !snap.isdirty() {
 		fmsg := "%v dowindup: no new mutations on snapshot %v"
 		infof(fmsg, bogn.logprefix, snap.id)
@@ -471,7 +530,7 @@ func dowindup(bogn *Bogn) error {
 	appendid, valuelogs := bogn.indexvaluelogs([]api.Index{purgedisk})
 	ndisk, err := bogn.builddiskstore(
 		"dowindup", nlevel, nversion, uuid, "" /*flushunix*/, disksetts, itere,
-		appendid, valuelogs, "windup",
+		appendid, valuelogs, "windup", nil, /*appdata*/
 	)
 	if err != nil {
 		return err
@@ -501,4 +560,24 @@ func dowindup(bogn *Bogn) error {
 		infof(fmsg, snap.bogn.logprefix, head.attributes(), ndisk.ID())
 	}()
 	return nil
+}
+
+func compactticker(bogn *Bogn, compactorch chan []interface{}) {
+	infof("%v tcompactor: starting...", bogn.logprefix)
+
+	atomic.AddInt64(&bogn.nroutines, 1)
+	defer func() {
+		infof("%v tcompactor: stopped", bogn.logprefix)
+		atomic.AddInt64(&bogn.nroutines, -1)
+	}()
+
+	ticker := time.NewTicker(Compacttick)
+	for range ticker.C {
+		posttick(bogn)
+		select {
+		case <-bogn.finch:
+			return
+		default:
+		}
+	}
 }

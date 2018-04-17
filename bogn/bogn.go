@@ -14,8 +14,9 @@ import "runtime"
 import "math/rand"
 import "io/ioutil"
 import "sync/atomic"
-import "encoding/json"
 import "path/filepath"
+import "encoding/json"
+import "encoding/base64"
 
 import "github.com/bnclabs/gostore/api"
 import "github.com/bnclabs/gostore/lib"
@@ -32,7 +33,7 @@ type Bogn struct {
 	// atomic access, 8-byte aligned
 	nroutines int64
 	dgmstate  int64
-	snapspin  uint64
+	snapspin  int64
 	// statistics
 	wramplification int64
 
@@ -55,7 +56,7 @@ type Bogn struct {
 	workingset    bool
 	flushratio    float64
 	compactratio  float64
-	flushperiod   time.Duration
+	autocommit    time.Duration
 	compactperiod time.Duration
 	memcapacity   int64
 	setts         s.Settings
@@ -134,8 +135,8 @@ func (bogn *Bogn) readsettings(setts s.Settings) *Bogn {
 	bogn.workingset = setts.Bool("workingset")
 	bogn.flushratio = setts.Float64("flushratio")
 	bogn.compactratio = setts.Float64("compactratio")
-	bogn.flushperiod = time.Duration(setts.Int64("flushperiod"))
-	bogn.flushperiod *= time.Second
+	bogn.autocommit = time.Duration(setts.Int64("autocommit"))
+	bogn.autocommit *= time.Second
 	bogn.compactperiod = time.Duration(setts.Int64("compactperiod"))
 	bogn.compactperiod *= time.Second
 	bogn.setts = setts
@@ -200,7 +201,7 @@ func (bogn *Bogn) settingstodisk() s.Settings {
 		"workingset":    bogn.workingset,
 		"flushratio":    bogn.flushratio,
 		"compactratio":  bogn.compactratio,
-		"flushperiod":   bogn.flushperiod,
+		"autocommit":    bogn.autocommit,
 		"compactperiod": bogn.compactperiod,
 		"memversions":   memversions,
 		"diskversions":  diskversions,
@@ -395,7 +396,7 @@ func (bogn *Bogn) mvccfromdisk(
 // started as:
 //   inst := NewBogn("storage", setts).Start()
 func (bogn *Bogn) Start() *Bogn {
-	bogn.compactorch = make(chan []interface{}, 1)
+	bogn.compactorch = make(chan []interface{}, 128)
 	go purger(bogn)
 	go compactor(bogn, bogn.compactorch)
 
@@ -459,46 +460,53 @@ func (bogn *Bogn) latestsnapshot() *snapshot {
 	panic("unreachable code")
 }
 
-var writelatch uint64 = 0x8000000000000000
-var writelock uint64 = 0xc000000000000000
+var writelatch int64 = 0x10000
+var writelock int64 = 0x4000000000000000
 
 func (bogn *Bogn) snaprlock() {
 	for {
-		l := atomic.AddUint64(&bogn.snapspin, 1)
-		if l&writelatch == 0 {
-			return
+		expected := atomic.LoadInt64(&bogn.snapspin)
+		if (expected & 0xFFFF0000) == 0 { // no writelatches
+			desired := expected + 1
+			if atomic.CompareAndSwapInt64(&bogn.snapspin, expected, desired) {
+				return
+			}
 		}
-		// write latch is on
-		atomic.AddUint64(&bogn.snapspin, ^uint64(0))
 		runtime.Gosched()
 	}
 }
 
 func (bogn *Bogn) snaprunlock() {
-	l := atomic.AddUint64(&bogn.snapspin, ^uint64(0)) & writelock
-	if l == 0 || l == writelatch {
-		return
+	for {
+		expected := atomic.LoadInt64(&bogn.snapspin)
+		desired := expected - 1
+		if atomic.CompareAndSwapInt64(&bogn.snapspin, expected, desired) {
+			return
+		}
+		runtime.Gosched()
 	}
-	panic("impossible situation")
 }
 
 func (bogn *Bogn) snaplock() {
-	setwritelatch := func() {
+	addlatch := func() {
 		for {
-			old := atomic.LoadUint64(&bogn.snapspin)
-			new := old | writelatch
-			if atomic.CompareAndSwapUint64(&bogn.snapspin, old, new) {
+			expected := atomic.LoadInt64(&bogn.snapspin)
+			desired := expected + writelatch
+			if atomic.CompareAndSwapInt64(&bogn.snapspin, expected, desired) {
 				return
 			}
 			runtime.Gosched()
 		}
 	}
 
+	addlatch()
 	for {
-		setwritelatch()
-		if old := atomic.LoadUint64(&bogn.snapspin); old == writelatch {
-			new := old | writelock
-			if atomic.CompareAndSwapUint64(&bogn.snapspin, old, new) {
+		expected := atomic.LoadInt64(&bogn.snapspin)
+		ok1 := (expected & 0xFFFF) == 0    // no readers
+		ok2 := (expected & writelock) == 0 // no writers
+		if ok1 && ok2 {
+			desired := expected | writelock
+			if atomic.CompareAndSwapInt64(&bogn.snapspin, expected, desired) {
 				return
 			}
 		}
@@ -508,21 +516,28 @@ func (bogn *Bogn) snaplock() {
 
 func (bogn *Bogn) snapunlock() {
 	for {
-		if atomic.CompareAndSwapUint64(&bogn.snapspin, writelock, 0) {
+		expected := atomic.LoadInt64(&bogn.snapspin)
+		desired := expected & (^writelock) // release the lock
+		desired -= writelatch
+		if atomic.CompareAndSwapInt64(&bogn.snapspin, expected, desired) {
 			return
 		}
+		runtime.Gosched()
 	}
 }
 
 func (bogn *Bogn) mwmetadata(
-	seqno uint64, flushunix string, settstodisk s.Settings) []byte {
+	seqno uint64, flushunix string, appdata []byte,
+	settstodisk s.Settings) []byte {
 
 	if len(flushunix) == 0 {
 		flushunix = fmt.Sprintf(`"%v"`, uint64(time.Now().Unix()))
 	}
+	appdatastr := base64.StdEncoding.EncodeToString(appdata)
 	metadata := map[string]interface{}{
 		"seqno":     fmt.Sprintf(`"%v"`, seqno),
 		"flushunix": flushunix,
+		"appdata":   appdatastr,
 	}
 	setts := (s.Settings{}).Mixin(settstodisk, metadata)
 	setts = setts.AddPrefix("bogn.")
@@ -540,11 +555,11 @@ func (bogn *Bogn) flushelapsed() bool {
 	}
 	_, disk := snap.latestlevel()
 	if disk == nil {
-		return int64(time.Since(bogn.epoch)) > int64(bogn.flushperiod)
+		return int64(time.Since(bogn.epoch)) > int64(bogn.autocommit)
 	}
 	metadata := bogn.diskmetadata(disk)
 	x, _ := strconv.Atoi(strings.Trim(metadata["flushunix"].(string), `"`))
-	return time.Now().Sub(time.Unix(int64(x), 0)) > bogn.flushperiod
+	return time.Now().Sub(time.Unix(int64(x), 0)) > bogn.autocommit
 }
 
 // cdisks is a list of disk snapshots being compacted.
@@ -643,13 +658,13 @@ func (bogn *Bogn) pickflushdisk4(
 	return []api.Index{latestdisk}, snap.nextbutlevel(latestlevel), true
 }
 
-func (bogn *Bogn) pickcompactdisks(cmd []interface{}) (
+func (bogn *Bogn) pickcompactdisks(tombstonepurge bool) (
 	disks []api.Index, nextlevel int, what string) {
 
 	var ok bool
 
 	// "offlinemerge", "persist"
-	if disks, nextlevel, ok = bogn.pickcompactdisks1(cmd); ok {
+	if disks, nextlevel, ok = bogn.pickcompactdisks1(tombstonepurge); ok {
 		return disks, nextlevel, "compact.tombstonepurge"
 	} else if disks, nextlevel, ok = bogn.pickcompactdisks2(); ok {
 		return disks, nextlevel, "compact.none"
@@ -666,17 +681,13 @@ func (bogn *Bogn) pickcompactdisks(cmd []interface{}) (
 }
 
 // tombstone purge for the last level
-func (bogn *Bogn) pickcompactdisks1(cmd []interface{}) (
+func (bogn *Bogn) pickcompactdisks1(tombstonepurge bool) (
 	cdisks []api.Index, nextlevel int, ok bool) {
 
 	snap := bogn.currsnapshot()
 	disks := snap.disklevels([]api.Index{})
 
-	if cmd == nil || len(cmd) == 0 {
-		return nil, -1, false
-	} else if op := cmd[0].(string); op != "compact.tombstonepurge" {
-		return nil, -1, false
-	} else if len(disks) == 0 {
+	if tombstonepurge == false || len(disks) == 0 {
 		return nil, -1, false
 	}
 
@@ -840,8 +851,34 @@ func (bogn *Bogn) ID() string {
 	return bogn.name
 }
 
+// Getseqno return current mutation seqno on write path.
 func (bogn *Bogn) Getseqno() uint64 {
 	return bogn.currsnapshot().mwseqno()
+}
+
+// Disksnapshots return a iterator to iterate on disk snapshots. Until
+// the iterator is closed, by calling diskiterator(true /*fin*/), all
+// write operations will be blocked. Caller can iterate until a nil is
+// return for api.Disksnapshot
+func (bogn *Bogn) Disksnapshots() func(fin bool) api.Disksnapshot {
+	done := false
+	bogn.snaplock()
+	snap := bogn.currsnapshot()
+	disks := snap.disklevels([]api.Index{})
+
+	return func(fin bool) api.Disksnapshot {
+		if done {
+			return nil
+
+		} else if len(disks) == 0 || fin {
+			bogn.snapunlock()
+			done, disks = true, nil
+			return nil
+		}
+		ds := disksnap{bogn: bogn, disk: disks[0]}
+		disks = disks[1:]
+		return &ds
+	}
 }
 
 // BeginTxn starts a read-write transaction. All transactions should either
@@ -890,6 +927,20 @@ func (bogn *Bogn) abortview(view *View) error {
 
 	bogn.snaprunlock()
 	return nil
+}
+
+// TombstonePurge call will remove all entries marked as deleted from
+// the oldest and top-most disk level, provided the highest seqno stored
+// in that level is less that `seqno`.
+func (bogn *Bogn) TombstonePurge() {
+	tombstonepurge(bogn)
+}
+
+// Commit will trigger a memory to disk flush and/or disk compaction.
+// Applications can supply appdata that will be stored as part of the
+// lastest snapshot.
+func (bogn *Bogn) Commit(appdata []byte) {
+	postcommit(bogn, appdata)
 }
 
 // Log vital statistics for all active bogn levels.
@@ -957,15 +1008,15 @@ func (bogn *Bogn) validatedisklevel(
 	return maxseqno
 }
 
-// TombstonePurge call will remove all entries marked as deleted from
-// the oldest and top-most disk level, provided the highest seqno stored
-// in that level is less that `seqno`.
-func (bogn *Bogn) TombstonePurge() {
-	tombstonepurge(bogn)
-}
-
 // Close this instance, no calls allowed after Close.
 func (bogn *Bogn) Close() {
+	if bogn.autocommit == 0 {
+		if snap := bogn.currsnapshot(); snap.isdirty() {
+			panic("commit before close")
+		}
+	}
+
+	compactorclose(bogn)
 	close(bogn.finch)
 
 	for atomic.LoadInt64(&bogn.nroutines) > 0 {
@@ -1084,27 +1135,42 @@ func (bogn *Bogn) Set(key, value, oldvalue []byte) (ov []byte, cas uint64) {
 func (bogn *Bogn) SetCAS(
 	key, value, oldvalue []byte, cas uint64) ([]byte, uint64, error) {
 
+	ov, rccas, err, ok := bogn.setcasMem(key, value, oldvalue, cas)
+	if ok {
+		return ov, rccas, err
+	}
+
+	rccas = 0
+
+	txn := bogn.BeginTxn(0xABBA)
+	_, gcas, deleted, ok := txn.Get(key, nil)
+	ok1 := (ok && deleted == false) && gcas != cas
+	ok2 := (ok == false || deleted) && cas != 0
+	if ok1 || ok2 {
+		txn.Abort()
+		return oldvalue, 0, api.ErrorInvalidCAS
+	}
+	ov = txn.Set(key, value, oldvalue)
+	err = txn.Commit()
+	return ov, rccas, err
+}
+
+func (bogn *Bogn) setcasMem(
+	key, value, oldvalue []byte, cas uint64) ([]byte, uint64, error, bool) {
+
 	var ov []byte
 	var rccas uint64
 	var err error
 
+	ok := false
+
 	bogn.snaprlock()
 	if atomic.LoadInt64(&bogn.dgmstate) == 0 {
 		ov, rccas, err = bogn.currsnapshot().setCAS(key, value, oldvalue, cas)
-
-	} else {
-		txn := bogn.BeginTxn(0xABBA)
-		_, gcas, deleted, ok := txn.Get(key, nil)
-		ok1 := (ok && deleted == false) && gcas != cas
-		ok2 := (ok == false || deleted) && cas != 0
-		if ok1 || ok2 {
-			return oldvalue, 0, api.ErrorInvalidCAS
-		}
-		ov = txn.Set(key, value, oldvalue)
-		err = txn.Commit()
+		ok = true
 	}
 	bogn.snaprunlock()
-	return ov, rccas, err
+	return ov, rccas, err, ok
 }
 
 // Delete key from index. Key should not be nil, if key found return its
@@ -1159,13 +1225,13 @@ func (bogn *Bogn) builddiskstore(
 	logprefix string,
 	level, version int, sha, flushunix string, settstodisk s.Settings,
 	itere api.EntryIterator, appendid string, valuelogs []string,
-	what string) (index api.Index, err error) {
+	what string, appdata []byte) (index api.Index, err error) {
 
 	switch bogn.diskstore {
 	case "bubt":
 		index, err = bogn.builddiskbubt(
 			logprefix, level, version, sha, flushunix, settstodisk, itere,
-			appendid, valuelogs, what,
+			appendid, valuelogs, what, appdata,
 		)
 		fmsg := "%v %v: new bubt snapshot %q"
 		infof(fmsg, bogn.logprefix, logprefix, index.ID())
@@ -1178,7 +1244,7 @@ func (bogn *Bogn) builddiskbubt(
 	logprefix string,
 	level, version int, sha, flushunix string, settstodisk s.Settings,
 	itere api.EntryIterator, appendid string, valuelogs []string,
-	what string) (index api.Index, err error) {
+	what string, appdata []byte) (index api.Index, err error) {
 
 	// book-keep largest seqno for this snapshot.
 	var diskseqno, count uint64
@@ -1226,7 +1292,7 @@ func (bogn *Bogn) builddiskbubt(
 		errorf("%v Build(): %v", bogn.logprefix, err)
 		return nil, err
 	}
-	mwmetadata := bogn.mwmetadata(diskseqno, flushunix, settstodisk)
+	mwmetadata := bogn.mwmetadata(diskseqno, flushunix, appdata, settstodisk)
 	if _, err = bt.Writemetadata(mwmetadata); err != nil {
 		errorf("%v Writemetadata(): %v", bogn.logprefix, err)
 		return nil, err
@@ -1424,6 +1490,7 @@ func (bogn *Bogn) mergedisksnapshots(
 	// diskversions and use them when building the merged snapshot.
 	disksetts := bogn.settingsfromdisk(disks[0])
 	flushunix := bogn.getflushunix(disks[0])
+	appdata := bogn.getappdata(disks[0])
 	bogn.setts = disksetts
 
 	fmsg := "%v %v: merging [%v]"
@@ -1435,7 +1502,7 @@ func (bogn *Bogn) mergedisksnapshots(
 	version := diskversions[level] + 1
 	ndisk, err := bogn.builddiskstore(
 		logprefix, level, version, uuid, flushunix, disksetts, itere,
-		"" /*appendid*/, nil /*valuelogs*/, "offlinemerge",
+		"" /*appendid*/, nil /*valuelogs*/, "offlinemerge", appdata,
 	)
 	if err != nil {
 		return err
@@ -1586,6 +1653,13 @@ func (bogn *Bogn) getdiskseqno(disk api.Index) uint64 {
 func (bogn *Bogn) getflushunix(disk api.Index) string {
 	metadata := bogn.diskmetadata(disk)
 	return metadata["flushunix"].(string)
+}
+
+func (bogn *Bogn) getappdata(disk api.Index) []byte {
+	metadata := bogn.diskmetadata(disk)
+	appdatastr := metadata["appdata"].(string)
+	appdata, _ := base64.StdEncoding.DecodeString(appdatastr)
+	return appdata
 }
 
 func (bogn *Bogn) getdiskversions(disk api.Index) [16]int {
