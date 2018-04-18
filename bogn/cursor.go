@@ -71,7 +71,7 @@ func (cur *Cursor) opencursor(t *Txn, v *View, key []byte) (*Cursor, error) {
 	if len(cur.iters) > 0 {
 		cur.iter = cur.iters[len(cur.iters)-1]
 		for i := len(cur.iters) - 2; i >= 0; i-- {
-			cur.iter = lsm.YSort(cur.iter, cur.iters[i])
+			cur.iter = lsm.YSort(cur.iters[i], cur.iter)
 		}
 	}
 

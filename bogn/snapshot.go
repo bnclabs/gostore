@@ -205,7 +205,7 @@ func (snap *snapshot) latestyget() (get api.Getter) {
 	}
 	get = gets[len(gets)-1]
 	for i := len(gets) - 2; i >= 0; i-- {
-		get = lsm.YGet(get, gets[i])
+		get = lsm.YGet(gets[i], get)
 	}
 	return
 }
@@ -240,7 +240,7 @@ func (snap *snapshot) txnyget(
 	}
 	get := gets[len(gets)-1]
 	for i := len(gets) - 2; i >= 0; i-- {
-		get = lsm.YGet(get, gets[i])
+		get = lsm.YGet(gets[i], get)
 	}
 	return get
 }
@@ -446,7 +446,7 @@ func reduceiter(scans []api.Iterator) api.Iterator {
 	}
 	scan := scans[len(scans)-1]
 	for i := len(scans) - 2; i >= 0; i-- {
-		scan = lsm.YSort(scan, scans[i])
+		scan = lsm.YSort(scans[i], scan)
 	}
 	return scan
 }
@@ -457,7 +457,7 @@ func reduceitere(scans []api.EntryIterator) api.EntryIterator {
 	}
 	scan := scans[len(scans)-1]
 	for i := len(scans) - 2; i >= 0; i-- {
-		scan = lsm.YSortEntries(scan, scans[i])
+		scan = lsm.YSortEntries(scans[i], scan)
 	}
 	return scan
 }
