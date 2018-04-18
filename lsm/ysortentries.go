@@ -44,7 +44,7 @@ func YSortEntries(a, b api.EntryIterator) api.EntryIterator {
 			if aentry != nil {
 				key, aseqno, _, aerr = aentry.Key()
 				akey = cp(akey, key)
-				//fmt.Printf("aentry %q %q %v %v\n", debug, akey, aseqno, aerr)
+				//fmt.Printf("%v aentry %q %v %v %v\n", id, akey, aseqno, adel, aerr)
 			} else {
 				aerr = io.EOF
 			}
@@ -54,7 +54,7 @@ func YSortEntries(a, b api.EntryIterator) api.EntryIterator {
 			if bentry != nil {
 				key, bseqno, _, berr = bentry.Key()
 				bkey = cp(bkey, key)
-				//fmt.Printf("bentry %q %q %v %v\n", debug, bkey, bseqno, aerr)
+				//fmt.Printf("%v bentry %q %v %v %v\n", id, bkey, bseqno, bdel, aerr)
 			} else {
 				berr = io.EOF
 			}
