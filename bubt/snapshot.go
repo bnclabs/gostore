@@ -352,11 +352,11 @@ func (snap *Snapshot) Log() {
 	ablocks, vblocks := info.Int64("n_ablocks"), info.Int64("n_vblocks")
 	infof(fmsg, snap.logprefix, epoch, took, mblocks, zblocks, ablocks, vblocks)
 
-	fmsg = "%v disk footprint is %v for a payload of %v ratio: %.2f"
+	fmsg = "%v for a payload of %v, disk footprint is %v ratio is %.2f"
 	payload := info.Int64("keymem") + info.Int64("valmem")
 	footprint := info.Int64("footprint")
 	ratio := float64(payload) / float64(footprint)
-	infof(fmsg, snap.logprefix, footprint, payload, ratio)
+	infof(fmsg, snap.logprefix, payload, footprint, ratio)
 }
 
 // Validate snapshot on disk. This is a costly call, use it only

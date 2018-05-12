@@ -49,7 +49,7 @@ func opensnapshot(
 	infof(fmsg, bogn.logprefix, head.id, head.attributes())
 
 	if head.mw == nil {
-		head.mw, err = bogn.newmemstore("opensnapshot", "mw", 0)
+		head.mw, err = bogn.newmemstore("opensnapshot", "mw", beginseqno)
 		if err != nil {
 			return nil, err
 		}
@@ -116,7 +116,8 @@ func (snap *snapshot) addtopurge(indexes ...api.Index) {
 func (snap *snapshot) isdirty() bool {
 	mwseqno := snap.mwseqno()
 	if mwseqno < snap.beginseqno {
-		panic("impossible case")
+		fmsg := "impossible case mwseqno(%v) < beginseqno(%v)"
+		panic(fmt.Errorf(fmsg, mwseqno, snap.beginseqno))
 	} else if mwseqno == snap.beginseqno {
 		return false
 	}

@@ -343,7 +343,7 @@ func (bogn *Bogn) warmupfromdisk(disks []api.Index) api.Index {
 		panic("unreachable code")
 	}
 
-	fmsg := "%v warmup: memory capacity %v too small %v, %v entries"
+	fmsg := "%v warmup: memory capacity %v too small for %v, %v entries"
 	arg1 := humanize.Bytes(uint64(memcapacity))
 	arg2 := humanize.Bytes(uint64(payload))
 	infof(fmsg, bogn.logprefix, arg1, arg2, entries)
