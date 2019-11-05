@@ -124,7 +124,7 @@ func dobenchconcur(b *testing.B, nroutines, repeat int) {
 	}
 
 	awg.Wait()
-	b.Logf("allocations are done\n")
+	b.Logf("allocations are done %v\n", time.Since(now))
 
 	for _, ch := range chans {
 		close(ch)

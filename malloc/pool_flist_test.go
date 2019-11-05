@@ -43,12 +43,12 @@ func TestMpoolAlloc(t *testing.T) {
 	if _, ok := mpool.allocchunk(); ok {
 		t.Errorf("expected pool to be exhausted")
 	} else if mpool.freeoff != -1 {
-		t.Errorf("unexpected %p", mpool.freeoff)
+		t.Errorf("unexpected %d", mpool.freeoff)
 	}
 
 	mpool.free(ptrs[0])
 	if mpool.freeoff == -1 {
-		t.Errorf("unexpected %p", mpool.freeoff)
+		t.Errorf("unexpected %d", mpool.freeoff)
 	}
 
 	// free
